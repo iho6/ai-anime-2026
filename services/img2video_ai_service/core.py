@@ -1,4 +1,4 @@
-"""Hunyuan Video 1.5 image-to-video (720p API easyCache): patch workflow, one job per input image."""
+"""Wan 2.2 14B image-to-video (i2v): patch workflow, one job per input image."""
 
 from __future__ import annotations
 
@@ -25,19 +25,18 @@ from services.utils import (
 
 logger = logging.getLogger("anime2026_services")
 
-API_KEY = "video_hunyuan_video_1.5_720p_i2v_api_easyCache"
-DEFAULT_LENGTH = 33
-DEFAULT_WIDTH = 1280
-DEFAULT_HEIGHT = 1280
+API_KEY = "video_wan2_2_14B_i2v"
+
+# Dimensions must be multiples of 16; max supported is 1280×720 (not 1280×1280).
+# Squares up to ~960×960 are within the 720p area budget.
+DEFAULT_LENGTH = 33   # must follow 4n+1: 1,5,9,…,33,37,…,81. 33 ≈ 2s at 16 fps.
+DEFAULT_WIDTH = 640
+DEFAULT_HEIGHT = 640
 
 
 def _services_use_s3() -> bool:
     return (os.environ.get("SERVICES_USE_S3") or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "y",
-        "on",
+        "1", "true", "yes", "y", "on",
     }
 
 
@@ -84,26 +83,25 @@ def _extract_video_frames_to_pngs(video_path: str, dest_dir: str) -> list[str]:
     return paths
 
 
-def _find_hunyuan_i2v_nodes(workflow: dict[str, Any]) -> tuple[str, str]:
-    hun_nid: str | None = None
+def _find_wan_i2v_nodes(workflow: dict[str, Any]) -> tuple[str, str]:
+    """Return (wan_nid, load_nid) for the WanImageToVideo and its LoadImage input."""
+    wan_nid: str | None = None
     for nid, node in workflow.items():
-        if not isinstance(node, dict):
-            continue
-        if node.get("class_type") == "HunyuanVideo15ImageToVideo":
-            hun_nid = str(nid)
+        if isinstance(node, dict) and node.get("class_type") == "WanImageToVideo":
+            wan_nid = str(nid)
             break
-    if not hun_nid:
-        raise ValueError("Workflow has no HunyuanVideo15ImageToVideo node")
+    if not wan_nid:
+        raise ValueError("Workflow has no WanImageToVideo node")
 
-    inp = workflow[hun_nid].get("inputs") or {}
+    inp = workflow[wan_nid].get("inputs") or {}
     start_ref = inp.get("start_image")
     if not (isinstance(start_ref, list) and len(start_ref) >= 1):
-        raise ValueError("HunyuanVideo15ImageToVideo missing start_image link")
+        raise ValueError("WanImageToVideo missing start_image link")
     load_nid = str(start_ref[0])
     n = workflow.get(load_nid)
     if not isinstance(n, dict) or n.get("class_type") != "LoadImage":
         raise ValueError(f"Expected LoadImage at node {load_nid}")
-    return hun_nid, load_nid
+    return wan_nid, load_nid
 
 
 def _find_clip_encode_by_title_contains(
@@ -129,6 +127,43 @@ def _find_first_node_id(workflow: dict[str, Any], class_type: str) -> str | None
     return None
 
 
+def _find_primitive_by_title(
+    workflow: dict[str, Any],
+    title: str,
+    *,
+    class_type: str | None = None,
+) -> str | None:
+    """Find a Primitive* node by exact _meta.title match."""
+    primitive_types = {
+        "PrimitiveInt", "PrimitiveFloat", "PrimitiveBoolean", "PrimitiveString",
+    }
+    for nid, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        ct = node.get("class_type") or ""
+        if class_type:
+            if ct != class_type:
+                continue
+        elif ct not in primitive_types:
+            continue
+        meta = node.get("_meta") or {}
+        if str(meta.get("title") or "") == title:
+            return str(nid)
+    return None
+
+
+def _find_ksampler_with_noise(workflow: dict[str, Any]) -> str | None:
+    """Find the KSamplerAdvanced node that adds noise (the first-pass sampler)."""
+    for nid, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        if node.get("class_type") != "KSamplerAdvanced":
+            continue
+        if (node.get("inputs") or {}).get("add_noise") == "enable":
+            return str(nid)
+    return None
+
+
 def _patch_workflow(
     api_workflow: dict[str, Any],
     *,
@@ -142,19 +177,20 @@ def _patch_workflow(
     cfg: float | None,
     seed: int | None,
     fps: int | None,
+    use_lora: bool | None,
 ) -> dict[str, Any]:
     w = deepcopy(api_workflow)
-    hun_nid, load_nid = _find_hunyuan_i2v_nodes(w)
+    wan_nid, load_nid = _find_wan_i2v_nodes(w)
 
     img = str(image_ref).strip()
     if osp.isfile(img):
         img = osp.basename(img)
     w[load_nid].setdefault("inputs", {})["image"] = img
 
-    hun_in = w[hun_nid].setdefault("inputs", {})
-    hun_in["width"] = int(width)
-    hun_in["height"] = int(height)
-    hun_in["length"] = int(length)
+    wan_in = w[wan_nid].setdefault("inputs", {})
+    wan_in["width"] = int(width)
+    wan_in["height"] = int(height)
+    wan_in["length"] = int(length)
 
     pos_nid = _find_clip_encode_by_title_contains(w, needle="positive")
     if pos_nid and positive_prompt is not None:
@@ -164,18 +200,55 @@ def _patch_workflow(
     if neg_nid and negative_prompt is not None:
         w[neg_nid].setdefault("inputs", {})["text"] = str(negative_prompt)
 
-    sched = _find_first_node_id(w, "BasicScheduler")
-    if sched and steps is not None:
-        w[sched].setdefault("inputs", {})["steps"] = int(steps)
+    # Lora toggle — controls the high-noise/low-noise split-step path.
+    if use_lora is not None:
+        lora_nid = _find_primitive_by_title(
+            w, "Enable 4steps LoRA?", class_type="PrimitiveBoolean"
+        )
+        if lora_nid:
+            w[lora_nid].setdefault("inputs", {})["value"] = bool(use_lora)
 
-    guider = _find_first_node_id(w, "CFGGuider")
-    if guider and cfg is not None:
-        w[guider].setdefault("inputs", {})["cfg"] = float(cfg)
+    # Steps — patch the normal (non-lora) Steps primitive.
+    steps_nid = _find_primitive_by_title(w, "Steps", class_type="PrimitiveInt")
+    if steps_nid and steps is not None:
+        # Only patch the 20-step node (normal mode); lora 4-step node has title "Steps" too
+        # but a different value. We find the one currently set to the higher value.
+        candidates = [
+            nid for nid, node in w.items()
+            if isinstance(node, dict)
+            and node.get("class_type") == "PrimitiveInt"
+            and str((node.get("_meta") or {}).get("title") or "") == "Steps"
+        ]
+        normal_nid = max(
+            candidates,
+            key=lambda nid: (w[nid].get("inputs") or {}).get("value", 0),
+            default=None,
+        )
+        if normal_nid:
+            w[normal_nid].setdefault("inputs", {})["value"] = int(steps)
 
-    noise = _find_first_node_id(w, "RandomNoise")
-    if noise and seed is not None:
-        w[noise].setdefault("inputs", {})["noise_seed"] = int(seed)
+    # CFG — patch the normal (non-lora) CFG primitive (higher value = 3.5).
+    if cfg is not None:
+        cfg_candidates = [
+            nid for nid, node in w.items()
+            if isinstance(node, dict)
+            and node.get("class_type") == "PrimitiveFloat"
+            and str((node.get("_meta") or {}).get("title") or "") == "CFG"
+        ]
+        normal_cfg_nid = max(
+            cfg_candidates,
+            key=lambda nid: (w[nid].get("inputs") or {}).get("value", 0),
+            default=None,
+        )
+        if normal_cfg_nid:
+            w[normal_cfg_nid].setdefault("inputs", {})["value"] = float(cfg)
 
+    # Seed — set on the noise-adding KSamplerAdvanced.
+    ks_nid = _find_ksampler_with_noise(w)
+    if ks_nid and seed is not None:
+        w[ks_nid].setdefault("inputs", {})["noise_seed"] = int(seed)
+
+    # FPS
     create_vid = _find_first_node_id(w, "CreateVideo")
     if create_vid and fps is not None:
         w[create_vid].setdefault("inputs", {})["fps"] = int(fps)
@@ -240,16 +313,12 @@ def align_lengths_for_images(
     if len(raw) > n_jobs:
         logger.warning(
             "Got %d length value(s) for %d image(s); using the first %d.",
-            len(raw),
-            n_jobs,
-            n_jobs,
+            len(raw), n_jobs, n_jobs,
         )
         return raw[:n_jobs]
     logger.warning(
         "Got %d length value(s) for %d image(s); padding remaining with %s.",
-        len(raw),
-        n_jobs,
-        raw[-1] if raw else default,
+        len(raw), n_jobs, raw[-1] if raw else default,
     )
     out = list(raw)
     fill = raw[-1] if raw else default
@@ -274,6 +343,24 @@ def _parse_optional_float(task: dict, key: str) -> float | None:
     if v is None or (isinstance(v, str) and not str(v).strip()):
         return None
     return float(v)
+
+
+def _parse_optional_bool(task: dict, key: str) -> bool | None:
+    if key not in task:
+        return None
+    v = task[key]
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return bool(int(v))
+    s = str(v).strip().lower()
+    if s in ("1", "true", "yes", "y", "on"):
+        return True
+    if s in ("0", "false", "no", "n", "off", ""):
+        return False
+    raise ValueError(f"invalid bool value for {key!r}: {v!r}")
 
 
 def run_img2video_job(
@@ -309,6 +396,7 @@ def run_img2video_job(
         cfg = _parse_optional_float(task, "cfg")
         seed = _parse_optional_int(task, "seed")
         fps = _parse_optional_int(task, "fps")
+        use_lora = _parse_optional_bool(task, "use_lora")
 
         api = workflows.get(API_KEY)
         if not api:
@@ -319,11 +407,8 @@ def run_img2video_job(
         for j, url in enumerate(image_urls):
             length = lengths[j]
             logger.info(
-                "img2video image_index=%s length=%s width=%s height=%s",
-                j,
-                length,
-                w_px,
-                h_px,
+                "img2video image_index=%s length=%s width=%s height=%s use_lora=%s",
+                j, length, w_px, h_px, use_lora,
             )
             try:
                 ref = resolve_to_comfy_input_ref(
@@ -348,6 +433,7 @@ def run_img2video_job(
                 cfg=cfg,
                 seed=seed,
                 fps=fps,
+                use_lora=use_lora,
             )
             try:
                 pid = task_queue(w, server_address)
@@ -366,32 +452,26 @@ def run_img2video_job(
                     try:
                         png_paths = _extract_video_frames_to_pngs(local_path, dest_dir)
                     except RuntimeError as e:
-                        out["error"] = (
-                            f"Frame extraction failed for image_index {j}: {e}"
-                        )
+                        out["error"] = f"Frame extraction failed for image_index {j}: {e}"
                         return out
                     frame_urls = [
                         _view_or_s3_url_for_output_file(p, server_address=server_address)
                         for p in png_paths
                     ]
-                    out["results"].append(
-                        {
-                            "image_index": j,
-                            "length": length,
-                            "frame_urls": frame_urls,
-                        }
-                    )
+                    out["results"].append({
+                        "image_index": j,
+                        "length": length,
+                        "frame_urls": frame_urls,
+                    })
                 else:
                     vurl = _view_or_s3_url_for_output_file(
                         local_path, server_address=server_address
                     )
-                    out["results"].append(
-                        {
-                            "image_index": j,
-                            "length": length,
-                            "url": vurl,
-                        }
-                    )
+                    out["results"].append({
+                        "image_index": j,
+                        "length": length,
+                        "url": vurl,
+                    })
             except Exception as e:
                 logger.error("image_index %s failed: %s", j, e)
                 out["error"] = f"Workflow failed for image_index {j}: {e}"

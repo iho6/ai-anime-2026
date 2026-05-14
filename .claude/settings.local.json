@@ -3,7 +3,9 @@
     "allow": [
       "Bash(grep -rn \"services/ui\\\\|services\\\\\\\\\\\\\\\\ui\\\\|\\\\\"services\\\\.ui\\\\\"\\\\|'services\\\\.ui'\" \"D:/Animation/anime2026_refactored\" --include=\"*.py\" --include=\"*.ts\" --include=\"*.js\" --include=\"*.json\" --include=\"*.yaml\" --include=\"*.yml\")",
       "Bash(grep -rn \"services.storage\\\\|services/storage\\\\|services\\\\\\\\\\\\\\\\storage\" \"D:/Animation/anime2026_refactored\" --include=\"*.py\" --include=\"*.ts\" --include=\"*.sh\" --include=\"*.ps1\")",
-      "Bash(grep -rn \"services\\\\.ui\\\\|services/ui\\\\|services\\\\\\\\\\\\\\\\ui\" \"D:/Animation/anime2026_refactored\" --include=\"*.py\" --include=\"*.sh\" --include=\"*.ps1\")"
+      "Bash(grep -rn \"services\\\\.ui\\\\|services/ui\\\\|services\\\\\\\\\\\\\\\\ui\" \"D:/Animation/anime2026_refactored\" --include=\"*.py\" --include=\"*.sh\" --include=\"*.ps1\")",
+      "WebSearch",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

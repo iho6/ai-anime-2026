@@ -1,5 +1,5 @@
 """
-Hunyuan Video 1.5 image-to-video — RunPod serverless + local --test-mode.
+Wan 2.2 14B image-to-video — RunPod serverless + local --test-mode.
 """
 
 from __future__ import annotations
@@ -155,7 +155,7 @@ def _parse_comma_ints(s: str | None, *, name: str) -> list[int]:
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Img2Video (Hunyuan Video 1.5 I2V) AI service"
+        description="Img2Video (Wan 2.2 14B I2V) AI service"
     )
     p.add_argument("--test-mode", action="store_true")
     p.add_argument("--enable-default", action="store_true")
@@ -174,7 +174,7 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help=(
-            "Per-image latent length(s), comma-separated (default 33). "
+            "Per-image frame length(s), comma-separated (default 33, must follow 4n+1: 9,13,…,33,…,81). "
             "e.g. 33 or 33,37,41 for multiple images"
         ),
     )
@@ -194,13 +194,23 @@ def _parse_args() -> argparse.Namespace:
         "--width",
         type=int,
         default=None,
-        help="Optional width (default 1280)",
+        help="Optional width in px, must be multiple of 16 (default 640, max 1280)",
     )
     p.add_argument(
         "--height",
         type=int,
         default=None,
-        help="Optional height (default 1280)",
+        help="Optional height in px, must be multiple of 16 (default 640, max 720)",
+    )
+    p.add_argument(
+        "--use-lora",
+        dest="use_lora",
+        default=None,
+        action=argparse.BooleanOptionalAction,
+        help=(
+            "Enable/disable the 4-step lightning LoRA (default: on). "
+            "--no-use-lora switches to the full 20-step pipeline."
+        ),
     )
     p.add_argument(
         "--convert-local-to-url",
@@ -248,6 +258,8 @@ def _run_test_mode(args: argparse.Namespace) -> None:
         inp["width"] = args.width
     if args.height is not None:
         inp["height"] = args.height
+    if args.use_lora is not None:
+        inp["use_lora"] = args.use_lora
 
     if not local_servers.get("default"):
         local_servers["default"] = f"127.0.0.1:{args.default_port}"
@@ -298,7 +310,7 @@ def main() -> None:
             raise RuntimeError(
                 "runpod is not installed; install it or run with --test-mode"
             )
-        logger.info("Starting RunPod serverless (img2video)...")
+        logger.info("Starting RunPod serverless (img2video Wan 2.2)...")
         runpod.serverless.start({"handler": handler})
 
 

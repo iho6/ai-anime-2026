@@ -35,6 +35,7 @@ uv.lock
 
 # Local reference clones / nested repos (not part of this repo)
 /reference_code/
+/workflow_library/
 
 # Local env secrets (do not commit)
 set-env.local.ps1
