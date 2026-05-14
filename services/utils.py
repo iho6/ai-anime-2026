@@ -997,3 +997,97 @@ def waiting_for_results(
             if len(history) > 0:
                 break
         time.sleep(0.1)
+
+
+def services_use_s3() -> bool:
+    return (os.environ.get("SERVICES_USE_S3") or "").strip().lower() in {
+        "1", "true", "yes", "y", "on",
+    }
+
+
+def view_or_s3_url_for_output_file(
+    local_file_path: str,
+    *,
+    server_address: str,
+) -> str:
+    """Return a Comfy /view URL or S3 URL for a file under LOCAL_OUTPUT_DIR."""
+    out_dir = osp.normpath(LOCAL_OUTPUT_DIR)
+    parent = osp.normpath(osp.dirname(local_file_path))
+    subfolder = ""
+    if parent != out_dir:
+        subfolder = osp.relpath(parent, out_dir).replace("\\", "/")
+    view_name = osp.basename(local_file_path)
+    if services_use_s3():
+        return upload_to_s3(local_file_path, str(uuid.uuid4()))
+    q: dict[str, str] = {"filename": view_name, "type": "output"}
+    if subfolder:
+        q["subfolder"] = subfolder
+    return f"http://{server_address}/view?{urllib.parse.urlencode(q)}"
+
+
+def media_item_path(output_dir: str, item: dict[str, Any]) -> str | None:
+    fn = item.get("filename")
+    if not fn:
+        return None
+    sub = (item.get("subfolder") or "").strip().replace("\\", "/").strip("/")
+    base = output_dir
+    if sub:
+        base = osp.join(base, *sub.split("/"))
+    path = osp.join(base, str(fn))
+    return path if osp.isfile(path) else None
+
+
+def first_video_output_path(
+    history: dict, prompt_id: str, output_dir: str
+) -> str | None:
+    block = history.get(prompt_id) or {}
+    outputs = block.get("outputs") or {}
+    for _nid, out in outputs.items():
+        if not isinstance(out, dict):
+            continue
+        for key in ("gifs", "videos", "images"):
+            arr = out.get(key)
+            if not isinstance(arr, list):
+                continue
+            for item in arr:
+                if not isinstance(item, dict):
+                    continue
+                p = media_item_path(output_dir, item)
+                if p:
+                    return p
+    return None
+
+
+def find_first_node_id(workflow: dict[str, Any], class_type: str) -> str | None:
+    for nid, node in workflow.items():
+        if isinstance(node, dict) and node.get("class_type") == class_type:
+            return str(nid)
+    return None
+
+
+def extract_video_frames_to_pngs(video_path: str, dest_dir: str) -> list[str]:
+    """Decode every video frame to PNGs (frame_000001.png, …). Returns ordered absolute paths."""
+    import av  # type: ignore
+    from PIL import Image  # type: ignore
+
+    os.makedirs(dest_dir, exist_ok=True)
+    paths: list[str] = []
+    try:
+        with av.open(video_path) as container:
+            if not container.streams.video:
+                raise RuntimeError("no video stream in output file")
+            stream = container.streams.video[0]
+            stream.thread_type = "AUTO"
+            for i, frame in enumerate(container.decode(stream)):
+                arr = frame.to_ndarray(format="rgb24")
+                im = Image.fromarray(arr)
+                out_path = osp.join(dest_dir, f"frame_{i + 1:06d}.png")
+                im.save(out_path)
+                paths.append(osp.abspath(out_path))
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(f"video frame extraction failed: {e}") from e
+    if not paths:
+        raise RuntimeError("video decode produced zero frames")
+    return paths

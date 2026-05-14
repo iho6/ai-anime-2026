@@ -11,6 +11,8 @@ import os
 import os.path as osp
 import sys
 import time
+import uuid
+from copy import deepcopy
 from typing import Any
 
 try:
@@ -18,16 +20,24 @@ try:
 except ModuleNotFoundError:
     runpod = None  # type: ignore
 
-from services.flf2video_ai_service import core
+from services.constant import LOCAL_OUTPUT_DIR, TIMEOUT
 from services.utils import (
     apply_convert_local_paths_to_urls_in_task,
     apply_upload_local_paths_to_comfy_in_task,
     delete_s3_object,
+    extract_video_frames_to_pngs,
+    fetch_comfy_history,
+    first_video_output_path,
     gpu_preflight,
     load_download_cache,
     load_workflows,
+    normalize_image_urls,
+    resolve_to_comfy_input_ref,
+    task_queue,
     timing_decorator,
+    view_or_s3_url_for_output_file,
     wait_for_service_ready,
+    waiting_for_results,
 )
 
 logging.basicConfig(
@@ -43,6 +53,283 @@ logger.info("Loaded %s workflow(s): %s", len(workflows), list(workflows.keys()))
 local_servers: dict[str, str] = {}
 convert_local_to_url = False
 individual_frames_default = False
+
+API_KEY = "video_wan2_2_14B_flf2v_lightning_api"
+DEFAULT_LENGTH = 33
+
+
+def _find_wan_flf_nodes(workflow: dict[str, Any]) -> tuple[str, str, str]:
+    wan_nid: str | None = None
+    for nid, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        if node.get("class_type") == "WanFirstLastFrameToVideo":
+            wan_nid = nid
+            break
+    if not wan_nid:
+        raise ValueError("Workflow has no WanFirstLastFrameToVideo node")
+
+    inp = workflow[wan_nid].get("inputs") or {}
+    start_ref = inp.get("start_image")
+    end_ref = inp.get("end_image")
+    if not (isinstance(start_ref, list) and len(start_ref) >= 1):
+        raise ValueError("WanFirstLastFrameToVideo missing start_image link")
+    if not (isinstance(end_ref, list) and len(end_ref) >= 1):
+        raise ValueError("WanFirstLastFrameToVideo missing end_image link")
+    start_nid = str(start_ref[0])
+    end_nid = str(end_ref[0])
+
+    for lid in (start_nid, end_nid):
+        n = workflow.get(lid)
+        if not isinstance(n, dict) or n.get("class_type") != "LoadImage":
+            raise ValueError(f"Expected LoadImage at node {lid}")
+
+    return wan_nid, start_nid, end_nid
+
+
+def _patch_workflow(
+    api_workflow: dict[str, Any],
+    *,
+    start_ref: str,
+    end_ref: str,
+    length: int,
+    positive_prompt: str | None,
+) -> dict[str, Any]:
+    w = deepcopy(api_workflow)
+    wan_nid, start_nid, end_nid = _find_wan_flf_nodes(w)
+
+    s = str(start_ref).strip()
+    e = str(end_ref).strip()
+    if osp.isfile(s):
+        s = osp.basename(s)
+    if osp.isfile(e):
+        e = osp.basename(e)
+    w[start_nid].setdefault("inputs", {})["image"] = s
+    w[end_nid].setdefault("inputs", {})["image"] = e
+    w[wan_nid].setdefault("inputs", {})["length"] = int(length)
+
+    if positive_prompt is not None and str(positive_prompt).strip():
+        text = str(positive_prompt).strip()
+        for _nid, node in w.items():
+            if not isinstance(node, dict):
+                continue
+            if node.get("class_type") != "CLIPTextEncode":
+                continue
+            meta = node.get("_meta") or {}
+            title = str(meta.get("title") or "")
+            inputs = node.setdefault("inputs", {})
+            if "Positive" in title and "text" in inputs:
+                inputs["text"] = text
+                break
+
+    return w
+
+
+def _parse_frames_1based(task: dict) -> list[int]:
+    raw = task.get("frames")
+    if raw is None:
+        raise ValueError(
+            'Missing "frames": list of 1-based indices into image_urls (at least 2)'
+        )
+    if isinstance(raw, str):
+        parts = [p.strip() for p in raw.replace(",", " ").split() if p.strip()]
+        frames = [int(p) for p in parts]
+    elif isinstance(raw, list):
+        frames = [int(x) for x in raw]
+    else:
+        raise ValueError("frames must be a list of integers or a comma-separated string")
+    if len(frames) < 2:
+        raise ValueError("frames must contain at least two indices for first/last pairing")
+    return frames
+
+
+def _parse_lengths(task: dict) -> list[int] | None:
+    raw = task.get("lengths")
+    if raw is None:
+        single = task.get("length")
+        if single is not None:
+            return [int(single)]
+        return None
+    if isinstance(raw, str):
+        parts = [p.strip() for p in raw.replace(",", " ").split() if p.strip()]
+        return [int(p) for p in parts]
+    if isinstance(raw, list):
+        return [int(x) for x in raw]
+    raise ValueError("lengths must be a list of integers or comma-separated string")
+
+
+def align_lengths_for_pairs(
+    lengths: list[int] | None, n_pairs: int, *, default: int = DEFAULT_LENGTH
+) -> list[int]:
+    raw = list(lengths) if lengths else []
+    if n_pairs <= 0:
+        return []
+
+    if len(raw) == n_pairs:
+        return raw
+
+    if len(raw) > n_pairs:
+        logger.warning(
+            "Got %d length value(s) for %d first-last pair(s); using the first %d.",
+            len(raw),
+            n_pairs,
+            n_pairs,
+        )
+        return raw[:n_pairs]
+
+    logger.warning(
+        "Got %d length value(s) for %d first-last pair(s); padding remaining with %s.",
+        len(raw),
+        n_pairs,
+        raw[-1] if raw else default,
+    )
+    out = list(raw)
+    fill = raw[-1] if raw else default
+    while len(out) < n_pairs:
+        out.append(fill)
+    return out
+
+
+def consecutive_pairs_from_frames(
+    frames_1based: list[int], n_images: int
+) -> list[tuple[int, int, int]]:
+    pairs: list[tuple[int, int, int]] = []
+    for i in range(len(frames_1based) - 1):
+        a1 = frames_1based[i]
+        b1 = frames_1based[i + 1]
+        if a1 < 1 or a1 > n_images or b1 < 1 or b1 > n_images:
+            raise ValueError(
+                f"frame index out of range: got {a1}, {b1} for {n_images} image(s) (1-based)"
+            )
+        pairs.append((i, a1 - 1, b1 - 1))
+    return pairs
+
+
+def run_flf2video_job(
+    task: dict,
+    *,
+    workflows: dict[str, Any],
+    server_address: str,
+    individual_frames: bool = False,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {"results": []}
+    try:
+        image_urls = normalize_image_urls(task)
+        n_img = len(image_urls)
+        frames_1 = _parse_frames_1based(task)
+        pairs_meta = consecutive_pairs_from_frames(frames_1, n_img)
+        n_pairs = len(pairs_meta)
+
+        lengths_in = _parse_lengths(task)
+        lengths = align_lengths_for_pairs(lengths_in, n_pairs, default=DEFAULT_LENGTH)
+
+        api = workflows.get(API_KEY)
+        if not api:
+            raise RuntimeError(
+                f"Workflow {API_KEY!r} not loaded; add workflows/{API_KEY}.json"
+            )
+
+        pos = task.get("positive_prompt")
+        if pos is not None:
+            pos = str(pos).strip() or None
+
+        for j, (_pair_idx, ia, ib) in enumerate(pairs_meta):
+            length = lengths[j]
+            url_a = image_urls[ia]
+            url_b = image_urls[ib]
+            logger.info(
+                "FLF2V pair %s: frame indices %s-%s (1-based), length=%s",
+                j,
+                frames_1[j],
+                frames_1[j + 1],
+                length,
+            )
+            try:
+                ref_start = resolve_to_comfy_input_ref(
+                    url_a,
+                    server_address,
+                    subfolder="anime2026_flf2video_inputs",
+                )
+                ref_end = resolve_to_comfy_input_ref(
+                    url_b,
+                    server_address,
+                    subfolder="anime2026_flf2video_inputs",
+                )
+            except Exception as e:
+                logger.error("Input resolve failed: %s", e)
+                out["error"] = f"Failed to resolve images for pair {j}: {e}"
+                return out
+
+            w = _patch_workflow(
+                api,
+                start_ref=ref_start,
+                end_ref=ref_end,
+                length=length,
+                positive_prompt=pos,
+            )
+            try:
+                pid = task_queue(w, server_address)
+                waiting_for_results(pid, server_address, timeout_seconds=TIMEOUT)
+                history = fetch_comfy_history(server_address, pid)
+                local_path = first_video_output_path(history, pid, LOCAL_OUTPUT_DIR)
+                if not local_path:
+                    out["error"] = (
+                        f"No video output for pair {j} (frames {frames_1[j]}-{frames_1[j+1]})"
+                    )
+                    return out
+                if individual_frames:
+                    dest_dir = osp.join(
+                        LOCAL_OUTPUT_DIR,
+                        "flf2video_frames",
+                        f"pair{j}_{uuid.uuid4().hex}",
+                    )
+                    try:
+                        png_paths = extract_video_frames_to_pngs(local_path, dest_dir)
+                    except RuntimeError as e:
+                        out["error"] = (
+                            f"Frame extraction failed for pair {j} "
+                            f"(frames {frames_1[j]}-{frames_1[j + 1]}): {e}"
+                        )
+                        return out
+                    frame_urls = [
+                        view_or_s3_url_for_output_file(p, server_address=server_address)
+                        for p in png_paths
+                    ]
+                    out["results"].append(
+                        {
+                            "pair_index": j,
+                            "frame_start": frames_1[j],
+                            "frame_end": frames_1[j + 1],
+                            "length": length,
+                            "frame_urls": frame_urls,
+                        }
+                    )
+                else:
+                    url = view_or_s3_url_for_output_file(
+                        local_path, server_address=server_address
+                    )
+                    out["results"].append(
+                        {
+                            "pair_index": j,
+                            "frame_start": frames_1[j],
+                            "frame_end": frames_1[j + 1],
+                            "length": length,
+                            "url": url,
+                        }
+                    )
+            except Exception as e:
+                logger.error("Pair %s failed: %s", j, e)
+                out["error"] = f"Workflow failed for pair {j}: {e}"
+                return out
+
+        return out
+    except ValueError as e:
+        out["error"] = str(e)
+        return out
+    except Exception as e:
+        logger.error("Job error: %s", e)
+        out["error"] = str(e)
+        return out
 
 
 def _parse_individual_frames_from_task(task: dict[str, Any]) -> bool | None:
@@ -101,7 +388,7 @@ def handler(job_input: dict[str, Any]) -> dict[str, Any]:
             return response
 
         addr = local_servers.get("default", "127.0.0.1:8188")
-        body = core.run_flf2video_job(
+        body = run_flf2video_job(
             task,
             workflows=workflows,
             server_address=addr,

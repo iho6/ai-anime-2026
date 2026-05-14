@@ -13,13 +13,14 @@ import sys
 import time
 import uuid
 import urllib.parse
+from copy import deepcopy
+from typing import Any
 
 try:
     import runpod  # type: ignore
 except ModuleNotFoundError:  # local --test-mode should still work
     runpod = None  # type: ignore
 
-from services.background_removal_ai_service import core
 from services.constant import LOCAL_OUTPUT_DIR, TIMEOUT
 from services.utils import (
     apply_upload_local_paths_to_comfy_in_task,
@@ -31,6 +32,8 @@ from services.utils import (
     load_workflows,
     normalize_image_urls,
     resolve_to_comfy_input_ref,
+    services_use_s3,
+    task_queue,
     timing_decorator,
     upload_to_s3,
     waiting_for_results,
@@ -51,16 +54,86 @@ local_servers: dict[str, str] = {}
 supported_tasks: list = []
 convert_local_to_url = False
 
-_LEGACY_REMBG_KEYS = frozenset({"torchscript_jit", "use_advanced", "threshold"})
+_LEGACY_RMBG_KEYS = frozenset({"torchscript_jit", "use_advanced", "threshold"})
 _legacy_keys_warned = False
+
+_API_KEY = "rmbg2_0_api"
+
+
+def _patch_workflow(
+    workflow: dict[str, Any],
+    *,
+    image_input_ref: str,
+    rmbg_overrides: dict[str, Any] | None,
+) -> dict[str, Any]:
+    w = deepcopy(workflow)
+    rmbg_nid: str | None = None
+    load_nid: str | None = None
+
+    for nid, node in w.items():
+        if not isinstance(node, dict):
+            continue
+        ct = node.get("class_type")
+        if ct == "LoadImage":
+            load_nid = nid
+            node.setdefault("inputs", {})["image"] = image_input_ref
+        elif ct == "RMBG":
+            rmbg_nid = nid
+
+    if load_nid is None:
+        raise ValueError("Workflow has no LoadImage node")
+    if rmbg_nid is None:
+        raise ValueError("Workflow has no RMBG node")
+
+    rmbg_inp = w[rmbg_nid].setdefault("inputs", {})
+    if rmbg_overrides:
+        for k, v in rmbg_overrides.items():
+            if k == "image":
+                continue
+            rmbg_inp[k] = v
+    rmbg_inp["image"] = [load_nid, 0]
+
+    for _nid, node in w.items():
+        if not isinstance(node, dict) or node.get("class_type") != "SaveImage":
+            continue
+        inp = node.setdefault("inputs", {})
+        imgs = inp.get("images")
+        if isinstance(imgs, list) and len(imgs) >= 2:
+            inp["images"] = [rmbg_nid, 0]
+
+    return w
+
+
+def run_rembg_workflow(
+    image_input_ref: str,
+    workflows: dict[str, Any],
+    server_address: str,
+    *,
+    rmbg_overrides: dict[str, Any] | None = None,
+) -> str:
+    api = workflows.get(_API_KEY)
+    if not api:
+        raise ValueError(
+            f"Missing workflow {_API_KEY!r}; add workflows/{_API_KEY}.json"
+        )
+    w = _patch_workflow(
+        api,
+        image_input_ref=(
+            osp.basename(image_input_ref)
+            if osp.isfile(image_input_ref)
+            else str(image_input_ref).strip()
+        ),
+        rmbg_overrides=rmbg_overrides,
+    )
+    return task_queue(w, server_address)
 
 
 def _rmbg_overrides_from_task(task: dict) -> dict[str, object] | None:
     global _legacy_keys_warned
-    if any(k in task for k in _LEGACY_REMBG_KEYS) and not _legacy_keys_warned:
+    if any(k in task for k in _LEGACY_RMBG_KEYS) and not _legacy_keys_warned:
         logger.debug(
             "Ignoring legacy InspyreNet task keys: %s",
-            sorted(k for k in _LEGACY_REMBG_KEYS if k in task),
+            sorted(k for k in _LEGACY_RMBG_KEYS if k in task),
         )
         _legacy_keys_warned = True
     raw = task.get("rmbg")
@@ -128,7 +201,7 @@ def handler(job_input: dict) -> dict:
                 return response
 
             try:
-                prompt_id = core.run_rembg_workflow(
+                prompt_id = run_rembg_workflow(
                     comfy_input_ref,
                     workflows,
                     addr,
@@ -145,16 +218,8 @@ def handler(job_input: dict) -> dict:
                         break
                 if out_filename and osp.isfile(osp.join(output_dir, out_filename)):
                     local_out = osp.join(output_dir, out_filename)
-                    use_s3 = (os.environ.get("SERVICES_USE_S3") or "").strip().lower() in {
-                        "1",
-                        "true",
-                        "yes",
-                        "y",
-                        "on",
-                    }
-                    if use_s3:
-                        upload_name = str(uuid.uuid4())
-                        output_url = upload_to_s3(local_out, upload_name)
+                    if services_use_s3():
+                        output_url = upload_to_s3(local_out, str(uuid.uuid4()))
                     else:
                         qfn = urllib.parse.quote(out_filename)
                         output_url = f"http://{addr}/view?filename={qfn}&type=output"
@@ -198,9 +263,6 @@ def handler(job_input: dict) -> dict:
 
 
 def _cli_image_url_to_task_fragment(s: str) -> dict:
-    """
-    Parse --image-url for test mode: one URL/path, or a JSON array of strings.
-    """
     raw = (s or "").strip()
     if not raw:
         raise ValueError("--image-url is empty")
@@ -254,7 +316,6 @@ def _run_test_mode(args: argparse.Namespace) -> None:
         sys.exit(1)
     if not local_servers.get("default"):
         local_servers["default"] = f"127.0.0.1:{args.default_port}"
-    # Fail fast: do not wait for ComfyUI if CUDA/GPU isn't usable.
     gpu_err, _gpu_detail = gpu_preflight()
     if gpu_err:
         print("ERROR: " + gpu_err, file=sys.stderr)
