@@ -1,0 +1,502 @@
+[
+  {
+    "id": 0,
+    "label": "neutral calm expression",
+    "prompt_text": "Edit the face to show neutral calm expression, keep identity coherent."
+  },
+  {
+    "id": 1,
+    "label": "soft pleasant smile",
+    "prompt_text": "Edit the face to show soft pleasant smile, keep identity coherent."
+  },
+  {
+    "id": 2,
+    "label": "wide genuine grin showing teeth",
+    "prompt_text": "Edit the face to show wide genuine grin showing teeth, keep identity coherent."
+  },
+  {
+    "id": 3,
+    "label": "subtle smirk",
+    "prompt_text": "Edit the face to show subtle smirk, keep identity coherent."
+  },
+  {
+    "id": 4,
+    "label": "closed-mouth polite smile",
+    "prompt_text": "Edit the face to show closed-mouth polite smile, keep identity coherent."
+  },
+  {
+    "id": 5,
+    "label": "bashful shy smile looking away",
+    "prompt_text": "Edit the face to show bashful shy smile looking away, keep identity coherent."
+  },
+  {
+    "id": 6,
+    "label": "flirtatious playful smile",
+    "prompt_text": "Edit the face to show flirtatious playful smile, keep identity coherent."
+  },
+  {
+    "id": 7,
+    "label": "mischievous grin",
+    "prompt_text": "Edit the face to show mischievous grin, keep identity coherent."
+  },
+  {
+    "id": 8,
+    "label": "nervous tight-lipped smile",
+    "prompt_text": "Edit the face to show nervous tight-lipped smile, keep identity coherent."
+  },
+  {
+    "id": 9,
+    "label": "bitter forced smile",
+    "prompt_text": "Edit the face to show bitter forced smile, keep identity coherent."
+  },
+  {
+    "id": 10,
+    "label": "slight frown of concern",
+    "prompt_text": "Edit the face to show slight frown of concern, keep identity coherent."
+  },
+  {
+    "id": 11,
+    "label": "deep furrowed-brow frown",
+    "prompt_text": "Edit the face to show deep furrowed-brow frown, keep identity coherent."
+  },
+  {
+    "id": 12,
+    "label": "angry scowl lips pressed",
+    "prompt_text": "Edit the face to show angry scowl lips pressed, keep identity coherent."
+  },
+  {
+    "id": 13,
+    "label": "rage snarl showing teeth",
+    "prompt_text": "Edit the face to show rage snarl showing teeth, keep identity coherent."
+  },
+  {
+    "id": 14,
+    "label": "pouting lips pushed forward",
+    "prompt_text": "Edit the face to show pouting lips pushed forward, keep identity coherent."
+  },
+  {
+    "id": 15,
+    "label": "sulking downturned mouth",
+    "prompt_text": "Edit the face to show sulking downturned mouth, keep identity coherent."
+  },
+  {
+    "id": 16,
+    "label": "disappointed sad eyes",
+    "prompt_text": "Edit the face to show disappointed sad eyes, keep identity coherent."
+  },
+  {
+    "id": 17,
+    "label": "on the verge of tears glistening eyes",
+    "prompt_text": "Edit the face to show on the verge of tears glistening eyes, keep identity coherent."
+  },
+  {
+    "id": 18,
+    "label": "openly crying tears streaming",
+    "prompt_text": "Edit the face to show openly crying tears streaming, keep identity coherent."
+  },
+  {
+    "id": 19,
+    "label": "wailing mouth wide sorrow",
+    "prompt_text": "Edit the face to show wailing mouth wide sorrow, keep identity coherent."
+  },
+  {
+    "id": 20,
+    "label": "red puffy eyes after crying",
+    "prompt_text": "Edit the face to show red puffy eyes after crying, keep identity coherent."
+  },
+  {
+    "id": 21,
+    "label": "surprised eyes wide mouth open",
+    "prompt_text": "Edit the face to show surprised eyes wide mouth open, keep identity coherent."
+  },
+  {
+    "id": 22,
+    "label": "shocked jaw dropped",
+    "prompt_text": "Edit the face to show shocked jaw dropped, keep identity coherent."
+  },
+  {
+    "id": 23,
+    "label": "astonished raised eyebrows",
+    "prompt_text": "Edit the face to show astonished raised eyebrows, keep identity coherent."
+  },
+  {
+    "id": 24,
+    "label": "mildly curious raised brow",
+    "prompt_text": "Edit the face to show mildly curious raised brow, keep identity coherent."
+  },
+  {
+    "id": 25,
+    "label": "skeptical side-eye",
+    "prompt_text": "Edit the face to show skeptical side-eye, keep identity coherent."
+  },
+  {
+    "id": 26,
+    "label": "unimpressed deadpan stare",
+    "prompt_text": "Edit the face to show unimpressed deadpan stare, keep identity coherent."
+  },
+  {
+    "id": 27,
+    "label": "bored half-lidded eyes",
+    "prompt_text": "Edit the face to show bored half-lidded eyes, keep identity coherent."
+  },
+  {
+    "id": 28,
+    "label": "sleepy drowsy heavy eyelids",
+    "prompt_text": "Edit the face to show sleepy drowsy heavy eyelids, keep identity coherent."
+  },
+  {
+    "id": 29,
+    "label": "yawning exhausted",
+    "prompt_text": "Edit the face to show yawning exhausted, keep identity coherent."
+  },
+  {
+    "id": 30,
+    "label": "focused intense gaze",
+    "prompt_text": "Edit the face to show focused intense gaze, keep identity coherent."
+  },
+  {
+    "id": 31,
+    "label": "determined set jaw",
+    "prompt_text": "Edit the face to show determined set jaw, keep identity coherent."
+  },
+  {
+    "id": 32,
+    "label": "confident slight smile steely eyes",
+    "prompt_text": "Edit the face to show confident slight smile steely eyes, keep identity coherent."
+  },
+  {
+    "id": 33,
+    "label": "glaring intense anger eyes",
+    "prompt_text": "Edit the face to show glaring intense anger eyes, keep identity coherent."
+  },
+  {
+    "id": 34,
+    "label": "side glance suspicious",
+    "prompt_text": "Edit the face to show side glance suspicious, keep identity coherent."
+  },
+  {
+    "id": 35,
+    "label": "rolling eyes upward annoyance",
+    "prompt_text": "Edit the face to show rolling eyes upward annoyance, keep identity coherent."
+  },
+  {
+    "id": 36,
+    "label": "eyes closed peaceful calm",
+    "prompt_text": "Edit the face to show eyes closed peaceful calm, keep identity coherent."
+  },
+  {
+    "id": 37,
+    "label": "eyes closed scrunched laughing hard",
+    "prompt_text": "Edit the face to show eyes closed scrunched laughing hard, keep identity coherent."
+  },
+  {
+    "id": 38,
+    "label": "squinting against bright light",
+    "prompt_text": "Edit the face to show squinting against bright light, keep identity coherent."
+  },
+  {
+    "id": 39,
+    "label": "narrow suspicious eyes",
+    "prompt_text": "Edit the face to show narrow suspicious eyes, keep identity coherent."
+  },
+  {
+    "id": 40,
+    "label": "wide innocent doe eyes",
+    "prompt_text": "Edit the face to show wide innocent doe eyes, keep identity coherent."
+  },
+  {
+    "id": 41,
+    "label": "furrowed confusion",
+    "prompt_text": "Edit the face to show furrowed confusion, keep identity coherent."
+  },
+  {
+    "id": 42,
+    "label": "puzzled head tilt expression",
+    "prompt_text": "Edit the face to show puzzled head tilt expression, keep identity coherent."
+  },
+  {
+    "id": 43,
+    "label": "concentrating tongue slightly out",
+    "prompt_text": "Edit the face to show concentrating tongue slightly out, keep identity coherent."
+  },
+  {
+    "id": 44,
+    "label": "embarrassed blush cheeks looking down",
+    "prompt_text": "Edit the face to show embarrassed blush cheeks looking down, keep identity coherent."
+  },
+  {
+    "id": 45,
+    "label": "ashamed unable to meet eyes",
+    "prompt_text": "Edit the face to show ashamed unable to meet eyes, keep identity coherent."
+  },
+  {
+    "id": 46,
+    "label": "proud chin lifted confident",
+    "prompt_text": "Edit the face to show proud chin lifted confident, keep identity coherent."
+  },
+  {
+    "id": 47,
+    "label": "arrogant smug half-smile",
+    "prompt_text": "Edit the face to show arrogant smug half-smile, keep identity coherent."
+  },
+  {
+    "id": 48,
+    "label": "contemptuous sneer",
+    "prompt_text": "Edit the face to show contemptuous sneer, keep identity coherent."
+  },
+  {
+    "id": 49,
+    "label": "disgusted wrinkled nose",
+    "prompt_text": "Edit the face to show disgusted wrinkled nose, keep identity coherent."
+  },
+  {
+    "id": 50,
+    "label": "tasting something sour expression",
+    "prompt_text": "Edit the face to show tasting something sour expression, keep identity coherent."
+  },
+  {
+    "id": 51,
+    "label": "sniffing disdainful",
+    "prompt_text": "Edit the face to show sniffing disdainful, keep identity coherent."
+  },
+  {
+    "id": 52,
+    "label": "playful wink one eye",
+    "prompt_text": "Edit the face to show playful wink one eye, keep identity coherent."
+  },
+  {
+    "id": 53,
+    "label": "both eyes squeezed shut joyful laugh",
+    "prompt_text": "Edit the face to show both eyes squeezed shut joyful laugh, keep identity coherent."
+  },
+  {
+    "id": 54,
+    "label": "mocking exaggerated smile",
+    "prompt_text": "Edit the face to show mocking exaggerated smile, keep identity coherent."
+  },
+  {
+    "id": 55,
+    "label": "terrified pale wide eyes",
+    "prompt_text": "Edit the face to show terrified pale wide eyes, keep identity coherent."
+  },
+  {
+    "id": 56,
+    "label": "anxious biting lip",
+    "prompt_text": "Edit the face to show anxious biting lip, keep identity coherent."
+  },
+  {
+    "id": 57,
+    "label": "panicked eyes darting",
+    "prompt_text": "Edit the face to show panicked eyes darting, keep identity coherent."
+  },
+  {
+    "id": 58,
+    "label": "relieved long exhale soft eyes",
+    "prompt_text": "Edit the face to show relieved long exhale soft eyes, keep identity coherent."
+  },
+  {
+    "id": 59,
+    "label": "content serene smile eyes soft",
+    "prompt_text": "Edit the face to show content serene smile eyes soft, keep identity coherent."
+  },
+  {
+    "id": 60,
+    "label": "dreamy faraway gaze",
+    "prompt_text": "Edit the face to show dreamy faraway gaze, keep identity coherent."
+  },
+  {
+    "id": 61,
+    "label": "starstruck awe sparkling eyes",
+    "prompt_text": "Edit the face to show starstruck awe sparkling eyes, keep identity coherent."
+  },
+  {
+    "id": 62,
+    "label": "envious sideways glare",
+    "prompt_text": "Edit the face to show envious sideways glare, keep identity coherent."
+  },
+  {
+    "id": 63,
+    "label": "hurt vulnerable wounded eyes",
+    "prompt_text": "Edit the face to show hurt vulnerable wounded eyes, keep identity coherent."
+  },
+  {
+    "id": 64,
+    "label": "betrayed wounded disbelief",
+    "prompt_text": "Edit the face to show betrayed wounded disbelief, keep identity coherent."
+  },
+  {
+    "id": 65,
+    "label": "cold emotionless mask-like face",
+    "prompt_text": "Edit the face to show cold emotionless mask-like face, keep identity coherent."
+  },
+  {
+    "id": 66,
+    "label": "manic excited grin too wide",
+    "prompt_text": "Edit the face to show manic excited grin too wide, keep identity coherent."
+  },
+  {
+    "id": 67,
+    "label": "delirious half-smile unfocused eyes",
+    "prompt_text": "Edit the face to show delirious half-smile unfocused eyes, keep identity coherent."
+  },
+  {
+    "id": 68,
+    "label": "smug eye-roll mid-expression",
+    "prompt_text": "Edit the face to show smug eye-roll mid-expression, keep identity coherent."
+  },
+  {
+    "id": 69,
+    "label": "stifling laughter pressed lips",
+    "prompt_text": "Edit the face to show stifling laughter pressed lips, keep identity coherent."
+  },
+  {
+    "id": 70,
+    "label": "bursting laughter eyes squeezed shut",
+    "prompt_text": "Edit the face to show bursting laughter eyes squeezed shut, keep identity coherent."
+  },
+  {
+    "id": 71,
+    "label": "silent chuckle shaking shoulders",
+    "prompt_text": "Edit the face to show silent chuckle shaking shoulders, keep identity coherent."
+  },
+  {
+    "id": 72,
+    "label": "confused tilt smirk combo",
+    "prompt_text": "Edit the face to show confused tilt smirk combo, keep identity coherent."
+  },
+  {
+    "id": 73,
+    "label": "polite listening slight nod expression",
+    "prompt_text": "Edit the face to show polite listening slight nod expression, keep identity coherent."
+  },
+  {
+    "id": 74,
+    "label": "interrupting mouth opening to speak",
+    "prompt_text": "Edit the face to show interrupting mouth opening to speak, keep identity coherent."
+  },
+  {
+    "id": 75,
+    "label": "shushing finger on lips secretive",
+    "prompt_text": "Edit the face to show shushing finger on lips secretive, keep identity coherent."
+  },
+  {
+    "id": 76,
+    "label": "blowing a kiss exaggerated",
+    "prompt_text": "Edit the face to show blowing a kiss exaggerated, keep identity coherent."
+  },
+  {
+    "id": 77,
+    "label": "duck face playful selfie",
+    "prompt_text": "Edit the face to show duck face playful selfie, keep identity coherent."
+  },
+  {
+    "id": 78,
+    "label": "fish gape meme face",
+    "prompt_text": "Edit the face to show fish gape meme face, keep identity coherent."
+  },
+  {
+    "id": 79,
+    "label": "stink eye with nose scrunch",
+    "prompt_text": "Edit the face to show stink eye with nose scrunch, keep identity coherent."
+  },
+  {
+    "id": 80,
+    "label": "double chin exaggerated joke face",
+    "prompt_text": "Edit the face to show double chin exaggerated joke face, keep identity coherent."
+  },
+  {
+    "id": 81,
+    "label": "cheek puff holding breath",
+    "prompt_text": "Edit the face to show cheek puff holding breath, keep identity coherent."
+  },
+  {
+    "id": 82,
+    "label": "one eyebrow raised challenge",
+    "prompt_text": "Edit the face to show one eyebrow raised challenge, keep identity coherent."
+  },
+  {
+    "id": 83,
+    "label": "both eyebrows raised exaggerated surprise",
+    "prompt_text": "Edit the face to show both eyebrows raised exaggerated surprise, keep identity coherent."
+  },
+  {
+    "id": 84,
+    "label": "lip bite nervous flirty",
+    "prompt_text": "Edit the face to show lip bite nervous flirty, keep identity coherent."
+  },
+  {
+    "id": 85,
+    "label": "nose crinkle joyful smile",
+    "prompt_text": "Edit the face to show nose crinkle joyful smile, keep identity coherent."
+  },
+  {
+    "id": 86,
+    "label": "eyes shimmering hope",
+    "prompt_text": "Edit the face to show eyes shimmering hope, keep identity coherent."
+  },
+  {
+    "id": 87,
+    "label": "grim determination teeth visible slight snarl",
+    "prompt_text": "Edit the face to show grim determination teeth visible slight snarl, keep identity coherent."
+  },
+  {
+    "id": 88,
+    "label": "broken smile sad eyes smiling lips",
+    "prompt_text": "Edit the face to show broken smile sad eyes smiling lips, keep identity coherent."
+  },
+  {
+    "id": 89,
+    "label": "thousand-yard stare hollow eyes",
+    "prompt_text": "Edit the face to show thousand-yard stare hollow eyes, keep identity coherent."
+  },
+  {
+    "id": 90,
+    "label": "zen patient faint smile",
+    "prompt_text": "Edit the face to show zen patient faint smile, keep identity coherent."
+  },
+  {
+    "id": 91,
+    "label": "maternal gentle warm eyes",
+    "prompt_text": "Edit the face to show maternal gentle warm eyes, keep identity coherent."
+  },
+  {
+    "id": 92,
+    "label": "stern disapproval look",
+    "prompt_text": "Edit the face to show stern disapproval look, keep identity coherent."
+  },
+  {
+    "id": 93,
+    "label": "childlike wonder bright eyes",
+    "prompt_text": "Edit the face to show childlike wonder bright eyes, keep identity coherent."
+  },
+  {
+    "id": 94,
+    "label": "older wise knowing half-smile",
+    "prompt_text": "Edit the face to show older wise knowing half-smile, keep identity coherent."
+  },
+  {
+    "id": 95,
+    "label": "villainous grin narrowed eyes",
+    "prompt_text": "Edit the face to show villainous grin narrowed eyes, keep identity coherent."
+  },
+  {
+    "id": 96,
+    "label": "heroic inspiring steadfast gaze",
+    "prompt_text": "Edit the face to show heroic inspiring steadfast gaze, keep identity coherent."
+  },
+  {
+    "id": 97,
+    "label": "shy peek from behind hands",
+    "prompt_text": "Edit the face to show shy peek from behind hands, keep identity coherent."
+  },
+  {
+    "id": 98,
+    "label": "peekaboo hands covering eyes playful",
+    "prompt_text": "Edit the face to show peekaboo hands covering eyes playful, keep identity coherent."
+  },
+  {
+    "id": 99,
+    "label": "ducking scared hands over head",
+    "prompt_text": "Edit the face to show ducking scared hands over head, keep identity coherent."
+  }
+]

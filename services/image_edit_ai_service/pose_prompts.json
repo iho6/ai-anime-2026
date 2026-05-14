@@ -1,0 +1,502 @@
+[
+  {
+    "id": 0,
+    "label": "standing upright with arms relaxed at sides",
+    "prompt_text": "Edit the subject to standing upright with arms relaxed at sides, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 1,
+    "label": "standing with hands on hips",
+    "prompt_text": "Edit the subject to standing with hands on hips, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 2,
+    "label": "standing with arms crossed",
+    "prompt_text": "Edit the subject to standing with arms crossed, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 3,
+    "label": "standing with one hand raised in a wave",
+    "prompt_text": "Edit the subject to standing with one hand raised in a wave, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 4,
+    "label": "standing saluting",
+    "prompt_text": "Edit the subject to standing saluting, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 5,
+    "label": "standing stretched tall reaching toward the sky",
+    "prompt_text": "Edit the subject to standing stretched tall reaching toward the sky, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 6,
+    "label": "standing in a contrapposto relaxed stance",
+    "prompt_text": "Edit the subject to standing in a contrapposto relaxed stance, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 7,
+    "label": "walking forward mid-stride",
+    "prompt_text": "Edit the subject to walking forward mid-stride, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 8,
+    "label": "walking casually with hands in pockets",
+    "prompt_text": "Edit the subject to walking casually with hands in pockets, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 9,
+    "label": "jogging lightly",
+    "prompt_text": "Edit the subject to jogging lightly, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 10,
+    "label": "running fast sprint pose",
+    "prompt_text": "Edit the subject to running fast sprint pose, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 11,
+    "label": "running with arms pumping",
+    "prompt_text": "Edit the subject to running with arms pumping, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 12,
+    "label": "crouching low ready to jump",
+    "prompt_text": "Edit the subject to crouching low ready to jump, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 13,
+    "label": "squatting deep with knees bent",
+    "prompt_text": "Edit the subject to squatting deep with knees bent, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 14,
+    "label": "squatting on toes balancing",
+    "prompt_text": "Edit the subject to squatting on toes balancing, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 15,
+    "label": "kneeling on one knee",
+    "prompt_text": "Edit the subject to kneeling on one knee, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 16,
+    "label": "kneeling upright with torso straight",
+    "prompt_text": "Edit the subject to kneeling upright with torso straight, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 17,
+    "label": "sitting on the ground legs crossed",
+    "prompt_text": "Edit the subject to sitting on the ground legs crossed, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 18,
+    "label": "sitting on a chair upright",
+    "prompt_text": "Edit the subject to sitting on a chair upright, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 19,
+    "label": "sitting slouched relaxed",
+    "prompt_text": "Edit the subject to sitting slouched relaxed, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 20,
+    "label": "lying on back looking up",
+    "prompt_text": "Edit the subject to lying on back looking up, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 21,
+    "label": "lying on side propped on elbow",
+    "prompt_text": "Edit the subject to lying on side propped on elbow, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 22,
+    "label": "lying face down on stomach",
+    "prompt_text": "Edit the subject to lying face down on stomach, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 23,
+    "label": "push-up position plank",
+    "prompt_text": "Edit the subject to push-up position plank, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 24,
+    "label": "mid-air jump legs tucked",
+    "prompt_text": "Edit the subject to mid-air jump legs tucked, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 25,
+    "label": "mid-air jump legs extended",
+    "prompt_text": "Edit the subject to mid-air jump legs extended, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 26,
+    "label": "jumping jack pose arms and legs spread",
+    "prompt_text": "Edit the subject to jumping jack pose arms and legs spread, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 27,
+    "label": "lunging forward one leg bent",
+    "prompt_text": "Edit the subject to lunging forward one leg bent, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 28,
+    "label": "side lunge stretching",
+    "prompt_text": "Edit the subject to side lunge stretching, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 29,
+    "label": "wide stance power pose",
+    "prompt_text": "Edit the subject to wide stance power pose, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 30,
+    "label": "stretching arms overhead to one side",
+    "prompt_text": "Edit the subject to stretching arms overhead to one side, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 31,
+    "label": "touching toes forward fold",
+    "prompt_text": "Edit the subject to touching toes forward fold, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 32,
+    "label": "yoga tree pose one foot on inner thigh",
+    "prompt_text": "Edit the subject to yoga tree pose one foot on inner thigh, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 33,
+    "label": "yoga warrior two stance",
+    "prompt_text": "Edit the subject to yoga warrior two stance, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 34,
+    "label": "yoga downward dog",
+    "prompt_text": "Edit the subject to yoga downward dog, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 35,
+    "label": "ballet first position",
+    "prompt_text": "Edit the subject to ballet first position, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 36,
+    "label": "dancing spin with arms out",
+    "prompt_text": "Edit the subject to dancing spin with arms out, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 37,
+    "label": "dancing arms raised above head",
+    "prompt_text": "Edit the subject to dancing arms raised above head, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 38,
+    "label": "fighting stance fists raised",
+    "prompt_text": "Edit the subject to fighting stance fists raised, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 39,
+    "label": "punching straight forward",
+    "prompt_text": "Edit the subject to punching straight forward, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 40,
+    "label": "defensive guard arms blocking",
+    "prompt_text": "Edit the subject to defensive guard arms blocking, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 41,
+    "label": "kicking high with one leg",
+    "prompt_text": "Edit the subject to kicking high with one leg, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 42,
+    "label": "holding imaginary heavy box",
+    "prompt_text": "Edit the subject to holding imaginary heavy box, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 43,
+    "label": "carrying bag over shoulder",
+    "prompt_text": "Edit the subject to carrying bag over shoulder, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 44,
+    "label": "lifting barbell overhead",
+    "prompt_text": "Edit the subject to lifting barbell overhead, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 45,
+    "label": "crawling on hands and knees",
+    "prompt_text": "Edit the subject to crawling on hands and knees, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 46,
+    "label": "tiptoeing quietly",
+    "prompt_text": "Edit the subject to tiptoeing quietly, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 47,
+    "label": "leaning against wall casual",
+    "prompt_text": "Edit the subject to leaning against wall casual, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 48,
+    "label": "leaning forward hands on knees catching breath",
+    "prompt_text": "Edit the subject to leaning forward hands on knees catching breath, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 49,
+    "label": "hands clasped behind back standing",
+    "prompt_text": "Edit the subject to hands clasped behind back standing, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 50,
+    "label": "pointing index finger forward",
+    "prompt_text": "Edit the subject to pointing index finger forward, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 51,
+    "label": "shrugging with palms up",
+    "prompt_text": "Edit the subject to shrugging with palms up, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 52,
+    "label": "facepalming one hand on forehead",
+    "prompt_text": "Edit the subject to facepalming one hand on forehead, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 53,
+    "label": "thinking pose hand on chin",
+    "prompt_text": "Edit the subject to thinking pose hand on chin, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 54,
+    "label": "arms wide open welcoming",
+    "prompt_text": "Edit the subject to arms wide open welcoming, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 55,
+    "label": "bowing slightly forward respectfully",
+    "prompt_text": "Edit the subject to bowing slightly forward respectfully, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 56,
+    "label": "polite bow with hands together",
+    "prompt_text": "Edit the subject to polite bow with hands together, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 57,
+    "label": "sitting on heels seiza style",
+    "prompt_text": "Edit the subject to sitting on heels seiza style, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 58,
+    "label": "perched on edge of seat leaning in",
+    "prompt_text": "Edit the subject to perched on edge of seat leaning in, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 59,
+    "label": "reclining legs extended lazy",
+    "prompt_text": "Edit the subject to reclining legs extended lazy, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 60,
+    "label": "side plank balance on one arm",
+    "prompt_text": "Edit the subject to side plank balance on one arm, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 61,
+    "label": "cartwheel freeze frame",
+    "prompt_text": "Edit the subject to cartwheel freeze frame, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 62,
+    "label": "cartwheel landing pose",
+    "prompt_text": "Edit the subject to cartwheel landing pose, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 63,
+    "label": "spinning on one foot ballet",
+    "prompt_text": "Edit the subject to spinning on one foot ballet, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 64,
+    "label": "ice skating glide pose",
+    "prompt_text": "Edit the subject to ice skating glide pose, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 65,
+    "label": "skiing tuck position",
+    "prompt_text": "Edit the subject to skiing tuck position, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 66,
+    "label": "surfboard balance stance",
+    "prompt_text": "Edit the subject to surfboard balance stance, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 67,
+    "label": "swimming crawl stroke mid-pull",
+    "prompt_text": "Edit the subject to swimming crawl stroke mid-pull, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 68,
+    "label": "climbing ladder pose one foot up",
+    "prompt_text": "Edit the subject to climbing ladder pose one foot up, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 69,
+    "label": "reaching high on tiptoes grabbing something",
+    "prompt_text": "Edit the subject to reaching high on tiptoes grabbing something, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 70,
+    "label": "stooping to pick object from ground",
+    "prompt_text": "Edit the subject to stooping to pick object from ground, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 71,
+    "label": "hugging self tightly",
+    "prompt_text": "Edit the subject to hugging self tightly, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 72,
+    "label": "holding umbrella overhead",
+    "prompt_text": "Edit the subject to holding umbrella overhead, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 73,
+    "label": "holding camera taking photo",
+    "prompt_text": "Edit the subject to holding camera taking photo, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 74,
+    "label": "reading book held in both hands",
+    "prompt_text": "Edit the subject to reading book held in both hands, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 75,
+    "label": "typing on invisible keyboard mid-air",
+    "prompt_text": "Edit the subject to typing on invisible keyboard mid-air, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 76,
+    "label": "talking on phone held to ear",
+    "prompt_text": "Edit the subject to talking on phone held to ear, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 77,
+    "label": "shouting cupping hands around mouth",
+    "prompt_text": "Edit the subject to shouting cupping hands around mouth, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 78,
+    "label": "whispering leaning toward viewer",
+    "prompt_text": "Edit the subject to whispering leaning toward viewer, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 79,
+    "label": "laughing holding belly bent slightly",
+    "prompt_text": "Edit the subject to laughing holding belly bent slightly, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 80,
+    "label": "crying wiping eye with back of hand",
+    "prompt_text": "Edit the subject to crying wiping eye with back of hand, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 81,
+    "label": "sleeping standing exaggerated slump",
+    "prompt_text": "Edit the subject to sleeping standing exaggerated slump, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 82,
+    "label": "marching with high knees",
+    "prompt_text": "Edit the subject to marching with high knees, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 83,
+    "label": "parade rest military stance",
+    "prompt_text": "Edit the subject to parade rest military stance, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 84,
+    "label": "presenting with open palm toward viewer",
+    "prompt_text": "Edit the subject to presenting with open palm toward viewer, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 85,
+    "label": "dj mixing hands on decks",
+    "prompt_text": "Edit the subject to dj mixing hands on decks, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 86,
+    "label": "conducting orchestra grand gesture",
+    "prompt_text": "Edit the subject to conducting orchestra grand gesture, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 87,
+    "label": "playing violin pose",
+    "prompt_text": "Edit the subject to playing violin pose, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 88,
+    "label": "playing guitar stance",
+    "prompt_text": "Edit the subject to playing guitar stance, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 89,
+    "label": "playing drums mid-strike",
+    "prompt_text": "Edit the subject to playing drums mid-strike, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 90,
+    "label": "goalkeeper diving save",
+    "prompt_text": "Edit the subject to goalkeeper diving save, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 91,
+    "label": "basketball jump shot release",
+    "prompt_text": "Edit the subject to basketball jump shot release, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 92,
+    "label": "tennis serve wind-up",
+    "prompt_text": "Edit the subject to tennis serve wind-up, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 93,
+    "label": "golf follow-through swing",
+    "prompt_text": "Edit the subject to golf follow-through swing, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 94,
+    "label": "baseball pitching windup",
+    "prompt_text": "Edit the subject to baseball pitching windup, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 95,
+    "label": "soccer kick planted foot",
+    "prompt_text": "Edit the subject to soccer kick planted foot, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 96,
+    "label": "rock climbing reaching for hold",
+    "prompt_text": "Edit the subject to rock climbing reaching for hold, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 97,
+    "label": "meditation lotus seated",
+    "prompt_text": "Edit the subject to meditation lotus seated, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 98,
+    "label": "tai chi slow extended arms",
+    "prompt_text": "Edit the subject to tai chi slow extended arms, keep identity and clothing coherent unless impossible."
+  },
+  {
+    "id": 99,
+    "label": "flexing biceps classic pose",
+    "prompt_text": "Edit the subject to flexing biceps classic pose, keep identity and clothing coherent unless impossible."
+  }
+]

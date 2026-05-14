@@ -1,0 +1,43 @@
+__pycache__/
+*.py[cod]
+
+# ComfyUI runtime dirs (now nested under comfyui/)
+/comfyui/output/
+/comfyui/input/
+!/comfyui/input/example.png
+/comfyui/models/
+/comfyui/temp/
+/comfyui/custom_nodes/
+!comfyui/custom_nodes/example_node.py.example
+/comfyui/extra_model_paths.yaml
+/comfyui/web/extensions/*
+!/comfyui/web/extensions/logging.js.example
+!/comfyui/web/extensions/core/
+/comfyui/tests-ui/data/object_info.json
+/comfyui/user/
+/comfyui/web_custom_versions/
+
+# IDE / editor
+/.vs
+.vscode/
+.idea/
+
+# Python envs
+venv*/
+.venv/
+.venv_min*/
+
+*.log
+.DS_Store
+openapi.yaml
+filtered-openapi.yaml
+uv.lock
+
+# Local reference clones / nested repos (not part of this repo)
+/reference_code/
+
+# Local env secrets (do not commit)
+set-env.local.ps1
+
+# Per-machine character data (poses, datasets, previews). Override path with ANIME_STORAGE_ROOT.
+/storage/characters/

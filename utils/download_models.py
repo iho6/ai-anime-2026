@@ -1,0 +1,600 @@
+#!/usr/bin/env python3
+"""Download model weights for AI workflows (anime2026).
+
+Reference: ComfyUI / Hugging Face model layouts for anime2026 services.
+
+Usage:
+    python utils/download_models.py --multi-angle [--hf-token YOUR_TOKEN]
+    python utils/download_models.py --image-edit [--hf-token YOUR_TOKEN]
+    python utils/download_models.py --anime-gen
+    python utils/download_models.py --background-removal
+    python utils/download_models.py --pose-keypoint
+    python utils/download_models.py --flf-lightning [--hf-token YOUR_TOKEN]
+    python utils/download_models.py --img2video-hunyuan-15 [--hf-token YOUR_TOKEN]
+    python utils/download_models.py --all  # all stacks (deduplicated)
+    python utils/download_models.py --all --force-redownload  # re-fetch HF weights (testing)
+"""
+
+import sys
+import os
+import shutil
+import time
+import urllib.error
+import urllib.request
+import ssl
+from pathlib import Path
+
+from tqdm import tqdm
+
+
+class _TqdmPipeLineStdout:
+    """Turn tqdm's CR-based refreshes into newline-terminated lines for piped parents."""
+
+    def __init__(self, raw):
+        self._raw = raw
+        self.encoding = getattr(raw, "encoding", None)
+
+    def write(self, s: str) -> int:
+        if not s:
+            return 0
+        if "\r" in s:
+            core = s.split("\r")[-1].rstrip()
+            if core:
+                self._raw.write(core + "\n")
+            return len(s)
+        self._raw.write(s)
+        return len(s)
+
+    def flush(self) -> None:
+        self._raw.flush()
+
+
+# Models required for multi-angle workflow (Qwen-Image-Edit-2511 + Multiple-Angles LoRA)
+# Base stack same as qwen-multiview; plus the multi-angle LoRA from fal.
+MULTI_ANGLE_MODELS = [
+    {
+        "name": "qwen_2.5_vl_7b_fp8_scaled.safetensors (Text Encoder)",
+        "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "path": "comfyui/models/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+    },
+    {
+        "name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors (LoRA)",
+        "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+        "path": "comfyui/models/loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+    },
+    {
+        "name": "qwen_image_edit_2511_bf16.safetensors (Diffusion Model)",
+        "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors",
+        "path": "comfyui/models/diffusion_models/qwen_image_edit_2511_bf16.safetensors",
+    },
+    {
+        "name": "qwen_image_vae.safetensors (VAE)",
+        "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors",
+        "path": "comfyui/models/vae/qwen_image_vae.safetensors",
+    },
+    {
+        "name": "qwen-image-edit-2511-multiple-angles-lora.safetensors (Multi-Angle LoRA)",
+        "url": "https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA/resolve/main/qwen-image-edit-2511-multiple-angles-lora.safetensors",
+        "path": "comfyui/models/loras/qwen-image-edit-2511-multiple-angles-lora.safetensors",
+    },
+]
+
+IMAGE_EDIT_MODELS = [
+    {
+        "name": "qwen_2.5_vl_7b_fp8_scaled.safetensors (Text Encoder)",
+        "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "path": "comfyui/models/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+    },
+    {
+        "name": "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors (LoRA)",
+        "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+        "path": "comfyui/models/loras/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+    },
+    {
+        "name": "qwen_image_edit_2509_fp8_e4m3fn.safetensors (Diffusion Model)",
+        "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors",
+        "path": "comfyui/models/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors",
+    },
+    {
+        "name": "qwen_image_vae.safetensors (VAE)",
+        "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors",
+        "path": "comfyui/models/vae/qwen_image_vae.safetensors",
+    },
+]
+
+# Anima preview T2I (image_anima_preview.json) — circlestone-labs/Anima
+ANIME_GEN_MODELS = [
+    {
+        "name": "anima-preview.safetensors (Diffusion)",
+        "url": "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-preview.safetensors",
+        "path": "comfyui/models/diffusion_models/anima-preview.safetensors",
+    },
+    {
+        "name": "qwen_3_06b_base.safetensors (CLIP)",
+        "url": "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors",
+        "path": "comfyui/models/text_encoders/qwen_3_06b_base.safetensors",
+    },
+    {
+        "name": "qwen_image_vae.safetensors (VAE, Anima bundle)",
+        "url": "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors",
+        "path": "comfyui/models/vae/qwen_image_vae.safetensors",
+    },
+]
+
+# SDPose whole-body checkpoint (utility_sdpose_ood_* workflows)
+POSE_KEYPOINT_MODELS = [
+    {
+        "name": "sdpose_wholebody_fp16.safetensors (SDPose checkpoint)",
+        "url": "https://huggingface.co/Comfy-Org/SDPose/resolve/main/checkpoints/sdpose_wholebody_fp16.safetensors",
+        "path": "comfyui/models/checkpoints/sdpose_wholebody_fp16.safetensors",
+    },
+]
+
+# Wan 2.2 first-last-frame (FLF) lightning API — video_wan2_2_14B_flf2v_lightning_api.json
+# URLs from Comfy-Org repackaged repos (same as workflow_library/video/video_wan2_2_14B_flf2v.json).
+FLF_LIGHTNING_MODELS = [
+    {
+        "name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors (Wan CLIP / text encoder)",
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "path": "comfyui/models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+    },
+    {
+        "name": "wan_2.1_vae.safetensors (VAE)",
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+        "path": "comfyui/models/vae/wan_2.1_vae.safetensors",
+    },
+    {
+        "name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors (UNet high noise)",
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+        "path": "comfyui/models/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+    },
+    {
+        "name": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors (UNet low noise)",
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+        "path": "comfyui/models/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+    },
+    {
+        "name": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors (LoRA)",
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+        "path": "comfyui/models/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+    },
+    {
+        "name": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors (LoRA)",
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+        "path": "comfyui/models/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+    },
+]
+
+# Hunyuan Video 1.5 720p I2V + EasyCache API — video_hunyuan_video_1.5_720p_i2v_api_easyCache.json
+# URLs from Comfy-Org repackaged / sigclip (same as workflow_library/video/video_hunyuan_video_1.5_720p_i2v.json).
+IMG2VIDEO_HUNYUAN_15_MODELS = [
+    {
+        "name": "qwen_2.5_vl_7b_fp8_scaled.safetensors (Hunyuan Video 1.5 text encoder 1)",
+        "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "path": "comfyui/models/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+    },
+    {
+        "name": "byt5_small_glyphxl_fp16.safetensors (Hunyuan Video 1.5 text encoder 2)",
+        "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/text_encoders/byt5_small_glyphxl_fp16.safetensors",
+        "path": "comfyui/models/text_encoders/byt5_small_glyphxl_fp16.safetensors",
+    },
+    {
+        "name": "sigclip_vision_patch14_384.safetensors (CLIP vision)",
+        "url": "https://huggingface.co/Comfy-Org/sigclip_vision_384/resolve/main/sigclip_vision_patch14_384.safetensors",
+        "path": "comfyui/models/clip_vision/sigclip_vision_patch14_384.safetensors",
+    },
+    {
+        "name": "hunyuanvideo1.5_720p_i2v_fp16.safetensors (UNet I2V)",
+        "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/diffusion_models/hunyuanvideo1.5_720p_i2v_fp16.safetensors",
+        "path": "comfyui/models/diffusion_models/hunyuanvideo1.5_720p_i2v_fp16.safetensors",
+    },
+    {
+        "name": "hunyuanvideo15_vae_fp16.safetensors (VAE)",
+        "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/vae/hunyuanvideo15_vae_fp16.safetensors",
+        "path": "comfyui/models/vae/hunyuanvideo15_vae_fp16.safetensors",
+    },
+]
+
+
+SERVICE_MODEL_MAP = {
+    "multi_angle": MULTI_ANGLE_MODELS,
+    "image_edit": IMAGE_EDIT_MODELS,
+    "anime_gen": ANIME_GEN_MODELS,
+    "pose_keypoint": POSE_KEYPOINT_MODELS,
+    "flf_lightning": FLF_LIGHTNING_MODELS,
+    "img2video_hunyuan_15": IMG2VIDEO_HUNYUAN_15_MODELS,
+}
+
+
+def _is_windows_sharing_violation(exc: BaseException) -> bool:
+    if os.name != "nt":
+        return False
+    return isinstance(exc, OSError) and getattr(exc, "winerror", None) == 32
+
+
+def _replace_with_retry(part: Path, dest: Path) -> None:
+    """Commit ``.part`` to final path; retry on transient Windows file locks (WinError 32)."""
+    max_attempts = 25
+    delay_s = 0.25
+    for attempt in range(max_attempts):
+        try:
+            os.replace(part, dest)
+            return
+        except OSError as e:
+            if not _is_windows_sharing_violation(e):
+                raise
+            if attempt >= max_attempts - 1:
+                print(
+                    "    HINT: Another program may be locking files under comfyui\\models\\ "
+                    "(e.g. Windows Defender, Explorer preview, or cloud sync). "
+                    "Try again or add an exclusion; re-run this script to resume."
+                )
+                raise
+            time.sleep(delay_s)
+            delay_s = min(2.0, delay_s + 0.25)
+
+
+def download_file(
+    url: str,
+    destination: str,
+    description: str = None,
+    hf_token: str = None,
+    skip_ssl_verify: bool = False,
+    force_redownload: bool = False,
+) -> bool:
+    """Download a file from URL to destination with optional HF authentication."""
+    destination_path = Path(destination)
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+
+    part_path = destination_path.with_suffix(destination_path.suffix + ".part")
+    if force_redownload:
+        if part_path.exists():
+            try:
+                part_path.unlink()
+            except OSError as e:
+                print(f"  ERROR: Could not remove partial download {part_path}: {e}")
+                return False
+        if destination_path.exists():
+            try:
+                destination_path.unlink()
+                print(f"  --force-redownload: removed existing {destination_path.name}")
+            except OSError as e:
+                print(f"  ERROR: Could not remove existing file {destination_path}: {e}")
+                return False
+
+    if destination_path.exists():
+        file_size = destination_path.stat().st_size
+        print(f"  OK  {description or destination_path.name} already exists ({file_size / (1024*1024):.1f} MB)")
+        return True
+
+    print(f"  Downloading {description or destination_path.name}...")
+    print(f"    From: {url}")
+    print(f"    To: {destination}")
+
+    try:
+        ssl_context = None
+        if skip_ssl_verify:
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            print("    WARN: SSL verification disabled for this download")
+
+        req = urllib.request.Request(url)
+        if hf_token and "huggingface.co" in url:
+            req.add_header("Authorization", f"Bearer {hf_token}")
+
+        if part_path.exists():
+            try:
+                part_path.unlink()
+            except Exception:
+                pass
+
+        with urllib.request.urlopen(req, context=ssl_context) as resp:
+            total = resp.headers.get("Content-Length")
+            total_bytes = int(total) if total and str(total).isdigit() else None
+            chunk_size = 1024 * 1024
+            desc = (description or destination_path.name).strip()
+
+            with tqdm(
+                total=total_bytes,
+                unit="B",
+                unit_scale=True,
+                unit_divisor=1024,
+                desc=desc,
+                dynamic_ncols=False,
+                disable=False,
+                file=_TqdmPipeLineStdout(sys.stdout),
+            ) as bar:
+                with open(part_path, "wb") as f:
+                    while True:
+                        chunk = resp.read(chunk_size)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        bar.update(len(chunk))
+                    f.flush()
+                    os.fsync(f.fileno())
+
+        part_size = part_path.stat().st_size if part_path.exists() else 0
+        if part_size <= 0:
+            print("  ERROR: Download failed - empty file")
+            try:
+                part_path.unlink()
+            except Exception:
+                pass
+            return False
+
+        _replace_with_retry(part_path, destination_path)
+        file_size = destination_path.stat().st_size
+        print(f"  OK  Successfully downloaded ({file_size / (1024*1024):.1f} MB)")
+        return True
+
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            print(f"  ERROR: Authorization failed: {e}")
+            print("    Get your token from: https://huggingface.co/settings/tokens")
+            print("    Then run: python utils/download_models.py --<flag> --hf-token YOUR_TOKEN")
+        else:
+            print(f"  ERROR: Download failed: {e}")
+        return False
+    except Exception as e:
+        print(f"  ERROR: Download failed: {e}")
+        try:
+            part_path  # type: ignore[name-defined]
+        except Exception:
+            part_path = None
+        if part_path:
+            try:
+                Path(part_path).unlink()
+            except Exception:
+                pass
+        return False
+
+
+def download_model_group(
+    title: str,
+    models: list[dict],
+    hf_token: str | None = None,
+    *,
+    force_redownload: bool = False,
+) -> bool:
+    """Download all models in a group."""
+    print("=" * 60)
+    print(title)
+    print("=" * 60)
+    Path("comfyui/models/configs").mkdir(parents=True, exist_ok=True)
+    print("[OK] Created/verified comfyui/models/configs directory")
+
+    success = 0
+    for model in models:
+        if download_file(
+            model["url"],
+            model["path"],
+            model["name"],
+            hf_token,
+            force_redownload=force_redownload,
+        ):
+            success += 1
+
+    print("\n" + "=" * 60)
+    print(f"Download complete: {success}/{len(models)} models")
+    print("=" * 60)
+    return success == len(models)
+
+
+def _dedupe_models(models: list[dict]) -> list[dict]:
+    """Deduplicate models by destination path (first definition wins)."""
+    deduped: list[dict] = []
+    seen_paths: set[str] = set()
+    for model in models:
+        path = str(model.get("path", "")).strip()
+        if not path or path in seen_paths:
+            continue
+        deduped.append(model)
+        seen_paths.add(path)
+    return deduped
+
+
+def _collect_selected_models(args) -> list[dict]:
+    selected_keys: list[str] = []
+    if args.all:
+        selected_keys = list(SERVICE_MODEL_MAP.keys())
+    else:
+        if args.multi_angle:
+            selected_keys.append("multi_angle")
+        if args.image_edit:
+            selected_keys.append("image_edit")
+        if args.anime_gen:
+            selected_keys.append("anime_gen")
+        if args.pose_keypoint:
+            selected_keys.append("pose_keypoint")
+        if args.flf_lightning:
+            selected_keys.append("flf_lightning")
+        if args.img2video_hunyuan_15:
+            selected_keys.append("img2video_hunyuan_15")
+
+    selected_models: list[dict] = []
+    for key in selected_keys:
+        selected_models.extend(SERVICE_MODEL_MAP[key])
+    return _dedupe_models(selected_models)
+
+
+def run_background_removal_bootstrap(
+    hf_token: str | None = None,
+    *,
+    force_redownload: bool = False,
+) -> bool:
+    """
+    Prefetch RMBG-2.0 into comfyui/models/RMBG/RMBG-2.0 for ComfyUI-RMBG
+    (background_removal_ai_service).
+    """
+    print("=" * 60)
+    print("Background-removal model bootstrap (briaai/RMBG-2.0)")
+    print("=" * 60)
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as e:
+        print(f"  ERROR: huggingface_hub is required: {e}")
+        print("=" * 60)
+        return False
+
+    dest = Path.cwd() / "comfyui" / "models" / "RMBG" / "RMBG-2.0"
+    token = (hf_token or os.environ.get("HF_TOKEN") or "").strip() or None
+
+    if force_redownload and dest.exists():
+        try:
+            shutil.rmtree(dest)
+            print(f"  --force-redownload: removed {dest}")
+        except OSError as e:
+            print(f"  ERROR: could not remove {dest}: {e}")
+            print("=" * 60)
+            return False
+
+    try:
+        if dest.exists() and any(dest.iterdir()):
+            print(f"  OK  RMBG-2.0 already present at {dest}")
+            print("=" * 60)
+            return True
+    except OSError:
+        pass
+
+    try:
+        snapshot_download(
+            repo_id="briaai/RMBG-2.0",
+            local_dir=str(dest),
+            token=token,
+        )
+        print(f"  OK  briaai/RMBG-2.0 -> {dest}")
+        print("=" * 60)
+        return True
+    except Exception as e:
+        print(f"  ERROR: RMBG-2.0 download failed: {e}")
+        print(
+            "  Tip: accept the model license on Hugging Face; set HF_TOKEN if gated."
+        )
+        print("=" * 60)
+        return False
+
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Download model weights for ComfyUI AI service workflows.",
+        epilog=(
+            "Examples:\n"
+            "  python utils/download_models.py --multi-angle --hf-token hf_xxx\n"
+            "  python utils/download_models.py --image-edit\n"
+            "  python utils/download_models.py --anime-gen\n"
+            "  python utils/download_models.py --background-removal\n"
+            "  python utils/download_models.py --pose-keypoint\n"
+            "  python utils/download_models.py --flf-lightning\n"
+            "  python utils/download_models.py --img2video-hunyuan-15\n"
+            "  python utils/download_models.py --all"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--multi-angle",
+        action="store_true",
+        help="Download models for multi-angle workflow (Qwen-Image-Edit-2511 + Multiple-Angles LoRA)",
+    )
+    parser.add_argument(
+        "--image-edit",
+        action="store_true",
+        help="Download models for image_edit_ai_service (Qwen-Image-Edit 2509 + Lightning LoRA)",
+    )
+    parser.add_argument(
+        "--anime-gen",
+        action="store_true",
+        help="Download models for anime_img_gen_ai_service (Anima preview T2I)",
+    )
+    parser.add_argument(
+        "--background-removal",
+        action="store_true",
+        help=(
+            "Download RMBG-2.0 weights into comfyui/models/RMBG/RMBG-2.0 "
+            "(ComfyUI-RMBG / background_removal_ai_service)"
+        ),
+    )
+    parser.add_argument(
+        "--pose-keypoint",
+        action="store_true",
+        help="Download SDPose checkpoint for pose_keypoint_ai_service",
+    )
+    parser.add_argument(
+        "--flf-lightning",
+        action="store_true",
+        help=(
+            "Download Wan 2.2 FLF lightning weights for flf2video_ai_service "
+            "(video_wan2_2_14B_flf2v_lightning_api; large download, tens of GB)"
+        ),
+    )
+    parser.add_argument(
+        "--img2video-hunyuan-15",
+        action="store_true",
+        dest="img2video_hunyuan_15",
+        help=(
+            "Download Hunyuan Video 1.5 720p I2V weights for img2video_ai_service "
+            "(video_hunyuan_video_1.5_720p_i2v_api_easyCache; large download)"
+        ),
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Download all service model stacks with deduplication by destination path",
+    )
+    parser.add_argument(
+        "--force-redownload",
+        action="store_true",
+        help=(
+            "Delete existing destination files and re-download HF weights "
+            "(for timing tests or repair; also reapplies to RMBG-2.0 folder "
+            "when --background-removal or --all is used)"
+        ),
+    )
+    parser.add_argument(
+        "--hf-token",
+        type=str,
+        help="Hugging Face API token (or set HF_TOKEN env var)",
+    )
+    args = parser.parse_args()
+
+    if (
+        not args.multi_angle
+        and not args.image_edit
+        and not args.anime_gen
+        and not args.background_removal
+        and not args.pose_keypoint
+        and not args.flf_lightning
+        and not args.img2video_hunyuan_15
+        and not args.all
+    ):
+        parser.print_help()
+        print("\nError: specify at least one model flag (or --all).")
+        sys.exit(1)
+
+    hf_token = args.hf_token or os.environ.get("HF_TOKEN")
+    if not hf_token:
+        print("\nWarning: No Hugging Face token provided. Some downloads may fail.")
+        print("Get your token from: https://huggingface.co/settings/tokens\n")
+
+    ok = True
+    selected_models = _collect_selected_models(args)
+    if selected_models:
+        ok = download_model_group(
+            "Service model download (deduplicated by destination path)",
+            selected_models,
+            hf_token,
+            force_redownload=args.force_redownload,
+        ) and ok
+    if args.background_removal or args.all:
+        ok = run_background_removal_bootstrap(
+            hf_token=hf_token,
+            force_redownload=args.force_redownload,
+        ) and ok
+    sys.exit(0 if ok else 1)
+
+
+if __name__ == "__main__":
+    main()

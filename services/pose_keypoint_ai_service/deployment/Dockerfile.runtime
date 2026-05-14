@@ -1,0 +1,34 @@
+ARG BUILDER_IMAGE
+FROM ${BUILDER_IMAGE} AS builder
+FROM nvidia/cuda:12.4.0-devel-ubuntu22.04
+WORKDIR /anime2026/
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+RUN apt update && apt install -y software-properties-common \
+    && add-apt-repository -y ppa:deadsnakes/ppa && apt update \
+    && apt install -y python3.12 python3.12-dev python3.12-venv \
+    && apt-get install -y \
+    git wget curl gnupg ca-certificates libgl1 libsm6 libxext6 libxrender-dev \
+    libglib2.0-0 libheif1 libavif-dev netcat-openbsd build-essential gcc g++ make ninja-build \
+    && ln -sf /usr/bin/python3.12 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3.12 /usr/bin/python \
+    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV FORCE_CUDA="1"
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.9;9.0"
+ENV CUDA_HOME=/usr/local/cuda
+RUN python3 -m pip install --upgrade pip setuptools wheel
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu124 -r /tmp/requirements.txt
+
+ENV FORCE_CUDA=""
+ENV TORCH_CUDA_ARCH_LIST=""
+
+COPY --from=builder /anime2026/ ./
+RUN chmod +x services/pose_keypoint_ai_service/entrypoint.sh
+ENTRYPOINT ["services/pose_keypoint_ai_service/entrypoint.sh"]
+CMD ["--enable-pose-keypoint", "--serverless"]

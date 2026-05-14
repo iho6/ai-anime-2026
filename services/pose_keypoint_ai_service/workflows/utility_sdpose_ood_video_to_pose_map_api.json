@@ -1,0 +1,122 @@
+{
+  "679": {
+    "inputs": {
+      "file": "man_in_the_rain.mp4"
+    },
+    "class_type": "LoadVideo",
+    "_meta": {
+      "title": "Load Video"
+    }
+  },
+  "680": {
+    "inputs": {
+      "filename_prefix": "video/ComfyUI",
+      "format": "auto",
+      "codec": "auto",
+      "video": [
+        "681",
+        0
+      ]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save Video"
+    }
+  },
+  "681": {
+    "inputs": {
+      "fps": [
+        "675:677",
+        2
+      ],
+      "images": [
+        "675:672",
+        0
+      ],
+      "audio": [
+        "675:677",
+        1
+      ]
+    },
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Create Video"
+    }
+  },
+  "675:673": {
+    "inputs": {
+      "ckpt_name": "sdpose_wholebody_fp16.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "675:674": {
+    "inputs": {
+      "resize_type": "scale longer dimension",
+      "resize_type.longer_size": 1024,
+      "scale_method": "lanczos",
+      "input": [
+        "675:677",
+        0
+      ]
+    },
+    "class_type": "ResizeImageMaskNode",
+    "_meta": {
+      "title": "Resize Image/Mask"
+    }
+  },
+  "675:671": {
+    "inputs": {
+      "batch_size": 16,
+      "model": [
+        "675:673",
+        0
+      ],
+      "vae": [
+        "675:673",
+        2
+      ],
+      "image": [
+        "675:674",
+        0
+      ]
+    },
+    "class_type": "SDPoseKeypointExtractor",
+    "_meta": {
+      "title": "SDPoseKeypointExtractor"
+    }
+  },
+  "675:672": {
+    "inputs": {
+      "draw_body": true,
+      "draw_hands": true,
+      "draw_face": true,
+      "draw_feet": true,
+      "stick_width": 4,
+      "face_point_size": 2,
+      "score_threshold": 0.5,
+      "keypoints": [
+        "675:671",
+        0
+      ]
+    },
+    "class_type": "SDPoseDrawKeypoints",
+    "_meta": {
+      "title": "SDPoseDrawKeypoints"
+    }
+  },
+  "675:677": {
+    "inputs": {
+      "video": [
+        "679",
+        0
+      ]
+    },
+    "class_type": "GetVideoComponents",
+    "_meta": {
+      "title": "Get Video Components"
+    }
+  }
+}

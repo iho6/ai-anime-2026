@@ -1,0 +1,5 @@
+/comfyui/web/assets/** linguist-generated
+/comfyui/web/** linguist-vendored
+comfyui/comfy_api_nodes/apis/__init__.py linguist-generated
+
+# Character assets live under storage/characters/ (gitignored, optional ANIME_STORAGE_ROOT).

@@ -1,0 +1,88 @@
+{
+  "667": {
+    "inputs": {
+      "image": "PXL_20260316_093900233.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "669": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "675:672",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "675:671": {
+    "inputs": {
+      "batch_size": 16,
+      "model": [
+        "675:673",
+        0
+      ],
+      "vae": [
+        "675:673",
+        2
+      ],
+      "image": [
+        "675:674",
+        0
+      ]
+    },
+    "class_type": "SDPoseKeypointExtractor",
+    "_meta": {
+      "title": "SDPoseKeypointExtractor"
+    }
+  },
+  "675:672": {
+    "inputs": {
+      "draw_body": true,
+      "draw_hands": true,
+      "draw_face": true,
+      "draw_feet": true,
+      "stick_width": 4,
+      "face_point_size": 2,
+      "score_threshold": 0.5,
+      "keypoints": [
+        "675:671",
+        0
+      ]
+    },
+    "class_type": "SDPoseDrawKeypoints",
+    "_meta": {
+      "title": "SDPoseDrawKeypoints"
+    }
+  },
+  "675:673": {
+    "inputs": {
+      "ckpt_name": "sdpose_wholebody_fp16.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "675:674": {
+    "inputs": {
+      "resize_type": "scale longer dimension",
+      "resize_type.longer_size": 1024,
+      "scale_method": "area",
+      "input": [
+        "667",
+        0
+      ]
+    },
+    "class_type": "ResizeImageMaskNode",
+    "_meta": {
+      "title": "Resize Image/Mask"
+    }
+  }
+}
