@@ -4,6 +4,8 @@ param(
   [int]$FrontendPort = 3000,
   [string]$VenvDir = ".venv",
   [switch]$SkipPythonInstall,
+  [switch]$KillPorts,
+  [switch]$ForcePipInstall,
   [ValidateSet("minimal", "full")]
   [string]$BootstrapMode = "minimal"
 )
@@ -42,12 +44,19 @@ function Kill-ListenersOnPort {
   }
 }
 
+$PipSentinel = Join-Path $VenvPath ".pip-minimal-ok"
+
 function Ensure-BootstrapPythonDeps {
+  if ((Test-Path $PipSentinel) -and -not $ForcePipInstall) {
+    Write-MetaLog "Minimal deps sentinel present — skipping pip (use -ForcePipInstall to refresh)"
+    return
+  }
   Write-MetaLog "Ensuring minimal Python deps (FastAPI/uvicorn) in venv..."
-  & $VenvPython -m pip install --upgrade pip "setuptools<82" wheel
+  & $VenvPython -m pip install pip "setuptools<82" wheel
   # Keep this list small; must cover imports at API startup.
   # services.character_storage imports requests; FastAPI needs python-multipart for File/Form.
   & $VenvPython -m pip install fastapi "uvicorn[standard]" pydantic starlette requests python-multipart
+  $null | Out-File $PipSentinel -Encoding utf8
   Write-MetaLog "Minimal deps installed"
 }
 
@@ -110,10 +119,12 @@ function Resolve-PythonExe {
   return $null
 }
 
-# --- Kill stale listeners before doing anything ---
-Kill-ListenersOnPort $ApiPort
-Kill-ListenersOnPort $FrontendPort
-Kill-ListenersOnPort 8188
+# --- Kill stale listeners (opt-in: -KillPorts) ---
+if ($KillPorts) {
+  Kill-ListenersOnPort $ApiPort
+  Kill-ListenersOnPort $FrontendPort
+  Kill-ListenersOnPort 8188
+}
 
 # --- Python venv ---
 $PythonExe = Resolve-PythonExe
@@ -124,6 +135,7 @@ if (-not $PythonExe) {
 if (-not (Test-Path $VenvPython)) {
   Write-MetaLog "Creating venv at: $VenvPath"
   & $PythonExe -m venv $VenvPath
+  Remove-Item -Path $PipSentinel -ErrorAction SilentlyContinue
   Write-MetaLog "Venv creation completed"
 }
 
