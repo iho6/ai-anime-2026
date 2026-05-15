@@ -906,6 +906,23 @@ export async function apiLocationDeleteItems(params: {
   await readJson<{ ok: boolean }>(res);
 }
 
+export async function apiLocationGalleryReorder(params: {
+  locationKey: string;
+  view: string[];
+  lighting: string[];
+}): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/detail/${encodeURIComponent(params.locationKey)}/location/gallery_reorder`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ view: params.view, lighting: params.lighting }),
+      credentials: "omit",
+    }
+  );
+  await readJson<{ ok: boolean }>(res);
+}
+
 export async function apiLocationAiEdit(params: {
   locationKey: string;
   section: "view" | "lighting";
@@ -922,6 +939,22 @@ export async function apiLocationAiEdit(params: {
         sourceRelPath: params.sourceRelPath,
         promptText: params.promptText,
       }),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ relPath: string }>(res);
+}
+
+export async function apiLocationOutpaint(params: {
+  locationKey: string;
+  promptText: string;
+}): Promise<{ relPath: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/detail/${encodeURIComponent(params.locationKey)}/location/outpaint`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ promptText: params.promptText }),
       credentials: "omit",
     }
   );

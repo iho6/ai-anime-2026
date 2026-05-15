@@ -8,6 +8,8 @@ export function AiEditModal(props: {
   title?: string;
   imageSrc: string;
   busy?: boolean;
+  placeholder?: string;
+  actionLabel?: string;
   onCancel: () => void;
   onGenerate: (promptText: string) => void | Promise<void>;
 }) {
@@ -16,6 +18,8 @@ export function AiEditModal(props: {
     title = "AI Edit",
     imageSrc,
     busy = false,
+    placeholder = "Enter prompt to edit the image",
+    actionLabel = "Generate",
     onCancel,
     onGenerate,
   } = props;
@@ -116,7 +120,7 @@ export function AiEditModal(props: {
               value={prompt}
               disabled={busy}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Enter prompt to edit the image"
+              placeholder={placeholder}
               rows={3}
               style={{
                 width: "100%",
@@ -152,7 +156,7 @@ export function AiEditModal(props: {
                   void onGenerate(prompt.trim());
                 }}
               >
-                Generate
+                {actionLabel}
               </button>
               <button
                 type="button"

@@ -102,21 +102,60 @@ def _write_hidden(location_key: str, values: set[str]) -> None:
     hf.write_text(json.dumps({"hidden": sorted(values)}, indent=2), encoding="utf-8")
 
 
-def _list_section(location_key: str, section: str) -> list[dict[str, str]]:
+def _order_file(location_key: str) -> Path:
+    return _location_dir(location_key) / "gallery_order.json"
+
+
+def _read_gallery_order(location_key: str) -> dict[str, list[str]]:
+    of = _order_file(location_key)
+    if not of.is_file():
+        return {}
+    try:
+        data = json.loads(of.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return {}
+        return {k: [str(x) for x in v] for k, v in data.items() if isinstance(v, list)}
+    except Exception:
+        return {}
+
+
+def _write_gallery_order(location_key: str, order: dict[str, list[str]]) -> None:
+    of = _order_file(location_key)
+    of.parent.mkdir(parents=True, exist_ok=True)
+    of.write_text(json.dumps(order, indent=2), encoding="utf-8")
+
+
+def _list_section(
+    location_key: str, section: str, order: list[str] | None = None
+) -> list[dict[str, str]]:
     d = _location_dir(location_key) / section
     if not d.is_dir():
         return []
+    all_files: dict[str, Path] = {
+        p.name: p
+        for p in d.iterdir()
+        if p.is_file() and p.suffix.lower() in _IMG_EXTS
+    }
     out: list[dict[str, str]] = []
-    for p in sorted(d.iterdir()):
-        if p.is_file() and p.suffix.lower() in _IMG_EXTS:
-            rel = storage_rel_from_abs(str(p))
-            out.append(
-                {
+    seen: set[str] = set()
+    if order:
+        for fn in order:
+            if fn in all_files and fn not in seen:
+                p = all_files[fn]
+                out.append({
                     "itemId": f"{section}:{p.name}",
                     "folderKey": section,
-                    "relPath": rel,
-                }
-            )
+                    "relPath": storage_rel_from_abs(str(p)),
+                })
+                seen.add(fn)
+    for fn in sorted(all_files):
+        if fn not in seen:
+            p = all_files[fn]
+            out.append({
+                "itemId": f"{section}:{p.name}",
+                "folderKey": section,
+                "relPath": storage_rel_from_abs(str(p)),
+            })
     return out
 
 
@@ -343,8 +382,9 @@ def new_location_import_from_archive(payload: NewLocationRelPathPayload) -> dict
 @router.get("/detail/{location_key}/location/gallery_split")
 def location_gallery_split(location_key: str) -> dict[str, Any]:
     _migrate_angle_to_view(location_key)
-    lighting = _list_section(location_key, "lighting")
-    view_files = _list_section(location_key, "view")
+    stored_order = _read_gallery_order(location_key)
+    lighting = _list_section(location_key, "lighting", stored_order.get("lighting"))
+    view_files = _list_section(location_key, "view", stored_order.get("view"))
     hidden = _read_hidden(location_key)
     base_path = _base_image_for_location(location_key)
     base_rel: str | None = storage_rel_from_abs(str(base_path)) if base_path else None
@@ -514,6 +554,59 @@ def location_generate(location_key: str, body: dict[str, str]) -> dict[str, str]
     dest = d / f"{sec}_{unique_suffix(12)}{ext}"
     shutil.copy2(src, dest)
     return {"relPath": storage_rel_from_abs(str(dest))}
+
+
+class GalleryReorderPayload(BaseModel):
+    view: list[str] = []
+    lighting: list[str] = []
+
+
+@router.post("/detail/{location_key}/location/gallery_reorder")
+def location_gallery_reorder(
+    location_key: str, payload: GalleryReorderPayload
+) -> dict[str, bool]:
+    d = _ensure_location_dirs(location_key)
+    hidden = _read_hidden(location_key)
+    hidden_changed = False
+
+    def _process(item_id: str, target_section: str) -> str | None:
+        if ":" not in item_id:
+            return None
+        colonIdx = item_id.index(":")
+        current_section = item_id[:colonIdx]
+        filename = item_id[colonIdx + 1:]
+        if current_section == "root":
+            return None
+        nonlocal hidden_changed
+        if current_section != target_section:
+            src = d / current_section / filename
+            if src.is_file():
+                (d / target_section).mkdir(parents=True, exist_ok=True)
+                shutil.move(str(src), str(d / target_section / filename))
+            old_id = f"{current_section}:{filename}"
+            new_id = f"{target_section}:{filename}"
+            if old_id in hidden:
+                hidden.discard(old_id)
+                hidden.add(new_id)
+                hidden_changed = True
+        return filename
+
+    view_fns: list[str] = []
+    for iid in payload.view:
+        fn = _process(iid, "view")
+        if fn is not None:
+            view_fns.append(fn)
+
+    lighting_fns: list[str] = []
+    for iid in payload.lighting:
+        fn = _process(iid, "lighting")
+        if fn is not None:
+            lighting_fns.append(fn)
+
+    if hidden_changed:
+        _write_hidden(location_key, hidden)
+    _write_gallery_order(location_key, {"view": view_fns, "lighting": lighting_fns})
+    return {"ok": True}
 
 
 @router.post("/detail/{location_key}/location/hide")

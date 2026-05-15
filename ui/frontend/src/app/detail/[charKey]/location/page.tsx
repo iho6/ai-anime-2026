@@ -4,9 +4,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation";
 import {
   apiLocationAiEdit,
+  apiLocationOutpaint,
   apiLocationAngleGroups,
   apiLocationDeleteItems,
   apiLocationGallerySplit,
+  apiLocationGalleryReorder,
   apiLocationGenerateAnglesStream,
   apiLocationHide,
   apiLocationSaveViewCopy,
@@ -16,6 +18,8 @@ import {
   type AngleGroup,
   type LocationGalleryItem,
 } from "../../../../lib/api";
+import { SortableMultiGrid, SortableItemInContainer } from "../../../../components/dnd/SortableMultiGrid";
+import { reorderInsertBeforeOrAfter } from "../../../../components/dnd/reorder";
 import { AiEditModal } from "../../../../components/AiEditModal";
 import { AngleSubsetModal } from "../../../../components/AngleSubsetModal";
 import { DesktopContextMenu, type ContextMenuItem } from "../../../../components/DesktopContextMenu";
@@ -354,6 +358,11 @@ export default function LocationDetailPage() {
     baseRelPath: string | null;
   } | null>(null);
   const [previewVersion, setPreviewVersion] = useState(0);
+  const [selectedPreviewId, setSelectedPreviewId] = useState<string | null>(null);
+  const [dragContainers, setDragContainers] = useState<{ view: string[]; lighting: string[] }>({
+    view: [],
+    lighting: [],
+  });
 
   const [busy, setBusy] = useState(false);
   const [cropMode, setCropMode] = useState(false);
@@ -380,6 +389,7 @@ export default function LocationDetailPage() {
   });
   const [aiOpen, setAiOpen] = useState(false);
   const [aiCtx, setAiCtx] = useState<LocationGalleryItem | null>(null);
+  const [outpaintOpen, setOutpaintOpen] = useState(false);
   const [lightbox, setLightbox] = useState<{ paths: string[]; index: number; title: string } | null>(null);
 
   const refresh = useCallback(async () => {
@@ -537,35 +547,45 @@ export default function LocationDetailPage() {
     ];
   }, [menu.item, split, locationKey, refresh]);
 
-  const renderSection = (title: string, items: LocationGalleryItem[]) => (
+  const renderSection = (
+    title: string,
+    items: LocationGalleryItem[],
+    opts?: { selectable?: boolean },
+  ) => (
     <div style={{ marginBottom: 14 }}>
       <div style={{ marginBottom: 6 }}>{title}</div>
       <ResizableScrollGallery aria-label={title}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {items.map((it) => (
-            <button
-              key={it.itemId}
-              type="button"
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setMenu({ open: true, x: e.clientX, y: e.clientY, item: it });
-              }}
-              style={{
-                width: 120,
-                height: 120,
-                border: "1px solid rgba(0,0,0,0.35)",
-                background: "transparent",
-                padding: 0,
-                overflow: "hidden",
-              }}
-            >
-              <img
-                src={assetUrlFromRelPath(it.relPath)}
-                alt=""
-                style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-              />
-            </button>
-          ))}
+          {items.map((it) => {
+            const isSelected = opts?.selectable && it.itemId === selectedPreviewId;
+            return (
+              <button
+                key={it.itemId}
+                type="button"
+                onClick={opts?.selectable ? () => setSelectedPreviewId(it.itemId) : undefined}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setMenu({ open: true, x: e.clientX, y: e.clientY, item: it });
+                }}
+                style={{
+                  width: 120,
+                  height: 120,
+                  border: isSelected ? "2px solid #000" : "1px solid rgba(0,0,0,0.35)",
+                  background: "transparent",
+                  padding: 0,
+                  overflow: "hidden",
+                  cursor: opts?.selectable ? "pointer" : undefined,
+                  boxSizing: "border-box",
+                }}
+              >
+                <img
+                  src={assetUrlFromRelPath(it.relPath)}
+                  alt=""
+                  style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                />
+              </button>
+            );
+          })}
         </div>
       </ResizableScrollGallery>
     </div>
@@ -574,6 +594,38 @@ export default function LocationDetailPage() {
   const baseRel = split?.baseRelPath ?? null;
   const previewSrc = baseRel ? `${assetUrlFromRelPath(baseRel)}?v=${previewVersion}` : "";
   const canSaveCrop = Boolean(cropMode && cropPx && baseRel);
+
+  const previewList = useMemo(
+    () => [...(split?.view ?? []), ...(split?.lighting ?? [])],
+    [split],
+  );
+  const selectedPreviewIndex = selectedPreviewId
+    ? previewList.findIndex((x) => x.itemId === selectedPreviewId)
+    : -1;
+  const effectivePreviewIndex = selectedPreviewId ? selectedPreviewIndex : 0;
+  const effectivePreviewItem = previewList[effectivePreviewIndex] ?? null;
+  const effectiveRelPath = effectivePreviewItem?.relPath ?? baseRel ?? "";
+  const effectivePreviewSrc = effectiveRelPath
+    ? `${assetUrlFromRelPath(effectiveRelPath)}?v=${previewVersion}`
+    : "";
+  const previewStackLength = previewList.length || 1;
+  const previewStackIndex = Math.max(0, effectivePreviewIndex);
+
+  useEffect(() => {
+    if (selectedPreviewId && split) {
+      const allItems = [...split.view, ...split.lighting];
+      if (!allItems.some((x) => x.itemId === selectedPreviewId)) {
+        setSelectedPreviewId(null);
+      }
+    }
+  }, [split, selectedPreviewId]);
+
+  useEffect(() => {
+    setDragContainers({
+      view: (split?.view ?? []).filter((x) => !x.itemId.startsWith("root:")).map((x) => x.itemId),
+      lighting: (split?.lighting ?? []).map((x) => x.itemId),
+    });
+  }, [split]);
 
   const toolBtnStyle = (active?: boolean): React.CSSProperties => ({
     flex: 1,
@@ -598,16 +650,22 @@ export default function LocationDetailPage() {
               <LocationBaseCropPreview imageSrc={previewSrc} crop={cropPx} onCropChange={setCropPx} />
             ) : (
               <StartingImagePreview
-                storageRelPath={baseRel}
-                stackLength={1}
-                stackIndex={0}
-                onPrev={() => {}}
-                onNext={() => {}}
+                storageRelPath={effectiveRelPath}
+                stackLength={previewStackLength}
+                stackIndex={previewStackIndex}
+                onPrev={() => {
+                  if (effectivePreviewIndex > 0)
+                    setSelectedPreviewId(previewList[effectivePreviewIndex - 1].itemId);
+                }}
+                onNext={() => {
+                  if (effectivePreviewIndex < previewList.length - 1)
+                    setSelectedPreviewId(previewList[effectivePreviewIndex + 1].itemId);
+                }}
                 onDeleteCacheEntry={() => {}}
                 onImageError={() => {}}
                 fitMaxWidth={PREVIEW_MAX_W}
                 fitMaxHeight={PREVIEW_MAX_H}
-                imageSrc={previewSrc}
+                imageSrc={effectivePreviewSrc || previewSrc}
               />
             )
           ) : (
@@ -648,11 +706,11 @@ export default function LocationDetailPage() {
           </button>
           <button
             type="button"
-            disabled={uiBusy}
+            disabled={uiBusy || !baseRel}
             style={toolBtnStyle()}
             onClick={() => {
               exitCropMode();
-              showError({ message: "Coming soon" });
+              setOutpaintOpen(true);
             }}
           >
             Outpaint
@@ -700,8 +758,149 @@ export default function LocationDetailPage() {
           Save Edit as Copy
         </button>
 
-        {renderSection("View", split?.view ?? [])}
-        {renderSection("Lighting", split?.lighting ?? [])}
+        <SortableMultiGrid
+          disabled={uiBusy}
+          crossContainerPreview
+          containers={[
+            { id: "view", ids: dragContainers.view },
+            { id: "lighting", ids: dragContainers.lighting },
+          ]}
+          renderContainer={({ containerId, children, setContainerRef }) => {
+            const rootItems =
+              containerId === "view"
+                ? (split?.view ?? []).filter((x) => x.itemId.startsWith("root:"))
+                : [];
+            return (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ marginBottom: 6 }}>
+                  {containerId === "view" ? "View" : "Lighting"}
+                </div>
+                <ResizableScrollGallery
+                  aria-label={containerId === "view" ? "View gallery" : "Lighting gallery"}
+                >
+                  <div
+                    ref={setContainerRef as React.Ref<HTMLDivElement>}
+                    style={{ display: "flex", flexWrap: "wrap", gap: 8, minHeight: 30 }}
+                  >
+                    {rootItems.map((it) => {
+                      const isSelected = it.itemId === selectedPreviewId;
+                      return (
+                        <button
+                          key={it.itemId}
+                          type="button"
+                          onClick={() => setSelectedPreviewId(it.itemId)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setMenu({ open: true, x: e.clientX, y: e.clientY, item: it });
+                          }}
+                          style={{
+                            width: 120,
+                            height: 120,
+                            border: isSelected ? "2px solid #000" : "1px solid rgba(0,0,0,0.35)",
+                            background: "transparent",
+                            padding: 0,
+                            overflow: "hidden",
+                            cursor: "pointer",
+                            boxSizing: "border-box",
+                          }}
+                        >
+                          <img
+                            src={assetUrlFromRelPath(it.relPath)}
+                            alt=""
+                            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                          />
+                        </button>
+                      );
+                    })}
+                    {children}
+                  </div>
+                </ResizableScrollGallery>
+              </div>
+            );
+          }}
+          renderItem={({ id, containerId }) => {
+            const allItems = [...(split?.view ?? []), ...(split?.lighting ?? [])];
+            let it = allItems.find((x) => x.itemId === id);
+            if (!it && id.includes(":")) {
+              const fn = id.slice(id.indexOf(":") + 1);
+              it = allItems.find((x) => x.itemId.endsWith(`:${fn}`));
+            }
+            if (!it) return null;
+            const isSelected = it.itemId === selectedPreviewId;
+            return (
+              <SortableItemInContainer id={id} containerId={containerId} disabled={uiBusy}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPreviewId(it!.itemId)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMenu({ open: true, x: e.clientX, y: e.clientY, item: it! });
+                  }}
+                  style={{
+                    width: 120,
+                    height: 120,
+                    border: isSelected ? "2px solid #000" : "1px solid rgba(0,0,0,0.35)",
+                    background: "transparent",
+                    padding: 0,
+                    overflow: "hidden",
+                    cursor: uiBusy ? "not-allowed" : "grab",
+                    boxSizing: "border-box",
+                    touchAction: "none",
+                  }}
+                >
+                  <img
+                    src={assetUrlFromRelPath(it!.relPath)}
+                    alt=""
+                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", pointerEvents: "none" }}
+                  />
+                </button>
+              </SortableItemInContainer>
+            );
+          }}
+          renderDragOverlay={({ id }) => {
+            const allItems = [...(split?.view ?? []), ...(split?.lighting ?? [])];
+            let it = allItems.find((x) => x.itemId === id);
+            if (!it && id.includes(":")) {
+              const fn = id.slice(id.indexOf(":") + 1);
+              it = allItems.find((x) => x.itemId.endsWith(`:${fn}`));
+            }
+            if (!it) return null;
+            return (
+              <div
+                style={{
+                  width: 120,
+                  height: 120,
+                  border: "1px solid rgba(0,0,0,0.35)",
+                  overflow: "hidden",
+                  cursor: "grabbing",
+                  opacity: 0.85,
+                }}
+              >
+                <img
+                  src={assetUrlFromRelPath(it.relPath)}
+                  alt=""
+                  style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                />
+              </div>
+            );
+          }}
+          onDragEnd={({ activeId, overId, insertAfter, sourceContainerId, targetContainerId }) => {
+            const r = reorderInsertBeforeOrAfter({
+              activeId,
+              overId,
+              insertAfter,
+              sourceContainerId,
+              targetContainerId,
+              containers: { view: dragContainers.view, lighting: dragContainers.lighting },
+              selectedIds: new Set(),
+            });
+            const nextView = r.containers.view ?? [];
+            const nextLighting = r.containers.lighting ?? [];
+            setDragContainers({ view: nextView, lighting: nextLighting });
+            void apiLocationGalleryReorder({ locationKey, view: nextView, lighting: nextLighting })
+              .then(() => refresh());
+          }}
+        />
         {renderSection("Hidden", split?.hidden ?? [])}
       </div>
       <DesktopContextMenu
@@ -712,6 +911,27 @@ export default function LocationDetailPage() {
         onClose={() => setMenu((m) => ({ ...m, open: false }))}
       />
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
+      <AiEditModal
+        open={outpaintOpen}
+        title="Outpaint"
+        imageSrc={baseRel ? assetUrlFromRelPath(baseRel) : ""}
+        busy={busy}
+        placeholder="Describe the scenery that you want to outpaint"
+        actionLabel="Outpaint"
+        onCancel={() => setOutpaintOpen(false)}
+        onGenerate={async (promptText) => {
+          setBusy(true);
+          try {
+            await apiLocationOutpaint({ locationKey, promptText });
+            await refresh();
+            setOutpaintOpen(false);
+          } catch (e) {
+            showError({ message: "Outpaint failed.", error: e });
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
       <AngleSubsetModal
         open={angleDialogOpen}
         groups={angleGroups}
