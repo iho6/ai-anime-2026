@@ -48,7 +48,7 @@ $PipSentinel = Join-Path $VenvPath ".pip-minimal-ok"
 
 function Ensure-BootstrapPythonDeps {
   if ((Test-Path $PipSentinel) -and -not $ForcePipInstall) {
-    Write-MetaLog "Minimal deps sentinel present — skipping pip (use -ForcePipInstall to refresh)"
+    Write-MetaLog "Minimal deps sentinel present - skipping pip (use -ForcePipInstall to refresh)"
     return
   }
   Write-MetaLog "Ensuring minimal Python deps (FastAPI/uvicorn) in venv..."

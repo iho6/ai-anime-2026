@@ -10,6 +10,9 @@ from services.character_storage import DEFAULT_STORAGE_ROOT
 from services import logic
 
 LOCATION_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "locations").resolve()
+SHOTS_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "shots").resolve()
+REFERENCES_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "references").resolve()
+TIMELINES_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "timelines").resolve()
 
 
 def resolve_storage_rel_file(rel_path: str) -> Path:
@@ -21,6 +24,15 @@ def resolve_storage_rel_file(rel_path: str) -> Path:
     rel_parts = rel.parts
     if rel_parts and rel_parts[0].lower() == "locations":
         root = LOCATION_STORAGE_ROOT.resolve()
+        rel = Path(*rel_parts[1:])
+    elif rel_parts and rel_parts[0].lower() == "shots":
+        root = SHOTS_STORAGE_ROOT.resolve()
+        rel = Path(*rel_parts[1:])
+    elif rel_parts and rel_parts[0].lower() == "references":
+        root = REFERENCES_STORAGE_ROOT.resolve()
+        rel = Path(*rel_parts[1:])
+    elif rel_parts and rel_parts[0].lower() == "timelines":
+        root = TIMELINES_STORAGE_ROOT.resolve()
         rel = Path(*rel_parts[1:])
     else:
         root = DEFAULT_STORAGE_ROOT.resolve()
@@ -42,6 +54,21 @@ def storage_rel_from_abs(abs_path: str) -> str:
     try:
         rel = p.resolve().relative_to(LOCATION_STORAGE_ROOT.resolve())
         return str(Path("locations") / rel).replace("\\", "/")
+    except Exception:
+        pass
+    try:
+        rel = p.resolve().relative_to(SHOTS_STORAGE_ROOT.resolve())
+        return str(Path("shots") / rel).replace("\\", "/")
+    except Exception:
+        pass
+    try:
+        rel = p.resolve().relative_to(REFERENCES_STORAGE_ROOT.resolve())
+        return str(Path("references") / rel).replace("\\", "/")
+    except Exception:
+        pass
+    try:
+        rel = p.resolve().relative_to(TIMELINES_STORAGE_ROOT.resolve())
+        return str(Path("timelines") / rel).replace("\\", "/")
     except Exception:
         return p.name
 

@@ -2,8 +2,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  apiPoseReferences,
-  apiPoseDeleteReference,
+  apiReferenceKeypoints,
+  apiReferenceKeypointDelete,
   assetUrlFromRelPath,
   type PoseReference,
 } from "../lib/api";
@@ -16,6 +16,7 @@ export function ReferencePicker(props: {
   onCancel: () => void;
   onPickSaved: (ref: PoseReference) => void;
   onPickNew: (file: File) => void;
+  onGenerateBase: (promptText: string) => void;
 }) {
   if (!props.open) return null;
   return (
@@ -25,6 +26,7 @@ export function ReferencePicker(props: {
       onCancel={props.onCancel}
       onPickSaved={props.onPickSaved}
       onPickNew={props.onPickNew}
+      onGenerateBase={props.onGenerateBase}
     />
   );
 }
@@ -35,21 +37,23 @@ function ReferencePickerOpen(props: {
   onCancel: () => void;
   onPickSaved: (ref: PoseReference) => void;
   onPickNew: (file: File) => void;
+  onGenerateBase: (promptText: string) => void;
 }) {
-  const { charKey, busy, onCancel, onPickSaved, onPickNew } = props;
+  const { busy, onCancel, onPickSaved, onPickNew, onGenerateBase } = props;
 
   const [refs, setRefs] = useState<PoseReference[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [genPrompt, setGenPrompt] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const canGenerate = !busy && genPrompt.trim().length > 0;
 
   const loadRefs = useCallback(async () => {
-    if (!charKey) return;
     try {
-      setRefs(await apiPoseReferences(charKey));
+      setRefs(await apiReferenceKeypoints());
     } catch {
       /* ignore */
     }
-  }, [charKey]);
+  }, []);
 
   useEffect(() => {
     loadRefs();
@@ -77,13 +81,13 @@ function ReferencePickerOpen(props: {
     async (refId: string, ev: React.MouseEvent) => {
       ev.stopPropagation();
       try {
-        await apiPoseDeleteReference(charKey, refId);
+        await apiReferenceKeypointDelete(refId);
         setRefs((prev) => prev.filter((r) => r.id !== refId));
       } catch {
         /* ignore */
       }
     },
-    [charKey]
+    []
   );
 
   return (
@@ -160,6 +164,50 @@ function ReferencePickerOpen(props: {
             style={{ display: "none" }}
             onChange={handleFileInput}
           />
+        </div>
+
+        {/* AI generate a base reference (Flux2 text-to-image) */}
+        <div style={{ marginBottom: 12 }}>
+          <textarea
+            value={genPrompt}
+            disabled={busy}
+            onChange={(e) => setGenPrompt(e.target.value)}
+            placeholder="Describe a base reference image to generate"
+            rows={2}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              resize: "vertical",
+              border: "1px solid rgba(255,255,255,0.2)",
+              background: "transparent",
+              color: "#eee",
+              caretColor: "#eee",
+              fontSize: 13,
+              padding: 8,
+              marginBottom: 8,
+            }}
+          />
+          <button
+            type="button"
+            disabled={!canGenerate}
+            onClick={() => {
+              const p = genPrompt.trim();
+              if (p) onGenerateBase(p);
+            }}
+            style={{
+              width: "100%",
+              borderRadius: 0,
+              border: "1px solid rgba(255,255,255,0.3)",
+              background: "transparent",
+              color: "#eee",
+              padding: "8px 12px",
+              cursor: canGenerate ? "pointer" : "not-allowed",
+              opacity: canGenerate ? 1 : 0.5,
+            }}
+            title="Generate a base reference image with AI, then convert it to a keypoint pose"
+          >
+            AI Generate Base Reference
+          </button>
         </div>
 
         {/* Saved poses list */}

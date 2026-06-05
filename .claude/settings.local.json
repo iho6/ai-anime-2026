@@ -6,7 +6,25 @@
       "Bash(grep -rn \"services\\\\.ui\\\\|services/ui\\\\|services\\\\\\\\\\\\\\\\ui\" \"D:/Animation/anime2026_refactored\" --include=\"*.py\" --include=\"*.sh\" --include=\"*.ps1\")",
       "WebSearch",
       "WebFetch(domain:github.com)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "PowerShell(Get-ChildItem -Path \"D:\\\\Animation\\\\anime2026_refactored\" -Force | Select-Object Name, @{Name=\"Type\";Expression={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}} | Format-Table -AutoSize)",
+      "Bash(awk '{print $NF}')",
+      "Bash(xargs cat)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Animation\\\\anime2026_refactored\\\\services\\\\background_removal_ai_service\\\\deployment\\\\\" -Force)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Animation\\\\anime2026_refactored\\\\services\\\\t2i_ref_gen_ai_service\" -Recurse -Force)",
+      "Bash(Select-Object FullName)",
+      "Bash(ConvertTo-Json)",
+      "Bash(tail -3 /c/Users/ianch/.claude/plans/i-want-to-create-adaptive-moon.md)",
+      "Bash(cat >> *)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(xargs grep -l \"get_character_paths\\\\|CharacterPath\")",
+      "WebFetch(domain:docs.comfy.org)",
+      "WebFetch(domain:bfl.ai)",
+      "Read(//d/tmp/**)",
+      "Bash(rm -rf qwenmultiangle)",
+      "Bash(gh repo *)",
+      "Read(//d/Animation/**)",
+      "Bash(rm -rf _qma_tmp)"
     ]
   }
 }

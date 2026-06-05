@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
@@ -346,15 +347,23 @@ async def expression_job_ws(ws: WebSocket, char_key: str) -> None:
                 raise ValueError("promptText required")
 
             source_abs_path = str(resolve_storage_rel_file(source_rel_path))
+            mask_abs_path = logic.decode_mask_png_to_temp_file(
+                msg.get("maskPngBase64")
+            )
 
             def work(log_cb):
-                new_abs = logic.ai_edit_expression_in_bucket(
-                    char_key,
-                    expr_key=expr_key,
-                    source_image_abs_path=source_abs_path,
-                    prompt_text=prompt_text,
-                    log_cb=log_cb,
-                )
+                try:
+                    new_abs = logic.ai_edit_expression_in_bucket(
+                        char_key,
+                        expr_key=expr_key,
+                        source_image_abs_path=source_abs_path,
+                        prompt_text=prompt_text,
+                        mask_abs_path=mask_abs_path,
+                        log_cb=log_cb,
+                    )
+                finally:
+                    if mask_abs_path:
+                        Path(mask_abs_path).unlink(missing_ok=True)
                 return {"newRelPath": storage_rel_from_abs(new_abs)}
 
             result, err = await run_with_log_stream(ws, work)

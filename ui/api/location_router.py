@@ -663,10 +663,16 @@ def location_ai_edit(location_key: str, body: dict[str, str]) -> dict[str, str]:
     if not prompt:
         raise HTTPException(400, "promptText required")
     src = resolve_location_rel_file(rel)
-    tmp = logic.ai_edit_image_inline_to_temp_file(
-        input_image_abs_path=str(src),
-        prompt_text=prompt,
-    )
+    mask_abs_path = logic.decode_mask_png_to_temp_file(body.get("maskPngBase64"))
+    try:
+        tmp = logic.ai_edit_image_inline_to_temp_file(
+            input_image_abs_path=str(src),
+            prompt_text=prompt,
+            mask_abs_path=mask_abs_path,
+        )
+    finally:
+        if mask_abs_path:
+            Path(mask_abs_path).unlink(missing_ok=True)
     try:
         d = _ensure_location_dirs(location_key) / sec
         ext = Path(tmp).suffix.lower() or src.suffix.lower() or ".png"

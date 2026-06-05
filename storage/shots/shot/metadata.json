@@ -1,0 +1,19 @@
+{
+  "shotName": "shot",
+  "locationKey": "flala_courtyard",
+  "locationImageRelPath": "locations/flala_courtyard/base.png",
+  "characters": [
+    {
+      "charKey": "Buan",
+      "imageRelPath": "Buan/poses/pose_012.png",
+      "x": 738.8739551040227,
+      "y": 508.7275538789078,
+      "scale": 0.47219536099802034
+    }
+  ],
+  "prompt": "",
+  "prependedPrompt": "",
+  "mode": "as_is",
+  "createdAt": "2026-06-05T14:31:58.559351+00:00",
+  "outputRelPath": "shots/shot/generated.png"
+}

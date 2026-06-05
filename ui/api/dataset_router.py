@@ -361,6 +361,9 @@ async def dataset_job_ws(ws: WebSocket, char_key: str) -> None:
             if not prompt_text:
                 raise ValueError("promptText required")
             src_abs = str(resolve_storage_rel_file(rel))
+            mask_abs_path = logic.decode_mask_png_to_temp_file(
+                msg.get("maskPngBase64")
+            )
 
             def _abs_under(path: Path, root: Path) -> bool:
                 try:
@@ -373,6 +376,7 @@ async def dataset_job_ws(ws: WebSocket, char_key: str) -> None:
                 temp_path = logic.ai_edit_image_inline_to_temp_file(
                     input_image_abs_path=src_abs,
                     prompt_text=prompt_text,
+                    mask_abs_path=mask_abs_path,
                     log_cb=log_cb,
                 )
                 try:
@@ -425,6 +429,8 @@ async def dataset_job_ws(ws: WebSocket, char_key: str) -> None:
                         )
                 finally:
                     Path(temp_path).unlink(missing_ok=True)
+                    if mask_abs_path:
+                        Path(mask_abs_path).unlink(missing_ok=True)
                 return {"previewRelPath": gallery_rel}
 
             result, err = await run_with_log_stream(ws, work)
@@ -444,15 +450,23 @@ async def dataset_job_ws(ws: WebSocket, char_key: str) -> None:
             if not prompt_text:
                 raise ValueError("promptText required")
             src_abs = str(resolve_storage_rel_file(rel))
+            mask_abs_path = logic.decode_mask_png_to_temp_file(
+                msg.get("maskPngBase64")
+            )
 
             def work(log_cb):
-                new_abs = logic.ai_edit_image_inline_to_dataset_file(
-                    char_key=char_key,
-                    dataset_name=dataset_name,
-                    source_image_abs_path=src_abs,
-                    prompt_text=prompt_text,
-                    log_cb=log_cb,
-                )
+                try:
+                    new_abs = logic.ai_edit_image_inline_to_dataset_file(
+                        char_key=char_key,
+                        dataset_name=dataset_name,
+                        source_image_abs_path=src_abs,
+                        prompt_text=prompt_text,
+                        mask_abs_path=mask_abs_path,
+                        log_cb=log_cb,
+                    )
+                finally:
+                    if mask_abs_path:
+                        Path(mask_abs_path).unlink(missing_ok=True)
                 return {"fileRelPath": storage_rel_from_abs(new_abs)}
 
             result, err = await run_with_log_stream(ws, work)
@@ -471,15 +485,23 @@ async def dataset_job_ws(ws: WebSocket, char_key: str) -> None:
             if not prompt_text:
                 raise ValueError("promptText required")
             src_abs = str(resolve_storage_rel_file(rel))
+            mask_abs_path = logic.decode_mask_png_to_temp_file(
+                msg.get("maskPngBase64")
+            )
 
             def work(log_cb):
-                new_abs = logic.ai_edit_sequence_gallery_image(
-                    char_key=char_key,
-                    sequence_name=sequence_name,
-                    source_image_abs_path=src_abs,
-                    prompt_text=prompt_text,
-                    log_cb=log_cb,
-                )
+                try:
+                    new_abs = logic.ai_edit_sequence_gallery_image(
+                        char_key=char_key,
+                        sequence_name=sequence_name,
+                        source_image_abs_path=src_abs,
+                        prompt_text=prompt_text,
+                        mask_abs_path=mask_abs_path,
+                        log_cb=log_cb,
+                    )
+                finally:
+                    if mask_abs_path:
+                        Path(mask_abs_path).unlink(missing_ok=True)
                 return {"fileRelPath": storage_rel_from_abs(new_abs)}
 
             result, err = await run_with_log_stream(ws, work)

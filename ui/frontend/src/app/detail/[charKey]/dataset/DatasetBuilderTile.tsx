@@ -132,7 +132,7 @@ function DatasetBuilderTileInner(props: DatasetBuilderTileProps) {
               ? [
                   {
                     key: "addAngle",
-                    label: "Add angle",
+                    label: "New Angle",
                     onSelect: () =>
                       onRequestAddAngles({
                         kind: e.sourceKind === "pose" ? "pose" : "expr",

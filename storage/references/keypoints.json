@@ -1,0 +1,20 @@
+[
+  {
+    "id": "e65949171a80",
+    "referenceRelPath": "references/keypoints/ref_e65949171a80.png",
+    "keypointRelPath": "references/keypoints/kp_e65949171a80.png",
+    "createdAt": 1780376809.1919382
+  },
+  {
+    "id": "d43363ecc5af",
+    "referenceRelPath": "references/keypoints/ref_d43363ecc5af.png",
+    "keypointRelPath": "references/keypoints/kp_d43363ecc5af.png",
+    "createdAt": 1780376809.282638
+  },
+  {
+    "id": "13ba33c17232",
+    "referenceRelPath": "references/keypoints/ref_13ba33c17232.png",
+    "keypointRelPath": "references/keypoints/kp_13ba33c17232.png",
+    "createdAt": 1780376809.4403164
+  }
+]

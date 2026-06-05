@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import filecmp
 from collections import deque
+import base64
 import json
 import logging
 import math
@@ -831,6 +832,418 @@ def _run_image_edit_inline_prompt(
     if not urls:
         raise RuntimeError("Image-edit returned no image URLs.")
     return urls[0]
+
+
+def _run_inline_edit_or_mask(
+    *,
+    input_image_abs_path: str,
+    prompt_text: str,
+    mask_abs_path: str | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """
+    Route an inline AI edit to the right service.
+
+    If ``mask_abs_path`` is given, the edit is region-limited and routed to the
+    Flux.1 Fill mask-guided service (:func:`run_mask_guided_edit`); the painted
+    region of the mask (white) is regenerated and the rest is preserved. With no
+    mask, the full image is edited via the Qwen image-edit service
+    (:func:`_run_image_edit_inline_prompt`). Both arms return an image URL/path.
+    """
+    if mask_abs_path:
+        return run_mask_guided_edit(
+            input_image_abs_path=input_image_abs_path,
+            mask_abs_path=mask_abs_path,
+            prompt_text=prompt_text,
+            log_cb=log_cb,
+        )
+    return _run_image_edit_inline_prompt(
+        input_image_abs_path=input_image_abs_path,
+        prompt_text=prompt_text,
+        log_cb=log_cb,
+    )
+
+
+def decode_mask_png_to_temp_file(mask_png_base64: str | None) -> str | None:
+    """
+    Decode a base64 mask PNG (as produced by the AI Edit mask canvas) to a temp
+    ``.png`` and return its path, or ``None`` when no mask was supplied. Painted
+    pixels are white; :func:`run_mask_guided_edit` treats white as the region to
+    regenerate. The caller is responsible for unlinking the returned path.
+    """
+    b64 = (mask_png_base64 or "").strip()
+    if not b64:
+        return None
+    if b64.lower().startswith("data:") and "," in b64:
+        b64 = b64.split(",", 1)[1]
+    raw = base64.b64decode(b64)
+    dest = Path(tempfile.gettempdir()) / f"ai_edit_mask_{unique_suffix()}.png"
+    dest.write_bytes(raw)
+    return str(dest)
+
+
+def run_flux2_t2i(
+    *,
+    prompt_text: str,
+    width: int = 1024,
+    height: int = 1024,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """
+    Generate a Flux2 text-to-image via the t2i_ref_gen service (test-mode).
+
+    Accepts a text prompt plus output width/height; all other inputs (seed,
+    steps, guidance, sampler, models) are defaulted by the workflow. Returns the
+    first output image reference (URL when S3 is configured, else a local path).
+    """
+    effective = (prompt_text or "").strip()
+    if not effective:
+        raise ValueError("prompt_text is required.")
+
+    body = _run_service_testmode(
+        "services.t2i_ref_gen_ai_service.serverless",
+        [
+            "--test-mode",
+            "--enable-default",
+            "--default-port",
+            str(COMFY_PORT),
+            "--prompt",
+            effective,
+            "--width",
+            str(int(width)),
+            "--height",
+            str(int(height)),
+            "--convert-local-to-url",
+        ],
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise RuntimeError(str(body["error"]))
+
+    results = body.get("results") or []
+    for r in results:
+        if isinstance(r, dict):
+            ref = r.get("url") or r.get("local_path")
+            if isinstance(ref, str) and ref:
+                return ref
+    raise RuntimeError("Flux2 t2i returned no image.")
+
+
+def run_mask_guided_edit(
+    *,
+    input_image_abs_path: str,
+    mask_abs_path: str,
+    prompt_text: str,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """
+    Run a mask-guided inpaint via the mask_guided_edit service (Flux.1 Fill).
+
+    The service is mask-unaware: ComfyUI's LoadImage derives its MASK output as
+    ``1 - alpha`` of the loaded image. So this helper bakes ``mask_abs_path`` into
+    the alpha channel of ``input_image_abs_path`` first, then sends the merged
+    RGBA PNG as the single ``--image-url`` input.
+
+    Mask convention: the painted/white region of ``mask_abs_path`` is the area to
+    regenerate, so it becomes ``alpha=0`` (transparent); the kept region stays
+    ``alpha=255``. If an incoming mask uses the opposite convention, flip the
+    ``ImageChops.invert(mask)`` line below.
+
+    Returns the first output image reference (URL when S3 is configured, else a
+    local path).
+    """
+    from PIL import Image, ImageChops
+
+    if not input_image_abs_path:
+        raise ValueError("input_image_abs_path is required.")
+    src = Path(input_image_abs_path)
+    if not src.is_file():
+        raise ValueError(f"Input image not found: {src}")
+
+    if not mask_abs_path:
+        raise ValueError("mask_abs_path is required.")
+    mask_p = Path(mask_abs_path)
+    if not mask_p.is_file():
+        raise ValueError(f"Mask image not found: {mask_p}")
+
+    effective = (prompt_text or "").strip()
+    if not effective:
+        raise ValueError("prompt_text is required.")
+
+    # Bake the mask into the alpha channel: white (edit) -> alpha 0, black -> 255.
+    base = Image.open(src).convert("RGBA")
+    mask = Image.open(mask_p).convert("L").resize(base.size)
+    alpha = ImageChops.invert(mask)
+    base.putalpha(alpha)
+    merged_path = Path(tempfile.gettempdir()) / f"mask_edit_{unique_suffix()}.png"
+    base.save(merged_path, format="PNG")
+
+    body = _run_service_testmode(
+        "services.mask_guided_edit_ai_service.serverless",
+        [
+            "--test-mode",
+            "--enable-default",
+            "--default-port",
+            str(COMFY_PORT),
+            "--image-url",
+            str(merged_path),
+            "--prompt",
+            effective,
+            "--convert-local-to-url",
+        ],
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise RuntimeError(str(body["error"]))
+
+    results = body.get("results") or []
+    for r in results:
+        if isinstance(r, dict):
+            ref = r.get("url") or r.get("local_path")
+            if isinstance(ref, str) and ref:
+                return ref
+    raise RuntimeError("Mask-guided edit returned no image.")
+
+
+def _run_image_edit_inline_prompt_with_aux(
+    *,
+    input_image_abs_path: str,
+    auxiliary_image_abs_paths: list[str],
+    prompt_text: str,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """
+    Run image edit (`prompt-source=inline`) with a primary image plus up to two
+    auxiliary images.
+
+    The primary ``input_image_abs_path`` maps to the workflow's first LoadImage
+    node (Qwen image1); auxiliary paths map to image2/image3 in order. Returns
+    the first output image URL from the service results.
+    """
+    if not input_image_abs_path:
+        raise ValueError("input_image_abs_path is required.")
+    src = Path(input_image_abs_path)
+    if not src.is_file():
+        raise ValueError(f"Input image not found: {src}")
+
+    aux_paths = [str(p) for p in (auxiliary_image_abs_paths or []) if p]
+    for p in aux_paths:
+        if not Path(p).is_file():
+            raise ValueError(f"Auxiliary image not found: {p}")
+    aux_paths = aux_paths[:2]
+
+    effective = (prompt_text or "").strip()
+    if not effective:
+        raise ValueError("prompt_text is required.")
+
+    args = [
+        "--test-mode",
+        "--enable-default",
+        "--default-port",
+        str(COMFY_PORT),
+        "--image-url",
+        input_image_abs_path,
+        "--prompt-source",
+        "inline",
+        "--prompts-json",
+        json.dumps([effective]),
+        "--convert-local-to-url",
+    ]
+    if aux_paths:
+        args += ["--auxiliary-image-urls-json", json.dumps(aux_paths)]
+
+    body = _run_service_testmode(
+        "services.image_edit_ai_service.serverless",
+        args,
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise RuntimeError(str(body["error"]))
+
+    urls = _extract_image_urls_from_image_edit(body)
+    if not urls:
+        raise RuntimeError("Image-edit returned no image URLs.")
+    return urls[0]
+
+
+# Fixed instruction prepended to every Create Shot generation. Image 1 is the
+# pristine backdrop; image 2 is the backdrop+character composite from the editor.
+SHOT_PROMPT_PREFIX = (
+    "Image 1 is the original backdrop image reference for a film shot generation "
+    "task. Image 2 is the reference for how characters should be integrated into "
+    "the backdrop, with character poses roughly cropped into the image. Edit the "
+    "character(s) into the image with seamless blending of lighting and contact "
+    "point with surrounding environment."
+)
+SHOT_PROMPT_SCENE_JOINER = (
+    " Here is a description of how the scene should be integrated: "
+)
+
+
+def build_shot_prompt(user_text: str | None) -> str:
+    """Compose the final Qwen prompt for a shot from the user's scene text."""
+    text = (user_text or "").strip()
+    if not text:
+        return SHOT_PROMPT_PREFIX
+    return SHOT_PROMPT_PREFIX + SHOT_PROMPT_SCENE_JOINER + text
+
+
+def create_shot(
+    *,
+    shot_name: str,
+    backdrop_abs_path: str,
+    composite_abs_path: str,
+    location_key: str | None = None,
+    location_image_rel_path: str | None = None,
+    characters: list[dict[str, Any]] | None = None,
+    prompt_text: str | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, str]:
+    """
+    Generate a film shot via Qwen image-edit with two image inputs.
+
+    ``backdrop_abs_path`` (image 1) is the pristine location image and
+    ``composite_abs_path`` (image 2) is the flattened backdrop+character overlay
+    rendered client-side. Saves ``generated.png`` + ``metadata.json`` under
+    ``storage/shots/<shot_key>/`` and returns relative paths for the UI.
+    """
+    import datetime as _dt
+
+    from services import shot_storage
+    from services.character_storage import (
+        ensure_dirs,
+        infer_ext_from_url,
+        download_url_to_file,
+    )
+
+    name = (shot_name or "").strip()
+    if not name:
+        raise ValueError("shot_name is required.")
+    backdrop = Path(backdrop_abs_path)
+    composite = Path(composite_abs_path)
+    if not backdrop.is_file():
+        raise ValueError(f"Backdrop image not found: {backdrop}")
+    if not composite.is_file():
+        raise ValueError(f"Composite image not found: {composite}")
+
+    prompt = build_shot_prompt(prompt_text)
+    if log_cb:
+        log_cb(f"Creating shot '{name}' with Qwen image-edit (2 image inputs).")
+
+    result_url = _run_image_edit_inline_prompt_with_aux(
+        input_image_abs_path=str(backdrop),
+        auxiliary_image_abs_paths=[str(composite)],
+        prompt_text=prompt,
+        log_cb=log_cb,
+    )
+
+    out_dir = shot_storage.shot_dir(name)
+    ensure_dirs(out_dir)
+    # Persist the exact inputs alongside the result for traceability.
+    shutil.copy2(backdrop, out_dir / f"backdrop{backdrop.suffix.lower() or '.png'}")
+    shutil.copy2(composite, out_dir / f"composite{composite.suffix.lower() or '.png'}")
+    ext = infer_ext_from_url(result_url)
+    generated = out_dir / f"generated{ext}"
+    download_url_to_file(result_url, generated)
+
+    metadata = {
+        "shotName": name,
+        "locationKey": location_key,
+        "locationImageRelPath": location_image_rel_path,
+        "characters": characters or [],
+        "prompt": (prompt_text or "").strip(),
+        "prependedPrompt": prompt,
+        "createdAt": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "outputRelPath": _shot_rel_from_abs(generated),
+    }
+    (out_dir / "metadata.json").write_text(
+        json.dumps(metadata, indent=2), encoding="utf-8"
+    )
+    if log_cb:
+        log_cb(f"Shot saved to {out_dir}")
+
+    return {
+        "shotKey": out_dir.name,
+        "outputRelPath": _shot_rel_from_abs(generated),
+    }
+
+
+def save_shot_as_is(
+    *,
+    shot_name: str,
+    backdrop_abs_path: str,
+    composite_abs_path: str,
+    location_key: str | None = None,
+    location_image_rel_path: str | None = None,
+    characters: list[dict[str, Any]] | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, str]:
+    """
+    Save a shot directly from the flattened composite, without running any AI.
+
+    The preview overlay (``composite_abs_path``) becomes the shot's output image
+    verbatim. Saves ``generated.png`` + ``metadata.json`` (``mode == "as_is"``)
+    under ``storage/shots/<shot_key>/`` and returns relative paths for the UI.
+    """
+    import datetime as _dt
+
+    from services import shot_storage
+    from services.character_storage import ensure_dirs
+
+    name = (shot_name or "").strip()
+    if not name:
+        raise ValueError("shot_name is required.")
+    backdrop = Path(backdrop_abs_path)
+    composite = Path(composite_abs_path)
+    if not backdrop.is_file():
+        raise ValueError(f"Backdrop image not found: {backdrop}")
+    if not composite.is_file():
+        raise ValueError(f"Composite image not found: {composite}")
+
+    if log_cb:
+        log_cb(f"Saving shot '{name}' as-is (no AI edit).")
+
+    out_dir = shot_storage.shot_dir(name)
+    ensure_dirs(out_dir)
+    # Persist the exact inputs alongside the output for traceability.
+    shutil.copy2(backdrop, out_dir / f"backdrop{backdrop.suffix.lower() or '.png'}")
+    shutil.copy2(composite, out_dir / f"composite{composite.suffix.lower() or '.png'}")
+    # The flattened overlay *is* the output for an as-is save.
+    generated = out_dir / "generated.png"
+    shutil.copy2(composite, generated)
+
+    metadata = {
+        "shotName": name,
+        "locationKey": location_key,
+        "locationImageRelPath": location_image_rel_path,
+        "characters": characters or [],
+        "prompt": "",
+        "prependedPrompt": "",
+        "mode": "as_is",
+        "createdAt": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+        "outputRelPath": _shot_rel_from_abs(generated),
+    }
+    (out_dir / "metadata.json").write_text(
+        json.dumps(metadata, indent=2), encoding="utf-8"
+    )
+    if log_cb:
+        log_cb(f"Shot saved to {out_dir}")
+
+    return {
+        "shotKey": out_dir.name,
+        "outputRelPath": _shot_rel_from_abs(generated),
+    }
+
+
+def _shot_rel_from_abs(abs_path: Path) -> str:
+    """Storage-relative path (``shots/<key>/...``) for a file under the shots root."""
+    from services import shot_storage
+
+    try:
+        rel = Path(abs_path).resolve().relative_to(shot_storage.SHOTS_STORAGE_ROOT)
+        return str(Path("shots") / rel).replace("\\", "/")
+    except Exception:
+        return Path(abs_path).name
 
 
 def _extract_single_result_url_from_multi_angle(body: dict[str, Any]) -> str:
@@ -1770,6 +2183,21 @@ def _run_single_multi_angle_from_image(
     out_abs = Path(tempfile.gettempdir()) / f"closeup_{angle_id}_{unique_suffix()}{ext}"
     download_url_to_file(url, out_abs)
     return out_abs
+
+
+def make_angle_to_temp_file(
+    input_abs_path: str,
+    angle_id: int,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """Public wrapper: generate a single camera angle from an arbitrary image and
+    return the path to a temp PNG. Used by net-new angle surfaces (shot composer
+    layers, sequence frames) that stage the result themselves."""
+    src = Path(input_abs_path)
+    if not src.is_file():
+        raise ValueError(f"Angle source image not found: {input_abs_path}")
+    out_abs = _run_single_multi_angle_from_image(src, int(angle_id), log_cb=log_cb)
+    return str(out_abs)
 
 
 def start_closeup_wizard(char_key: str) -> dict[str, Any]:
@@ -3630,6 +4058,7 @@ def ai_edit_pose_in_bucket(
     pose_key: str,
     source_image_abs_path: str,
     prompt_text: str,
+    mask_abs_path: str | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> str:
     """
@@ -3645,9 +4074,10 @@ def ai_edit_pose_in_bucket(
         raise ValueError(f"Input image not found: {src}")
     _assert_abs_file_under_dir(src, pose_dir)
 
-    edited_url = _run_image_edit_inline_prompt(
+    edited_url = _run_inline_edit_or_mask(
         input_image_abs_path=source_image_abs_path,
         prompt_text=prompt_text,
+        mask_abs_path=mask_abs_path,
         log_cb=log_cb,
     )
 
@@ -3685,6 +4115,7 @@ def ai_edit_expression_in_bucket(
     expr_key: str,
     source_image_abs_path: str,
     prompt_text: str,
+    mask_abs_path: str | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> str:
     """
@@ -3698,9 +4129,10 @@ def ai_edit_expression_in_bucket(
         raise ValueError(f"Input image not found: {src}")
     _assert_abs_file_under_dir(src, expr_dir)
 
-    edited_url = _run_image_edit_inline_prompt(
+    edited_url = _run_inline_edit_or_mask(
         input_image_abs_path=source_image_abs_path,
         prompt_text=prompt_text,
+        mask_abs_path=mask_abs_path,
         log_cb=log_cb,
     )
 
@@ -3736,15 +4168,17 @@ def ai_edit_image_inline_to_temp_file(
     *,
     input_image_abs_path: str,
     prompt_text: str,
+    mask_abs_path: str | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> str:
     """
     Utility: run the inline image-edit service and download the result
     into a temp file. Caller can persist it wherever needed.
     """
-    edited_url = _run_image_edit_inline_prompt(
+    edited_url = _run_inline_edit_or_mask(
         input_image_abs_path=input_image_abs_path,
         prompt_text=prompt_text,
+        mask_abs_path=mask_abs_path,
         log_cb=log_cb,
     )
     ext = infer_ext_from_url(edited_url)
@@ -3759,6 +4193,7 @@ def ai_edit_image_inline_to_dataset_file(
     dataset_name: str,
     source_image_abs_path: str,
     prompt_text: str,
+    mask_abs_path: str | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> str:
     """
@@ -3775,9 +4210,10 @@ def ai_edit_image_inline_to_dataset_file(
     if not src.is_file():
         raise ValueError(f"Input image not found: {src}")
 
-    edited_url = _run_image_edit_inline_prompt(
+    edited_url = _run_inline_edit_or_mask(
         input_image_abs_path=source_image_abs_path,
         prompt_text=prompt_text,
+        mask_abs_path=mask_abs_path,
         log_cb=log_cb,
     )
     ext = infer_ext_from_url(edited_url)
@@ -3800,6 +4236,7 @@ def ai_edit_sequence_gallery_image(
     sequence_name: str,
     source_image_abs_path: str,
     prompt_text: str,
+    mask_abs_path: str | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> str:
     """
@@ -3825,6 +4262,7 @@ def ai_edit_sequence_gallery_image(
     temp_path = ai_edit_image_inline_to_temp_file(
         input_image_abs_path=str(src),
         prompt_text=prompt_text,
+        mask_abs_path=mask_abs_path,
         log_cb=log_cb,
     )
     try:
@@ -6937,6 +7375,88 @@ def delete_pose_reference(char_key: str, ref_id: str) -> bool:
     return found
 
 
+# --- Global reference library (images + shared keypoints) ---------------------
+
+
+def _reference_ref_to_local(ref: str, log_cb: Callable[[str], None] | None = None) -> str:
+    """Resolve a Flux2 t2i result (URL or local path) to a local absolute path."""
+    if ref and Path(ref).is_file():
+        return str(Path(ref).resolve())
+    if ref and (ref.startswith("http://") or ref.startswith("https://")):
+        dest = Path(tempfile.gettempdir()) / f"ref_{unique_suffix()}.png"
+        download_url_to_file(ref, dest)
+        return str(dest)
+    raise RuntimeError(f"Could not resolve reference image: {ref!r}")
+
+
+def generate_reference_preview(
+    *,
+    prompt_text: str,
+    width: int = 1024,
+    height: int = 1024,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, str]:
+    """Generate a Flux2 t2i image and stash it in the references ``_preview`` scratch.
+
+    Returns ``{previewRelPath}`` (storage-relative, ``references/_preview/...``).
+    """
+    from services import reference_storage
+
+    ref = run_flux2_t2i(
+        prompt_text=prompt_text, width=width, height=height, log_cb=log_cb
+    )
+    local = _reference_ref_to_local(ref, log_cb=log_cb)
+    preview_rel = reference_storage.add_preview(local)
+    return {"previewRelPath": preview_rel}
+
+
+def commit_reference_image(preview_rel: str) -> dict[str, Any]:
+    """Promote a ``_preview`` generation into the saved Image collection."""
+    from services import reference_storage
+
+    return reference_storage.commit_preview(preview_rel)
+
+
+def make_reference_keypoint(
+    image_rel_path: str,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Run the SD pose service on a saved reference image and store the
+    (original, skeleton) pair in the global keypoint collection."""
+    from services import reference_storage
+
+    rel_norm = str(image_rel_path).replace("\\", "/").lstrip("/")
+    if rel_norm.lower().startswith("references/"):
+        abs_path = str(reference_storage.resolve_rel(rel_norm))
+    else:
+        # Character-staging uploads etc. resolve under the characters root.
+        abs_path = str(resolve_storage_rel_path_to_abs(rel_norm))
+    if not Path(abs_path).is_file():
+        raise ValueError(f"Reference image not found: {image_rel_path}")
+    kp_abs = run_pose_keypoint_for_image(abs_path, log_cb=log_cb)
+    return reference_storage.add_keypoint_pair(abs_path, kp_abs)
+
+
+def make_reference_angle(
+    image_rel_path: str,
+    angle_id: int,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Generate a new camera angle from a saved reference image and store the
+    result as a new reference image."""
+    from services import reference_storage
+
+    rel_norm = str(image_rel_path).replace("\\", "/").lstrip("/")
+    if rel_norm.lower().startswith("references/"):
+        abs_path = str(reference_storage.resolve_rel(rel_norm))
+    else:
+        abs_path = str(resolve_storage_rel_path_to_abs(rel_norm))
+    if not Path(abs_path).is_file():
+        raise ValueError(f"Reference image not found: {image_rel_path}")
+    out_abs = _run_single_multi_angle_from_image(Path(abs_path), int(angle_id), log_cb=log_cb)
+    return reference_storage.add_image(str(out_abs))
+
+
 # --- Sequence editor (timeline) -----------------------------------------------
 
 SEQUENCE_MANIFEST_NAME = "manifest.json"
@@ -7653,6 +8173,109 @@ def write_gallery_frame_sequence_set_mp4(
         raise RuntimeError(f"Frame sequence set MP4 export failed: {ex}") from ex
 
 
+def probe_video_meta(path: Path | str) -> dict[str, Any]:
+    """Return ``{durationSec, width, height}`` for an mp4/video via PyAV.
+
+    Duration falls back to (nb_frames / rate) when the container reports none.
+    """
+    import av
+
+    p = Path(path)
+    duration_sec = 0.0
+    width = 0
+    height = 0
+    with av.open(str(p)) as container:
+        vs = next((s for s in container.streams if s.type == "video"), None)
+        if vs is not None:
+            if vs.width:
+                width = int(vs.width)
+            if vs.height:
+                height = int(vs.height)
+            if container.duration:
+                duration_sec = float(container.duration) / float(av.time_base)
+            elif vs.duration is not None and vs.time_base is not None:
+                duration_sec = float(vs.duration) * float(vs.time_base)
+            elif vs.frames and vs.average_rate:
+                duration_sec = float(vs.frames) / float(vs.average_rate)
+    return {
+        "durationSec": round(duration_sec, 4),
+        "width": width,
+        "height": height,
+    }
+
+
+def materialize_sequence_to_timeline_clip(
+    char_key: str,
+    sequence_name: str,
+    gallery_item_id: str | None,
+    dest_dir: Path | str,
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Render a character sequence (or one gallery video item) to a persistent
+    ``.mp4`` inside ``dest_dir`` and return ``{absPath, durationSec, width, height}``.
+
+    Reuses the existing PyAV exporters: a specific ``gallery_item_id`` renders that
+    item's ``frameSequence`` strip; otherwise the whole timeline slideshow is used.
+    """
+    import uuid
+
+    dest = Path(dest_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    out_path = dest / f"clip_{uuid.uuid4().hex}.mp4"
+
+    gid = (gallery_item_id or "").strip()
+    if log_cb:
+        log_cb(
+            f"Rendering {'gallery item' if gid else 'sequence timeline'} "
+            f"{sequence_name!r} to mp4…"
+        )
+    if gid:
+        write_gallery_frame_sequence_set_mp4(char_key, sequence_name, gid, out_path)
+    else:
+        write_sequence_timeline_slideshow_mp4(char_key, sequence_name, out_path)
+
+    if not out_path.is_file():
+        raise RuntimeError("Sequence materialization produced no file.")
+    meta = probe_video_meta(out_path)
+    if log_cb:
+        log_cb(
+            f"Rendered {out_path.name} "
+            f"({meta['width']}x{meta['height']}, {meta['durationSec']}s)."
+        )
+    return {"absPath": str(out_path), **meta}
+
+
+def import_image_to_timeline_clip(
+    source_abs_path: Path | str,
+    dest_dir: Path | str,
+) -> dict[str, Any]:
+    """Copy an image (location/shot/etc.) into ``dest_dir`` and return
+    ``{absPath, width, height}``."""
+    import shutil
+    import uuid
+
+    from PIL import Image
+
+    src = Path(source_abs_path)
+    if not src.is_file():
+        raise ValueError(f"Image not found: {source_abs_path}")
+    dest = Path(dest_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    ext = src.suffix.lower() or ".png"
+    out_path = dest / f"clip_{uuid.uuid4().hex}{ext}"
+    shutil.copy2(src, out_path)
+
+    width = 0
+    height = 0
+    try:
+        with Image.open(out_path) as im:
+            width, height = int(im.width), int(im.height)
+    except Exception:
+        pass
+    return {"absPath": str(out_path), "width": width, "height": height}
+
+
 def _ensure_rel_under_sequence_folder(
     char_key: str, sequence_name: str, rel_path: str
 ) -> None:
@@ -7878,34 +8501,7 @@ def generate_flf_sequence(
             f"path_a={path_a} path_b={path_b}"
         )
 
-    body = _run_service_testmode(
-        "services.flf2video_ai_service.serverless",
-        [
-            "--test-mode",
-            "--enable-default",
-            "--default-port",
-            str(COMFY_PORT),
-            "--individual-frames",
-            "--image-url",
-            json.dumps([str(path_a), str(path_b)]),
-            "--frames",
-            "1,2",
-            "--length",
-            str(int(length)),
-        ],
-        log_cb=log_cb,
-    )
-    if body.get("error"):
-        raise RuntimeError(str(body["error"]))
-    results = body.get("results") or []
-    if not results:
-        raise RuntimeError("FLF returned no results.")
-    pair0 = results[0] if isinstance(results[0], dict) else {}
-    frame_urls = pair0.get("frame_urls")
-    if not isinstance(frame_urls, list) or not frame_urls:
-        raise RuntimeError(
-            "FLF did not return frame_urls (is the service running with --individual-frames?)."
-        )
+    frame_urls = _run_flf_service(path_a, path_b, int(length), log_cb=log_cb)
 
     return gallery_item_from_frame_urls(
         char_key=char_key,
@@ -7982,6 +8578,73 @@ def generate_i2v_sequence(
             f"path={path_img} prompt_snippet={prompt_snip!r}"
         )
 
+    urls_out = _run_i2v_service(
+        path_img, text, int(length), width, height, log_cb=log_cb
+    )
+
+    return gallery_item_from_frame_urls(
+        char_key=char_key,
+        sequence_name=sequence_name,
+        frame_urls=urls_out,
+        gallery_subdir_prefix="i2v",
+        error_tag="I2V",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Shared FLF / I2V service cores (reused by sequence + timeline callers)
+# ---------------------------------------------------------------------------
+
+
+def _run_flf_service(
+    path_a: Path,
+    path_b: Path,
+    length: int,
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> list[str]:
+    """Invoke flf2video with two endpoint image paths; return ordered frame URLs."""
+    body = _run_service_testmode(
+        "services.flf2video_ai_service.serverless",
+        [
+            "--test-mode",
+            "--enable-default",
+            "--default-port",
+            str(COMFY_PORT),
+            "--individual-frames",
+            "--image-url",
+            json.dumps([str(path_a), str(path_b)]),
+            "--frames",
+            "1,2",
+            "--length",
+            str(int(length)),
+        ],
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise RuntimeError(str(body["error"]))
+    results = body.get("results") or []
+    if not results:
+        raise RuntimeError("FLF returned no results.")
+    pair0 = results[0] if isinstance(results[0], dict) else {}
+    frame_urls = pair0.get("frame_urls")
+    if not isinstance(frame_urls, list) or not frame_urls:
+        raise RuntimeError(
+            "FLF did not return frame_urls (is the service running with --individual-frames?)."
+        )
+    return [str(u).strip() for u in frame_urls if isinstance(u, str) and str(u).strip()]
+
+
+def _run_i2v_service(
+    path_img: Path,
+    prompt_text: str,
+    length: int,
+    width: int | None,
+    height: int | None,
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> list[str]:
+    """Invoke img2video with one image + prompt; return ordered frame URLs."""
     argv: list[str] = [
         "--test-mode",
         "--enable-default",
@@ -7993,7 +8656,7 @@ def generate_i2v_sequence(
         "--length",
         str(max(1, int(length))),
         "--positive-prompt",
-        text,
+        prompt_text,
     ]
     if width is not None:
         argv.extend(["--width", str(int(width))])
@@ -8016,15 +8679,179 @@ def generate_i2v_sequence(
         raise RuntimeError(
             "I2V did not return frame_urls (is the service running with --individual-frames?)."
         )
-    urls_out = [str(u).strip() for u in frame_urls if isinstance(u, str) and str(u).strip()]
+    return [str(u).strip() for u in frame_urls if isinstance(u, str) and str(u).strip()]
 
-    return gallery_item_from_frame_urls(
-        char_key=char_key,
-        sequence_name=sequence_name,
-        frame_urls=urls_out,
-        gallery_subdir_prefix="i2v",
-        error_tag="I2V",
+
+def _download_frame_urls_to_dir(frame_urls: list[str], out_dir: Path) -> list[Path]:
+    """Download ordered frame URLs to ``out_dir`` as ``frame_000001.png`` etc."""
+    from services.character_storage import download_url_to_file
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths: list[Path] = []
+    for i, url in enumerate(frame_urls):
+        u = str(url or "").strip()
+        if not u:
+            continue
+        dest = out_dir / f"frame_{i + 1:06d}.png"
+        download_url_to_file(u, dest)
+        paths.append(dest)
+    if not paths:
+        raise RuntimeError("No frames were downloaded.")
+    return paths
+
+
+def encode_frames_to_mp4(
+    frame_paths: list[Path], out_path: Path | str, fps: int = 24
+) -> None:
+    """Encode an ordered list of image frames into an H.264 mp4 (PyAV)."""
+    import av
+    import numpy as np
+    from PIL import Image
+
+    if not frame_paths:
+        raise ValueError("No frames to encode.")
+    out_p = Path(out_path)
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+
+    # Even dimensions (yuv420p requirement) from the first frame.
+    with Image.open(frame_paths[0]) as im0:
+        w, h = im0.size
+    w = max(2, w - (w % 2))
+    h = max(2, h - (h % 2))
+    rate = max(1, min(120, int(round(fps))))
+
+    try:
+        with av.open(str(out_p), mode="w") as container:
+            stream = container.add_stream("libx264", rate=rate)
+            stream.width = w
+            stream.height = h
+            stream.pix_fmt = "yuv420p"
+            stream.options = {"crf": "20", "preset": "veryfast"}
+            for fp in frame_paths:
+                with Image.open(fp) as im:
+                    rgb = im.convert("RGB").resize((w, h))
+                    arr = np.asarray(rgb, dtype=np.uint8)
+                frame = av.VideoFrame.from_ndarray(arr, format="rgb24")
+                frame = frame.reformat(format="yuv420p")
+                for packet in stream.encode(frame):
+                    if packet is not None:
+                        container.mux(packet)
+            for packet in stream.encode(None):
+                if packet is not None:
+                    container.mux(packet)
+    except Exception as ex:
+        if out_p.is_file():
+            out_p.unlink(missing_ok=True)
+        raise RuntimeError(f"Frame mp4 encode failed: {ex}") from ex
+
+
+def _frames_to_timeline_clip(
+    frame_urls: list[str], dest_dir: Path | str, *, fps: int = 24
+) -> dict[str, Any]:
+    """Download generated frame URLs → encode mp4 in ``dest_dir`` → probe meta."""
+    import tempfile
+    import uuid
+
+    dest = Path(dest_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(prefix="tl_frames_"))
+    try:
+        frames = _download_frame_urls_to_dir(frame_urls, tmp)
+        out_path = dest / f"clip_{uuid.uuid4().hex}.mp4"
+        encode_frames_to_mp4(frames, out_path, fps=fps)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    meta = probe_video_meta(out_path)
+    return {"absPath": str(out_path), **meta}
+
+
+def generate_flf_to_timeline_clip(
+    image_a_abs_path: str,
+    image_b_abs_path: str,
+    dest_dir: Path | str,
+    *,
+    length: int = 33,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """FLF between two image files → mp4 clip in ``dest_dir``; returns clip meta."""
+    pa = Path(image_a_abs_path)
+    pb = Path(image_b_abs_path)
+    if not pa.is_file() or not pb.is_file():
+        raise ValueError("FLF source images not found on disk.")
+    if log_cb:
+        log_cb(f"FLF: {pa.name} → {pb.name} (length={int(length)})")
+    frame_urls = _run_flf_service(pa, pb, int(length), log_cb=log_cb)
+    return _frames_to_timeline_clip(frame_urls, dest_dir)
+
+
+def generate_i2v_to_timeline_clip(
+    image_abs_path: str,
+    prompt: str,
+    dest_dir: Path | str,
+    *,
+    length: int = 129,
+    width: int | None = None,
+    height: int | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """I2V from one image + prompt → mp4 clip in ``dest_dir``; returns clip meta."""
+    p = Path(image_abs_path)
+    if not p.is_file():
+        raise ValueError("I2V source image not found on disk.")
+    text = (prompt or "").strip()
+    if not text:
+        raise ValueError("A prompt is required for I2V generation.")
+    if log_cb:
+        log_cb(f"I2V: {p.name} (length={int(length)})")
+    frame_urls = _run_i2v_service(p, text, int(length), width, height, log_cb=log_cb)
+    return _frames_to_timeline_clip(frame_urls, dest_dir)
+
+
+def ai_edit_to_timeline_clip(
+    source_image_abs_path: str,
+    prompt: str,
+    dest_dir: Path | str,
+    *,
+    mask_png_base64: str | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """AI-edit a single image (optional mask) → new image in ``dest_dir``."""
+    import uuid
+
+    from PIL import Image
+
+    src = Path(source_image_abs_path)
+    if not src.is_file():
+        raise ValueError("AI-edit source image not found on disk.")
+    text = (prompt or "").strip()
+    if not text:
+        raise ValueError("A prompt is required for AI editing.")
+
+    mask_abs: str | None = None
+    if mask_png_base64:
+        mask_abs = decode_mask_png_to_temp_file(mask_png_base64)
+
+    temp_out = ai_edit_image_inline_to_temp_file(
+        input_image_abs_path=str(src),
+        prompt_text=text,
+        mask_abs_path=mask_abs,
+        log_cb=log_cb,
     )
+
+    dest = Path(dest_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    ext = Path(temp_out).suffix.lower() or ".png"
+    out_path = dest / f"clip_{uuid.uuid4().hex}{ext}"
+    shutil.copy2(temp_out, out_path)
+
+    width = 0
+    height = 0
+    try:
+        with Image.open(out_path) as im:
+            width, height = int(im.width), int(im.height)
+    except Exception:
+        pass
+    return {"absPath": str(out_path), "width": width, "height": height}
 
 
 def create_sequence_from_sources(

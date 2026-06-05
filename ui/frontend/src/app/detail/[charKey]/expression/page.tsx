@@ -23,7 +23,7 @@ import {
   runDetailWsJob,
 } from "../../../../lib/api";
 import { buildFlatGalleryLightboxPaths } from "../../../../lib/galleryLightboxOrder";
-import { AngleSubsetModal } from "../../../../components/AngleSubsetModal";
+import { CameraAngleModal } from "../../../../components/CameraAngleModal";
 import { DesktopContextMenu, ContextMenuItem } from "../../../../components/DesktopContextMenu";
 import { DetailSubpageChrome } from "../../../../components/DetailSubpageChrome";
 import { ImagePickerModal } from "../../../../components/ImagePickerModal";
@@ -116,6 +116,7 @@ export default function ExpressionPage() {
   const [galleryAnchorItemId, setGalleryAnchorItemId] = useState<string | null>(null);
   const [importDragOver, setImportDragOver] = useState(false);
   const [angleDialogOpen, setAngleDialogOpen] = useState(false);
+  const [angleDialogImageUrl, setAngleDialogImageUrl] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const logRef = useRef<SharedLogStreamHandle>(null);
@@ -182,7 +183,7 @@ export default function ExpressionPage() {
   );
 
   const onAiEditGenerateExpr = useCallback(
-    async (promptText: string) => {
+    async (promptText: string, maskPngBase64?: string) => {
       if (!charKey) return;
       if (!aiEditExprKey || !aiEditSourceRelPath) return;
 
@@ -197,6 +198,7 @@ export default function ExpressionPage() {
             exprKey: aiEditExprKey,
             sourceRelPath: aiEditSourceRelPath,
             promptText,
+            ...(maskPngBase64 ? { maskPngBase64 } : {}),
           },
           onLogLine: (line) => logRef.current?.pushLine(line),
         });
@@ -647,6 +649,9 @@ export default function ExpressionPage() {
           label: "Add angle",
           onSelect: () => {
             setSelectedExprItemIds(new Set([item.itemId]));
+            setAngleDialogImageUrl(
+              item.relPath ? assetUrlFromRelPath(item.relPath, charKey) : null
+            );
             setAngleDialogOpen(true);
           },
         });
@@ -1472,11 +1477,12 @@ export default function ExpressionPage() {
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
 
-      <AngleSubsetModal
+      <CameraAngleModal
         open={angleDialogOpen}
-        groups={angleGroups}
+        title="New Angle"
+        imageUrl={angleDialogImageUrl}
         onCancel={() => setAngleDialogOpen(false)}
-        onConfirm={(ids, files) => void confirmAngles(ids, files)}
+        onConfirm={(angleId) => void confirmAngles([angleId], [])}
       />
 
       <AiEditModal
@@ -1485,7 +1491,9 @@ export default function ExpressionPage() {
         imageSrc={aiEditSourceRelPath ? assetUrlFromRelPath(aiEditSourceRelPath) : ""}
         busy={uiBusy}
         onCancel={() => setAiEditOpen(false)}
-        onGenerate={(promptText) => void onAiEditGenerateExpr(promptText)}
+        onGenerate={(promptText, maskPngBase64) =>
+          void onAiEditGenerateExpr(promptText, maskPngBase64)
+        }
       />
 
       <DesktopContextMenu

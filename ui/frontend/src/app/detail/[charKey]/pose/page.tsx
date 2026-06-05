@@ -22,9 +22,11 @@ import {
   PoseCatalogItem,
   PoseReference,
   runDetailWsJob,
+  runReferenceMakeKeypointWsJob,
+  runReferenceGenerateWsJob,
 } from "../../../../lib/api";
 import { buildFlatGalleryLightboxPaths } from "../../../../lib/galleryLightboxOrder";
-import { AngleSubsetModal } from "../../../../components/AngleSubsetModal";
+import { CameraAngleModal } from "../../../../components/CameraAngleModal";
 import { DesktopContextMenu, ContextMenuItem } from "../../../../components/DesktopContextMenu";
 import { DetailSubpageChrome } from "../../../../components/DetailSubpageChrome";
 import { ImagePickerModal } from "../../../../components/ImagePickerModal";
@@ -144,6 +146,7 @@ export default function PosePage() {
   const [galleryAnchorItemId, setGalleryAnchorItemId] = useState<string | null>(null);
   const [importDragOver, setImportDragOver] = useState(false);
   const [angleDialogOpen, setAngleDialogOpen] = useState(false);
+  const [angleDialogImageUrl, setAngleDialogImageUrl] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const logRef = useRef<SharedLogStreamHandle>(null);
@@ -216,7 +219,7 @@ export default function PosePage() {
   );
 
   const onAiEditGeneratePose = useCallback(
-    async (promptText: string) => {
+    async (promptText: string, maskPngBase64?: string) => {
       if (!charKey) return;
       if (!aiEditPoseKey || !aiEditSourceRelPath) return;
 
@@ -231,6 +234,7 @@ export default function PosePage() {
             poseKey: aiEditPoseKey,
             sourceRelPath: aiEditSourceRelPath,
             promptText,
+            ...(maskPngBase64 ? { maskPngBase64 } : {}),
           },
           onLogLine: (line) => logRef.current?.pushLine(line),
         });
@@ -312,14 +316,8 @@ export default function PosePage() {
         setTitle("Converting image to pose keypoints");
         setRunningStatus("Starting keypoint conversion…");
         pushLog("Upload complete. Starting keypoint job…");
-        const done = await runDetailWsJob<{
-          refId: string;
-          referenceRelPath: string;
-          keypointRelPath: string;
-        }>({
-          charKey,
-          pathSuffix: "/pose/keypoint_ws",
-          payload: { job: "run_keypoint", inputRelPath: relPath, inputType: "image" },
+        const done = await runReferenceMakeKeypointWsJob({
+          imageRelPath: relPath,
           onLogLine: (line) => {
             logRef.current?.pushLine(line);
             setRunningStatus(truncateJobModalStatusLine(line));
@@ -328,9 +326,9 @@ export default function PosePage() {
         if (!done.ok) throw new Error(done.error ?? "Keypoint generation failed");
         if (done.result) {
           setReferenceRef({
-            id: done.result.refId,
-            referenceRelPath: done.result.referenceRelPath,
-            keypointRelPath: done.result.keypointRelPath,
+            id: done.result.item.id,
+            referenceRelPath: done.result.item.referenceRelPath,
+            keypointRelPath: done.result.item.keypointRelPath,
           });
           clearPosePromptUiForKeypointReference();
         }
@@ -363,6 +361,60 @@ export default function PosePage() {
       clearPosePromptUiForKeypointReference();
     }
   }, [clearPosePromptUiForKeypointReference]);
+
+  const onReferenceGenerateBase = useCallback(
+    async (promptText: string) => {
+      setReferencePickerOpen(false);
+      try {
+        beginSession({
+          title: "Generating base reference…",
+          clearLog: true,
+          runningStatus: "Generating base reference…",
+        });
+        const gen = await runReferenceGenerateWsJob({
+          promptText,
+          onLogLine: (line) => {
+            logRef.current?.pushLine(line);
+            setRunningStatus(truncateJobModalStatusLine(line));
+          },
+        });
+        if (!gen.ok || !gen.result) {
+          throw new Error(gen.error ?? "Reference generation failed");
+        }
+        setTitle("Converting image to pose keypoints");
+        setRunningStatus("Starting keypoint conversion…");
+        pushLog("Base reference generated. Starting keypoint job…");
+        const done = await runReferenceMakeKeypointWsJob({
+          imageRelPath: gen.result.previewRelPath,
+          onLogLine: (line) => {
+            logRef.current?.pushLine(line);
+            setRunningStatus(truncateJobModalStatusLine(line));
+          },
+        });
+        if (!done.ok) throw new Error(done.error ?? "Keypoint generation failed");
+        if (done.result) {
+          setReferenceRef({
+            id: done.result.item.id,
+            referenceRelPath: done.result.item.referenceRelPath,
+            keypointRelPath: done.result.item.keypointRelPath,
+          });
+          clearPosePromptUiForKeypointReference();
+        }
+        endSession();
+      } catch (err) {
+        failSession(err, "Failed to generate base reference.");
+      }
+    },
+    [
+      beginSession,
+      clearPosePromptUiForKeypointReference,
+      endSession,
+      failSession,
+      pushLog,
+      setRunningStatus,
+      setTitle,
+    ]
+  );
 
   useEffect(() => {
     if (!charKey) return;
@@ -756,6 +808,9 @@ export default function PosePage() {
           label: "Add angle",
           onSelect: () => {
             setSelectedPoseItemIds(new Set([item.itemId]));
+            setAngleDialogImageUrl(
+              item.relPath ? assetUrlFromRelPath(item.relPath, charKey) : null
+            );
             setAngleDialogOpen(true);
           },
         });
@@ -1696,11 +1751,12 @@ export default function PosePage() {
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
 
-      <AngleSubsetModal
+      <CameraAngleModal
         open={angleDialogOpen}
-        groups={angleGroups}
+        title="New Angle"
+        imageUrl={angleDialogImageUrl}
         onCancel={() => setAngleDialogOpen(false)}
-        onConfirm={(ids, files) => void confirmAngles(ids, files)}
+        onConfirm={(angleId) => void confirmAngles([angleId], [])}
       />
 
       <AiEditModal
@@ -1709,7 +1765,9 @@ export default function PosePage() {
         imageSrc={aiEditSourceRelPath ? assetUrlFromRelPath(aiEditSourceRelPath) : ""}
         busy={uiBusy}
         onCancel={() => setAiEditOpen(false)}
-        onGenerate={(promptText) => void onAiEditGeneratePose(promptText)}
+        onGenerate={(promptText, maskPngBase64) =>
+          void onAiEditGeneratePose(promptText, maskPngBase64)
+        }
       />
 
       <ReferencePicker
@@ -1719,6 +1777,7 @@ export default function PosePage() {
         onCancel={() => setReferencePickerOpen(false)}
         onPickSaved={onReferencePickSaved}
         onPickNew={onReferencePickNew}
+        onGenerateBase={onReferenceGenerateBase}
       />
 
       <DesktopContextMenu

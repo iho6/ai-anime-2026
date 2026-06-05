@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "fps": 24,
+  "previewAspect": "1:1",
+  "tracks": [
+    {
+      "id": "trk_mq0tr6g2_1",
+      "name": "Video 1",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mq0u1pcn_9",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_450d2212a1c04c36a6096986cd3839de.mp4",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 2.5,
+          "speed": 1,
+          "duration": 2.5,
+          "srcDuration": 2.5,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Buan",
+            "sequenceName": "head_turn"
+          },
+          "transform": {
+            "x": 0.10826058818724549,
+            "y": 0.018314896674370536,
+            "scale": 1.1429429965825926
+          }
+        }
+      ],
+      "hidden": false
+    },
+    {
+      "id": "trk_mq0u2f24_10",
+      "name": "Video 2",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mq0u2lii_12",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_e5b7d30a530a426cb54c48f430a0aed3.png",
+          "start": 0.497804617881775,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 2.002195382118225,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "flala_courtyard"
+          },
+          "transform": {
+            "x": 0.00508258897785327,
+            "y": 0.052331823166633915,
+            "scale": 0.9748629631369453
+          }
+        },
+        {
+          "id": "clip_mq0u8941_13",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_e5b7d30a530a426cb54c48f430a0aed3.png",
+          "start": 2.5,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 1.008135199546814,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "flala_courtyard"
+          },
+          "transform": {
+            "x": -0.04845115033927057,
+            "y": -0.07038279029063085,
+            "scale": 1
+          }
+        }
+      ],
+      "hidden": false
+    },
+    {
+      "id": "trk_mq0uqe2i_3",
+      "name": "Music 1",
+      "kind": "audio",
+      "clips": [
+        {
+          "id": "clip_mq0uqe2i_1",
+          "type": "audio",
+          "srcRelPath": "",
+          "start": 3.9876037597656246,
+          "inPoint": 0,
+          "outPoint": 5,
+          "speed": 1,
+          "duration": 5
+        },
+        {
+          "id": "clip_mq0vd4q4_1",
+          "type": "audio",
+          "srcRelPath": "",
+          "start": 8.987603759765625,
+          "inPoint": 0,
+          "outPoint": 5,
+          "speed": 1,
+          "duration": 5
+        }
+      ],
+      "hidden": false
+    }
+  ]
+}

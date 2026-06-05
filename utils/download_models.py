@@ -11,6 +11,8 @@ Usage:
     python utils/download_models.py --pose-keypoint
     python utils/download_models.py --flf-lightning [--hf-token YOUR_TOKEN]
     python utils/download_models.py --img2video-hunyuan-15 [--hf-token YOUR_TOKEN]
+    python utils/download_models.py --flux-fill --hf-token YOUR_TOKEN  # mask edit + outpaint
+    python utils/download_models.py --flux2-t2i  # reference t2i gen
     python utils/download_models.py --all  # all stacks (deduplicated)
     python utils/download_models.py --all --force-redownload  # re-fetch HF weights (testing)
 """
@@ -195,6 +197,58 @@ IMG2VIDEO_HUNYUAN_15_MODELS = [
     },
 ]
 
+# Flux.1 Fill dev (inpaint) — shared by mask_guided_edit_ai_service
+# (flux_fill_inpaint_example) AND the location outpaint workflow
+# (flux_fill_outpaint); identical weights, deduplicated by destination path.
+# flux1-fill-dev.safetensors lives in a gated repo and needs an HF token.
+FLUX_FILL_MODELS = [
+    {
+        "name": "flux1-fill-dev.safetensors (UNet, gated)",
+        "url": "https://huggingface.co/black-forest-labs/FLUX.1-Fill-dev/resolve/main/flux1-fill-dev.safetensors",
+        "path": "comfyui/models/diffusion_models/flux1-fill-dev.safetensors",
+    },
+    {
+        "name": "clip_l.safetensors (CLIP-L text encoder)",
+        "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors",
+        "path": "comfyui/models/text_encoders/clip_l.safetensors",
+    },
+    {
+        "name": "t5xxl_fp16.safetensors (T5-XXL text encoder)",
+        "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors",
+        "path": "comfyui/models/text_encoders/t5xxl_fp16.safetensors",
+    },
+    {
+        "name": "ae.safetensors (Flux VAE)",
+        "url": "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/ae.safetensors",
+        "path": "comfyui/models/vae/ae.safetensors",
+    },
+]
+
+# Flux.2 dev T2I — t2i_ref_gen_ai_service (image_flux2_t2i_api.json).
+# URLs from the bundled ComfyUI "Text to Image (Flux.2 Dev)" blueprint.
+FLUX2_T2I_MODELS = [
+    {
+        "name": "flux2_dev_fp8mixed.safetensors (Diffusion Model)",
+        "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/diffusion_models/flux2_dev_fp8mixed.safetensors",
+        "path": "comfyui/models/diffusion_models/flux2_dev_fp8mixed.safetensors",
+    },
+    {
+        "name": "mistral_3_small_flux2_bf16.safetensors (Text Encoder)",
+        "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/text_encoders/mistral_3_small_flux2_bf16.safetensors",
+        "path": "comfyui/models/text_encoders/mistral_3_small_flux2_bf16.safetensors",
+    },
+    {
+        "name": "flux2-vae.safetensors (VAE)",
+        "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
+        "path": "comfyui/models/vae/flux2-vae.safetensors",
+    },
+    {
+        "name": "Flux_2-Turbo-LoRA_comfyui.safetensors (Turbo LoRA)",
+        "url": "https://huggingface.co/ByteZSzn/Flux.2-Turbo-ComfyUI/resolve/main/Flux_2-Turbo-LoRA_comfyui.safetensors",
+        "path": "comfyui/models/loras/Flux_2-Turbo-LoRA_comfyui.safetensors",
+    },
+]
+
 
 SERVICE_MODEL_MAP = {
     "multi_angle": MULTI_ANGLE_MODELS,
@@ -203,6 +257,8 @@ SERVICE_MODEL_MAP = {
     "pose_keypoint": POSE_KEYPOINT_MODELS,
     "flf_lightning": FLF_LIGHTNING_MODELS,
     "img2video_hunyuan_15": IMG2VIDEO_HUNYUAN_15_MODELS,
+    "flux_fill": FLUX_FILL_MODELS,
+    "flux2_t2i": FLUX2_T2I_MODELS,
 }
 
 
@@ -412,6 +468,10 @@ def _collect_selected_models(args) -> list[dict]:
             selected_keys.append("flf_lightning")
         if args.img2video_hunyuan_15:
             selected_keys.append("img2video_hunyuan_15")
+        if args.flux_fill:
+            selected_keys.append("flux_fill")
+        if args.flux2_t2i:
+            selected_keys.append("flux2_t2i")
 
     selected_models: list[dict] = []
     for key in selected_keys:
@@ -490,6 +550,8 @@ def main():
             "  python utils/download_models.py --pose-keypoint\n"
             "  python utils/download_models.py --flf-lightning\n"
             "  python utils/download_models.py --img2video-hunyuan-15\n"
+            "  python utils/download_models.py --flux-fill --hf-token hf_xxx\n"
+            "  python utils/download_models.py --flux2-t2i\n"
             "  python utils/download_models.py --all"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -540,6 +602,21 @@ def main():
         ),
     )
     parser.add_argument(
+        "--flux-fill",
+        action="store_true",
+        dest="flux_fill",
+        help=(
+            "Download Flux.1 Fill dev weights for mask_guided_edit_ai_service and the "
+            "location outpaint workflow (flux1-fill-dev is gated; needs --hf-token)"
+        ),
+    )
+    parser.add_argument(
+        "--flux2-t2i",
+        action="store_true",
+        dest="flux2_t2i",
+        help="Download Flux.2 dev T2I weights for t2i_ref_gen_ai_service (image_flux2_t2i)",
+    )
+    parser.add_argument(
         "--all",
         action="store_true",
         help="Download all service model stacks with deduplication by destination path",
@@ -568,6 +645,8 @@ def main():
         and not args.pose_keypoint
         and not args.flf_lightning
         and not args.img2video_hunyuan_15
+        and not args.flux_fill
+        and not args.flux2_t2i
         and not args.all
     ):
         parser.print_help()

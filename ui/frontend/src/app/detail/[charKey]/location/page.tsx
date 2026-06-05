@@ -21,7 +21,7 @@ import {
 import { SortableMultiGrid, SortableItemInContainer } from "../../../../components/dnd/SortableMultiGrid";
 import { reorderInsertBeforeOrAfter } from "../../../../components/dnd/reorder";
 import { AiEditModal } from "../../../../components/AiEditModal";
-import { AngleSubsetModal } from "../../../../components/AngleSubsetModal";
+import { CameraAngleModal } from "../../../../components/CameraAngleModal";
 import { DesktopContextMenu, type ContextMenuItem } from "../../../../components/DesktopContextMenu";
 import { DetailSubpageChrome } from "../../../../components/DetailSubpageChrome";
 import { ResizableScrollGallery } from "../../../../components/ResizableScrollGallery";
@@ -932,11 +932,12 @@ export default function LocationDetailPage() {
           }
         }}
       />
-      <AngleSubsetModal
+      <CameraAngleModal
         open={angleDialogOpen}
-        groups={angleGroups}
+        title="New Angle"
+        imageUrl={baseRel ? assetUrlFromRelPath(baseRel) : null}
         onCancel={() => setAngleDialogOpen(false)}
-        onConfirm={(ids, files) => void confirmAngles(ids, files)}
+        onConfirm={(angleId) => void confirmAngles([angleId], [])}
       />
       <AiEditModal
         open={aiOpen}
@@ -944,7 +945,7 @@ export default function LocationDetailPage() {
         imageSrc={aiCtx ? assetUrlFromRelPath(aiCtx.relPath) : ""}
         busy={busy}
         onCancel={() => setAiOpen(false)}
-        onGenerate={async (promptText) => {
+        onGenerate={async (promptText, maskPngBase64) => {
           const ctx = aiCtx;
           if (!ctx) return;
           const section = ctx.folderKey === "lighting" ? "lighting" : "view";
@@ -955,6 +956,7 @@ export default function LocationDetailPage() {
               section,
               sourceRelPath: ctx.relPath,
               promptText,
+              maskPngBase64,
             });
             await refresh();
             setAiOpen(false);

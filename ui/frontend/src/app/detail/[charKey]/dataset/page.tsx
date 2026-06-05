@@ -16,7 +16,6 @@ import {
   apiDatasetPreviewAddNoise,
   apiDatasetSavedCommit,
   apiDatasetSavedOrder,
-  apiExpressionAngleGroups,
   apiPoseAngleGroups,
   apiSequenceCreate,
   apiSequenceGet,
@@ -29,6 +28,7 @@ import {
   assetUrlFromRelPath,
   BuilderSourceItem,
   runDetailWsJob,
+  runShotMakeAngleWsJob,
   type AngleGroup,
 } from "../../../../lib/api";
 import { SequenceEditor } from "./SequenceEditor";
@@ -44,6 +44,7 @@ import { ConnectedJobRunModal } from "../../../../components/ConnectedJobRunModa
 import { useJobRunSession, type BeginSessionOpts } from "../../../../hooks/useJobRunSession";
 import { AiEditModal } from "../../../../components/AiEditModal";
 import { AngleSubsetModal } from "../../../../components/AngleSubsetModal";
+import { CameraAngleModal } from "../../../../components/CameraAngleModal";
 import { useAppError } from "../../../../components/ErrorProvider";
 import { SortableGrid, SortableItem } from "../../../../components/dnd/SortableGrid";
 import { reorderInsertBeforeOrAfter } from "../../../../components/dnd/reorder";
@@ -139,8 +140,21 @@ export default function DatasetPage() {
     folderKey: string;
     inputRelPath?: string;
   } | null>(null);
-  const [datasetAngleDialogOpen, setDatasetAngleDialogOpen] = useState(false);
   const [datasetAngleGroups, setDatasetAngleGroups] = useState<AngleGroup[]>([]);
+  // Per-tile single-angle camera gizmo (right-click "Add angle").
+  const [datasetCameraAngleOpen, setDatasetCameraAngleOpen] = useState(false);
+  const [datasetCameraImageUrl, setDatasetCameraImageUrl] = useState<string | null>(null);
+  // Batch Angle (checkbox grid) over selected builder tiles (toolbar button).
+  const [datasetBatchAngleOpen, setDatasetBatchAngleOpen] = useState(false);
+
+  // Sequence gallery-frame single-angle camera gizmo (right-click "New Angle").
+  const [seqAngleOpen, setSeqAngleOpen] = useState(false);
+  const [seqAngleImageUrl, setSeqAngleImageUrl] = useState<string | null>(null);
+  const seqAngleCtxRef = useRef<{
+    seqName: string;
+    galleryItemId: string;
+    relPath: string;
+  } | null>(null);
 
   const [aiEditOpen, setAiEditOpen] = useState(false);
   const [aiEditMode, setAiEditMode] = useState<"builder" | "saved" | "sequence">("builder");
@@ -239,6 +253,61 @@ export default function DatasetPage() {
     [sequenceFolderKey, showError]
   );
 
+  const openNewAngleSequenceGallery = useCallback(
+    (ctx: { relPath: string; galleryItemId: string }) => {
+      if (!sequenceFolderKey) {
+        showError({ message: "New Angle: sequence name missing." });
+        return;
+      }
+      const rel = (ctx.relPath || "").trim();
+      if (!rel) {
+        showError({ message: "New Angle: source image not found." });
+        return;
+      }
+      seqAngleCtxRef.current = {
+        seqName: sequenceFolderKey,
+        galleryItemId: ctx.galleryItemId,
+        relPath: rel,
+      };
+      setSeqAngleImageUrl(assetUrlFromRelPath(rel));
+      setSeqAngleOpen(true);
+    },
+    [sequenceFolderKey, showError]
+  );
+
+  const applyNewAngleSequenceGallery = useCallback(
+    async (angleId: number) => {
+      setSeqAngleOpen(false);
+      const ctx = seqAngleCtxRef.current;
+      seqAngleCtxRef.current = null;
+      if (!charKey || !ctx) return;
+
+      beginSession({ title: "Generating new angle", clearLog: true });
+      try {
+        const done = await runShotMakeAngleWsJob({
+          imageRelPath: ctx.relPath,
+          angleId,
+          onLogLine: (line) => logRef.current?.pushLine(line),
+        });
+        const newRel = done.result?.relPath;
+        if (!done.ok || !newRel) {
+          throw new Error(done.error ?? "Angle generation returned no image.");
+        }
+        const manifest = await apiSequenceGet(charKey, ctx.seqName);
+        const gi = manifest.gallery.findIndex((g) => g.id === ctx.galleryItemId);
+        if (gi < 0) throw new Error("New Angle: sequence gallery item no longer exists");
+        const nextGallery = manifest.gallery.map((g, i) =>
+          i === gi ? { ...g, relPath: newRel } : g
+        );
+        await apiSequencePut(charKey, ctx.seqName, { ...manifest, gallery: nextGallery });
+        endSession();
+      } catch (err) {
+        failSession(err, "New Angle failed.");
+      }
+    },
+    [charKey, beginSession, endSession, failSession, apiSequenceGet, apiSequencePut]
+  );
+
   const mergeBuilderFromApi = useCallback(
     async (preserve: Map<string, Partial<BuilderEntry>>) => {
       if (!charKey) return;
@@ -275,7 +344,7 @@ export default function DatasetPage() {
   );
 
   const onAiEditGenerate = useCallback(
-    async (promptText: string) => {
+    async (promptText: string, maskPngBase64?: string) => {
       if (!charKey) return;
       if (!aiEditSourceRelPath) return;
 
@@ -299,6 +368,7 @@ export default function DatasetPage() {
               sourceRelPath: aiEditSourceRelPath,
               sourceKind: builderCtx.sourceKind,
               promptText,
+              ...(maskPngBase64 ? { maskPngBase64 } : {}),
             },
             onLogLine: (line) => logRef.current?.pushLine(line),
           });
@@ -319,6 +389,7 @@ export default function DatasetPage() {
               datasetName: savedName,
               sourceRelPath: aiEditSourceRelPath,
               promptText,
+              ...(maskPngBase64 ? { maskPngBase64 } : {}),
             },
             onLogLine: (line) => logRef.current?.pushLine(line),
           });
@@ -339,6 +410,7 @@ export default function DatasetPage() {
               sequenceName: seqName,
               sourceRelPath: aiEditSourceRelPath,
               promptText,
+              ...(maskPngBase64 ? { maskPngBase64 } : {}),
             },
             onLogLine: (line) => logRef.current?.pushLine(line),
           });
@@ -379,22 +451,106 @@ export default function DatasetPage() {
     ]
   );
 
-  async function openDatasetBuilderAddAngles(ctx: {
+  // Per-tile right-click "Add angle" -> single camera gizmo for that tile.
+  function openDatasetBuilderAddAngles(ctx: {
     kind: "pose" | "expr";
     folderKey: string;
     inputRelPath?: string;
   }) {
     if (!charKey) return;
+    datasetAnglesCtxRef.current = ctx;
+    setDatasetCameraImageUrl(
+      ctx.inputRelPath ? assetUrlFromRelPath(ctx.inputRelPath, charKey) : null
+    );
+    setDatasetCameraAngleOpen(true);
+  }
+
+  // Toolbar "Batch Angle" -> checkbox grid applied to selected builder tiles.
+  async function openDatasetBatchAngles() {
+    if (!charKey) return;
+    const selected = entries.filter(
+      (e) => selectedBuilder.has(e.tileId) && !e.removed
+    );
+    if (!selected.length) {
+      showError({ message: "Select one or more tiles first (checkboxes)." });
+      return;
+    }
     try {
-      const ag =
-        ctx.kind === "pose"
-          ? await apiPoseAngleGroups(charKey)
-          : await apiExpressionAngleGroups(charKey);
-      datasetAnglesCtxRef.current = ctx;
+      // The 96 angle groups are identical across pose/expr; load once for display.
+      const ag = await apiPoseAngleGroups(charKey);
       setDatasetAngleGroups(ag);
-      setDatasetAngleDialogOpen(true);
+      setDatasetBatchAngleOpen(true);
     } catch (e) {
       showError({ message: "Failed to load angle groups.", error: e });
+    }
+  }
+
+  async function confirmDatasetBatchAngles(selectedAngleIds: number[]) {
+    setDatasetBatchAngleOpen(false);
+    if (!charKey || !selectedAngleIds.length) return;
+    const selected = entries.filter(
+      (e) => selectedBuilder.has(e.tileId) && !e.removed
+    );
+    if (!selected.length) return;
+
+    // Group selected tiles by kind, then by folderKey, collecting source paths.
+    const groups: { kind: "pose" | "expr"; folderKey: string; rels: string[] }[] = [];
+    for (const kind of ["pose", "expr"] as const) {
+      const byFolder = new Map<string, string[]>();
+      for (const e of selected.filter((x) => x.sourceKind === kind)) {
+        const arr = byFolder.get(e.folderKey) ?? [];
+        if (e.sourceRelPath) arr.push(e.sourceRelPath);
+        byFolder.set(e.folderKey, arr);
+      }
+      for (const [folderKey, rels] of byFolder) {
+        groups.push({ kind, folderKey, rels });
+      }
+    }
+    if (!groups.length) return;
+
+    beginSession({ title: "Generating angles", clearLog: true });
+    let anglesSessionOk = false;
+    try {
+      for (const g of groups) {
+        const payload: Record<string, unknown> = {
+          job: "angles",
+          angleIds: selectedAngleIds,
+        };
+        if (g.kind === "pose") payload.poseKeys = [g.folderKey];
+        else payload.exprKeys = [g.folderKey];
+        if (g.rels.length) payload.inputRelPaths = g.rels;
+
+        const done = await runDetailWsJob({
+          charKey,
+          pathSuffix: g.kind === "pose" ? "/pose/ws" : "/expression/ws",
+          payload,
+          onLogLine: (line) => logRef.current?.pushLine(line),
+        });
+        if (!done.ok) {
+          failSession(
+            new Error(done.error ?? "Angle generation failed."),
+            "Angle generation failed."
+          );
+          return;
+        }
+      }
+      const preserve = new Map(
+        entries.map((e) => [
+          e.tileId,
+          {
+            previewRelPath: e.previewRelPath,
+            beforeNoiseRelPath: e.beforeNoiseRelPath,
+            builderHidden: e.builderHidden,
+            removed: e.removed,
+          },
+        ])
+      );
+      await mergeBuilderFromApi(preserve);
+      anglesSessionOk = true;
+    } catch (e) {
+      failSession(e, "Angle generation failed.");
+    } finally {
+      if (anglesSessionOk) endSession();
     }
   }
 
@@ -402,7 +558,7 @@ export default function DatasetPage() {
     selectedAngleIds: number[],
     manualFiles: File[]
   ) {
-    setDatasetAngleDialogOpen(false);
+    setDatasetCameraAngleOpen(false);
     const ctx = datasetAnglesCtxRef.current;
     datasetAnglesCtxRef.current = null;
     if (!charKey || !ctx) return;
@@ -896,6 +1052,7 @@ export default function DatasetPage() {
             onBatchAddNoise={() => void batchAddNoise(Array.from(selectedBuilder))}
             onBatchRestoreBackground={() => batchRestoreBackground(Array.from(selectedBuilder))}
             onBatchRemoveNoise={() => batchRemoveNoise(Array.from(selectedBuilder))}
+            onBatchAngle={() => void openDatasetBatchAngles()}
             onDropBuilderImageOnSequence={onDropBuilderImageOnSequence}
             beginRemoveBackgroundModal={beginRemoveBackgroundModal}
             endRemoveBackgroundModal={endRemoveBackgroundModal}
@@ -939,6 +1096,7 @@ export default function DatasetPage() {
               sequenceName={sequenceFolderKey}
               onError={onSequenceEditorError}
               onAiEditSequenceGallery={openAiEditSequenceGallery}
+              onNewAngleSequenceGallery={openNewAngleSequenceGallery}
               jobModal={{
                 begin: beginSession,
                 end: endSession,
@@ -962,14 +1120,37 @@ export default function DatasetPage() {
         onClose={() => setMenu((m) => ({ ...m, open: false }))}
       />
 
-      <AngleSubsetModal
-        open={datasetAngleDialogOpen}
-        groups={datasetAngleGroups}
+      <CameraAngleModal
+        open={datasetCameraAngleOpen}
+        title="New Angle"
+        imageUrl={datasetCameraImageUrl}
         onCancel={() => {
-          setDatasetAngleDialogOpen(false);
+          setDatasetCameraAngleOpen(false);
           datasetAnglesCtxRef.current = null;
         }}
-        onConfirm={(ids, files) => void confirmDatasetBuilderAngles(ids, files)}
+        onConfirm={(angleId) => {
+          setDatasetCameraAngleOpen(false);
+          void confirmDatasetBuilderAngles([angleId], []);
+        }}
+      />
+
+      <AngleSubsetModal
+        open={datasetBatchAngleOpen}
+        title="Batch Angle: generate angles for the selected tiles."
+        groups={datasetAngleGroups}
+        onCancel={() => setDatasetBatchAngleOpen(false)}
+        onConfirm={(ids) => void confirmDatasetBatchAngles(ids)}
+      />
+
+      <CameraAngleModal
+        open={seqAngleOpen}
+        title="New Angle"
+        imageUrl={seqAngleImageUrl}
+        onCancel={() => {
+          setSeqAngleOpen(false);
+          seqAngleCtxRef.current = null;
+        }}
+        onConfirm={(angleId) => void applyNewAngleSequenceGallery(angleId)}
       />
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
@@ -980,7 +1161,9 @@ export default function DatasetPage() {
         imageSrc={aiEditSourceRelPath ? assetUrlFromRelPath(aiEditSourceRelPath) : ""}
         busy={busy}
         onCancel={() => setAiEditOpen(false)}
-        onGenerate={(promptText) => void onAiEditGenerate(promptText)}
+        onGenerate={(promptText, maskPngBase64) =>
+          void onAiEditGenerate(promptText, maskPngBase64)
+        }
       />
       {lightbox ? (
         <GalleryImageLightbox

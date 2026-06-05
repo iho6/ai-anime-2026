@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { ZoomableImage } from "./ZoomableImage";
+import React, { useEffect, useRef, useState } from "react";
+import { ZoomableImage, type MaskController } from "./ZoomableImage";
 
 export function AiEditModal(props: {
   open: boolean;
@@ -11,7 +11,10 @@ export function AiEditModal(props: {
   placeholder?: string;
   actionLabel?: string;
   onCancel: () => void;
-  onGenerate: (promptText: string) => void | Promise<void>;
+  onGenerate: (
+    promptText: string,
+    maskPngBase64?: string
+  ) => void | Promise<void>;
 }) {
   const {
     open,
@@ -25,15 +28,30 @@ export function AiEditModal(props: {
   } = props;
 
   const [prompt, setPrompt] = useState("");
+  const [maskOn, setMaskOn] = useState(false);
+  const [brushSize, setBrushSize] = useState(40);
+  const [hasPaint, setHasPaint] = useState(false);
+
+  const maskControllerRef = useRef<MaskController | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setPrompt("");
+    setMaskOn(false);
+    setHasPaint(false);
   }, [open]);
 
   if (!open) return null;
 
   const canGenerate = !busy && prompt.trim().length > 0;
+
+  const handleGenerate = () => {
+    let maskB64: string | undefined;
+    if (maskOn) {
+      maskB64 = maskControllerRef.current?.exportBase64() ?? undefined;
+    }
+    void onGenerate(prompt.trim(), maskB64);
+  };
 
   return (
     <div
@@ -73,9 +91,34 @@ export function AiEditModal(props: {
             fontWeight: 400,
             padding: "12px 12px 10px",
             borderBottom: "1px solid rgba(255,255,255,0.12)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
           }}
         >
-          {title}
+          <span>{title}</span>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 13,
+              color: "rgba(255,255,255,0.85)",
+              cursor: busy ? "not-allowed" : "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={maskOn}
+              disabled={busy}
+              onChange={(e) => {
+                setMaskOn(e.target.checked);
+                if (!e.target.checked) setHasPaint(false);
+              }}
+            />
+            Mask edit (Flux.1)
+          </label>
         </div>
 
         <div
@@ -103,6 +146,11 @@ export function AiEditModal(props: {
                 src={imageSrc}
                 fitMaxWidth="100%"
                 fitMaxHeight="100%"
+                maskMode={maskOn}
+                maskBrushSize={brushSize}
+                maskDisplayColor="rgba(0,0,0,0.55)"
+                maskController={maskControllerRef}
+                onMaskPaintedChange={setHasPaint}
               />
             </div>
           </div>
@@ -115,6 +163,48 @@ export function AiEditModal(props: {
               background: "#0b0b0b",
             }}
           >
+            {maskOn && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  marginBottom: 10,
+                  fontSize: 13,
+                  color: "rgba(255,255,255,0.85)",
+                }}
+              >
+                <span>Paint the area to edit.</span>
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  Brush
+                  <input
+                    type="range"
+                    min={8}
+                    max={120}
+                    step={1}
+                    value={brushSize}
+                    disabled={busy}
+                    onChange={(e) => setBrushSize(Number(e.target.value))}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="ui-btn-black"
+                  disabled={busy || !hasPaint}
+                  style={{
+                    cursor: busy || !hasPaint ? "not-allowed" : "pointer",
+                    opacity: busy || !hasPaint ? 0.6 : 1,
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    maskControllerRef.current?.clear();
+                  }}
+                >
+                  Clear mask
+                </button>
+              </div>
+            )}
+
             <textarea
               className="ai-edit-modal__prompt"
               value={prompt}
@@ -153,7 +243,7 @@ export function AiEditModal(props: {
                 }}
                 onClick={(e) => {
                   e.preventDefault();
-                  void onGenerate(prompt.trim());
+                  handleGenerate();
                 }}
               >
                 {actionLabel}
@@ -175,4 +265,3 @@ export function AiEditModal(props: {
     </div>
   );
 }
-

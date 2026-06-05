@@ -1,0 +1,149 @@
+{
+  "3": {
+    "inputs": {
+      "image": "live_portrait_character.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "10": {
+    "inputs": {
+      "frame_rate": 15,
+      "loop_count": 0,
+      "filename_prefix": "LivePortrait",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "49",
+        0
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "44": {
+    "inputs": {
+      "video": "live_portrait_expression.mp4",
+      "force_rate": 0,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 0,
+      "skip_first_frames": 0,
+      "select_every_nth": 2,
+      "format": "AnimateDiff"
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "Load Video (Upload) 🎥🅥🅗🅢"
+    }
+  },
+  "47": {
+    "inputs": {
+      "lip_zero": false,
+      "lip_zero_threshold": 0.03,
+      "stitching": true,
+      "delta_multiplier": 1.5,
+      "mismatch_method": "constant",
+      "relative_motion_mode": "relative",
+      "driving_smooth_observation_variance": 0.000003,
+      "expression_friendly": false,
+      "expression_friendly_multiplier": 1,
+      "pipeline": [
+        "60",
+        0
+      ],
+      "crop_info": [
+        "51",
+        1
+      ],
+      "source_image": [
+        "3",
+        0
+      ],
+      "driving_images": [
+        "44",
+        0
+      ]
+    },
+    "class_type": "LivePortraitProcess",
+    "_meta": {
+      "title": "LivePortrait Process"
+    }
+  },
+  "49": {
+    "inputs": {
+      "source_image": [
+        "3",
+        0
+      ],
+      "cropped_image": [
+        "47",
+        0
+      ],
+      "liveportrait_out": [
+        "47",
+        1
+      ]
+    },
+    "class_type": "LivePortraitComposite",
+    "_meta": {
+      "title": "LivePortrait Composite"
+    }
+  },
+  "51": {
+    "inputs": {
+      "dsize": 512,
+      "scale": 2,
+      "vx_ratio": 0,
+      "vy_ratio": -0.125,
+      "face_index": 0,
+      "face_index_order": "large-small",
+      "rotate": true,
+      "pipeline": [
+        "60",
+        0
+      ],
+      "cropper": [
+        "59",
+        0
+      ],
+      "source_image": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "LivePortraitCropper",
+    "_meta": {
+      "title": "LivePortrait Cropper"
+    }
+  },
+  "59": {
+    "inputs": {
+      "landmarkrunner_onnx_device": "CPU",
+      "keep_model_loaded": true
+    },
+    "class_type": "LivePortraitLoadMediaPipeCropper",
+    "_meta": {
+      "title": "LivePortrait Load MediaPipeCropper"
+    }
+  },
+  "60": {
+    "inputs": {
+      "precision": "auto",
+      "mode": "human"
+    },
+    "class_type": "DownloadAndLoadLivePortraitModels",
+    "_meta": {
+      "title": "(Down)Load LivePortraitModels"
+    }
+  }
+}

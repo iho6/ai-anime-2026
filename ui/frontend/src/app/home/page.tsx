@@ -31,6 +31,22 @@ export default function HomePage() {
               cursor: "pointer",
               textAlign: "center",
             }}
+            onClick={() => router.push("/location_hub")}
+          >
+            Create Location
+          </button>
+          <button
+            style={{
+              width: 140,
+              height: 140,
+              borderRadius: 0,
+              border: "1px solid rgba(0,0,0,0.5)",
+              background: "transparent",
+              color: "inherit",
+              fontWeight: 400,
+              cursor: "pointer",
+              textAlign: "center",
+            }}
             onClick={() => router.push("/hub")}
           >
             Create Character
@@ -47,9 +63,25 @@ export default function HomePage() {
               cursor: "pointer",
               textAlign: "center",
             }}
-            onClick={() => router.push("/location_hub")}
+            onClick={() => router.push("/shot_hub")}
           >
-            Create Location
+            Create Shot
+          </button>
+          <button
+            style={{
+              width: 140,
+              height: 140,
+              borderRadius: 0,
+              border: "1px solid rgba(0,0,0,0.5)",
+              background: "transparent",
+              color: "inherit",
+              fontWeight: 400,
+              cursor: "pointer",
+              textAlign: "center",
+            }}
+            onClick={() => router.push("/timeline_hub")}
+          >
+            Create Video Timeline
           </button>
         </div>
       </div>

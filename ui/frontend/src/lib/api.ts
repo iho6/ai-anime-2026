@@ -353,6 +353,549 @@ export async function apiLocationHubChangeCover(
   await readJson<{ ok: boolean }>(res);
 }
 
+// --- Shot hub ---
+
+export type HubShot = {
+  shotKey: string;
+  coverRelPath: string;
+};
+
+export async function apiShotHubItems(): Promise<HubShot[]> {
+  const res = await fetch(`${API_BASE_URL}/shot/hub/items`, {
+    method: "GET",
+    credentials: "omit",
+  });
+  return readJson<HubShot[]>(res);
+}
+
+export async function apiShotHubRename(
+  shotKey: string,
+  newName: string
+): Promise<{ newShotKey: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/shot/hub/${encodeURIComponent(shotKey)}/rename`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ newName }),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ newShotKey: string }>(res);
+}
+
+export async function apiShotHubDelete(shotKey: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/shot/hub/${encodeURIComponent(shotKey)}/delete`,
+    { method: "POST", credentials: "omit" }
+  );
+  await readJson<{ ok: boolean }>(res);
+}
+
+export async function apiShotHubSetGenerated(
+  shotKey: string,
+  relPath: string
+): Promise<{ coverRelPath: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/shot/hub/${encodeURIComponent(shotKey)}/set_generated`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ relPath }),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ coverRelPath: string }>(res);
+}
+
+// ----------------------------------------------------------------------------
+// Video timeline (multi-track composite editor)
+// ----------------------------------------------------------------------------
+
+export type HubTimeline = {
+  timelineKey: string;
+  coverRelPath: string;
+};
+
+export type TimelineClipType = "video" | "image" | "audio";
+
+export type TimelineClip = {
+  id: string;
+  type: TimelineClipType;
+  /** Storage-relative path under ``timelines/<key>/clips/`` served by /assets/storage/. */
+  srcRelPath: string;
+  /** Seconds along the timeline where the clip begins. */
+  start: number;
+  /** Trim start within the source (seconds). */
+  inPoint: number;
+  /** Trim end within the source (seconds). */
+  outPoint: number;
+  /** Playback speed multiplier (1 = normal). */
+  speed: number;
+  /** Timeline duration in seconds = (outPoint - inPoint) / speed. */
+  duration: number;
+  /** Source media duration in seconds (video/audio); caps right-trim. */
+  srcDuration?: number;
+  naturalW?: number;
+  naturalH?: number;
+  /** In-frame transform for the preview: fractional offset + scale multiplier. */
+  transform?: { x: number; y: number; scale: number };
+  /** Where this clip was imported from (for provenance / re-import). */
+  source?: {
+    charKey?: string;
+    sequenceName?: string;
+    galleryItemId?: string;
+    shotKey?: string;
+    locationKey?: string;
+  };
+};
+
+export type TimelineTrack = {
+  id: string;
+  name: string;
+  kind: "video" | "audio";
+  clips: TimelineClip[];
+  /** When true, the track is excluded from preview playback. */
+  hidden?: boolean;
+};
+
+export type TimelineManifest = {
+  version: number;
+  fps: number;
+  previewAspect: "16:9" | "4:3" | "1:1" | "9:16";
+  tracks: TimelineTrack[];
+};
+
+export async function apiTimelineHubItems(): Promise<HubTimeline[]> {
+  const res = await fetch(`${API_BASE_URL}/timeline/hub/items`, {
+    method: "GET",
+    credentials: "omit",
+  });
+  return readJson<HubTimeline[]>(res);
+}
+
+export async function apiTimelineCreate(name?: string): Promise<{ timelineKey: string }> {
+  const res = await fetch(`${API_BASE_URL}/timeline/create`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: name ?? "Timeline" }),
+    credentials: "omit",
+  });
+  return readJson<{ timelineKey: string }>(res);
+}
+
+export async function apiTimelineHubRename(
+  timelineKey: string,
+  newName: string
+): Promise<{ newTimelineKey: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/hub/${encodeURIComponent(timelineKey)}/rename`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ newName }),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ newTimelineKey: string }>(res);
+}
+
+export async function apiTimelineHubDelete(timelineKey: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/hub/${encodeURIComponent(timelineKey)}/delete`,
+    { method: "POST", credentials: "omit" }
+  );
+  await readJson<{ ok: boolean }>(res);
+}
+
+export async function apiTimelineGet(timelineKey: string): Promise<TimelineManifest> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(timelineKey)}/manifest`,
+    { method: "GET", credentials: "omit" }
+  );
+  return readJson<TimelineManifest>(res);
+}
+
+export async function apiTimelinePut(
+  timelineKey: string,
+  manifest: TimelineManifest
+): Promise<{ ok: boolean }> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(timelineKey)}/manifest`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(manifest),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ ok: boolean }>(res);
+}
+
+/** Copy a location/shot/character image into the timeline as an image clip. */
+export async function apiTimelineImportImage(params: {
+  timelineKey: string;
+  sourceRelPath: string;
+}): Promise<{ type: "image"; srcRelPath: string; width: number; height: number }> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(params.timelineKey)}/import_image`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sourceRelPath: params.sourceRelPath }),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ type: "image"; srcRelPath: string; width: number; height: number }>(res);
+}
+
+/** Materialize a character sequence (or one gallery video item) into an mp4 clip. */
+export function runTimelineImportSequenceWsJob(params: {
+  timelineKey: string;
+  charKey: string;
+  sequenceName: string;
+  galleryItemId?: string;
+  onLogLine: (line: string) => void;
+}): Promise<
+  WsDoneMessage<{
+    type: "video";
+    srcRelPath: string;
+    durationSec: number;
+    width: number;
+    height: number;
+  }>
+> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  const url = wsUrlForPath(`/timeline/${encodeURIComponent(timelineKey)}/import_sequence/ws`);
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => {
+      ws.send(JSON.stringify(payload));
+    };
+    ws.onmessage = (ev) => {
+      let data: {
+        type?: string;
+        line?: string;
+        ok?: boolean;
+        error?: string;
+        result?: {
+          type: "video";
+          srcRelPath: string;
+          durationSec: number;
+          width: number;
+          height: number;
+        };
+      };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") {
+        onLogLine(data.line);
+      }
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(
+          data as WsDoneMessage<{
+            type: "video";
+            srcRelPath: string;
+            durationSec: number;
+            width: number;
+            height: number;
+          }>
+        );
+      }
+    };
+  });
+}
+
+type TimelineVideoClipResult = {
+  type: "video";
+  srcRelPath: string;
+  durationSec: number;
+  width: number;
+  height: number;
+};
+type TimelineImageClipResult = {
+  type: "image";
+  srcRelPath: string;
+  width: number;
+  height: number;
+};
+
+/** Shared WS runner for timeline generation jobs (FLF / I2V / AI-edit). */
+function runTimelineGenWsJob<T>(
+  path: string,
+  payload: Record<string, unknown>,
+  onLogLine: (line: string) => void
+): Promise<WsDoneMessage<T>> {
+  const url = wsUrlForPath(path);
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => ws.send(JSON.stringify(payload));
+    ws.onmessage = (ev) => {
+      let data: { type?: string; line?: string };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") onLogLine(data.line);
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(data as WsDoneMessage<T>);
+      }
+    };
+  });
+}
+
+/** FLF (first-last-frame) between two timeline image clips → new video clip. */
+export function runTimelineFlfWsJob(params: {
+  timelineKey: string;
+  imageRelPathA: string;
+  imageRelPathB: string;
+  length?: number;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<TimelineVideoClipResult>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<TimelineVideoClipResult>(
+    `/timeline/${encodeURIComponent(timelineKey)}/flf/ws`,
+    payload,
+    onLogLine
+  );
+}
+
+/** I2V (image-to-video) from one timeline image clip + prompt → new video clip. */
+export function runTimelineI2vWsJob(params: {
+  timelineKey: string;
+  imageRelPath: string;
+  prompt: string;
+  length?: number;
+  width?: number;
+  height?: number;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<TimelineVideoClipResult>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<TimelineVideoClipResult>(
+    `/timeline/${encodeURIComponent(timelineKey)}/i2v/ws`,
+    payload,
+    onLogLine
+  );
+}
+
+/** AI-edit a timeline image clip (prompt + optional mask) → new image clip. */
+export function runTimelineAiEditWsJob(params: {
+  timelineKey: string;
+  imageRelPath: string;
+  prompt: string;
+  maskPngBase64?: string;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<TimelineImageClipResult>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<TimelineImageClipResult>(
+    `/timeline/${encodeURIComponent(timelineKey)}/ai_edit/ws`,
+    payload,
+    onLogLine
+  );
+}
+
+export type ShotLayerMeta = {
+  charKey: string;
+  imageRelPath: string;
+  x: number;
+  y: number;
+  scale: number;
+};
+
+/**
+ * Generate a shot via the Qwen image-edit service (backdrop = image 1,
+ * composite = image 2). Streams log lines and resolves with the saved result.
+ */
+export function runShotCreateWsJob(params: {
+  shotName: string;
+  locationKey: string | null;
+  locationImageRelPath: string;
+  characters: ShotLayerMeta[];
+  compositePngBase64: string;
+  promptText: string;
+  /** "i2i" = Qwen edit (default); "as_is" = save the overlay verbatim. */
+  mode?: "i2i" | "as_is";
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<{ shotKey: string; outputRelPath: string }>> {
+  const url = wsUrlForPath("/shot/create/ws");
+  const { onLogLine, mode, ...rest } = params;
+  const payload = { ...rest, mode: mode ?? "i2i" };
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => {
+      ws.send(JSON.stringify(payload));
+    };
+    ws.onmessage = (ev) => {
+      let data: {
+        type?: string;
+        line?: string;
+        ok?: boolean;
+        error?: string;
+        result?: { shotKey: string; outputRelPath: string };
+      };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") {
+        onLogLine(data.line);
+      }
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(
+          data as WsDoneMessage<{ shotKey: string; outputRelPath: string }>
+        );
+      }
+    };
+  });
+}
+
+/**
+ * Remove a character layer's background (RMBG-2.0). Streams log lines and
+ * resolves with the rel path of a transparent PNG in the shots scratch dir.
+ */
+export function runShotRemoveBgWsJob(params: {
+  imageRelPath: string;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<{ relPath: string }>> {
+  const url = wsUrlForPath("/shot/remove_bg/ws");
+  const { onLogLine, ...payload } = params;
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => {
+      ws.send(JSON.stringify(payload));
+    };
+    ws.onmessage = (ev) => {
+      let data: {
+        type?: string;
+        line?: string;
+        ok?: boolean;
+        error?: string;
+        result?: { relPath: string };
+      };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") {
+        onLogLine(data.line);
+      }
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(data as WsDoneMessage<{ relPath: string }>);
+      }
+    };
+  });
+}
+
+/**
+ * Generate a single new camera angle for an arbitrary image (shot composer layer /
+ * generated scene, or a sequence frame). Returns the staged angled PNG's storage rel path.
+ */
+export function runShotMakeAngleWsJob(params: {
+  imageRelPath: string;
+  angleId: number;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<{ relPath: string }>> {
+  const url = wsUrlForPath("/shot/make_angle/ws");
+  const { onLogLine, ...payload } = params;
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => {
+      ws.send(JSON.stringify(payload));
+    };
+    ws.onmessage = (ev) => {
+      let data: {
+        type?: string;
+        line?: string;
+        ok?: boolean;
+        error?: string;
+        result?: { relPath: string };
+      };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") {
+        onLogLine(data.line);
+      }
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(data as WsDoneMessage<{ relPath: string }>);
+      }
+    };
+  });
+}
+
 export async function apiHubCoverCandidates(
   charKey: string
 ): Promise<CoverCandidate[]> {
@@ -928,6 +1471,7 @@ export async function apiLocationAiEdit(params: {
   section: "view" | "lighting";
   sourceRelPath: string;
   promptText: string;
+  maskPngBase64?: string;
 }): Promise<{ relPath: string }> {
   const res = await fetch(
     `${API_BASE_URL}/detail/${encodeURIComponent(params.locationKey)}/location/ai_edit`,
@@ -938,6 +1482,9 @@ export async function apiLocationAiEdit(params: {
         section: params.section,
         sourceRelPath: params.sourceRelPath,
         promptText: params.promptText,
+        ...(params.maskPngBase64
+          ? { maskPngBase64: params.maskPngBase64 }
+          : {}),
       }),
       credentials: "omit",
     }
@@ -1524,6 +2071,235 @@ export async function apiPoseDeleteReference(
   if (!res.ok) {
     await readJson(res);
   }
+}
+
+// --- Global reference library (images + shared keypoints) ---
+
+export type ReferenceImageItem = {
+  itemId: string;
+  relPath: string;
+};
+
+export async function apiReferenceImages(): Promise<ReferenceImageItem[]> {
+  const res = await fetch(`${API_BASE_URL}/reference/images`, {
+    method: "GET",
+    credentials: "omit",
+  });
+  return readJson<ReferenceImageItem[]>(res);
+}
+
+export async function apiReferenceKeypoints(): Promise<PoseReference[]> {
+  const res = await fetch(`${API_BASE_URL}/reference/keypoints`, {
+    method: "GET",
+    credentials: "omit",
+  });
+  return readJson<PoseReference[]>(res);
+}
+
+export async function apiReferenceImageCommit(
+  previewRelPath: string
+): Promise<ReferenceImageItem> {
+  const res = await fetch(`${API_BASE_URL}/reference/images/commit`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ previewRelPath }),
+  });
+  const data = await readJson<{ item: ReferenceImageItem }>(res);
+  return data.item;
+}
+
+export async function apiReferenceImagesReorder(order: string[]): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/reference/images/reorder`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ order }),
+  });
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceKeypointsReorder(
+  order: string[]
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/reference/keypoints/reorder`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ order }),
+  });
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceImageDelete(id: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/reference/images/${encodeURIComponent(id)}`,
+    { method: "DELETE", credentials: "omit" }
+  );
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceKeypointDelete(id: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/reference/keypoints/${encodeURIComponent(id)}`,
+    { method: "DELETE", credentials: "omit" }
+  );
+  if (!res.ok) await readJson(res);
+}
+
+/** Generate a Flux2 t2i reference preview. Resolves with the preview rel path. */
+export function runReferenceGenerateWsJob(params: {
+  promptText: string;
+  width?: number;
+  height?: number;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<{ previewRelPath: string }>> {
+  const url = wsUrlForPath("/reference/generate/ws");
+  const { onLogLine, ...payload } = params;
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => {
+      ws.send(JSON.stringify(payload));
+    };
+    ws.onmessage = (ev) => {
+      let data: {
+        type?: string;
+        line?: string;
+        ok?: boolean;
+        error?: string;
+        result?: { previewRelPath: string };
+      };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") {
+        onLogLine(data.line);
+      }
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(data as WsDoneMessage<{ previewRelPath: string }>);
+      }
+    };
+  });
+}
+
+/** Run the SD pose service on a saved reference image; resolves with the new pair. */
+export function runReferenceMakeKeypointWsJob(params: {
+  imageRelPath: string;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<{ item: PoseReference }>> {
+  const url = wsUrlForPath("/reference/make_keypoint/ws");
+  const { onLogLine, ...payload } = params;
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => {
+      ws.send(JSON.stringify(payload));
+    };
+    ws.onmessage = (ev) => {
+      let data: {
+        type?: string;
+        line?: string;
+        ok?: boolean;
+        error?: string;
+        result?: { item: PoseReference };
+      };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") {
+        onLogLine(data.line);
+      }
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(data as WsDoneMessage<{ item: PoseReference }>);
+      }
+    };
+  });
+}
+
+export async function apiReferenceAngleGroups(): Promise<AngleGroup[]> {
+  const res = await fetch(`${API_BASE_URL}/reference/angle_groups`, {
+    method: "GET",
+    credentials: "omit",
+  });
+  return readJson<AngleGroup[]>(res);
+}
+
+/** Generate a new camera angle from a saved reference image; resolves with the new image entry. */
+export function runReferenceMakeAngleWsJob(params: {
+  imageRelPath: string;
+  angleId: number;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<{ item: ReferenceImageItem }>> {
+  const url = wsUrlForPath("/reference/make_angle/ws");
+  const { onLogLine, ...payload } = params;
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => {
+      ws.send(JSON.stringify(payload));
+    };
+    ws.onmessage = (ev) => {
+      let data: {
+        type?: string;
+        line?: string;
+        ok?: boolean;
+        error?: string;
+        result?: { item: ReferenceImageItem };
+      };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") {
+        onLogLine(data.line);
+      }
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(data as WsDoneMessage<{ item: ReferenceImageItem }>);
+      }
+    };
+  });
 }
 
 // --- Detail: expression ---

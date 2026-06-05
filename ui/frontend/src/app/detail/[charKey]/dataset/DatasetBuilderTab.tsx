@@ -95,6 +95,7 @@ export type DatasetBuilderTabProps = {
   onBatchAddNoise: () => void;
   onBatchRestoreBackground: () => void;
   onBatchRemoveNoise: () => void;
+  onBatchAngle: () => void;
   onDropBuilderImageOnSequence: (
     sequenceName: string,
     sourceRelPath: string
@@ -144,6 +145,7 @@ export function DatasetBuilderTab(props: DatasetBuilderTabProps) {
     onBatchAddNoise,
     onBatchRestoreBackground,
     onBatchRemoveNoise,
+    onBatchAngle,
     onDropBuilderImageOnSequence,
     beginRemoveBackgroundModal,
     endRemoveBackgroundModal,
@@ -456,6 +458,7 @@ export function DatasetBuilderTab(props: DatasetBuilderTabProps) {
             ["Add Noise", onBatchAddNoise],
             ["Restore background", onBatchRestoreBackground],
             ["Remove noise", onBatchRemoveNoise],
+            ["Batch Angle", onBatchAngle],
           ] as [string, () => void][]
         ).map(([label, fn]) => (
           <button

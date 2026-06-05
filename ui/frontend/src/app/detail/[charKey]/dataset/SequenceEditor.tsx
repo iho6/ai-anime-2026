@@ -709,9 +709,17 @@ export function SequenceEditor(props: {
   registerFlushSave?: (fn: (() => Promise<void>) | null) => void;
   jobModal?: SequenceJobModal;
   onAiEditSequenceGallery?: (ctx: { relPath: string; galleryItemId: string }) => void;
+  onNewAngleSequenceGallery?: (ctx: { relPath: string; galleryItemId: string }) => void;
 }) {
-  const { charKey, sequenceName, onError, registerFlushSave, jobModal, onAiEditSequenceGallery } =
-    props;
+  const {
+    charKey,
+    sequenceName,
+    onError,
+    registerFlushSave,
+    jobModal,
+    onAiEditSequenceGallery,
+    onNewAngleSequenceGallery,
+  } = props;
   /** Parent often passes an inline onError; keep ref so load/save callbacks stay stable (avoids reload wiping state). */
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
@@ -1666,6 +1674,14 @@ export function SequenceEditor(props: {
           onAiEditSequenceGallery({ relPath: g.relPath.trim(), galleryItemId: g.id }),
       });
     }
+    if (g?.relPath?.trim() && g.id && onNewAngleSequenceGallery) {
+      items.push({
+        key: "newAngle",
+        label: "New Angle",
+        onSelect: () =>
+          onNewAngleSequenceGallery({ relPath: g.relPath.trim(), galleryItemId: g.id }),
+      });
+    }
     items.push({
       key: "delGal",
       label: "Delete",
@@ -1704,6 +1720,7 @@ export function SequenceEditor(props: {
     gallerySetDownloadId,
     downloadGalleryFrameSetMp4,
     onAiEditSequenceGallery,
+    onNewAngleSequenceGallery,
   ]);
 
   useEffect(() => {
