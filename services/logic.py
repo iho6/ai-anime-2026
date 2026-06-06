@@ -584,6 +584,7 @@ def _launch_main_background(
     log_cb: Callable[[str], None] | None = None,
 ) -> tuple[subprocess.Popen, threading.Event, deque[str], threading.Lock]:
     """Start Comfy ``main.py`` in the background; stream stdout/stderr via pipe while ``forward_logs`` is set."""
+    (_REPO_ROOT / "comfyui" / "custom_nodes").mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable,
         str(_REPO_ROOT / "comfyui" / "main.py"),
