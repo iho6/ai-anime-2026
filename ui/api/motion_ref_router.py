@@ -14,11 +14,6 @@ from typing import Any
 
 import time
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
@@ -110,6 +105,11 @@ _BONES_SIMPLIFIED = [
 @router.post("/motion_ref/render_joints")
 def motion_ref_render_joints(body: dict[str, Any]) -> dict[str, str]:
     """Render a SOMA 77-joint pose as a skeleton PNG.  Pure matplotlib — no GPU."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
     raw = body.get("joints")
     if not raw or len(raw) < 7:
         raise HTTPException(400, "joints must be a list of at least 7 [x,y,z] positions.")
