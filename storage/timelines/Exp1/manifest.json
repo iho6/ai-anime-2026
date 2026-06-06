@@ -1,0 +1,223 @@
+{
+  "version": 1,
+  "fps": 24,
+  "previewAspect": "1:1",
+  "tracks": [
+    {
+      "id": "trk_mq0tr6g2_1",
+      "name": "Video 1",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mq0u1pcn_9",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_450d2212a1c04c36a6096986cd3839de.mp4",
+          "start": 0.11363639831542967,
+          "inPoint": 0,
+          "outPoint": 2.5,
+          "speed": 1,
+          "duration": 2.5,
+          "srcDuration": 2.5,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Buan",
+            "sequenceName": "head_turn"
+          },
+          "transform": {
+            "x": 0.08906555023285122,
+            "y": 0.36702904508210055,
+            "scale": 1.1429429965825926
+          }
+        }
+      ],
+      "hidden": false
+    },
+    {
+      "id": "trk_mq0u2f24_10",
+      "name": "Video 2",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mq22sx3g_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_862cb36003354b55bdc60791ffb095b1.mp4",
+          "start": 5.3616979837417595,
+          "inPoint": 0,
+          "outPoint": 2.1667,
+          "speed": 1,
+          "duration": 2.1667,
+          "srcDuration": 2.1667,
+          "naturalW": 1080,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Buan",
+            "sequenceName": "camera_full_body"
+          },
+          "transform": {
+            "x": -0.21657123139603499,
+            "y": 0.11469611244542655,
+            "scale": 0.5142109406193148
+          }
+        },
+        {
+          "id": "clip_mq0u8941_13",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_e5b7d30a530a426cb54c48f430a0aed3.png",
+          "start": 7.52839798374176,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 1.008135199546814,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "flala_courtyard"
+          },
+          "transform": {
+            "x": -0.05975554220196094,
+            "y": -0.21188443406880003,
+            "scale": 0.3793530363515394
+          }
+        },
+        {
+          "id": "clip_mq24skho_5",
+          "type": "image",
+          "srcRelPath": "Buan/poses/pose_001.png",
+          "start": 8.536533183288574,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3.0397722778320313,
+          "naturalW": 500,
+          "naturalH": 500,
+          "source": {
+            "charKey": "Buan"
+          },
+          "transform": {
+            "x": 0.1517327855063161,
+            "y": 0.17848001636919558,
+            "scale": 0.5757816597861494
+          },
+          "trajectory": {
+            "waypoints": [
+              {
+                "t": 0,
+                "x": 0.2328386084855231,
+                "y": 0.1090224322692627,
+                "scale": 0.49062849524510843,
+                "cpx": 0.21487676637612255,
+                "cpy": 0.22544173651202426
+              },
+              {
+                "t": 1,
+                "x": 0.19159285148290695,
+                "y": 0.11035296274809449,
+                "scale": 0.5757816597861494
+              }
+            ]
+          }
+        }
+      ],
+      "hidden": false
+    },
+    {
+      "id": "trk_mq0uqe2i_3",
+      "name": "Music 1",
+      "kind": "audio",
+      "clips": [
+        {
+          "id": "clip_mq0uqe2i_1",
+          "type": "audio",
+          "srcRelPath": "",
+          "start": 3.9876037597656246,
+          "inPoint": 0,
+          "outPoint": 5,
+          "speed": 1,
+          "duration": 5
+        },
+        {
+          "id": "clip_mq0vd4q4_1",
+          "type": "audio",
+          "srcRelPath": "",
+          "start": 8.987603759765625,
+          "inPoint": 0,
+          "outPoint": 5,
+          "speed": 1,
+          "duration": 5
+        }
+      ],
+      "hidden": false
+    },
+    {
+      "id": "trk_mq23ac2m_3",
+      "name": "Video 3",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mq24r4hf_4",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_08f75c5302d7492a86b9e543b6437170.mp4",
+          "start": 2.1654180765151976,
+          "inPoint": 0,
+          "outPoint": 2.1667,
+          "speed": 1,
+          "duration": 2.1667,
+          "srcDuration": 2.1667,
+          "naturalW": 1080,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Buan",
+            "sequenceName": "camera_full_body"
+          },
+          "transform": {
+            "x": 0.33911651129559073,
+            "y": 0.2783314171845702,
+            "scale": 0.558508929111474
+          }
+        },
+        {
+          "id": "clip_mq24so0f_6",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_249cf63b0e9e427d8dd20e1cadb6f4a6.png",
+          "start": 4.332118076515197,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "flala_courtyard"
+          },
+          "transform": {
+            "x": 0.25710447241111917,
+            "y": -0.026775755497177214,
+            "scale": 0.6458376133735086
+          }
+        },
+        {
+          "id": "clip_mq24srgj_7",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_be93caa80852422cb2f663cc3433d346.png",
+          "start": 7.843481449317932,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "flala_courtyard"
+          },
+          "transform": {
+            "x": 0.07541154872844752,
+            "y": -0.02644033265673553,
+            "scale": 1
+          }
+        }
+      ],
+      "hidden": false
+    }
+  ]
+}

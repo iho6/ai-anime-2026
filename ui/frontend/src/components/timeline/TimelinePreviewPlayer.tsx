@@ -9,11 +9,27 @@ import {
   sourceTimeAt,
   timelineDuration,
 } from "./timelineUtil";
+import { TrajectoryEditor, TrajectoryWaypoint, trajectoryTransformAt } from "./TrajectoryEditor";
 
 type Transform = { x: number; y: number; scale: number };
 type Rect = { left: number; top: number; width: number; height: number };
 
-function clipTransform(clip: TimelineClip): Transform {
+/**
+ * Resolve the effective transform for a clip at a given playhead time.
+ * Trajectory interpolation only applies while playing or while the clip
+ * is the active trajectory clip — otherwise the static transform is used
+ * so manual dragging in the preview continues to work normally.
+ */
+function clipTransform(
+  clip: TimelineClip,
+  playhead: number,
+  isTrajectoryActive: boolean,
+  isPlaying: boolean
+): Transform {
+  if (isPlaying || isTrajectoryActive) {
+    const traj = trajectoryTransformAt(clip, playhead);
+    if (traj) return traj;
+  }
   return clip.transform ?? { x: 0, y: 0, scale: 1 };
 }
 
@@ -67,9 +83,13 @@ export function TimelinePreviewPlayer(props: {
   editable: boolean;
   onPlayheadChange: (t: number) => void;
   onEnded: () => void;
-  onSelectClip: (clipId: string | null) => void;
+  onSelectClip: (clipId: string | null, additive?: boolean) => void;
   onClipTransformChange: (clipId: string, transform: Transform) => void;
   onTransformStart?: () => void;
+  onClipContextMenu?: (clipId: string, x: number, y: number) => void;
+  trajectoryClipId?: string | null;
+  onWaypointChange?: (clipId: string, waypoints: TrajectoryWaypoint[]) => void;
+  onDeleteTrajectory?: (clipId: string) => void;
   height?: number;
 }) {
   const {
@@ -83,6 +103,10 @@ export function TimelinePreviewPlayer(props: {
     onSelectClip,
     onClipTransformChange,
     onTransformStart,
+    onClipContextMenu,
+    trajectoryClipId,
+    onWaypointChange,
+    onDeleteTrajectory,
     height = 260,
   } = props;
 
@@ -206,7 +230,8 @@ export function TimelinePreviewPlayer(props: {
   ) {
     e.preventDefault();
     e.stopPropagation();
-    onSelectClip(clip.id);
+    const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+    onSelectClip(clip.id, additive);
     if (!editable) return; // selection only while playing
     onTransformStart?.();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -215,7 +240,7 @@ export function TimelinePreviewPlayer(props: {
       clipId: clip.id,
       startX: e.clientX,
       startY: e.clientY,
-      orig: clipTransform(clip),
+      orig: clipTransform(clip, playhead, clip.id === trajectoryClipId, playing),
       w: frameSize.w || 1,
       h: frameSize.h || 1,
     };
@@ -253,39 +278,74 @@ export function TimelinePreviewPlayer(props: {
         ref={frameRef}
         onPointerDown={(e) => {
           // Click on empty frame background → deselect.
-          if (e.target === e.currentTarget) onSelectClip(null);
+          if (e.target === e.currentTarget) onSelectClip(null, false);
         }}
         style={{
           position: "relative",
           height,
           aspectRatio: String(ratio),
           background: "#000",
-          overflow: "hidden",
-          border: "1px solid rgba(255,255,255,0.15)",
+          overflow: "visible",
+          border: "2px solid rgba(255,255,255,0.45)",
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.6)",
         }}
       >
-        {/* Top track is the topmost visual layer → highest z-index. */}
+        {/*
+          Two-pass rendering:
+          Pass 1 (inside overflow:hidden) — images clipped to the frame boundary.
+          Pass 2 (outside overflow:hidden) — pointer events + selection outlines that can extend beyond the frame.
+        */}
+
+        {/* Pass 1: image layer — clipped to frame */}
+        <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+          {videoTracks.map((track, i) => {
+            const clip = activeClipAt(track, playhead);
+            if (!clip) return null;
+            const z = videoTracks.length - i;
+            const tf = clipTransform(clip, playhead, clip.id === trajectoryClipId, playing);
+            const rect = imageRectFor(clip, tf, frameSize.w, frameSize.h);
+            const src = assetUrlFromRelPath(clip.srcRelPath);
+            const mediaStyle: React.CSSProperties = {
+              width: "100%", height: "100%", objectFit: "fill", display: "block", pointerEvents: "none",
+            };
+            return (
+              <div key={clip.id} style={{ position: "absolute", left: rect.left, top: rect.top, width: rect.width, height: rect.height, zIndex: z }}>
+                {clip.type === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={src} alt="" draggable={false} style={mediaStyle} />
+                ) : (
+                  <video
+                    ref={(el) => {
+                      if (el) mediaRefs.current.set(clip.id, el);
+                      else mediaRefs.current.delete(clip.id);
+                    }}
+                    src={src} muted playsInline style={mediaStyle}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Pass 2: interaction + outline layer — overflow visible, outlines extend beyond frame */}
         {videoTracks.map((track, i) => {
           const clip = activeClipAt(track, playhead);
           if (!clip) return null;
           const z = videoTracks.length - i;
-          const tf = clipTransform(clip);
+          const tf = clipTransform(clip, playhead, clip.id === trajectoryClipId, playing);
           const rect = imageRectFor(clip, tf, frameSize.w, frameSize.h);
           const selected = clip.id === selectedClipId;
-          const src = assetUrlFromRelPath(clip.srcRelPath);
-          const mediaStyle: React.CSSProperties = {
-            width: "100%",
-            height: "100%",
-            objectFit: "fill",
-            display: "block",
-            pointerEvents: "none",
-          };
           return (
             <div
               key={clip.id}
               onPointerDown={(e) => beginDrag(e, clip, "move")}
               onPointerMove={onDragMove}
               onPointerUp={endDrag}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClipContextMenu?.(clip.id, e.clientX, e.clientY);
+              }}
               style={{
                 position: "absolute",
                 left: rect.left,
@@ -295,29 +355,12 @@ export function TimelinePreviewPlayer(props: {
                 zIndex: z,
                 cursor: editable ? "move" : "pointer",
                 outline: selected
-                  ? editable
-                    ? "1.5px dashed #ffd166"
-                    : "1.5px solid #5ad7ff"
+                  ? editable ? "2px dashed #ffd166" : "2px solid #5ad7ff"
                   : "none",
-                outlineOffset: -1,
+                outlineOffset: 2,
               }}
             >
-              {clip.type === "image" ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={src} alt="" draggable={false} style={mediaStyle} />
-              ) : (
-                <video
-                  ref={(el) => {
-                    if (el) mediaRefs.current.set(clip.id, el);
-                    else mediaRefs.current.delete(clip.id);
-                  }}
-                  src={src}
-                  muted
-                  playsInline
-                  style={mediaStyle}
-                />
-              )}
-              {/* Scale handle on the image's own corner (paused + selected). */}
+              {/* Scale handle */}
               {selected && editable ? (
                 <div
                   onPointerDown={(e) => beginDrag(e, clip, "scale")}
@@ -338,6 +381,24 @@ export function TimelinePreviewPlayer(props: {
             </div>
           );
         })}
+
+        {/* Trajectory editor overlay */}
+        {trajectoryClipId && (() => {
+          const trajClip = videoTracks.flatMap((t) => t.clips).find((c) => c.id === trajectoryClipId);
+          if (!trajClip || !trajClip.trajectory) return null;
+          return (
+            <TrajectoryEditor
+              key={trajClip.id}
+              clip={trajClip}
+              frameW={frameSize.w}
+              frameH={frameSize.h}
+              playing={playing}
+              onWaypointsChange={(wps) => onWaypointChange?.(trajClip.id, wps)}
+              onPlayheadSync={onPlayheadChange}
+              onDeleteTrajectory={() => onDeleteTrajectory?.(trajClip.id)}
+            />
+          );
+        })()}
 
         {/* Hidden audio elements for music/audio tracks. */}
         {audioTracks.map((track) => {

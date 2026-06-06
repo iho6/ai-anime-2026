@@ -35,6 +35,7 @@ import type { SharedLogStreamHandle } from "../../../../components/SharedLogStre
 import { ConnectedJobRunModal } from "../../../../components/ConnectedJobRunModal";
 import { useJobRunSession } from "../../../../hooks/useJobRunSession";
 import { ReferencePicker } from "../../../../components/ReferencePicker";
+import { MotionRefGenModal } from "../../../../components/MotionRefGenModal";
 import { StartingImagePreview } from "../../../../components/StartingImagePreview";
 import { ZoomableImage } from "../../../../components/ZoomableImage";
 import { GalleryImageLightbox } from "../../../../components/GalleryImageLightbox";
@@ -168,6 +169,7 @@ export default function PosePage() {
 
   const [referenceRef, setReferenceRef] = useState<PoseReference | null>(null);
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
+  const [motionRefOpen, setMotionRefOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const [menu, setMenu] = useState<{
@@ -1778,6 +1780,23 @@ export default function PosePage() {
         onPickSaved={onReferencePickSaved}
         onPickNew={onReferencePickNew}
         onGenerateBase={onReferenceGenerateBase}
+        onOpenMotionRef={() => {
+          setReferencePickerOpen(false);
+          setMotionRefOpen(true);
+        }}
+      />
+
+      <MotionRefGenModal
+        open={motionRefOpen}
+        charKey={charKey}
+        onBack={() => {
+          setMotionRefOpen(false);
+          setReferencePickerOpen(true);
+        }}
+        onClose={() => setMotionRefOpen(false)}
+        onKeypointsMade={(ref) => {
+          onReferencePickSaved(ref);
+        }}
       />
 
       <DesktopContextMenu

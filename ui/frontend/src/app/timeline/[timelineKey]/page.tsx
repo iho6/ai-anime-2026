@@ -10,13 +10,22 @@ import {
   apiTimelinePut,
   assetUrlFromRelPath,
   runTimelineAiEditWsJob,
+  runTimelineExportMp4WsJob,
   runTimelineFlfWsJob,
   runTimelineI2vWsJob,
   runTimelineImportSequenceWsJob,
+  runTimelineVideoRemoveBgWsJob,
+  runShotCreateWsJob,
+  runShotMakeAngleWsJob,
+  runShotRemoveBgWsJob,
+  apiTimelineHubRename,
+  assetDownloadUrlFromRelPath,
   TimelineClip,
   TimelineManifest,
+  ShotLayerMeta,
 } from "../../../lib/api";
 import { AiEditModal } from "../../../components/AiEditModal";
+import { CameraAngleModal } from "../../../components/CameraAngleModal";
 import {
   DesktopContextMenu,
   ContextMenuItem,
@@ -33,6 +42,8 @@ import {
   SequenceVideoPicker,
   SequenceVideoChoice,
 } from "../../../components/timeline/SequenceVideoPicker";
+import { TimelineCharacterPicker } from "../../../components/TimelineCharacterPicker";
+import type { TrajectoryWaypoint } from "../../../components/timeline/TrajectoryEditor";
 import {
   ImageSourcePickerModal,
   PickerItem,
@@ -72,6 +83,9 @@ export default function TimelineEditorPage() {
   const [pxPerSec, setPxPerSec] = useState(80);
   const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
   const [previewHeight, setPreviewHeight] = useState(260);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const [trajectoryClipId, setTrajectoryClipId] = useState<string | null>(null);
 
   // AI Edit modal (image clips).
   const [aiEditOpen, setAiEditOpen] = useState(false);
@@ -82,8 +96,16 @@ export default function TimelineEditorPage() {
   // Pickers + which track a newly-imported clip should land on.
   const targetTrackRef = useRef<string | null>(null);
   const [seqPickerOpen, setSeqPickerOpen] = useState(false);
+  const [charPickerOpen, setCharPickerOpen] = useState(false);
+  const [charPickerInitialKey, setCharPickerInitialKey] = useState<string | null>(null);
+  const [changePoseClipId, setChangePoseClipId] = useState<string | null>(null);
   const [locPickerOpen, setLocPickerOpen] = useState(false);
   const [shotPickerOpen, setShotPickerOpen] = useState(false);
+
+  // New Angle modal (for character clips).
+  const [cameraAngleOpen, setCameraAngleOpen] = useState(false);
+  const [cameraAngleImageUrl, setCameraAngleImageUrl] = useState<string | null>(null);
+  const cameraAngleClipIdRef = useRef<string | null>(null);
 
   // Context menus.
   const [clipMenu, setClipMenu] = useState<{
@@ -318,6 +340,166 @@ export default function TimelineEditorPage() {
     }
   }
 
+  // ---- Character picker (pose / expression / sequence) ---------------------
+  function onPickCharImage(charKey: string, relPath: string) {
+    setCharPickerOpen(false);
+    const swapId = changePoseClipId;
+    setChangePoseClipId(null);
+    setCharPickerInitialKey(null);
+    if (swapId) {
+      // Change Pose: replace clip's source image in-place.
+      historyUpdate((m) => ({
+        ...m,
+        tracks: m.tracks.map((t) => ({
+          ...t,
+          clips: t.clips.map((c) =>
+            c.id === swapId
+              ? { ...c, srcRelPath: relPath, source: { ...c.source, charKey } }
+              : c
+          ),
+        })),
+      }));
+    } else {
+      void importImageClip(relPath, { charKey });
+    }
+  }
+
+  function onPickCharSequence(charKey: string, sequenceName: string) {
+    setCharPickerOpen(false);
+    setChangePoseClipId(null);
+    setCharPickerInitialKey(null);
+    void onPickSequence({ charKey, sequenceName, label: sequenceName });
+  }
+
+  // ---- New Angle ------------------------------------------------------------
+  function openClipAngle(clipId: string) {
+    const found = findClip(clipId);
+    if (!found) return;
+    cameraAngleClipIdRef.current = clipId;
+    setCameraAngleImageUrl(assetUrlFromRelPath(found.clip.srcRelPath));
+    setCameraAngleOpen(true);
+  }
+
+  async function applyClipAngle(angleId: number) {
+    setCameraAngleOpen(false);
+    const clipId = cameraAngleClipIdRef.current;
+    cameraAngleClipIdRef.current = null;
+    if (!clipId) return;
+    const found = findClip(clipId);
+    if (!found) return;
+    beginSession({ title: "Generating new angle", clearLog: true });
+    await Promise.resolve();
+    pushLog("Generating a new camera angle…");
+    try {
+      const done = await runShotMakeAngleWsJob({
+        imageRelPath: found.clip.srcRelPath,
+        angleId,
+        onLogLine: (line) => pushLog(line),
+      });
+      const newRel = done.result?.relPath;
+      if (!done.ok || !newRel) throw new Error(done.error || "Angle generation returned no image.");
+      // Re-import the new image and replace clip in-place.
+      const r = await apiTimelineImportImage({ timelineKey, sourceRelPath: newRel });
+      historyUpdate((m) => ({
+        ...m,
+        tracks: m.tracks.map((t) => ({
+          ...t,
+          clips: t.clips.map((c) =>
+            c.id === clipId
+              ? { ...c, srcRelPath: r.srcRelPath, naturalW: r.width || c.naturalW, naturalH: r.height || c.naturalH }
+              : c
+          ),
+        })),
+      }));
+      endSession();
+    } catch (e) {
+      failSession(e, "Could not generate a new angle.");
+    }
+  }
+
+  // ---- Joint Generate (character + background overlap) ----------------------
+  function getOverlappingCharBgPair(): [backdrop: TimelineClip, overlay: TimelineClip] | null {
+    const sel = selectedImageClips();
+    if (sel.length !== 2) return null;
+    const [a, b] = sel;
+    const aEnd = a.start + a.duration;
+    const bEnd = b.start + b.duration;
+    if (a.start >= bEnd || b.start >= aEnd) return null;
+    const overlay = [a, b].find((c) => c.source?.charKey);
+    const backdrop = [a, b].find((c) => !c.source?.charKey);
+    if (!overlay || !backdrop) return null;
+    return [backdrop, overlay];
+  }
+
+  function loadHTMLImage(url: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+      img.src = url;
+    });
+  }
+
+  async function buildCompositeFromRelPaths(bgRel: string, overlayRel: string, bgW: number, bgH: number): Promise<string> {
+    const [bgImg, overlayImg] = await Promise.all([
+      loadHTMLImage(assetUrlFromRelPath(bgRel)),
+      loadHTMLImage(assetUrlFromRelPath(overlayRel)),
+    ]);
+    const canvas = document.createElement("canvas");
+    canvas.width = bgW || bgImg.naturalWidth || 512;
+    canvas.height = bgH || bgImg.naturalHeight || 512;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+    // Scale overlay to fit within bg, centered.
+    const scale = Math.min(canvas.width / (overlayImg.naturalWidth || 1), canvas.height / (overlayImg.naturalHeight || 1));
+    const w = (overlayImg.naturalWidth || canvas.width) * scale;
+    const h = (overlayImg.naturalHeight || canvas.height) * scale;
+    ctx.drawImage(overlayImg, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+    return canvas.toDataURL("image/png").split(",")[1] ?? "";
+  }
+
+  async function runJointGenerate(mode: "i2i" | "as_is") {
+    const pair = getOverlappingCharBgPair();
+    if (!pair) return;
+    const [backdrop, overlay] = pair;
+    beginSession({ title: mode === "i2i" ? "Generating scene" : "Combining images", clearLog: true });
+    await Promise.resolve();
+    pushLog("Building composite…");
+    try {
+      const composite = await buildCompositeFromRelPaths(
+        backdrop.srcRelPath,
+        overlay.srcRelPath,
+        backdrop.naturalW ?? 0,
+        backdrop.naturalH ?? 0,
+      );
+      const charKey = overlay.source?.charKey ?? "";
+      const layers: ShotLayerMeta[] = [{
+        charKey,
+        imageRelPath: overlay.srcRelPath,
+        x: 0, y: 0, scale: 1,
+      }];
+      pushLog("Sending to generation…");
+      const done = await runShotCreateWsJob({
+        shotName: `timeline_shot_${Date.now()}`,
+        locationKey: backdrop.source?.locationKey ?? null,
+        locationImageRelPath: backdrop.srcRelPath,
+        characters: layers,
+        compositePngBase64: composite,
+        promptText: "",
+        mode,
+        onLogLine: (line) => pushLog(line),
+      });
+      if (!done.ok || !done.result?.outputRelPath) {
+        throw new Error(done.error ?? "Shot generation failed.");
+      }
+      await importImageClip(done.result.outputRelPath, { shotKey: done.result.shotKey });
+      endSession();
+    } catch (e) {
+      failSession(e, "Joint generation failed.");
+    }
+  }
+
   function onPickLocation(item: PickerItem) {
     setLocPickerOpen(false);
     if (!item.coverRelPath) {
@@ -338,13 +520,152 @@ export default function TimelineEditorPage() {
 
   // ---- Clip operations -----------------------------------------------------
   function deleteClip(trackId: string, clipId: string) {
+    // Robust: if trackId is empty (e.g., from preview right-click), match by clipId across all tracks.
     historyUpdate((m) => ({
       ...m,
       tracks: m.tracks.map((t) =>
-        t.id === trackId ? { ...t, clips: t.clips.filter((c) => c.id !== clipId) } : t
+        (t.id === trackId || (!trackId && t.clips.some((c) => c.id === clipId)))
+          ? { ...t, clips: t.clips.filter((c) => c.id !== clipId) }
+          : t
       ),
     }));
     setSelectedClipIds((prev) => prev.filter((x) => x !== clipId));
+  }
+
+  /** Delete a set of clip IDs in one undo-able operation. */
+  function deleteClips(clipIds: string[]) {
+    const idSet = new Set(clipIds);
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.filter((c) => !idSet.has(c.id)),
+      })),
+    }));
+    setSelectedClipIds((prev) => prev.filter((x) => !idSet.has(x)));
+  }
+
+  function updateClipTrajectory(clipId: string, trajectory: TimelineClip["trajectory"]) {
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => (c.id === clipId ? { ...c, trajectory } : c)),
+      })),
+    }));
+  }
+
+  function onWaypointChange(clipId: string, waypoints: TrajectoryWaypoint[]) {
+    updateManifest((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          c.id === clipId ? { ...c, trajectory: { waypoints } } : c
+        ),
+      })),
+    }));
+  }
+
+  async function removeClipBg(clipId: string) {
+    const found = findClip(clipId);
+    if (!found || found.clip.type !== "image") return;
+    beginSession({ title: "Removing background", clearLog: true });
+    await Promise.resolve();
+    pushLog("Removing background…");
+    try {
+      const done = await runShotRemoveBgWsJob({
+        imageRelPath: found.clip.srcRelPath,
+        onLogLine: (line) => pushLog(line),
+      });
+      const newRel = done.result?.relPath;
+      if (!done.ok || !newRel) throw new Error(done.error || "Background removal failed.");
+      const r = await apiTimelineImportImage({ timelineKey, sourceRelPath: newRel });
+      historyUpdate((m) => ({
+        ...m,
+        tracks: m.tracks.map((t) => ({
+          ...t,
+          clips: t.clips.map((c) =>
+            c.id === clipId
+              ? { ...c, srcRelPath: r.srcRelPath, naturalW: r.width || c.naturalW, naturalH: r.height || c.naturalH }
+              : c
+          ),
+        })),
+      }));
+      endSession();
+    } catch (e) {
+      failSession(e, "Background removal failed.");
+    }
+  }
+
+  async function removeVideoClipBg(clipId: string) {
+    const found = findClip(clipId);
+    if (!found || found.clip.type !== "video") return;
+    beginSession({ title: "Removing video background (RVM)", clearLog: true });
+    await Promise.resolve();
+    pushLog("Starting RobustVideoMatting (model loads on first run ~15 s)…");
+    try {
+      const done = await runTimelineVideoRemoveBgWsJob({
+        timelineKey,
+        videoRelPath: found.clip.srcRelPath,
+        onLogLine: (line) => pushLog(line),
+      });
+      if (!done.ok || !done.result?.srcRelPath) {
+        throw new Error(done.error || "Video BG removal returned no output.");
+      }
+      historyUpdate((m) => ({
+        ...m,
+        tracks: m.tracks.map((t) => ({
+          ...t,
+          clips: t.clips.map((c) =>
+            c.id === clipId
+              ? {
+                  ...c,
+                  srcRelPath: done.result!.srcRelPath,
+                  naturalW: done.result!.width || c.naturalW,
+                  naturalH: done.result!.height || c.naturalH,
+                }
+              : c
+          ),
+        })),
+      }));
+      endSession();
+    } catch (e) {
+      failSession(e, "Video background removal failed.");
+    }
+  }
+
+  async function commitRename() {
+    setRenaming(false);
+    const next = renameValue.trim();
+    if (!next || next === timelineKey) return;
+    try {
+      const { newTimelineKey } = await apiTimelineHubRename(timelineKey, next);
+      router.replace(`/timeline/${encodeURIComponent(newTimelineKey)}`);
+    } catch (e) {
+      showError({ message: "Could not rename timeline.", error: e });
+    }
+  }
+
+  async function runExportMp4() {
+    beginSession({ title: "Exporting MP4", clearLog: true });
+    await Promise.resolve();
+    pushLog("Starting export…");
+    try {
+      const done = await runTimelineExportMp4WsJob({
+        timelineKey,
+        onLogLine: (line) => pushLog(line),
+      });
+      if (!done.ok || !done.result?.relPath) throw new Error(done.error || "Export returned no file.");
+      pushLog("Export complete. Starting download…");
+      endSession();
+      const a = document.createElement("a");
+      a.href = assetDownloadUrlFromRelPath(done.result.relPath);
+      a.download = `${timelineKey}.mp4`;
+      a.click();
+    } catch (e) {
+      failSession(e, "Export failed.");
+    }
   }
 
   function splitClipAtPlayhead(trackId: string, clipId: string) {
@@ -611,7 +932,12 @@ export default function TimelineEditorPage() {
     if (!clipMenu.open) return [];
     const rc = findClip(clipMenu.clipId);
     const isImage = rc?.clip.type === "image";
+    const isCharImage = isImage && Boolean(rc?.clip.source?.charKey);
     const twoImagesSelected = selectedImageClips().length === 2;
+    const pair = getOverlappingCharBgPair();
+    // Multi-delete: if the right-clicked clip is part of the current selection, delete all selected.
+    const isMultiDelete = selectedClipIds.length > 1 && selectedClipIds.includes(clipMenu.clipId);
+
     const items: ContextMenuItem[] = [
       {
         key: "split",
@@ -620,38 +946,120 @@ export default function TimelineEditorPage() {
       },
       {
         key: "speed",
-        label: "Speed…",
+        label: "Speed",
         onSelect: () => void changeClipSpeed(clipMenu.trackId, clipMenu.clipId),
       },
     ];
-    if (isImage) {
+
+    // Video clip BG removal
+    if (rc?.clip.type === "video") {
+      items.push({
+        key: "removeVideoBg",
+        label: "Remove Background (video)",
+        disabled: busy,
+        onSelect: () => void removeVideoClipBg(clipMenu.clipId),
+      });
+    }
+
+    // Image-specific actions — hidden when a char+bg pair is selected
+    if (isImage && !pair) {
+      if (isCharImage) {
+        items.push({
+          key: "changePose",
+          label: "Change Pose",
+          onSelect: () => {
+            setClipMenu((s) => ({ ...s, open: false }));
+            setChangePoseClipId(clipMenu.clipId);
+            setCharPickerInitialKey(rc!.clip.source!.charKey ?? null);
+            setCharPickerOpen(true);
+          },
+        });
+      }
       items.push(
         {
+          key: "newAngle",
+          label: "New Angle",
+          disabled: busy,
+          onSelect: () => openClipAngle(clipMenu.clipId),
+        },
+        {
+          key: "removeBg",
+          label: "Remove Background",
+          disabled: busy,
+          onSelect: () => void removeClipBg(clipMenu.clipId),
+        },
+        {
           key: "aiedit",
-          label: "AI Edit…",
+          label: "AI Edit",
           disabled: busy,
           onSelect: () => openAiEdit(clipMenu.clipId),
         },
         {
           key: "i2v",
-          label: "I2V (image → video)…",
+          label: "I2V (image to video)",
           disabled: busy,
           onSelect: () => void runI2v(clipMenu.clipId),
         }
       );
+      items.push({
+        key: "flf",
+        label: twoImagesSelected
+          ? "FLF (selected 2 images to video)"
+          : "FLF (select 2 image clips first)",
+        disabled: busy || !twoImagesSelected,
+        onSelect: () => void runFlf(),
+      });
     }
-    items.push({
-      key: "flf",
-      label: twoImagesSelected
-        ? "FLF (selected 2 images → video)"
-        : "FLF (select 2 image clips first)",
-      disabled: busy || !twoImagesSelected,
-      onSelect: () => void runFlf(),
-    });
+
+    // Combine buttons — only shown when a valid char+bg pair is selected
+    if (pair) {
+      items.push(
+        {
+          key: "combineAI",
+          label: "Combine Images (AI I2I)",
+          disabled: busy,
+          onSelect: () => void runJointGenerate("i2i"),
+        },
+        {
+          key: "combineManual",
+          label: "Combine Images (Manual)",
+          disabled: busy,
+          onSelect: () => void runJointGenerate("as_is"),
+        }
+      );
+    }
+
+    // Trajectory (image and video clips)
+    if (isImage || rc?.clip.type === "video") {
+      items.push({
+        key: "trajectory",
+        label: rc?.clip.trajectory ? "Edit Trajectory" : "Add Trajectory",
+        onSelect: () => {
+          const clip = rc!.clip;
+          if (!clip.trajectory) {
+            const tf = clip.transform ?? { x: 0, y: 0, scale: 1 };
+            updateClipTrajectory(clip.id, {
+              waypoints: [
+                { t: 0, x: tf.x, y: tf.y, scale: tf.scale },
+                { t: 1, x: tf.x, y: tf.y, scale: tf.scale },
+              ],
+            });
+          }
+          setTrajectoryClipId(clip.id);
+        },
+      });
+    }
+
     items.push({
       key: "delete",
-      label: "Delete clip",
-      onSelect: () => deleteClip(clipMenu.trackId, clipMenu.clipId),
+      label: isMultiDelete ? `Delete ${selectedClipIds.length} clips` : "Delete clip",
+      onSelect: () => {
+        if (isMultiDelete) {
+          deleteClips(selectedClipIds);
+        } else {
+          deleteClip(clipMenu.trackId, clipMenu.clipId);
+        }
+      },
     });
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -670,7 +1078,7 @@ export default function TimelineEditorPage() {
     const items: ContextMenuItem[] = [];
     if (!isAudio) {
       items.push(
-        { key: "addChar", label: "Add Character video", onSelect: open(() => setSeqPickerOpen(true)) },
+        { key: "addChar", label: "Add Character", onSelect: open(() => { setCharPickerInitialKey(null); setChangePoseClipId(null); setCharPickerOpen(true); }) },
         { key: "addLoc", label: "Add Location", onSelect: open(() => setLocPickerOpen(true)) },
         { key: "addShot", label: "Add Shot", onSelect: open(() => setShotPickerOpen(true)) }
       );
@@ -722,7 +1130,27 @@ export default function TimelineEditorPage() {
           aria-label="Back"
           icon={<TriangleIcon direction="left" />}
         />
-        <span style={{ marginLeft: 10, fontSize: 14 }}>{timelineKey}</span>
+        {renaming ? (
+          <input
+            autoFocus
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onBlur={() => void commitRename()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void commitRename();
+              if (e.key === "Escape") setRenaming(false);
+            }}
+            style={{ marginLeft: 10, fontSize: 14, background: "transparent", border: "1px solid rgba(255,255,255,0.3)", color: "#eee", padding: "2px 6px" }}
+          />
+        ) : (
+          <span
+            onDoubleClick={() => { setRenameValue(timelineKey); setRenaming(true); }}
+            title="Double-click to rename"
+            style={{ marginLeft: 10, fontSize: 14, cursor: "default" }}
+          >
+            {timelineKey}
+          </span>
+        )}
       </div>
 
       {/* Preview */}
@@ -760,9 +1188,16 @@ export default function TimelineEditorPage() {
           editable={!playing}
           onPlayheadChange={setPlayhead}
           onEnded={() => setPlaying(false)}
-          onSelectClip={(id) => selectClip(id, false)}
+          onSelectClip={(id, additive) => selectClip(id, additive ?? false)}
           onClipTransformChange={setClipTransform}
           onTransformStart={commit}
+          onClipContextMenu={(clipId, x, y) => {
+            const rc = findClip(clipId);
+            setClipMenu({ open: true, x, y, trackId: rc?.trackId ?? "", clipId });
+          }}
+          trajectoryClipId={trajectoryClipId}
+          onWaypointChange={onWaypointChange}
+          onDeleteTrajectory={(clipId) => { updateClipTrajectory(clipId, undefined); setTrajectoryClipId(null); }}
           height={previewHeight}
         />
 
@@ -845,7 +1280,9 @@ export default function TimelineEditorPage() {
         <button
           onClick={() => {
             targetTrackRef.current = null;
-            setSeqPickerOpen(true);
+            setCharPickerInitialKey(null);
+            setChangePoseClipId(null);
+            setCharPickerOpen(true);
           }}
           style={toolBtn}
           disabled={busy}
@@ -875,6 +1312,18 @@ export default function TimelineEditorPage() {
         <button onClick={() => addMusic()} style={toolBtn} disabled={busy}>
           Add Music
         </button>
+        <button onClick={() => void runExportMp4()} style={toolBtn} disabled={busy} title="Compile all clips into a single MP4">
+          Export MP4
+        </button>
+        {trajectoryClipId && (
+          <button
+            onClick={() => setTrajectoryClipId(null)}
+            style={{ ...toolBtn, borderColor: "#ffd166", color: "#ffd166" }}
+            title="Exit path edit mode"
+          >
+            Exit Path Mode
+          </button>
+        )}
       </div>
 
       {/* Tracks */}
@@ -912,6 +1361,13 @@ export default function TimelineEditorPage() {
         open={seqPickerOpen}
         onCancel={() => setSeqPickerOpen(false)}
         onPick={(choice) => void onPickSequence(choice)}
+      />
+      <TimelineCharacterPicker
+        open={charPickerOpen}
+        initialKey={charPickerInitialKey}
+        onPickImage={onPickCharImage}
+        onPickSequence={onPickCharSequence}
+        onCancel={() => { setCharPickerOpen(false); setChangePoseClipId(null); setCharPickerInitialKey(null); }}
       />
       <ImageSourcePickerModal
         open={locPickerOpen}
@@ -952,6 +1408,14 @@ export default function TimelineEditorPage() {
         y={trackMenu.y}
         items={trackMenuItems}
         onClose={() => setTrackMenu((s) => ({ ...s, open: false }))}
+      />
+
+      <CameraAngleModal
+        open={cameraAngleOpen}
+        title="New Angle"
+        imageUrl={cameraAngleImageUrl}
+        onCancel={() => { setCameraAngleOpen(false); cameraAngleClipIdRef.current = null; }}
+        onConfirm={(angleId) => void applyClipAngle(angleId)}
       />
 
       <AiEditModal

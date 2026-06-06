@@ -215,21 +215,6 @@ export default function ShotHubPage() {
             alignItems: "start",
           }}
         >
-          {/* New Shot tile at [0,0] */}
-          <div style={{ width: TILE }}>
-            <div style={{ visibility: "hidden" }}>
-              <CharacterNameTag variant="hub" text="." />
-            </div>
-            <SquareButton
-              size={TILE}
-              variant="tile"
-              tone="dark"
-              style={{ fontWeight: 400 }}
-              onClick={() => router.push("/new_shot")}
-            >
-              New Shot
-            </SquareButton>
-          </div>
 
           {items.map((x) => (
             <div

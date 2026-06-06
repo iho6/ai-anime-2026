@@ -440,6 +440,17 @@ export type TimelineClip = {
   naturalH?: number;
   /** In-frame transform for the preview: fractional offset + scale multiplier. */
   transform?: { x: number; y: number; scale: number };
+  /** Motion path: clip moves through these waypoints over its duration. */
+  trajectory?: {
+    waypoints: Array<{
+      t: number;       // 0–1 fraction of clip duration
+      x: number;       // same space as transform.x (fractional from center)
+      y: number;
+      scale: number;   // same as transform.scale
+      cpx?: number;    // bezier control point for the outgoing segment
+      cpy?: number;
+    }>;
+  };
   /** Where this clip was imported from (for provenance / re-import). */
   source?: {
     charKey?: string;
@@ -722,6 +733,186 @@ export function runTimelineAiEditWsJob(params: {
     payload,
     onLogLine
   );
+}
+
+/** Remove background from a video clip via RobustVideoMatting → WebM + alpha. */
+export function runTimelineVideoRemoveBgWsJob(params: {
+  timelineKey: string;
+  videoRelPath: string;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<TimelineVideoClipResult>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<TimelineVideoClipResult>(
+    `/timeline/${encodeURIComponent(timelineKey)}/remove_video_bg/ws`,
+    payload,
+    onLogLine
+  );
+}
+
+/** Export the full timeline as a single concatenated MP4. */
+export function runTimelineExportMp4WsJob(params: {
+  timelineKey: string;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<{ relPath: string }>> {
+  const { timelineKey, onLogLine } = params;
+  return runTimelineGenWsJob<{ relPath: string }>(
+    `/timeline/${encodeURIComponent(timelineKey)}/export_mp4/ws`,
+    {},
+    onLogLine
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Motion reference generation (KiMoD)
+// ----------------------------------------------------------------------------
+
+export type MotionRefSegment = {
+  text: string;
+  duration: number; // seconds
+};
+
+/** Returned by the generate WS job once generation completes. */
+export type MotionRefManifest = {
+  motionKey: string;
+  fps: number;
+  frameCount: number;
+  jointCount: number;
+  /** Storage-relative path to joints.json.gz (served by /assets/storage/). */
+  jointsRelPath: string;
+  segments: MotionRefSegment[];
+};
+
+/** A saved rendered frame (PNG) from the 3D viewer at a specific camera angle. */
+export type MotionRefShot = {
+  /** Incremental index within this session (display order). */
+  shotIndex: number;
+  frameIndex: number;
+  azimuth: number;   // degrees
+  elevation: number; // degrees
+  /** Storage-relative path to the rendered PNG. */
+  relPath: string;
+};
+
+export type MotionRefListItem = {
+  motionKey: string;
+  fps: number;
+  frameCount: number;
+  jointCount: number;
+  thumbnailRelPath: string;
+  segments: MotionRefSegment[];
+};
+
+/** Stream a motion-generation job. Logs are emitted during long inference. */
+export function runMotionRefGenerateWsJob(params: {
+  motionName?: string;
+  segments: MotionRefSegment[];
+  numSamples?: number;
+  diffusionSteps?: number;
+  model?: string;
+  /** Optional 77×3 joint positions to constrain the first frame of generation. */
+  startingPose?: number[][];
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<MotionRefManifest>> {
+  const { onLogLine, ...payload } = params;
+  const url = wsUrlForPath("/motion_ref/generate/ws");
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => ws.send(JSON.stringify(payload));
+    ws.onmessage = (ev) => {
+      let data: { type?: string; line?: string };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") onLogLine(data.line);
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(data as WsDoneMessage<MotionRefManifest>);
+      }
+    };
+  });
+}
+
+/** Fetch the gzipped joints JSON array for a motion (ArrayBuffer). */
+export async function apiMotionRefJoints(motionKey: string): Promise<ArrayBuffer> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/joints`,
+    { method: "GET", credentials: "omit" }
+  );
+  if (!res.ok) throw new Error(`Failed to fetch joints: ${res.status}`);
+  return res.arrayBuffer();
+}
+
+/** Render one frame at a specific camera angle → returns {shotRelPath}. */
+export async function apiMotionRefRenderFrame(params: {
+  motionKey: string;
+  frameIndex: number;
+  azimuth: number;
+  elevation: number;
+  width?: number;
+  height?: number;
+  shotName?: string;
+}): Promise<{ shotRelPath: string }> {
+  const { motionKey, ...body } = params;
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/render_frame`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ shotRelPath: string }>(res);
+}
+
+export async function apiMotionRefList(): Promise<MotionRefListItem[]> {
+  const res = await fetch(`${API_BASE_URL}/motion_ref/list`, {
+    method: "GET",
+    credentials: "omit",
+  });
+  return readJson<MotionRefListItem[]>(res);
+}
+
+export async function apiMotionRefDelete(motionKey: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/delete`,
+    { method: "POST", credentials: "omit" }
+  );
+  await readJson<{ ok: boolean }>(res);
+}
+
+/**
+ * Render raw joint positions [J][3] to a PNG at the given camera angle.
+ * Works without any stored motion — for puppet-mode Save Pose.
+ */
+export async function apiMotionRefRenderJoints(params: {
+  joints: number[][];
+  azimuth: number;
+  elevation: number;
+  width?: number;
+  height?: number;
+}): Promise<{ shotRelPath: string }> {
+  const res = await fetch(`${API_BASE_URL}/motion_ref/render_joints`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+    credentials: "omit",
+  });
+  return readJson<{ shotRelPath: string }>(res);
 }
 
 export type ShotLayerMeta = {

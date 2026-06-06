@@ -15,6 +15,7 @@ export function CollapsibleGallerySection(props: {
   title: string;
   images: GallerySectionImage[];
   onPick: (relPath: string) => void;
+  onRightClick?: (relPath: string, x: number, y: number) => void;
   defaultOpen?: boolean;
   emptyText?: string;
 }) {
@@ -22,6 +23,7 @@ export function CollapsibleGallerySection(props: {
     title,
     images,
     onPick,
+    onRightClick,
     defaultOpen = true,
     emptyText = "No images",
   } = props;
@@ -84,6 +86,11 @@ export function CollapsibleGallerySection(props: {
                 key={img.relPath}
                 type="button"
                 onClick={() => onPick(img.relPath)}
+                onContextMenu={onRightClick ? (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onRightClick(img.relPath, e.clientX, e.clientY);
+                } : undefined}
                 title={img.caption}
                 style={{
                   width: "100%",

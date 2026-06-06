@@ -17,6 +17,7 @@ export function ReferencePicker(props: {
   onPickSaved: (ref: PoseReference) => void;
   onPickNew: (file: File) => void;
   onGenerateBase: (promptText: string) => void;
+  onOpenMotionRef?: () => void;
 }) {
   if (!props.open) return null;
   return (
@@ -27,6 +28,7 @@ export function ReferencePicker(props: {
       onPickSaved={props.onPickSaved}
       onPickNew={props.onPickNew}
       onGenerateBase={props.onGenerateBase}
+      onOpenMotionRef={props.onOpenMotionRef}
     />
   );
 }
@@ -38,8 +40,9 @@ function ReferencePickerOpen(props: {
   onPickSaved: (ref: PoseReference) => void;
   onPickNew: (file: File) => void;
   onGenerateBase: (promptText: string) => void;
+  onOpenMotionRef?: () => void;
 }) {
-  const { busy, onCancel, onPickSaved, onPickNew, onGenerateBase } = props;
+  const { busy, onCancel, onPickSaved, onPickNew, onGenerateBase, onOpenMotionRef } = props;
 
   const [refs, setRefs] = useState<PoseReference[]>([]);
   const [dragOver, setDragOver] = useState(false);
@@ -164,6 +167,21 @@ function ReferencePickerOpen(props: {
             style={{ display: "none" }}
             onChange={handleFileInput}
           />
+          {onOpenMotionRef && (
+            <SquareButton
+              disabled={busy}
+              onClick={onOpenMotionRef}
+              variant="import"
+              tone="light"
+              size={120}
+              style={{ color: "inherit" }}
+              title="Open Motion Ref Gen to pose a 3D skeleton and generate motion sequences"
+            >
+              Motion
+              <br />
+              Ref Gen
+            </SquareButton>
+          )}
         </div>
 
         {/* AI generate a base reference (Flux2 text-to-image) */}

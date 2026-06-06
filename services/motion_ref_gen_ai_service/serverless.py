@@ -1,0 +1,856 @@
+"""
+Motion reference generation service — KiMoD persistent worker.
+
+Architecture: persistent HTTP worker (same pattern as vid_bckgrnd_removal_ai_service).
+KiMoD and its LLM2Vec text encoder load once at startup; all subsequent
+generation calls are fast.
+
+Endpoints
+─────────
+GET  /health        → {"ok": true}
+POST /generate      → generate 3D motion from text prompts; store NPZ + joints
+POST /render_frame  → matplotlib projection of one frame → PNG file
+
+CLI
+───
+# Start persistent worker (called by _ensure_worker in this module):
+python -m services.motion_ref_gen_ai_service.serverless --serve [--serve-port 8766]
+
+# One-shot for testing:
+python -m services.motion_ref_gen_ai_service.serverless \\
+    --prompt "walking forward" --duration 3.0 --output /tmp/test_motion
+
+Environment variables
+─────────────────────
+TEXT_ENCODER_DEVICE=cpu   (default) → text encoder runs on CPU; GPU VRAM <3 GB
+TEXT_ENCODER_DEVICE=cuda  → faster text encoding, requires ~17 GB VRAM total
+KIMODO_MODEL=kimodo-soma-rp-v1.1  (default model name)
+"""
+
+from __future__ import annotations
+
+import argparse
+import gzip
+import json
+import logging
+import os
+import subprocess
+import sys
+import threading
+import time
+import uuid
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+from typing import Any, Callable
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s.%(msecs)03d - %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("motion_ref_gen")
+
+_SERVICE_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _SERVICE_DIR.parents[1]
+
+# ── SOMA 77-joint bone pairs (child_index, parent_index) ─────────────────────
+# Derived from SOMASkeleton77.bone_order_names_with_parents in kimodo/skeleton/definitions.py
+# The list position IS the joint index; None parent → root (index 0 / Hips).
+
+SOMA_JOINT_NAMES: list[str] = [
+    "Hips",            # 0
+    "Spine1",          # 1
+    "Spine2",          # 2
+    "Chest",           # 3
+    "Neck1",           # 4
+    "Neck2",           # 5
+    "Head",            # 6
+    "HeadEnd",         # 7
+    "Jaw",             # 8
+    "LeftEye",         # 9
+    "RightEye",        # 10
+    "LeftShoulder",    # 11
+    "LeftArm",         # 12
+    "LeftForeArm",     # 13
+    "LeftHand",        # 14
+    "LeftHandThumb1",  # 15
+    "LeftHandThumb2",  # 16
+    "LeftHandThumb3",  # 17
+    "LeftHandThumbEnd",# 18
+    "LeftHandIndex1",  # 19
+    "LeftHandIndex2",  # 20
+    "LeftHandIndex3",  # 21
+    "LeftHandIndex4",  # 22
+    "LeftHandIndexEnd",# 23
+    "LeftHandMiddle1", # 24
+    "LeftHandMiddle2", # 25
+    "LeftHandMiddle3", # 26
+    "LeftHandMiddle4", # 27
+    "LeftHandMiddleEnd",# 28
+    "LeftHandRing1",   # 29
+    "LeftHandRing2",   # 30
+    "LeftHandRing3",   # 31
+    "LeftHandRing4",   # 32
+    "LeftHandRingEnd", # 33
+    "LeftHandPinky1",  # 34
+    "LeftHandPinky2",  # 35
+    "LeftHandPinky3",  # 36
+    "LeftHandPinky4",  # 37
+    "LeftHandPinkyEnd",# 38
+    "RightShoulder",   # 39
+    "RightArm",        # 40
+    "RightForeArm",    # 41
+    "RightHand",       # 42
+    "RightHandThumb1", # 43
+    "RightHandThumb2", # 44
+    "RightHandThumb3", # 45
+    "RightHandThumbEnd",# 46
+    "RightHandIndex1", # 47
+    "RightHandIndex2", # 48
+    "RightHandIndex3", # 49
+    "RightHandIndex4", # 50
+    "RightHandIndexEnd",# 51
+    "RightHandMiddle1",# 52
+    "RightHandMiddle2",# 53
+    "RightHandMiddle3",# 54
+    "RightHandMiddle4",# 55
+    "RightHandMiddleEnd",# 56
+    "RightHandRing1",  # 57
+    "RightHandRing2",  # 58
+    "RightHandRing3",  # 59
+    "RightHandRing4",  # 60
+    "RightHandRingEnd",# 61
+    "RightHandPinky1", # 62
+    "RightHandPinky2", # 63
+    "RightHandPinky3", # 64
+    "RightHandPinky4", # 65
+    "RightHandPinkyEnd",# 66
+    "LeftLeg",         # 67
+    "LeftShin",        # 68
+    "LeftFoot",        # 69
+    "LeftToeBase",     # 70
+    "LeftToeEnd",      # 71
+    "RightLeg",        # 72
+    "RightShin",       # 73
+    "RightFoot",       # 74
+    "RightToeBase",    # 75
+    "RightToeEnd",     # 76
+]
+
+# (child_index, parent_index) pairs — for drawing bones as line segments.
+# parent_index==-1 means root (no line drawn from root upward).
+SOMA_BONES: list[tuple[int, int]] = [
+    (1, 0), (2, 1), (3, 2), (4, 3), (5, 4), (6, 5), (7, 6),  # spine + neck + head
+    (8, 6), (9, 6), (10, 6),                                    # jaw, eyes
+    (11, 3), (12, 11), (13, 12), (14, 13),                      # left arm
+    (15, 14), (16, 15), (17, 16), (18, 17),                     # L thumb
+    (19, 14), (20, 19), (21, 20), (22, 21), (23, 22),           # L index
+    (24, 14), (25, 24), (26, 25), (27, 26), (28, 27),           # L middle
+    (29, 14), (30, 29), (31, 30), (32, 31), (33, 32),           # L ring
+    (34, 14), (35, 34), (36, 35), (37, 36), (38, 37),           # L pinky
+    (39, 3), (40, 39), (41, 40), (42, 41),                      # right arm
+    (43, 42), (44, 43), (45, 44), (46, 45),                     # R thumb
+    (47, 42), (48, 47), (49, 48), (50, 49), (51, 50),           # R index
+    (52, 42), (53, 52), (54, 53), (55, 54), (56, 55),           # R middle
+    (57, 42), (58, 57), (59, 58), (60, 59), (61, 60),           # R ring
+    (62, 42), (63, 62), (64, 63), (65, 64), (66, 65),           # R pinky
+    (67, 0), (68, 67), (69, 68), (70, 69), (71, 70),            # left leg
+    (72, 0), (73, 72), (74, 73), (75, 74), (76, 75),            # right leg
+]
+
+# ── Model cache ───────────────────────────────────────────────────────────────
+
+_MODEL_CACHE: dict[str, Any] = {}
+_DEFAULT_MODEL = os.environ.get("KIMODO_MODEL", "kimodo-soma-rp")  # resolves to latest v1.1
+_DEFAULT_SERVE_PORT = 8766
+_DEFAULT_DIFFUSION_STEPS = 100
+
+
+def _load_kimodo_model(model_name: str = _DEFAULT_MODEL) -> Any:
+    """Load and cache the KiMoD model. Downloads weights on first call."""
+    if model_name in _MODEL_CACHE:
+        return _MODEL_CACHE[model_name]
+
+    # Ensure text encoder runs on CPU unless explicitly overridden
+    if "TEXT_ENCODER_DEVICE" not in os.environ:
+        os.environ["TEXT_ENCODER_DEVICE"] = "cpu"
+
+    import torch
+    from kimodo import load_model
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logger.info(
+        "Loading KiMoD model '%s' on %s (TEXT_ENCODER_DEVICE=%s)…",
+        model_name, device, os.environ.get("TEXT_ENCODER_DEVICE", "auto"),
+    )
+    model = load_model(model_name, device=device)
+    _MODEL_CACHE[model_name] = model
+    logger.info("KiMoD model loaded.")
+    return model
+
+
+# ── Core generation ───────────────────────────────────────────────────────────
+
+
+def generate_motion(
+    segments: list[dict],            # [{"text": str, "duration": float}, …]
+    dest_dir: Path | str,
+    *,
+    model_name: str = _DEFAULT_MODEL,
+    num_samples: int = 1,
+    diffusion_steps: int = _DEFAULT_DIFFUSION_STEPS,
+    starting_pose: list[list[float]] | None = None,  # 77×3 joint positions
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """
+    Generate a 3D motion sequence from text prompts using KiMoD.
+
+    If ``starting_pose`` is supplied (77×3 joint positions from the puppet editor),
+    a FullBodyConstraintSet is applied at frame 0 to start generation from that pose.
+
+    Returns a manifest dict:
+        {motion_key, fps, frame_count, joint_count, joints_gz_path, npz_path, segments}
+    """
+    import numpy as np
+
+    def _log(msg: str) -> None:
+        logger.info(msg)
+        if log_cb:
+            log_cb(msg)
+
+    if not segments:
+        raise ValueError("At least one segment (text + duration) is required.")
+
+    dest = Path(dest_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / "shots").mkdir(exist_ok=True)
+
+    model = _load_kimodo_model(model_name)
+    fps: int = getattr(model, "fps", 30)
+
+    texts = [str(s["text"]).strip() for s in segments]
+    durations = [float(s.get("duration", 3.0)) for s in segments]
+    num_frames_list = [max(1, int(round(d * fps))) for d in durations]
+
+    _log(f"Generating motion: {len(texts)} segment(s), {sum(num_frames_list)} frames @ {fps} fps")
+    for i, (t, nf) in enumerate(zip(texts, num_frames_list)):
+        _log(f"  Segment {i+1}: '{t[:80]}' → {nf} frames ({durations[i]:.1f}s)")
+
+    multi_prompt = len(texts) > 1
+
+    # Build starting-pose constraint if the user specified one.
+    constraint_lst: list = []
+    if starting_pose:
+        _log(f"Using starting pose constraint ({len(starting_pose)} joints).")
+        try:
+            constraint_lst = [_build_fullbody_constraint_at_frame0(model, starting_pose)]
+        except Exception as exc:
+            _log(f"Warning: could not build starting pose constraint: {exc}. Generating unconstrained.")
+            constraint_lst = []
+
+    output: dict = model(
+        prompts=texts if multi_prompt else texts[0],
+        num_frames=num_frames_list if multi_prompt else num_frames_list[0],
+        num_denoising_steps=diffusion_steps,
+        multi_prompt=multi_prompt,
+        num_samples=num_samples,
+        constraint_lst=constraint_lst,
+        return_numpy=True,
+        post_processing=True,
+    )
+
+    # Extract posed_joints: shape [T, J, 3] (or [B, T, J, 3] for num_samples>1)
+    posed_joints_raw = output["posed_joints"]
+    if posed_joints_raw.ndim == 4:
+        posed_joints_raw = posed_joints_raw[0]  # take first sample
+    posed_joints: np.ndarray = posed_joints_raw.astype(np.float32)  # [T, J, 3]
+    T, J, _ = posed_joints.shape
+    _log(f"Generated {T} frames, {J} joints.")
+
+    # ── Save NPZ ────────────────────────────────────────────────────────────
+    npz_path = dest / "motion.npz"
+    np.savez_compressed(str(npz_path), **{k: v for k, v in output.items()})
+    _log(f"Saved motion.npz ({npz_path.stat().st_size // 1024} KB)")
+
+    # ── Save joints.json.gz (for browser streaming) ─────────────────────────
+    # posed_joints centred around origin (subtract mean root XZ for nicer display)
+    joints_centered = posed_joints.copy()
+    mean_xz = posed_joints[:, 0, [0, 2]].mean(axis=0)  # mean Hips X,Z
+    joints_centered[:, :, 0] -= mean_xz[0]
+    joints_centered[:, :, 2] -= mean_xz[1]
+
+    joints_list = joints_centered.tolist()  # [T][J][3] nested lists
+    joints_json = json.dumps(joints_list).encode("utf-8")
+    joints_gz_path = dest / "joints.json.gz"
+    with gzip.open(str(joints_gz_path), "wb") as f:
+        f.write(joints_json)
+    _log(f"Saved joints.json.gz ({joints_gz_path.stat().st_size // 1024} KB)")
+
+    # ── Write manifest ───────────────────────────────────────────────────────
+    manifest = {
+        "fps": fps,
+        "frame_count": T,
+        "joint_count": J,
+        "segments": [{"text": t, "duration": d} for t, d in zip(texts, durations)],
+        "model": model_name,
+    }
+    with (dest / "manifest.json").open("w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+
+    return {
+        "fps": fps,
+        "frame_count": T,
+        "joint_count": J,
+        "npz_path": str(npz_path),
+        "joints_gz_path": str(joints_gz_path),
+        "segments": manifest["segments"],
+    }
+
+
+# ── Pose-constrained generation ───────────────────────────────────────────────
+
+
+def _build_fullbody_constraint_at_frame0(
+    model: Any,
+    joints_77x3: list[list[float]],
+) -> Any:
+    """
+    Construct a ``FullBodyConstraintSet`` that pins the first frame of generation
+    to the given joint positions.
+
+    The model's ``neutral_joints`` (rest-pose global rotations) are reused for
+    the rotation component — only the positions are updated from the puppet pose.
+    This avoids needing to invert FK, which would require knowing local rotations.
+    The result is a soft constraint: KiMoD will start from this pose but may
+    slightly deviate to satisfy the physics (foot contacts, etc.).
+    """
+    import torch
+    from kimodo.constraints import FullBodyConstraintSet
+
+    skel = model.skeleton
+    # If the model uses SOMA77 wrapped, unwrap to the base skeleton.
+    if hasattr(skel, "somaskel77"):
+        skel = skel.somaskel77
+
+    J = len(joints_77x3)
+    joints_tensor = torch.tensor(joints_77x3, dtype=torch.float32).unsqueeze(0)  # [1, J, 3]
+    frame_indices = torch.tensor([0], dtype=torch.long)
+
+    # Use neutral global rotations as the rotation component.
+    # neutral_joints has shape [J, 3]; we need global rot mats [1, J, 3, 3].
+    # KiMoD supports positions-only constraints when rotations match the neutral pose.
+    neutral_rot = torch.eye(3).unsqueeze(0).unsqueeze(0).expand(1, J, 3, 3)  # identity
+
+    constraint = FullBodyConstraintSet(
+        skeleton=skel,
+        frame_indices=frame_indices,
+        global_joints_positions=joints_tensor,
+        global_joints_rots=neutral_rot,
+    )
+    return constraint
+
+
+# ── Frame rendering ───────────────────────────────────────────────────────────
+
+def render_frame_to_png(
+    motion_dir: Path | str,
+    frame_index: int,
+    azimuth: float,
+    elevation: float,
+    *,
+    width: int = 512,
+    height: int = 512,
+    output_path: Path | str | None = None,
+) -> str:
+    """
+    Render a single frame of the stored motion as a 2D matplotlib projection
+    from the given camera angle.  Returns the absolute path to the saved PNG.
+
+    ``azimuth`` and ``elevation`` are in degrees, matching the Three.js
+    spherical camera convention used by the frontend viewer.
+    """
+    import gzip
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+    motion_dir = Path(motion_dir)
+    joints_gz = motion_dir / "joints.json.gz"
+    if not joints_gz.is_file():
+        raise FileNotFoundError(f"joints.json.gz not found in {motion_dir}")
+
+    with gzip.open(str(joints_gz), "rb") as f:
+        joints_all = json.loads(f.read().decode("utf-8"))  # [T][J][3]
+
+    T = len(joints_all)
+    if not (0 <= frame_index < T):
+        raise ValueError(f"frame_index {frame_index} out of range [0, {T})")
+
+    pts = np.array(joints_all[frame_index], dtype=np.float32)  # [J, 3]
+
+    dpi = 100
+    fig_w = width / dpi
+    fig_h = height / dpi
+    fig = plt.figure(figsize=(fig_w, fig_h), dpi=dpi, facecolor="white")
+    ax = fig.add_subplot(111, projection="3d", facecolor="white")
+
+    # KiMoD outputs Y-up coordinates. Matplotlib 3D: x,y=horizontal, z=vertical.
+    # Map: KiMoD (x,y,z) → Matplotlib (x,z,y) so the character stands upright.
+    xs, ys, zs = pts[:, 0], pts[:, 2], pts[:, 1]
+
+    # Draw bones
+    for child_i, parent_i in SOMA_BONES:
+        if child_i >= len(pts) or parent_i >= len(pts):
+            continue
+        ax.plot(
+            [xs[parent_i], xs[child_i]],
+            [ys[parent_i], ys[child_i]],
+            [zs[parent_i], zs[child_i]],
+            "b-", linewidth=1.5, alpha=0.85,
+        )
+
+    # Draw joints
+    ax.scatter(xs, ys, zs, c="red", s=12, depthshade=False, zorder=5)
+
+    # Camera: azimuth (yaw around Y axis) and elevation (pitch)
+    ax.view_init(elev=elevation, azim=azimuth)
+
+    # Equal aspect ratio trick for 3D
+    max_range = max(
+        xs.max() - xs.min(),
+        ys.max() - ys.min(),
+        zs.max() - zs.min(),
+    ) / 2
+    mid_x = (xs.max() + xs.min()) / 2
+    mid_y = (ys.max() + ys.min()) / 2
+    mid_z = (zs.max() + zs.min()) / 2
+    ax.set_xlim(mid_x - max_range, mid_x + max_range)
+    ax.set_ylim(mid_y - max_range, mid_y + max_range)
+    ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+    ax.set_axis_off()
+    fig.tight_layout(pad=0)
+
+    if output_path is None:
+        out = motion_dir / "shots" / f"frame{frame_index:05d}_az{int(azimuth)}_el{int(elevation)}.png"
+    else:
+        out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(str(out), dpi=dpi, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return str(out)
+
+
+def render_joints_array_to_png(
+    joints_array: list[list[float]],  # [J][3] — direct joint positions, no file needed
+    azimuth: float,
+    elevation: float,
+    *,
+    width: int = 512,
+    height: int = 512,
+    output_path: Path | str | None = None,
+) -> str:
+    """
+    Render an arbitrary set of joint positions directly to a PNG.
+
+    This is the puppet-mode path: the joints come from the browser editor,
+    no stored NPZ or joints.json.gz is needed.
+
+    Returns the absolute path to the saved PNG.
+    """
+    import tempfile
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+    pts = np.array(joints_array, dtype=np.float32)  # [J, 3]
+    J = len(pts)
+
+    dpi = 100
+    fig_w = width / dpi
+    fig_h = height / dpi
+    fig = plt.figure(figsize=(fig_w, fig_h), dpi=dpi, facecolor="white")
+    ax = fig.add_subplot(111, projection="3d", facecolor="white")
+
+    xs, ys, zs = pts[:, 0], pts[:, 2], pts[:, 1]  # remap Y-up → Matplotlib
+
+    for child_i, parent_i in SOMA_BONES:
+        if child_i >= J or parent_i >= J:
+            continue
+        ax.plot(
+            [xs[parent_i], xs[child_i]],
+            [ys[parent_i], ys[child_i]],
+            [zs[parent_i], zs[child_i]],
+            "b-", linewidth=1.5, alpha=0.85,
+        )
+    ax.scatter(xs, ys, zs, c="red", s=12, depthshade=False, zorder=5)
+
+    ax.view_init(elev=elevation, azim=azimuth)
+
+    if xs.max() > xs.min():
+        max_range = max(xs.max()-xs.min(), ys.max()-ys.min(), zs.max()-zs.min()) / 2
+        mid_x = (xs.max()+xs.min()) / 2
+        mid_y = (ys.max()+ys.min()) / 2
+        mid_z = (zs.max()+zs.min()) / 2
+        ax.set_xlim(mid_x-max_range, mid_x+max_range)
+        ax.set_ylim(mid_y-max_range, mid_y+max_range)
+        ax.set_zlim(mid_z-max_range, mid_z+max_range)
+
+    ax.set_axis_off()
+    fig.tight_layout(pad=0)
+
+    if output_path is None:
+        out = Path(tempfile.gettempdir()) / f"puppet_{uuid.uuid4().hex[:8]}.png"
+    else:
+        out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(str(out), dpi=dpi, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return str(out)
+
+
+# ── Persistent HTTP worker ────────────────────────────────────────────────────
+
+def _make_request_handler(model_name: str) -> type:
+    class _Handler(BaseHTTPRequestHandler):
+        def log_message(self, fmt: str, *args: Any) -> None:
+            logger.debug(fmt, *args)
+
+        def _send_json(self, code: int, body: dict) -> None:
+            data = json.dumps(body).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self) -> None:
+            if self.path == "/health":
+                self._send_json(200, {"ok": True})
+            elif self.path == "/bones":
+                self._send_json(200, {"bones": SOMA_BONES, "joint_names": SOMA_JOINT_NAMES})
+            else:
+                self.send_error(404)
+
+        def _read_body(self) -> dict:
+            n = int(self.headers.get("Content-Length", 0))
+            return json.loads(self.rfile.read(n).decode())
+
+        def do_POST(self) -> None:
+            if self.path == "/generate":
+                payload = self._read_body()
+                segments = payload.get("segments") or []
+                dest_dir = payload.get("dest_dir", "")
+                diffusion_steps = int(payload.get("diffusion_steps") or _DEFAULT_DIFFUSION_STEPS)
+                num_samples = int(payload.get("num_samples") or 1)
+                starting_pose = payload.get("starting_pose") or None
+                logs: list[str] = []
+                try:
+                    result = generate_motion(
+                        segments,
+                        dest_dir,
+                        model_name=model_name,
+                        num_samples=num_samples,
+                        diffusion_steps=diffusion_steps,
+                        starting_pose=starting_pose,
+                        log_cb=lambda m: logs.append(m),
+                    )
+                    self._send_json(200, {"result": result, "error": None, "logs": logs})
+                except Exception as exc:
+                    logger.exception("Generation failed")
+                    self._send_json(200, {"result": None, "error": str(exc), "logs": logs})
+
+            elif self.path == "/render_frame":
+                payload = self._read_body()
+                motion_dir = payload.get("motion_dir", "")
+                frame_index = int(payload.get("frame_index", 0))
+                azimuth = float(payload.get("azimuth", 0))
+                elevation = float(payload.get("elevation", 20))
+                width = int(payload.get("width", 512))
+                height = int(payload.get("height", 512))
+                output_path = payload.get("output_path") or None
+                try:
+                    path = render_frame_to_png(
+                        motion_dir, frame_index, azimuth, elevation,
+                        width=width, height=height, output_path=output_path,
+                    )
+                    self._send_json(200, {"url": path, "error": None})
+                except Exception as exc:
+                    logger.exception("Render frame failed")
+                    self._send_json(200, {"url": None, "error": str(exc)})
+
+            elif self.path == "/render_joints":
+                # Render raw joint positions directly — no stored NPZ needed.
+                payload = self._read_body()
+                joints = payload.get("joints") or []
+                azimuth = float(payload.get("azimuth", 0))
+                elevation = float(payload.get("elevation", 20))
+                width = int(payload.get("width", 512))
+                height = int(payload.get("height", 512))
+                output_path = payload.get("output_path") or None
+                try:
+                    path = render_joints_array_to_png(
+                        joints, azimuth, elevation,
+                        width=width, height=height, output_path=output_path,
+                    )
+                    self._send_json(200, {"url": path, "error": None})
+                except Exception as exc:
+                    logger.exception("Render joints failed")
+                    self._send_json(200, {"url": None, "error": str(exc)})
+            else:
+                self.send_error(404)
+
+    return _Handler
+
+
+def serve_forever(
+    port: int = _DEFAULT_SERVE_PORT,
+    model_name: str = _DEFAULT_MODEL,
+) -> None:
+    """Load model once, then serve requests indefinitely."""
+    logger.info("Pre-loading KiMoD model '%s'…", model_name)
+    _load_kimodo_model(model_name)
+    logger.info("Model ready. Starting HTTP server on 127.0.0.1:%d", port)
+    httpd = HTTPServer(("127.0.0.1", port), _make_request_handler(model_name))
+    print(f"READY:{port}", flush=True)
+    logger.info("Motion ref gen server listening on port %d", port)
+    httpd.serve_forever()
+
+
+# ── Persistent worker client (called by motion_ref_router) ────────────────────
+
+_worker_lock = threading.Lock()
+_worker_proc: subprocess.Popen | None = None  # type: ignore[type-arg]
+_worker_port: int = _DEFAULT_SERVE_PORT
+
+
+def _server_is_up(port: int) -> bool:
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def _wait_for_server(
+    proc: subprocess.Popen,  # type: ignore[type-arg]
+    port: int,
+    timeout: float = 180.0,
+    log_cb: Callable[[str], None] | None = None,
+) -> None:
+    deadline = time.monotonic() + timeout
+    ready_event = threading.Event()
+    stderr_lines: list[str] = []
+
+    def _read_stdout() -> None:
+        for line in proc.stdout:  # type: ignore[union-attr]
+            line = line.strip()
+            if line.startswith("READY:"):
+                ready_event.set()
+                break
+            if log_cb:
+                log_cb(f"[motion-ref-worker] {line}")
+
+    def _read_stderr() -> None:
+        for line in proc.stderr:  # type: ignore[union-attr]
+            line = line.strip()
+            stderr_lines.append(line)
+            logger.debug("[motion-ref-worker] %s", line)
+            if log_cb:
+                log_cb(f"[motion-ref-worker] {line}")
+
+    threading.Thread(target=_read_stdout, daemon=True).start()
+    threading.Thread(target=_read_stderr, daemon=True).start()
+
+    while time.monotonic() < deadline:
+        if ready_event.is_set() or _server_is_up(port):
+            return
+        if proc.poll() is not None:
+            tail = "\n".join(stderr_lines[-10:])
+            raise RuntimeError(
+                f"Motion ref worker exited (code {proc.returncode}).\n{tail}"
+            )
+        time.sleep(0.3)
+
+    raise RuntimeError(f"Motion ref worker did not start on port {port} within {timeout:.0f}s.")
+
+
+def ensure_worker(
+    port: int = _DEFAULT_SERVE_PORT,
+    model_name: str = _DEFAULT_MODEL,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """Start the persistent motion-ref worker if not already running. Thread-safe."""
+    global _worker_proc, _worker_port
+
+    with _worker_lock:
+        _worker_port = port
+
+        if _server_is_up(port):
+            return f"http://127.0.0.1:{port}"
+
+        if _worker_proc is not None and _worker_proc.poll() is None:
+            _wait_for_server(_worker_proc, port, log_cb=log_cb)
+            return f"http://127.0.0.1:{port}"
+
+        if log_cb:
+            log_cb(
+                f"Starting KiMoD worker (model={model_name}, port={port}). "
+                "Model weights will download on first run (~few GB)…"
+            )
+        cmd = [
+            sys.executable, "-m",
+            "services.motion_ref_gen_ai_service.serverless",
+            "--serve",
+            "--serve-port", str(port),
+            "--model", model_name,
+        ]
+        _worker_proc = subprocess.Popen(
+            cmd,
+            cwd=str(_REPO_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+        _wait_for_server(_worker_proc, port, log_cb=log_cb)
+
+        if log_cb:
+            log_cb(f"KiMoD worker ready on port {port}.")
+        logger.info("KiMoD worker ready on port %d.", port)
+        return f"http://127.0.0.1:{port}"
+
+
+def call_generate(
+    segments: list[dict],
+    dest_dir: str,
+    *,
+    port: int = _DEFAULT_SERVE_PORT,
+    model_name: str = _DEFAULT_MODEL,
+    num_samples: int = 1,
+    diffusion_steps: int = _DEFAULT_DIFFUSION_STEPS,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Call /generate on the persistent worker."""
+    import urllib.request
+
+    base = ensure_worker(port=port, model_name=model_name, log_cb=log_cb)
+    if log_cb:
+        log_cb("Sending generation request to KiMoD worker…")
+
+    payload = json.dumps({
+        "segments": segments,
+        "dest_dir": dest_dir,
+        "num_samples": num_samples,
+        "diffusion_steps": diffusion_steps,
+    }).encode()
+
+    req = urllib.request.Request(
+        f"{base}/generate", data=payload,
+        headers={"Content-Type": "application/json"}, method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=7200) as resp:
+        body = json.loads(resp.read().decode())
+
+    if body.get("logs") and log_cb:
+        for line in body["logs"]:
+            log_cb(line)
+
+    if body.get("error"):
+        raise RuntimeError(body["error"])
+
+    return body["result"]
+
+
+def call_render_frame(
+    motion_dir: str,
+    frame_index: int,
+    azimuth: float,
+    elevation: float,
+    *,
+    port: int = _DEFAULT_SERVE_PORT,
+    model_name: str = _DEFAULT_MODEL,
+    width: int = 512,
+    height: int = 512,
+    output_path: str | None = None,
+) -> str:
+    """Call /render_frame on the persistent worker; return absolute PNG path."""
+    import urllib.request
+
+    base = ensure_worker(port=port, model_name=model_name)
+    payload = json.dumps({
+        "motion_dir": motion_dir,
+        "frame_index": frame_index,
+        "azimuth": azimuth,
+        "elevation": elevation,
+        "width": width,
+        "height": height,
+        "output_path": output_path,
+    }).encode()
+    req = urllib.request.Request(
+        f"{base}/render_frame", data=payload,
+        headers={"Content-Type": "application/json"}, method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        body = json.loads(resp.read().decode())
+
+    if body.get("error"):
+        raise RuntimeError(body["error"])
+    url = str(body.get("url") or "")
+    if not url or not Path(url).is_file():
+        raise RuntimeError(f"render_frame returned no file (url={url!r})")
+    return url
+
+
+# ── CLI entry point ───────────────────────────────────────────────────────────
+
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Motion reference generation — KiMoD")
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--serve", action="store_true", help="Persistent HTTP worker mode.")
+    p.add_argument("--serve-port", type=int, default=_DEFAULT_SERVE_PORT)
+    p.add_argument("--model", type=str, default=_DEFAULT_MODEL)
+    p.add_argument("--diffusion-steps", type=int, default=_DEFAULT_DIFFUSION_STEPS)
+    # One-shot args
+    p.add_argument("--prompt", type=str, default=None, help="Text prompt (one-shot mode)")
+    p.add_argument("--duration", type=float, default=3.0)
+    p.add_argument("--output", type=str, default=None)
+    return p.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+
+    if args.serve:
+        serve_forever(port=args.serve_port, model_name=args.model)
+        return
+
+    # One-shot mode
+    if not args.prompt:
+        print(json.dumps({"result": None, "error": "--prompt is required in one-shot mode"}))
+        sys.exit(1)
+
+    import tempfile
+    dest = args.output or str(Path(tempfile.gettempdir()) / f"motion_{uuid.uuid4().hex[:8]}")
+    try:
+        result = generate_motion(
+            [{"text": args.prompt, "duration": args.duration}],
+            dest,
+            model_name=args.model,
+            diffusion_steps=args.diffusion_steps,
+            log_cb=lambda msg: print(msg, file=sys.stderr),
+        )
+        print(json.dumps({"result": result, "error": None}))
+    except Exception as exc:
+        logger.exception("One-shot generation failed")
+        print(json.dumps({"result": None, "error": str(exc)}))
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

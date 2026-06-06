@@ -13,6 +13,7 @@ LOCATION_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "locations").resolve()
 SHOTS_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "shots").resolve()
 REFERENCES_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "references").resolve()
 TIMELINES_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "timelines").resolve()
+MOTION_REFS_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "motion_refs").resolve()
 
 
 def resolve_storage_rel_file(rel_path: str) -> Path:
@@ -33,6 +34,9 @@ def resolve_storage_rel_file(rel_path: str) -> Path:
         rel = Path(*rel_parts[1:])
     elif rel_parts and rel_parts[0].lower() == "timelines":
         root = TIMELINES_STORAGE_ROOT.resolve()
+        rel = Path(*rel_parts[1:])
+    elif rel_parts and rel_parts[0].lower() == "motion_refs":
+        root = MOTION_REFS_STORAGE_ROOT.resolve()
         rel = Path(*rel_parts[1:])
     else:
         root = DEFAULT_STORAGE_ROOT.resolve()
@@ -69,6 +73,11 @@ def storage_rel_from_abs(abs_path: str) -> str:
     try:
         rel = p.resolve().relative_to(TIMELINES_STORAGE_ROOT.resolve())
         return str(Path("timelines") / rel).replace("\\", "/")
+    except Exception:
+        pass
+    try:
+        rel = p.resolve().relative_to(MOTION_REFS_STORAGE_ROOT.resolve())
+        return str(Path("motion_refs") / rel).replace("\\", "/")
     except Exception:
         return p.name
 

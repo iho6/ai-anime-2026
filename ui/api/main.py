@@ -33,6 +33,7 @@ from ui.api.location_router import router as location_router  # noqa: E402
 from ui.api.shot_router import router as shot_router  # noqa: E402
 from ui.api.reference_router import router as reference_router  # noqa: E402
 from ui.api.timeline_router import router as timeline_router  # noqa: E402
+from ui.api.motion_ref_router import router as motion_ref_router  # noqa: E402
 from ui.api.storage_paths import (  # noqa: E402
     ensure_path_in_character_archive_root,
     ensure_path_in_new_character_draft_root,
@@ -83,6 +84,7 @@ app.include_router(location_router)
 app.include_router(shot_router)
 app.include_router(reference_router)
 app.include_router(timeline_router)
+app.include_router(motion_ref_router)
 
 @app.get("/health")
 def health() -> dict[str, Any]:

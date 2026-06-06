@@ -9,6 +9,9 @@ videos, location/shot images, and music placeholders. Timelines live under
 from __future__ import annotations
 
 import shutil
+import subprocess
+import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -132,6 +135,50 @@ def timeline_import_image(timeline_key: str, body: dict[str, str]) -> dict[str, 
         "width": info.get("width") or 0,
         "height": info.get("height") or 0,
     }
+
+
+@router.websocket("/timeline/{timeline_key}/remove_video_bg/ws")
+async def timeline_remove_video_bg_ws(ws: WebSocket, timeline_key: str) -> None:
+    """Remove background from a video clip via RobustVideoMatting.  Outputs WebM+alpha."""
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+
+    try:
+        d = _timeline_dir(timeline_key)
+        if not d.is_dir():
+            raise ValueError("Timeline not found.")
+        rel = (msg.get("videoRelPath") or "").strip()
+        if not rel:
+            raise ValueError("videoRelPath is required.")
+        from .storage_paths import resolve_storage_rel_file
+        abs_src = str(resolve_storage_rel_file(rel))
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            from services.vid_bckgrnd_removal_ai_service.serverless import (
+                remove_video_background_persistent,
+            )
+            clips_dir = timeline_storage.timeline_clips_dir(timeline_key)
+            stem = Path(abs_src).stem
+            out_path = str(Path(clips_dir) / f"{stem}_nobg_{int(time.time())}.webm")
+            result = remove_video_background_persistent(
+                abs_src, out_path, log_cb=log_cb
+            )
+            return {
+                "srcRelPath": storage_rel_from_abs(result["url"]),
+                "width": result.get("width") or 0,
+                "height": result.get("height") or 0,
+            }
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
 
 
 @router.websocket("/timeline/{timeline_key}/import_sequence/ws")
@@ -305,6 +352,96 @@ async def timeline_ai_edit_ws(ws: WebSocket, timeline_key: str) -> None:
                 "width": info.get("width") or 0,
                 "height": info.get("height") or 0,
             }
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
+@router.websocket("/timeline/{timeline_key}/export_mp4/ws")
+async def timeline_export_mp4_ws(ws: WebSocket, timeline_key: str) -> None:
+    """Concatenate all clips in timeline order into a single MP4 via ffmpeg."""
+    await ws.accept()
+    try:
+        await ws.receive_json()  # consume handshake (no payload needed)
+    except WebSocketDisconnect:
+        return
+
+    try:
+        d = _timeline_dir(timeline_key)
+        if not d.is_dir():
+            raise ValueError("Timeline not found.")
+
+        manifest = timeline_storage.read_manifest(timeline_key)
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            fps = int(manifest.get("fps", 30))
+            clips = []
+            for track in manifest.get("tracks", []):
+                if track.get("hidden"):
+                    continue
+                if track.get("kind") != "video":
+                    continue
+                for clip in sorted(track.get("clips", []), key=lambda c: c.get("start", 0)):
+                    rel = (clip.get("srcRelPath") or "").strip()
+                    if not rel:
+                        continue
+                    from .storage_paths import resolve_storage_rel_file as _rsrf
+                    abs_p = str(_rsrf(rel))
+                    if not Path(abs_p).is_file():
+                        log_cb(f"Skipping missing: {rel}")
+                        continue
+                    clips.append({
+                        "path": abs_p,
+                        "type": clip.get("type", "image"),
+                        "duration": float(clip.get("duration", 3)),
+                    })
+
+            if not clips:
+                raise ValueError("No video/image clips found.")
+
+            log_cb(f"Exporting {len(clips)} clip(s)...")
+            out_dir = d / "exports"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"export_{int(time.time())}.mp4"
+
+            seg_paths: list[str] = []
+            try:
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+                    concat_file = f.name
+                    for i, clip in enumerate(clips):
+                        if clip["type"] == "image":
+                            seg = str(out_dir / f"_seg_{i}.mp4")
+                            seg_paths.append(seg)
+                            subprocess.run([
+                                "ffmpeg", "-y", "-loop", "1", "-i", clip["path"],
+                                "-t", str(clip["duration"]), "-r", str(fps),
+                                "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                                seg,
+                            ], check=True, capture_output=True)
+                            f.write(f"file '{seg}'\n")
+                            log_cb(f"Converted image clip {i + 1}/{len(clips)}")
+                        else:
+                            f.write(f"file '{clip['path']}'\n")
+
+                subprocess.run([
+                    "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+                    "-i", concat_file, "-c", "copy", str(out_path),
+                ], check=True, capture_output=True)
+            finally:
+                for s in seg_paths:
+                    try:
+                        Path(s).unlink()
+                    except OSError:
+                        pass
+
+            log_cb(f"Done -> {out_path.name}")
+            return {"relPath": storage_rel_from_abs(str(out_path))}
 
         result, err = await run_with_log_stream(ws, work)
         if err:

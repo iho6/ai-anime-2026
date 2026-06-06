@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { TimelineManifest, TimelineClip, TimelineTrack } from "../../lib/api";
 import { TrackLabelTag } from "./TrackLabelTag";
 import { clamp, clipEnd, timelineDuration } from "./timelineUtil";
@@ -56,8 +56,11 @@ export function TimelineTracks(props: {
 
   const dragRef = useRef<DragState | null>(null);
   const laneAreaRef = useRef<HTMLDivElement | null>(null);
-  // Whether the current drag gesture has already pushed an undo checkpoint.
   const gestureCommittedRef = useRef(false);
+
+  // Track drag-to-reorder state.
+  const trackDragRef = useRef<{ trackId: string; startY: number } | null>(null);
+  const [trackDropIndex, setTrackDropIndex] = useState<number | null>(null);
   // Pending cursor anchor to keep the time-under-cursor fixed across a wheel zoom.
   const zoomAnchorRef = useRef<{ cursorTime: number; offsetX: number } | null>(null);
 
@@ -211,6 +214,7 @@ export function TimelineTracks(props: {
     clip: TimelineClip,
     kind: DragKind
   ) {
+    if (e.button === 2) return; // right-click — selection handled by onContextMenu, don't override
     e.preventDefault();
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -225,7 +229,27 @@ export function TimelineTracks(props: {
     };
   }
 
+  function startTrackDrag(trackId: string, e: React.PointerEvent) {
+    trackDragRef.current = { trackId, startY: e.clientY };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    setTrackDropIndex(manifest.tracks.findIndex((t) => t.id === trackId));
+  }
+
+  function getTrackDropIndexFromY(clientY: number): number {
+    const el = laneAreaRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    const relY = clientY - rect.top - RULER_H + el.scrollTop;
+    return clamp(Math.round(relY / ROW_H), 0, manifest.tracks.length);
+  }
+
   function onPointerMove(e: React.PointerEvent) {
+    // Track reorder drag takes priority.
+    if (trackDragRef.current) {
+      setTrackDropIndex(getTrackDropIndexFromY(e.clientY));
+      return;
+    }
+
     const d = dragRef.current;
     if (!d) return;
     // One undo checkpoint per drag, captured before the first applied change.
@@ -295,6 +319,25 @@ export function TimelineTracks(props: {
   }
 
   function onPointerUp(e: React.PointerEvent) {
+    // Finish track reorder drag.
+    if (trackDragRef.current) {
+      (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+      const { trackId } = trackDragRef.current;
+      const dropIdx = getTrackDropIndexFromY(e.clientY);
+      trackDragRef.current = null;
+      setTrackDropIndex(null);
+      const tracks = manifest.tracks;
+      const fromIdx = tracks.findIndex((t) => t.id === trackId);
+      if (fromIdx !== -1 && dropIdx !== fromIdx && dropIdx !== fromIdx + 1) {
+        const next = [...tracks];
+        const [moved] = next.splice(fromIdx, 1);
+        const insertAt = dropIdx > fromIdx ? dropIdx - 1 : dropIdx;
+        next.splice(insertAt, 0, moved);
+        onCommit();
+        onChange({ ...manifest, tracks: next });
+      }
+      return;
+    }
     if (dragRef.current) {
       (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
       dragRef.current = null;
@@ -380,8 +423,19 @@ export function TimelineTracks(props: {
         </div>
 
         {/* Track rows */}
-        {manifest.tracks.map((track) => (
-          <div key={track.id} style={{ display: "flex", height: ROW_H }}>
+        {manifest.tracks.map((track, trackIdx) => (
+          <React.Fragment key={track.id}>
+            {/* Drop indicator — shown above this track when dragging */}
+            {trackDropIndex === trackIdx && (
+              <div style={{ height: 3, background: "#ffd166", marginLeft: LABEL_W, width: laneWidth }} />
+            )}
+            <div
+              style={{
+                display: "flex",
+                height: ROW_H,
+                opacity: trackDragRef.current?.trackId === track.id ? 0.4 : 1,
+              }}
+            >
             <TrackLabelTag
               name={track.name}
               kind={track.kind}
@@ -390,6 +444,7 @@ export function TimelineTracks(props: {
               onToggleHidden={() => toggleTrackHidden(track.id)}
               onRename={(next) => renameTrack(track.id, next)}
               onContextMenu={(x, y) => onTrackContextMenu(track.id, x, y)}
+              onDragHandlePointerDown={(e) => startTrackDrag(track.id, e)}
             />
             <div
               style={{
@@ -437,7 +492,7 @@ export function TimelineTracks(props: {
                       border: selected
                         ? "2px solid #ffd166"
                         : "1px solid rgba(255,255,255,0.25)",
-                      borderRadius: 3,
+                      borderRadius: 0,
                       boxSizing: "border-box",
                       cursor: "grab",
                       overflow: "hidden",
@@ -451,6 +506,9 @@ export function TimelineTracks(props: {
                     {clip.type === "audio" && !clip.srcRelPath
                       ? "♪ music (placeholder)"
                       : `${clip.type} · ${clip.speed !== 1 ? `${clip.speed}× · ` : ""}${clip.duration.toFixed(1)}s`}
+                    {clip.trajectory && (
+                      <span style={{ marginLeft: 4, fontSize: 8, opacity: 0.75 }} title="Has trajectory">↗</span>
+                    )}
                     {/* Trim handles */}
                     <div
                       onPointerDown={(e) => onClipPointerDown(e, track, clip, "trimL")}
@@ -464,8 +522,13 @@ export function TimelineTracks(props: {
                 );
               })}
             </div>
-          </div>
+            </div>  {/* close row div */}
+          </React.Fragment>
         ))}
+        {/* Drop indicator at the very bottom */}
+        {trackDropIndex === manifest.tracks.length && (
+          <div style={{ height: 3, background: "#ffd166", marginLeft: LABEL_W, width: laneWidth }} />
+        )}
 
         {/* Playhead overlay (spans ruler + rows, offset past the label column). */}
         <div
