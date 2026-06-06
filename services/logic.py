@@ -714,10 +714,27 @@ def run_startup_setup_and_launch(
             cwd=_REPO_ROOT,
             log_cb=log_cb,
         )
+        _run_command_logged(
+            [sys.executable, "-m", "pip", "install",
+             "comfyui-frontend-package==1.43.18",
+             "comfyui-workflow-templates==0.9.75",
+             "comfyui-embedded-docs==0.5.0"],
+            cwd=_REPO_ROOT,
+            log_cb=log_cb,
+        )
         if not _pip_check_ok(log_cb=log_cb) and log_cb:
             log_cb("Warning: pip check still reports issues after repair; continuing anyway.")
-    elif log_cb:
-        log_cb("Quick check passed. Skipping reinstall.")
+    else:
+        if log_cb:
+            log_cb("Quick check passed. Skipping reinstall.")
+        _run_command_logged(
+            [sys.executable, "-m", "pip", "install",
+             "comfyui-frontend-package==1.43.18",
+             "comfyui-workflow-templates==0.9.75",
+             "comfyui-embedded-docs==0.5.0"],
+            cwd=_REPO_ROOT,
+            log_cb=log_cb,
+        )
 
     # Install required Comfy custom nodes after deps are ready, before model downloads.
     install_required_custom_nodes(log_cb=log_cb)
