@@ -33,6 +33,7 @@ from services.utils import (
     gpu_preflight,
     load_download_cache,
     load_workflows,
+    media_item_path,
     resolve_to_comfy_input_ref,
     task_queue,
     timing_decorator,
@@ -267,14 +268,14 @@ def handler(job_input):
             output_dir = LOCAL_OUTPUT_DIR
             history = fetch_comfy_history(local_servers["default"], prompt_id)
             outputs = (history.get(prompt_id) or {}).get("outputs") or {}
-            out_filename = None
+            local_out = None
             for _nid, out in outputs.items():
                 imgs = out.get("images")
                 if imgs:
-                    out_filename = imgs[0].get("filename")
-                    break
-            if out_filename and osp.isfile(osp.join(output_dir, out_filename)):
-                local_out = osp.join(output_dir, out_filename)
+                    local_out = media_item_path(output_dir, imgs[0])
+                    if local_out:
+                        break
+            if local_out:
                 try:
                     if local_input_path:
                         angle_library.save_generation_to_library(
@@ -297,7 +298,7 @@ def handler(job_input):
                     upload_name = str(uuid.uuid4())
                     output_url = upload_to_s3(local_out, upload_name)
                 else:
-                    qfn = urllib.parse.quote(out_filename)
+                    qfn = urllib.parse.quote(osp.basename(local_out))
                     output_url = f"http://{local_servers['default']}/view?filename={qfn}&type=output"
                 response["variations"]["items"][0]["result"]["url"] = output_url
             else:

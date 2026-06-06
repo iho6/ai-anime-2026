@@ -17,8 +17,8 @@ DOWNLOAD_CACHE_FILE = os.environ.get(
     "SERVICES_DOWNLOAD_CACHE_FILE", "services/download_cache.jsonl"
 ).replace("\\", "/")
 
-LOCAL_INPUT_DIR = os.environ.get("LOCAL_INPUT_DIR", "input")
-LOCAL_OUTPUT_DIR = os.environ.get("LOCAL_OUTPUT_DIR", "output")
+LOCAL_INPUT_DIR = os.environ.get("LOCAL_INPUT_DIR", "comfyui/input")
+LOCAL_OUTPUT_DIR = os.environ.get("LOCAL_OUTPUT_DIR", "comfyui/output")
 
 CACHE_MAX_AGE = 31536000
 TIMEOUT = int(os.environ.get("COMFY_TASK_TIMEOUT", "3000"))
