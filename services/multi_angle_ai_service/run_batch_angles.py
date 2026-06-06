@@ -145,7 +145,7 @@ def main():
     )
     parser.add_argument(
         "--comfy-output-dir",
-        default="output",
+        default="comfyui/output",
         help="ComfyUI output directory",
     )
     parser.add_argument(

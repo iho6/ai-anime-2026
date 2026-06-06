@@ -736,6 +736,30 @@ def run_startup_setup_and_launch(
             log_cb=log_cb,
         )
 
+    # Install kimodo (nv-tlabs/kimodo) if not already present — clone then editable-install.
+    kimodo_dir = _REPO_ROOT / "kimodo"
+    if not (kimodo_dir / "setup.py").is_file() and not (kimodo_dir / "pyproject.toml").is_file():
+        if log_cb:
+            log_cb("Cloning nv-tlabs/kimodo…")
+        _run_command_logged(
+            ["git", "clone", "https://github.com/nv-tlabs/kimodo.git", str(kimodo_dir)],
+            cwd=_REPO_ROOT,
+            log_cb=log_cb,
+        )
+    try:
+        import kimodo  # noqa: F401
+    except ImportError:
+        if log_cb:
+            log_cb("Installing kimodo (editable)…")
+        kimodo_env = os.environ.copy()
+        kimodo_env["SKIP_MOTION_CORRECTION_IN_SETUP"] = "1"
+        _run_command_logged(
+            [sys.executable, "-m", "pip", "install", "-e", str(kimodo_dir)],
+            cwd=_REPO_ROOT,
+            log_cb=log_cb,
+            env=kimodo_env,
+        )
+
     # Install required Comfy custom nodes after deps are ready, before model downloads.
     install_required_custom_nodes(log_cb=log_cb)
 

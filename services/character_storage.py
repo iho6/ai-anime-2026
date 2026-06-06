@@ -127,10 +127,15 @@ def infer_ext_from_url(url: str) -> str:
 
 def download_url_to_file(url: str, dest_path: Path, *, timeout_s: int = 120) -> Path:
     """
-    Download an image URL to a local file path.
+    Download an image URL to a local file path, or copy if url is a local path.
     Returns the written file path.
     """
+    import shutil as _shutil
     dest_path.parent.mkdir(parents=True, exist_ok=True)
+    src = Path(url)
+    if src.is_file():
+        _shutil.copy2(src, dest_path)
+        return dest_path
     with requests.get(url, stream=True, timeout=timeout_s) as r:
         r.raise_for_status()
         with open(dest_path, "wb") as f:
