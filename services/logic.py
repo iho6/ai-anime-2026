@@ -586,7 +586,7 @@ def _launch_main_background(
     """Start Comfy ``main.py`` in the background; stream stdout/stderr via pipe while ``forward_logs`` is set."""
     cmd = [
         sys.executable,
-        "main.py",
+        str(_REPO_ROOT / "comfyui" / "main.py"),
         "--disable-metadata",
         "--port",
         str(int(port)),
@@ -609,7 +609,7 @@ def _launch_main_background(
     comfy_tail: deque[str] = deque(maxlen=80)
     tail_lock = threading.Lock()
     kwargs: dict[str, Any] = {
-        "cwd": str(_REPO_ROOT),
+        "cwd": str(_REPO_ROOT / "comfyui"),
         "stdout": subprocess.PIPE,
         "stderr": subprocess.STDOUT,
         "stdin": subprocess.DEVNULL,

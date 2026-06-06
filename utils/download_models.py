@@ -10,7 +10,6 @@ Usage:
     python utils/download_models.py --background-removal
     python utils/download_models.py --pose-keypoint
     python utils/download_models.py --flf-lightning [--hf-token YOUR_TOKEN]
-    python utils/download_models.py --img2video-hunyuan-15 [--hf-token YOUR_TOKEN]
     python utils/download_models.py --flux-fill --hf-token YOUR_TOKEN  # mask edit + outpaint
     python utils/download_models.py --flux2-t2i  # reference t2i gen
     python utils/download_models.py --all  # all stacks (deduplicated)
@@ -167,36 +166,6 @@ FLF_LIGHTNING_MODELS = [
     },
 ]
 
-# Hunyuan Video 1.5 720p I2V + EasyCache API — video_hunyuan_video_1.5_720p_i2v_api_easyCache.json
-# URLs from Comfy-Org repackaged / sigclip (same as workflow_library/video/video_hunyuan_video_1.5_720p_i2v.json).
-IMG2VIDEO_HUNYUAN_15_MODELS = [
-    {
-        "name": "qwen_2.5_vl_7b_fp8_scaled.safetensors (Hunyuan Video 1.5 text encoder 1)",
-        "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
-        "path": "comfyui/models/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
-    },
-    {
-        "name": "byt5_small_glyphxl_fp16.safetensors (Hunyuan Video 1.5 text encoder 2)",
-        "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/text_encoders/byt5_small_glyphxl_fp16.safetensors",
-        "path": "comfyui/models/text_encoders/byt5_small_glyphxl_fp16.safetensors",
-    },
-    {
-        "name": "sigclip_vision_patch14_384.safetensors (CLIP vision)",
-        "url": "https://huggingface.co/Comfy-Org/sigclip_vision_384/resolve/main/sigclip_vision_patch14_384.safetensors",
-        "path": "comfyui/models/clip_vision/sigclip_vision_patch14_384.safetensors",
-    },
-    {
-        "name": "hunyuanvideo1.5_720p_i2v_fp16.safetensors (UNet I2V)",
-        "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/diffusion_models/hunyuanvideo1.5_720p_i2v_fp16.safetensors",
-        "path": "comfyui/models/diffusion_models/hunyuanvideo1.5_720p_i2v_fp16.safetensors",
-    },
-    {
-        "name": "hunyuanvideo15_vae_fp16.safetensors (VAE)",
-        "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/vae/hunyuanvideo15_vae_fp16.safetensors",
-        "path": "comfyui/models/vae/hunyuanvideo15_vae_fp16.safetensors",
-    },
-]
-
 # Flux.1 Fill dev (inpaint) — shared by mask_guided_edit_ai_service
 # (flux_fill_inpaint_example) AND the location outpaint workflow
 # (flux_fill_outpaint); identical weights, deduplicated by destination path.
@@ -256,7 +225,6 @@ SERVICE_MODEL_MAP = {
     "anime_gen": ANIME_GEN_MODELS,
     "pose_keypoint": POSE_KEYPOINT_MODELS,
     "flf_lightning": FLF_LIGHTNING_MODELS,
-    "img2video_hunyuan_15": IMG2VIDEO_HUNYUAN_15_MODELS,
     "flux_fill": FLUX_FILL_MODELS,
     "flux2_t2i": FLUX2_T2I_MODELS,
 }
@@ -466,8 +434,6 @@ def _collect_selected_models(args) -> list[dict]:
             selected_keys.append("pose_keypoint")
         if args.flf_lightning:
             selected_keys.append("flf_lightning")
-        if args.img2video_hunyuan_15:
-            selected_keys.append("img2video_hunyuan_15")
         if args.flux_fill:
             selected_keys.append("flux_fill")
         if args.flux2_t2i:
@@ -549,7 +515,6 @@ def main():
             "  python utils/download_models.py --background-removal\n"
             "  python utils/download_models.py --pose-keypoint\n"
             "  python utils/download_models.py --flf-lightning\n"
-            "  python utils/download_models.py --img2video-hunyuan-15\n"
             "  python utils/download_models.py --flux-fill --hf-token hf_xxx\n"
             "  python utils/download_models.py --flux2-t2i\n"
             "  python utils/download_models.py --all"
@@ -590,15 +555,6 @@ def main():
         help=(
             "Download Wan 2.2 FLF lightning weights for flf2video_ai_service "
             "(video_wan2_2_14B_flf2v_lightning_api; large download, tens of GB)"
-        ),
-    )
-    parser.add_argument(
-        "--img2video-hunyuan-15",
-        action="store_true",
-        dest="img2video_hunyuan_15",
-        help=(
-            "Download Hunyuan Video 1.5 720p I2V weights for img2video_ai_service "
-            "(video_hunyuan_video_1.5_720p_i2v_api_easyCache; large download)"
         ),
     )
     parser.add_argument(
@@ -644,7 +600,6 @@ def main():
         and not args.background_removal
         and not args.pose_keypoint
         and not args.flf_lightning
-        and not args.img2video_hunyuan_15
         and not args.flux_fill
         and not args.flux2_t2i
         and not args.all
