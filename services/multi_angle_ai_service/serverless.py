@@ -153,6 +153,8 @@ def _resolve_prompt(task: dict, angle_id: int) -> str:
         base = str(override).strip()
     else:
         base = str(_camera_angle_by_id[angle_id]["prompt_text"] or "").strip()
+    if task.get("is_scenery"):
+        return base
     return append_default_multi_angle_background_instruction(base)
 
 
@@ -338,6 +340,11 @@ def _parse_args():
     )
     parser.add_argument("--library-key", type=str, default=None)
     parser.add_argument(
+        "--is-scenery",
+        action="store_true",
+        help="Suppress blank-white background constraint for scenery/location images",
+    )
+    parser.add_argument(
         "--convert-local-to-url",
         action="store_true",
         help=(
@@ -372,6 +379,8 @@ def _run_test_mode(args: argparse.Namespace) -> None:
         inp["prompt_text"] = args.prompt_text
     if args.library_key:
         inp["library_key"] = args.library_key
+    if args.is_scenery:
+        inp["is_scenery"] = True
     apply_upload_local_paths_to_comfy_in_task(
         inp, local_servers["default"], subfolder="anime2026_multi_angle_test"
     )

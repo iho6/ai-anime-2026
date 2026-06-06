@@ -3827,6 +3827,7 @@ def generate_multi_angle_subset_for_location(
                     str(input_source),
                     "--angle-id",
                     str(aid),
+                    "--is-scenery",
                     "--convert-local-to-url",
                 ],
                 log_cb=log_cb,

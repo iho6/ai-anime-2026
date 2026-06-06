@@ -944,6 +944,7 @@ export default function LocationDetailPage() {
         title="AI Edit"
         imageSrc={aiCtx ? assetUrlFromRelPath(aiCtx.relPath) : ""}
         busy={busy}
+        placeholder="Describe the edit (e.g. 'empty forest background' or 'add a bench')"
         onCancel={() => setAiOpen(false)}
         onGenerate={async (promptText, maskPngBase64) => {
           const ctx = aiCtx;

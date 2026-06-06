@@ -142,7 +142,8 @@ def run_one_generation(
         raise RuntimeError(
             f"Workflow missing CLIPTextEncode positive node {PROMPT_NODE_ID}"
         )
-    pos.setdefault("inputs", {})["text"] = prompt
+    pos["inputs"]["text"] = prompt
+    logger.info("Flux Fill prompt → %r", prompt)
 
     seed_node = w.get(SEED_NODE_ID)
     if isinstance(seed_node, dict) and seed_node.get("class_type") == "KSampler":
