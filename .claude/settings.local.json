@@ -24,7 +24,11 @@
       "Bash(rm -rf qwenmultiangle)",
       "Bash(gh repo *)",
       "Read(//d/Animation/**)",
-      "Bash(rm -rf _qma_tmp)"
+      "Bash(rm -rf _qma_tmp)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(gh api *)",
+      "Bash(mkdir -p /d/Animation/anime2026_refactored/services/vid_bckgrnd_removal_ai_service)",
+      "Bash(python -m py_compile services/logic.py services/vid_bckgrnd_removal_ai_service/serverless.py)"
     ]
   }
 }

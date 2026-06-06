@@ -7146,6 +7146,64 @@ def remove_background_to_temp_file(
     return str(dest)
 
 
+def remove_video_background_to_temp_file(
+    video_path: str,
+    *,
+    output_path: str | None = None,
+    backbone: str = "mobilenetv3",
+    device: str = "auto",
+    downsample_ratio: float = 0.25,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """
+    Remove the background from a video using RobustVideoMatting (RVM).
+
+    Uses a **persistent worker process** so the model is loaded only once
+    across the entire FastAPI session.  The first call starts the worker
+    (~5–15 s while weights download/load); all subsequent calls are fast.
+
+    Returns the absolute path to the output ``.webm`` file (VP9 + alpha
+    transparency, playable directly in modern browsers).
+
+    Parameters
+    ----------
+    video_path : str
+        Absolute path to the source video file.
+    output_path : str, optional
+        Destination ``.webm`` path.  If omitted a temp file is created.
+    backbone : str
+        ``"mobilenetv3"`` (14 MB, fast, default) or ``"resnet50"`` (~67 MB).
+    device : str
+        ``"auto"``, ``"cuda"``, or ``"cpu"``.
+    downsample_ratio : float
+        Inference resolution fraction (default 0.25).
+    log_cb : callable, optional
+        Receives progress log strings during inference.
+    """
+    from services.vid_bckgrnd_removal_ai_service.serverless import (
+        remove_video_background_persistent,
+    )
+
+    src = Path(video_path)
+    if not src.is_file():
+        raise ValueError(f"Video not found: {src}")
+
+    result = remove_video_background_persistent(
+        src,
+        output_path,
+        backbone=backbone,
+        device=device,
+        downsample_ratio=downsample_ratio,
+        log_cb=log_cb,
+    )
+    out = str(result.get("url") or "").strip()
+    if not out or not Path(out).is_file():
+        raise RuntimeError(
+            f"Video background removal produced no output file (url={out!r})."
+        )
+    return out
+
+
 def composite_image_on_gaussian_noise_to_temp(local_image_path: str) -> str:
     """
     Build RGB image: Gaussian noise plate (same size as image) with the image composited on top.
