@@ -627,6 +627,9 @@ def _launch_main_background(
         cmd.append("--cache-none")
     # Async weight offloading is unstable with legacy ModelPatcher (PyTorch < 2.8).
     cmd.append("--disable-async-offload")
+    # Offload models to CPU between pipeline stages to prevent OOM on 24 GB cards
+    # when loading the BF16→FP8 diffusion model alongside the 7.9 GB text encoder.
+    cmd.append("--medvram")
     if log_cb:
         log_cb("$ " + " ".join(cmd))
     popen_env = os.environ.copy()
