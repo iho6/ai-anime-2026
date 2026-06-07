@@ -41,7 +41,10 @@ def list_motion_ref_keys() -> list[str]:
     if not root.exists():
         return []
     return sorted(
-        [p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith("_")],
+        [
+            p.name for p in root.iterdir()
+            if p.is_dir() and not p.name.startswith("_") and (p / "manifest.json").is_file()
+        ],
         key=lambda s: s.lower(),
     )
 

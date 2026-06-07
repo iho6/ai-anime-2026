@@ -343,7 +343,10 @@ export function MotionRefGenModal(props: {
         justifyContent: "center",
         zIndex: 1100,
       }}
-      onClick={onClose}
+      onClick={() => {
+        if (motionCtxMenu) { setMotionCtxMenu(null); return; }
+        onClose();
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -554,6 +557,7 @@ export function MotionRefGenModal(props: {
             zIndex: 1200,
             minWidth: 120,
           }}
+          onClick={(e) => e.stopPropagation()}
           onMouseLeave={() => setMotionCtxMenu(null)}
         >
           <button

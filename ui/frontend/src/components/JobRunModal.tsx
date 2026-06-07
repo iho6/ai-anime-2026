@@ -44,6 +44,7 @@ export function JobRunModal(props: {
         // Not closable while running (Option A). Backdrop does nothing.
         e.preventDefault();
       }}
+      onClick={(e) => e.stopPropagation()}
     >
       <div
         data-native-clipboard-shortcuts
