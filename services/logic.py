@@ -763,6 +763,13 @@ def run_startup_setup_and_launch(
             log_cb=log_cb,
         )
 
+    # Install cmake (required to build kimodo's MotionCorrection C extension).
+    _run_command_logged(
+        ["apt-get", "install", "-y", "cmake"],
+        cwd=_REPO_ROOT,
+        log_cb=log_cb,
+    )
+
     # Install kimodo (nv-tlabs/kimodo) if not already present — clone then editable-install.
     kimodo_dir = _REPO_ROOT / "kimodo"
     if not (kimodo_dir / "setup.py").is_file() and not (kimodo_dir / "pyproject.toml").is_file():
@@ -774,17 +781,15 @@ def run_startup_setup_and_launch(
             log_cb=log_cb,
         )
     try:
+        import motion_correction  # noqa: F401 — C extension built by kimodo setup
         import kimodo  # noqa: F401
     except ImportError:
         if log_cb:
-            log_cb("Installing kimodo (editable)…")
-        kimodo_env = os.environ.copy()
-        kimodo_env["SKIP_MOTION_CORRECTION_IN_SETUP"] = "1"
+            log_cb("Installing kimodo (editable, with MotionCorrection C extension)…")
         _run_command_logged(
             [sys.executable, "-m", "pip", "install", "-e", str(kimodo_dir)],
             cwd=_REPO_ROOT,
             log_cb=log_cb,
-            env=kimodo_env,
         )
 
     # Install required Comfy custom nodes after deps are ready, before model downloads.
