@@ -82,7 +82,7 @@ def motion_ref_joints(motion_key: str) -> FileResponse:
     return FileResponse(
         str(gz),
         media_type="application/gzip",
-        headers={"Content-Encoding": "gzip", "Cache-Control": "no-cache"},
+        headers={"Cache-Control": "no-cache"},
     )
 
 
