@@ -1,6 +1,6 @@
-# Flux2 text-to-image (reference gen) service
+# Qwen-Image 2512 text-to-image (reference gen) service
 
-Text-to-image using [`workflows/image_flux2_t2i_api.json`](workflows/image_flux2_t2i_api.json) (Flux2 dev UNet + Mistral-Small Flux2 CLIP + Flux2 VAE, optional Turbo LoRA).
+Text-to-image using [`workflows/image_qwen_t2i_api.json`](workflows/image_qwen_t2i_api.json) (Qwen-Image 2512 UNet + Qwen2.5-VL CLIP + Qwen-Image VAE). The text encoder and VAE are the **same files** already downloaded for the Qwen image-edit services, so only the base diffusion model is a new download.
 
 ## Job input
 
@@ -8,10 +8,10 @@ Text-to-image using [`workflows/image_flux2_t2i_api.json`](workflows/image_flux2
 - **`width`** (int, optional): output width (default `1024`).
 - **`height`** (int, optional): output height (default `1024`).
 
-All other inputs (seed, steps, guidance, sampler, models, LoRA) are defaulted by
-the workflow. The seed is randomized on every run. Width/height are applied to
-**both** the latent (`98:47` `EmptyFlux2LatentImage`) and the scheduler
-(`98:48` `Flux2Scheduler`) nodes, which must match.
+All other inputs (seed, steps, cfg, sampler, models) are defaulted by the
+workflow. The seed is randomized on every run (KSampler node `8`). Width/height
+are applied to the single latent node (`7` `EmptySD3LatentImage`); the KSampler
+infers its dimensions from the latent.
 
 ### Response
 
@@ -33,9 +33,11 @@ the workflow. The seed is randomized on every run. Width/height are applied to
 
 ## Models
 
-Weights expected by the workflow: `flux2_dev_fp8mixed.safetensors` (UNet),
-`mistral_3_small_flux2_bf16.safetensors` (CLIP, type `flux2`),
-`flux2-vae.safetensors` (VAE), `Flux_2-Turbo-LoRA_comfyui.safetensors` (LoRA).
+Weights expected by the workflow: `qwen_image_2512_fp8_e4m3fn.safetensors` (UNet),
+`qwen_2.5_vl_7b_fp8_scaled.safetensors` (CLIP, type `qwen_image`),
+`qwen_image_vae.safetensors` (VAE). Download with
+`python utils/download_models.py --qwen-t2i` (the CLIP + VAE dedupe against the
+edit-service downloads).
 
 ## Local test mode
 

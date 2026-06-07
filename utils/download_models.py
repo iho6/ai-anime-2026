@@ -11,7 +11,7 @@ Usage:
     python utils/download_models.py --pose-keypoint
     python utils/download_models.py --flf-lightning [--hf-token YOUR_TOKEN]
     python utils/download_models.py --flux-fill --hf-token YOUR_TOKEN  # mask edit + outpaint
-    python utils/download_models.py --flux2-t2i  # reference t2i gen
+    python utils/download_models.py --qwen-t2i  # reference t2i gen (Qwen-Image 2512)
     python utils/download_models.py --all  # all stacks (deduplicated)
     python utils/download_models.py --all --force-redownload  # re-fetch HF weights (testing)
 """
@@ -193,28 +193,24 @@ FLUX_FILL_MODELS = [
     },
 ]
 
-# Flux.2 dev T2I — t2i_ref_gen_ai_service (image_flux2_t2i_api.json).
-# URLs from the bundled ComfyUI "Text to Image (Flux.2 Dev)" blueprint.
-FLUX2_T2I_MODELS = [
+# Qwen-Image 2512 T2I — t2i_ref_gen_ai_service (image_qwen_t2i_api.json).
+# Reuses the SAME text encoder + VAE as the Qwen image-edit services, so only the
+# base diffusion model is a new download (the shared files are deduped away).
+QWEN_T2I_MODELS = [
     {
-        "name": "flux2_dev_fp8mixed.safetensors (Diffusion Model)",
-        "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/diffusion_models/flux2_dev_fp8mixed.safetensors",
-        "path": "comfyui/models/diffusion_models/flux2_dev_fp8mixed.safetensors",
+        "name": "qwen_image_2512_fp8_e4m3fn.safetensors (Diffusion Model)",
+        "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors",
+        "path": "comfyui/models/diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors",
     },
     {
-        "name": "mistral_3_small_flux2_bf16.safetensors (Text Encoder)",
-        "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/text_encoders/mistral_3_small_flux2_bf16.safetensors",
-        "path": "comfyui/models/text_encoders/mistral_3_small_flux2_bf16.safetensors",
+        "name": "qwen_2.5_vl_7b_fp8_scaled.safetensors (Text Encoder, shared with edit services)",
+        "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "path": "comfyui/models/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
     },
     {
-        "name": "flux2-vae.safetensors (VAE)",
-        "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
-        "path": "comfyui/models/vae/flux2-vae.safetensors",
-    },
-    {
-        "name": "Flux_2-Turbo-LoRA_comfyui.safetensors (Turbo LoRA)",
-        "url": "https://huggingface.co/ByteZSzn/Flux.2-Turbo-ComfyUI/resolve/main/Flux_2-Turbo-LoRA_comfyui.safetensors",
-        "path": "comfyui/models/loras/Flux_2-Turbo-LoRA_comfyui.safetensors",
+        "name": "qwen_image_vae.safetensors (VAE, shared with edit services)",
+        "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors",
+        "path": "comfyui/models/vae/qwen_image_vae.safetensors",
     },
 ]
 
@@ -226,7 +222,7 @@ SERVICE_MODEL_MAP = {
     "pose_keypoint": POSE_KEYPOINT_MODELS,
     "flf_lightning": FLF_LIGHTNING_MODELS,
     "flux_fill": FLUX_FILL_MODELS,
-    "flux2_t2i": FLUX2_T2I_MODELS,
+    "qwen_t2i": QWEN_T2I_MODELS,
 }
 
 
@@ -436,8 +432,8 @@ def _collect_selected_models(args) -> list[dict]:
             selected_keys.append("flf_lightning")
         if args.flux_fill:
             selected_keys.append("flux_fill")
-        if args.flux2_t2i:
-            selected_keys.append("flux2_t2i")
+        if args.qwen_t2i:
+            selected_keys.append("qwen_t2i")
 
     selected_models: list[dict] = []
     for key in selected_keys:
@@ -516,7 +512,7 @@ def main():
             "  python utils/download_models.py --pose-keypoint\n"
             "  python utils/download_models.py --flf-lightning\n"
             "  python utils/download_models.py --flux-fill --hf-token hf_xxx\n"
-            "  python utils/download_models.py --flux2-t2i\n"
+            "  python utils/download_models.py --qwen-t2i\n"
             "  python utils/download_models.py --all"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -567,10 +563,13 @@ def main():
         ),
     )
     parser.add_argument(
-        "--flux2-t2i",
+        "--qwen-t2i",
         action="store_true",
-        dest="flux2_t2i",
-        help="Download Flux.2 dev T2I weights for t2i_ref_gen_ai_service (image_flux2_t2i)",
+        dest="qwen_t2i",
+        help=(
+            "Download Qwen-Image 2512 T2I weights for t2i_ref_gen_ai_service "
+            "(image_qwen_t2i; reuses the Qwen text encoder + VAE from the edit services)"
+        ),
     )
     parser.add_argument(
         "--all",
@@ -601,7 +600,7 @@ def main():
         and not args.pose_keypoint
         and not args.flf_lightning
         and not args.flux_fill
-        and not args.flux2_t2i
+        and not args.qwen_t2i
         and not args.all
     ):
         parser.print_help()

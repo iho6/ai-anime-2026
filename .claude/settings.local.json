@@ -32,7 +32,10 @@
       "Bash(grep -v \"//\\\\|imgStyle\\\\|imgBust\\\\|imgPad\\\\|image\\\\|IMG_\")",
       "Bash(Get-ChildItem -Path \"D:\\\\Animation\\\\anime2026_refactored\\\\services\" -Recurse -Directory)",
       "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(Sort-Object)"
+      "Bash(Sort-Object)",
+      "Bash(cd /d \"D:\\\\Animation\\\\anime2026_refactored\")",
+      "Bash(Get-ChildItem -Path \".\" -Directory)",
+      "Bash(Select-Object Name)"
     ]
   }
 }

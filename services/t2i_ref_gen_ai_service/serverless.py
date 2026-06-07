@@ -1,8 +1,9 @@
 """
-Flux2 text-to-image (reference gen) — RunPod serverless.
+Qwen-Image 2512 text-to-image (reference gen) — RunPod serverless.
 
 Base input is a text prompt plus image width/height; every other input
-(seed, steps, guidance, sampler, models, LoRA) is defaulted by the workflow.
+(seed, steps, cfg, sampler, models) is defaulted by the workflow. Reuses the
+Qwen text encoder + VAE already downloaded for the image-edit services.
 """
 
 from __future__ import annotations
@@ -52,11 +53,10 @@ logger.info("Loaded %s workflow(s): %s", len(workflows), list(workflows.keys()))
 
 local_servers: dict[str, str] = {}
 
-WORKFLOW_STEM = "image_flux2_t2i_api"
-POSITIVE_NODE_ID = "98:6"        # CLIPTextEncode (positive prompt)
-LATENT_NODE_ID = "98:47"         # EmptyFlux2LatentImage (width/height/batch_size)
-SCHEDULER_NODE_ID = "98:48"      # Flux2Scheduler (width/height must match latent)
-NOISE_NODE_ID = "98:25"          # RandomNoise (noise_seed)
+WORKFLOW_STEM = "image_qwen_t2i_api"
+POSITIVE_NODE_ID = "5"           # CLIPTextEncode (positive prompt)
+LATENT_NODE_ID = "7"             # EmptySD3LatentImage (width/height/batch_size)
+SAMPLER_NODE_ID = "8"            # KSampler (seed)
 
 DEFAULT_WIDTH = 1024
 DEFAULT_HEIGHT = 1024
@@ -136,35 +136,28 @@ def run_one_generation(
         )
     pos.setdefault("inputs", {})["text"] = prompt
 
-    # Width/height must be set on BOTH the latent node and the scheduler node.
+    # KSampler infers latent dims from the latent node, so width/height is set once.
     latent = w.get(LATENT_NODE_ID)
-    if not isinstance(latent, dict) or latent.get("class_type") != "EmptyFlux2LatentImage":
+    if not isinstance(latent, dict) or latent.get("class_type") != "EmptySD3LatentImage":
         raise RuntimeError(
-            f"Workflow missing EmptyFlux2LatentImage node {LATENT_NODE_ID}"
+            f"Workflow missing EmptySD3LatentImage node {LATENT_NODE_ID}"
         )
     latent.setdefault("inputs", {})["width"] = int(width)
     latent["inputs"]["height"] = int(height)
 
-    sched = w.get(SCHEDULER_NODE_ID)
-    if not isinstance(sched, dict) or sched.get("class_type") != "Flux2Scheduler":
-        raise RuntimeError(
-            f"Workflow missing Flux2Scheduler node {SCHEDULER_NODE_ID}"
-        )
-    sched.setdefault("inputs", {})["width"] = int(width)
-    sched["inputs"]["height"] = int(height)
-
-    noise = w.get(NOISE_NODE_ID)
-    if isinstance(noise, dict) and noise.get("class_type") == "RandomNoise":
-        noise.setdefault("inputs", {})["noise_seed"] = secrets.randbelow(2**63)
+    seed = secrets.randbelow(2**63)
+    sampler = w.get(SAMPLER_NODE_ID)
+    if isinstance(sampler, dict) and sampler.get("class_type") == "KSampler":
+        sampler.setdefault("inputs", {})["seed"] = seed
     else:
         for _nid, node in w.items():
-            if isinstance(node, dict) and node.get("class_type") == "RandomNoise":
-                node.setdefault("inputs", {})["noise_seed"] = secrets.randbelow(2**63)
+            if isinstance(node, dict) and node.get("class_type") == "KSampler":
+                node.setdefault("inputs", {})["seed"] = seed
 
     return task_queue(w, server_address)
 
 
-def run_flux2_t2i_job(
+def run_qwen_t2i_job(
     task: dict,
     *,
     workflows: dict,
@@ -285,7 +278,7 @@ def handler(job_input: dict[str, Any]) -> dict[str, Any]:
             return response
 
         addr = local_servers.get("default", "127.0.0.1:8188")
-        body = run_flux2_t2i_job(
+        body = run_qwen_t2i_job(
             task,
             workflows=workflows,
             server_address=addr,
@@ -310,7 +303,7 @@ def handler(job_input: dict[str, Any]) -> dict[str, Any]:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Flux2 text-to-image (reference gen)")
+    parser = argparse.ArgumentParser(description="Qwen-Image 2512 text-to-image (reference gen)")
     parser.add_argument("--test-mode", action="store_true")
     parser.add_argument("--enable-default", action="store_true")
     parser.add_argument("--default-port", type=int, default=8188)

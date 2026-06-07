@@ -4,7 +4,7 @@ Global reference library storage under ``storage/references/``.
 Unlike characters/locations/shots, the reference library is a single global
 store shared across the whole app. It holds two ordered collections:
 
-* **images** — generic reference images (e.g. Flux2 text-to-image generations).
+* **images** — generic reference images (e.g. Qwen-Image text-to-image generations).
 * **keypoints** — (original-image, skeleton) pairs produced by the SD pose
   service. This collection is shared with the per-character pose picker so every
   character can pick from the same skeleton references.

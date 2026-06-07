@@ -982,7 +982,7 @@ def decode_mask_png_to_temp_file(mask_png_base64: str | None) -> str | None:
     return str(dest)
 
 
-def run_flux2_t2i(
+def run_qwen_t2i(
     *,
     prompt_text: str,
     width: int = 1024,
@@ -990,10 +990,10 @@ def run_flux2_t2i(
     log_cb: Callable[[str], None] | None = None,
 ) -> str:
     """
-    Generate a Flux2 text-to-image via the t2i_ref_gen service (test-mode).
+    Generate a Qwen-Image 2512 text-to-image via the t2i_ref_gen service (test-mode).
 
     Accepts a text prompt plus output width/height; all other inputs (seed,
-    steps, guidance, sampler, models) are defaulted by the workflow. Returns the
+    steps, cfg, sampler, models) are defaulted by the workflow. Returns the
     first output image reference (URL when S3 is configured, else a local path).
     """
     effective = (prompt_text or "").strip()
@@ -1026,7 +1026,7 @@ def run_flux2_t2i(
             ref = r.get("url") or r.get("local_path")
             if isinstance(ref, str) and ref:
                 return ref
-    raise RuntimeError("Flux2 t2i returned no image.")
+    raise RuntimeError("Qwen t2i returned no image.")
 
 
 def run_mask_guided_edit(
@@ -7474,7 +7474,7 @@ def delete_pose_reference(char_key: str, ref_id: str) -> bool:
 
 
 def _reference_ref_to_local(ref: str, log_cb: Callable[[str], None] | None = None) -> str:
-    """Resolve a Flux2 t2i result (URL or local path) to a local absolute path."""
+    """Resolve a t2i result (URL or local path) to a local absolute path."""
     if ref and Path(ref).is_file():
         return str(Path(ref).resolve())
     if ref and (ref.startswith("http://") or ref.startswith("https://")):
@@ -7491,13 +7491,13 @@ def generate_reference_preview(
     height: int = 1024,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, str]:
-    """Generate a Flux2 t2i image and stash it in the references ``_preview`` scratch.
+    """Generate a Qwen-Image t2i image and stash it in the references ``_preview`` scratch.
 
     Returns ``{previewRelPath}`` (storage-relative, ``references/_preview/...``).
     """
     from services import reference_storage
 
-    ref = run_flux2_t2i(
+    ref = run_qwen_t2i(
         prompt_text=prompt_text, width=width, height=height, log_cb=log_cb
     )
     local = _reference_ref_to_local(ref, log_cb=log_cb)
