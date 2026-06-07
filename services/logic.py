@@ -40,12 +40,27 @@ from services.character_storage import (
     write_multi_angle_appended_stem,
     write_base_image_from_url,
 )
-from services.new_character_anime_prompt import compose_new_character_positive_prompt
-from services.preset_prompts import (
+from services import prompts
+from services.prompts import (
+    ANIME_DEFAULT_STYLE_PREFIX,
+    NEW_CHARACTER_POSITIVE_LEAD,
     POSE_KEYPOINT_CLOSEUP_PROMPT_SUFFIX,
     POSE_KEYPOINT_ONLY_ROLE_HINT,
+    DEFAULT_KEYPOINT_ONLY_POSE_PROMPT,
+    SHOT_PROMPT_PREFIX,
+    SHOT_PROMPT_SCENE_JOINER,
+    build_expression_prompt_from_label,
+    build_pose_prompt_from_label,
+    build_positive_prompt,
+    build_shot_prompt,
+    compose_new_character_positive_prompt,
+    load_catalog as _load_catalog,
 )
 from services.sequence_gallery_strip import gallery_item_from_frame_urls
+
+# Backward-compat private aliases for the keypoint-hint appenders (now centralized).
+_append_closeup_keypoint_pose_hint = prompts.append_closeup_keypoint_pose_hint
+_append_keypoint_only_pose_hint = prompts.append_keypoint_only_pose_hint
 
 COMFY_PORT = int(os.environ.get("COMFY_PORT", 8188))
 
@@ -98,19 +113,10 @@ _REQUIRED_CUSTOM_NODES: list[dict[str, str]] = [
     }
 ]
 
-POSE_PROMPTS_PATH = _SERVICES_DIR / "image_edit_ai_service" / "pose_prompts.json"
-EXPRESSION_PROMPTS_PATH = (
-    _SERVICES_DIR / "image_edit_ai_service" / "expression_prompts.json"
-)
-CAMERA_ANGLES_PATH = _SERVICES_DIR / "multi_angle_ai_service" / "camera_angles.json"
-
-
-def _load_catalog(path: Path) -> list[dict[str, Any]]:
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    if not isinstance(data, list):
-        raise ValueError(f"Catalog must be a JSON array: {path}")
-    return data
+# Prompt catalogs now live in services/prompts/ (re-exported here for back-compat).
+POSE_PROMPTS_PATH = prompts.POSE_PROMPTS_PATH
+EXPRESSION_PROMPTS_PATH = prompts.EXPRESSION_PROMPTS_PATH
+CAMERA_ANGLES_PATH = prompts.CAMERA_ANGLES_PATH
 
 
 @dataclass(frozen=True)
@@ -795,6 +801,20 @@ def run_startup_setup_and_launch(
             log_cb=log_cb,
         )
 
+    # smplx: skins the kimodo SMPL-X motion into a white body mesh for the viewer.
+    # Requires the SMPL-X body model staged at $SMPLX_MODEL_DIR/smplx/SMPLX_NEUTRAL.npz
+    # (default storage/body_models/smplx/), which must be provided separately (licensed asset).
+    try:
+        import smplx  # noqa: F401
+    except ImportError:
+        if log_cb:
+            log_cb("Installing smplx (SMPL-X mesh skinning)…")
+        _run_command_logged(
+            [sys.executable, "-m", "pip", "install", "smplx>=0.1.28"],
+            cwd=_REPO_ROOT,
+            log_cb=log_cb,
+        )
+
     # Install required Comfy custom nodes after deps are ready, before model downloads.
     install_required_custom_nodes(log_cb=log_cb)
 
@@ -1144,28 +1164,6 @@ def _run_image_edit_inline_prompt_with_aux(
     if not urls:
         raise RuntimeError("Image-edit returned no image URLs.")
     return urls[0]
-
-
-# Fixed instruction prepended to every Create Shot generation. Image 1 is the
-# pristine backdrop; image 2 is the backdrop+character composite from the editor.
-SHOT_PROMPT_PREFIX = (
-    "Image 1 is the original backdrop image reference for a film shot generation "
-    "task. Image 2 is the reference for how characters should be integrated into "
-    "the backdrop, with character poses roughly cropped into the image. Edit the "
-    "character(s) into the image with seamless blending of lighting and contact "
-    "point with surrounding environment."
-)
-SHOT_PROMPT_SCENE_JOINER = (
-    " Here is a description of how the scene should be integrated: "
-)
-
-
-def build_shot_prompt(user_text: str | None) -> str:
-    """Compose the final Qwen prompt for a shot from the user's scene text."""
-    text = (user_text or "").strip()
-    if not text:
-        return SHOT_PROMPT_PREFIX
-    return SHOT_PROMPT_PREFIX + SHOT_PROMPT_SCENE_JOINER + text
 
 
 def create_shot(
@@ -3110,24 +3108,6 @@ def character_base_closeup_composite_abs_path(char_key: str) -> str | None:
     return str(p.resolve())
 
 
-def _append_closeup_keypoint_pose_hint(user_prompt: str) -> str:
-    """Append backend hint when using starting image + closeup composite + keypoint auxiliaries."""
-    u = (user_prompt or "").strip()
-    s = POSE_KEYPOINT_CLOSEUP_PROMPT_SUFFIX.strip()
-    if not u:
-        return s
-    return f"{u} {s}"
-
-
-def _append_keypoint_only_pose_hint(user_prompt: str) -> str:
-    """Append backend hint when using starting image + keypoint auxiliary only (no closeup sheet)."""
-    u = (user_prompt or "").strip()
-    s = POSE_KEYPOINT_ONLY_ROLE_HINT.strip()
-    if not u:
-        return s
-    return f"{u} {s}"
-
-
 def _image_edit_aux_keypoint_cli_args(
     character_name: str,
     keypoint_image_path: str | None,
@@ -3287,26 +3267,8 @@ def generate_pose_starting_image_from_prompt(
     return abs_path, rel
 
 
-# --- Prompt formatting helpers ---
-# These convert short checklist descriptions (what the user sees in the UI)
-# into the longer inline prompts expected by the image-edit services.
-#
-# Future step: plug in an LLM to smart-reformat/expand descriptions while keeping the
-# output consistent with the rest of the template.
-def build_expression_prompt_from_label(short_desc: str) -> str:
-    desc = (short_desc or "").strip()
-    if not desc:
-        return ""
-    return f"Edit the face to show {desc}, keep identity coherent."
-
-
-def build_pose_prompt_from_label(short_desc: str) -> str:
-    desc = (short_desc or "").strip()
-    if not desc:
-        return ""
-    return (
-        f"Edit the subject to {desc}, keep identity and clothing coherent unless impossible."
-    )
+# Prompt formatting helpers (build_expression_prompt_from_label / build_pose_prompt_from_label)
+# now live in services/prompts and are imported at the top of this module.
 
 
 def _unique_prompt_folder_key(
@@ -3321,12 +3283,6 @@ def _unique_prompt_folder_key(
         key = sanitize_for_folder(f"{base_key}_{unique_suffix(suffix_bytes)}")
     used.add(key)
     return key
-
-
-DEFAULT_KEYPOINT_ONLY_POSE_PROMPT = (
-    "Match the reference body pose and skeleton; preserve the subject's identity, proportions, "
-    "and clothing unless impossible."
-)
 
 
 def generate_pose_starting_images_from_prompts(

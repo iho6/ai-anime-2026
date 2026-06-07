@@ -1,6 +1,6 @@
 /**
  * Maps a continuous camera state (from the Three.js CameraWidget gizmo) to one of the
- * 96 discrete angle ids in services/multi_angle_ai_service/camera_angles.json.
+ * 96 discrete angle ids in services/prompts/camera_angles.json.
  *
  * Layout: id = distance_block*32 + elevation_block*8 + azimuth_index
  *   - azimuth_index: round(h/45) % 8  -> 0,45,...,315 buckets

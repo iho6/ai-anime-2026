@@ -9,7 +9,9 @@ Endpoints
 ─────────
 GET  /health        → {"ok": true}
 POST /generate      → generate 3D motion from text prompts; store NPZ + joints
-POST /render_frame  → matplotlib projection of one frame → PNG file
+
+Shots are captured client-side (WebGL screenshot of the live viewer), so this
+worker no longer renders frames — it is used only for generation.
 
 CLI
 ───
@@ -24,7 +26,8 @@ Environment variables
 ─────────────────────
 TEXT_ENCODER_DEVICE=cpu   (default) → text encoder runs on CPU; GPU VRAM <3 GB
 TEXT_ENCODER_DEVICE=cuda  → faster text encoding, requires ~17 GB VRAM total
-KIMODO_MODEL=kimodo-soma-rp-v1.1  (default model name)
+KIMODO_MODEL=kimodo-smplx-rp  (default model name — SMPL-X checkpoint for mesh skinning)
+SMPLX_MODEL_DIR=storage/body_models  (parent of the smplx/ body-model folder)
 """
 
 from __future__ import annotations
@@ -161,7 +164,8 @@ SOMA_BONES: list[tuple[int, int]] = [
 # ── Model cache ───────────────────────────────────────────────────────────────
 
 _MODEL_CACHE: dict[str, Any] = {}
-_DEFAULT_MODEL = os.environ.get("KIMODO_MODEL", "kimodo-soma-rp")  # resolves to latest v1.1
+# SMPL-X checkpoint so we can skin a real body mesh for the viewer. Override via KIMODO_MODEL.
+_DEFAULT_MODEL = os.environ.get("KIMODO_MODEL", "kimodo-smplx-rp")
 _DEFAULT_SERVE_PORT = 8766
 _DEFAULT_DIFFUSION_STEPS = 100
 
@@ -305,11 +309,26 @@ def generate_motion(
         f.write(joints_json)
     _log(f"Saved joints.json.gz ({joints_gz_path.stat().st_size // 1024} KB)")
 
+    # ── Skin SMPL-X mesh → mesh.f16.gz + mesh_faces.json.gz ─────────────────
+    has_mesh = False
+    vertex_count = 0
+    face_count = 0
+    try:
+        has_mesh, vertex_count, face_count = _write_mesh_stream(
+            dest, output, center_xz=(float(mean_xz[0]), float(mean_xz[1])), log=_log
+        )
+    except Exception as exc:  # best-effort — generation still succeeds without the mesh
+        logger.exception("SMPL-X skinning failed")
+        _log(f"Warning: could not skin SMPL-X mesh: {exc}")
+
     # ── Write manifest ───────────────────────────────────────────────────────
     manifest = {
         "fps": fps,
         "frame_count": T,
         "joint_count": J,
+        "has_mesh": has_mesh,
+        "vertex_count": vertex_count,
+        "face_count": face_count,
         "segments": [{"text": t, "duration": d} for t, d in zip(texts, durations)],
         "model": model_name,
     }
@@ -320,10 +339,48 @@ def generate_motion(
         "fps": fps,
         "frame_count": T,
         "joint_count": J,
+        "has_mesh": has_mesh,
+        "vertex_count": vertex_count,
+        "face_count": face_count,
         "npz_path": str(npz_path),
         "joints_gz_path": str(joints_gz_path),
         "segments": manifest["segments"],
     }
+
+
+def _write_mesh_stream(
+    dest: Path,
+    output: dict,
+    *,
+    center_xz: tuple[float, float],
+    log: Callable[[str], None],
+) -> tuple[bool, int, int]:
+    """
+    Skin the SMPL-X mesh and persist it next to the joints:
+      - ``mesh.f16.gz``        — gzipped float16 little-endian ``[T, V, 3]`` vertex stream
+      - ``mesh_faces.json.gz`` — gzipped JSON face index array ``[F][3]``
+    Returns ``(has_mesh, vertex_count, face_count)``.
+    """
+    import numpy as np
+    from services.motion_ref_gen_ai_service.smplx_skinning import skin_sequence
+
+    vertices, faces = skin_sequence(output, center_xz=center_xz)
+    vertices = np.ascontiguousarray(vertices, dtype=np.float16)  # [T, V, 3]
+    T, V, _ = vertices.shape
+    F = int(faces.shape[0])
+
+    mesh_path = dest / "mesh.f16.gz"
+    with gzip.open(str(mesh_path), "wb") as f:
+        f.write(vertices.tobytes())
+    faces_path = dest / "mesh_faces.json.gz"
+    with gzip.open(str(faces_path), "wb") as f:
+        f.write(json.dumps(faces.tolist()).encode("utf-8"))
+
+    log(
+        f"Saved mesh.f16.gz ({mesh_path.stat().st_size // 1024} KB, {T}×{V} verts) "
+        f"+ mesh_faces.json.gz ({F} faces)"
+    )
+    return True, V, F
 
 
 # ── Pose-constrained generation ───────────────────────────────────────────────
@@ -369,170 +426,10 @@ def _build_fullbody_constraint_at_frame0(
     return constraint
 
 
-# ── Frame rendering ───────────────────────────────────────────────────────────
-
-def render_frame_to_png(
-    motion_dir: Path | str,
-    frame_index: int,
-    azimuth: float,
-    elevation: float,
-    *,
-    width: int = 512,
-    height: int = 512,
-    output_path: Path | str | None = None,
-) -> str:
-    """
-    Render a single frame of the stored motion as a 2D matplotlib projection
-    from the given camera angle.  Returns the absolute path to the saved PNG.
-
-    ``azimuth`` and ``elevation`` are in degrees, matching the Three.js
-    spherical camera convention used by the frontend viewer.
-    """
-    import gzip
-    import numpy as np
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-
-    motion_dir = Path(motion_dir)
-    joints_gz = motion_dir / "joints.json.gz"
-    if not joints_gz.is_file():
-        raise FileNotFoundError(f"joints.json.gz not found in {motion_dir}")
-
-    with gzip.open(str(joints_gz), "rb") as f:
-        joints_all = json.loads(f.read().decode("utf-8"))  # [T][J][3]
-
-    T = len(joints_all)
-    if not (0 <= frame_index < T):
-        raise ValueError(f"frame_index {frame_index} out of range [0, {T})")
-
-    pts = np.array(joints_all[frame_index], dtype=np.float32)  # [J, 3]
-
-    dpi = 100
-    fig_w = width / dpi
-    fig_h = height / dpi
-    fig = plt.figure(figsize=(fig_w, fig_h), dpi=dpi, facecolor="white")
-    ax = fig.add_subplot(111, projection="3d", facecolor="white")
-
-    # KiMoD outputs Y-up coordinates. Matplotlib 3D: x,y=horizontal, z=vertical.
-    # Map: KiMoD (x,y,z) → Matplotlib (x,z,y) so the character stands upright.
-    xs, ys, zs = pts[:, 0], pts[:, 2], pts[:, 1]
-
-    # Draw bones
-    for child_i, parent_i in SOMA_BONES:
-        if child_i >= len(pts) or parent_i >= len(pts):
-            continue
-        ax.plot(
-            [xs[parent_i], xs[child_i]],
-            [ys[parent_i], ys[child_i]],
-            [zs[parent_i], zs[child_i]],
-            "b-", linewidth=1.5, alpha=0.85,
-        )
-
-    # Draw joints
-    ax.scatter(xs, ys, zs, c="red", s=12, depthshade=False, zorder=5)
-
-    # Camera: azimuth (yaw around Y axis) and elevation (pitch)
-    ax.view_init(elev=elevation, azim=azimuth)
-
-    # Equal aspect ratio trick for 3D
-    max_range = max(
-        xs.max() - xs.min(),
-        ys.max() - ys.min(),
-        zs.max() - zs.min(),
-    ) / 2
-    mid_x = (xs.max() + xs.min()) / 2
-    mid_y = (ys.max() + ys.min()) / 2
-    mid_z = (zs.max() + zs.min()) / 2
-    ax.set_xlim(mid_x - max_range, mid_x + max_range)
-    ax.set_ylim(mid_y - max_range, mid_y + max_range)
-    ax.set_zlim(mid_z - max_range, mid_z + max_range)
-
-    ax.set_axis_off()
-    fig.tight_layout(pad=0)
-
-    if output_path is None:
-        out = motion_dir / "shots" / f"frame{frame_index:05d}_az{int(azimuth)}_el{int(elevation)}.png"
-    else:
-        out = Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(str(out), dpi=dpi, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
-    return str(out)
-
-
-def render_joints_array_to_png(
-    joints_array: list[list[float]],  # [J][3] — direct joint positions, no file needed
-    azimuth: float,
-    elevation: float,
-    *,
-    width: int = 512,
-    height: int = 512,
-    output_path: Path | str | None = None,
-) -> str:
-    """
-    Render an arbitrary set of joint positions directly to a PNG.
-
-    This is the puppet-mode path: the joints come from the browser editor,
-    no stored NPZ or joints.json.gz is needed.
-
-    Returns the absolute path to the saved PNG.
-    """
-    import tempfile
-    import numpy as np
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-
-    pts = np.array(joints_array, dtype=np.float32)  # [J, 3]
-    J = len(pts)
-
-    dpi = 100
-    fig_w = width / dpi
-    fig_h = height / dpi
-    fig = plt.figure(figsize=(fig_w, fig_h), dpi=dpi, facecolor="white")
-    ax = fig.add_subplot(111, projection="3d", facecolor="white")
-
-    xs, ys, zs = pts[:, 0], pts[:, 2], pts[:, 1]  # remap Y-up → Matplotlib
-
-    for child_i, parent_i in SOMA_BONES:
-        if child_i >= J or parent_i >= J:
-            continue
-        ax.plot(
-            [xs[parent_i], xs[child_i]],
-            [ys[parent_i], ys[child_i]],
-            [zs[parent_i], zs[child_i]],
-            "b-", linewidth=1.5, alpha=0.85,
-        )
-    ax.scatter(xs, ys, zs, c="red", s=12, depthshade=False, zorder=5)
-
-    ax.view_init(elev=elevation, azim=azimuth)
-
-    if xs.max() > xs.min():
-        max_range = max(xs.max()-xs.min(), ys.max()-ys.min(), zs.max()-zs.min()) / 2
-        mid_x = (xs.max()+xs.min()) / 2
-        mid_y = (ys.max()+ys.min()) / 2
-        mid_z = (zs.max()+zs.min()) / 2
-        ax.set_xlim(mid_x-max_range, mid_x+max_range)
-        ax.set_ylim(mid_y-max_range, mid_y+max_range)
-        ax.set_zlim(mid_z-max_range, mid_z+max_range)
-
-    ax.set_axis_off()
-    fig.tight_layout(pad=0)
-
-    if output_path is None:
-        out = Path(tempfile.gettempdir()) / f"puppet_{uuid.uuid4().hex[:8]}.png"
-    else:
-        out = Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(str(out), dpi=dpi, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
-    return str(out)
-
-
 # ── Persistent HTTP worker ────────────────────────────────────────────────────
+# NOTE: server-side frame rendering was removed. Shots are now captured as a
+# WebGL screenshot of the live viewer on the client (no KiMoD worker needed),
+# which eliminated the OOM crash from spinning up the model just to draw a frame.
 
 def _make_request_handler(model_name: str) -> type:
     class _Handler(BaseHTTPRequestHandler):
@@ -583,43 +480,6 @@ def _make_request_handler(model_name: str) -> type:
                     logger.exception("Generation failed")
                     self._send_json(200, {"result": None, "error": str(exc), "logs": logs})
 
-            elif self.path == "/render_frame":
-                payload = self._read_body()
-                motion_dir = payload.get("motion_dir", "")
-                frame_index = int(payload.get("frame_index", 0))
-                azimuth = float(payload.get("azimuth", 0))
-                elevation = float(payload.get("elevation", 20))
-                width = int(payload.get("width", 512))
-                height = int(payload.get("height", 512))
-                output_path = payload.get("output_path") or None
-                try:
-                    path = render_frame_to_png(
-                        motion_dir, frame_index, azimuth, elevation,
-                        width=width, height=height, output_path=output_path,
-                    )
-                    self._send_json(200, {"url": path, "error": None})
-                except Exception as exc:
-                    logger.exception("Render frame failed")
-                    self._send_json(200, {"url": None, "error": str(exc)})
-
-            elif self.path == "/render_joints":
-                # Render raw joint positions directly — no stored NPZ needed.
-                payload = self._read_body()
-                joints = payload.get("joints") or []
-                azimuth = float(payload.get("azimuth", 0))
-                elevation = float(payload.get("elevation", 20))
-                width = int(payload.get("width", 512))
-                height = int(payload.get("height", 512))
-                output_path = payload.get("output_path") or None
-                try:
-                    path = render_joints_array_to_png(
-                        joints, azimuth, elevation,
-                        width=width, height=height, output_path=output_path,
-                    )
-                    self._send_json(200, {"url": path, "error": None})
-                except Exception as exc:
-                    logger.exception("Render joints failed")
-                    self._send_json(200, {"url": None, "error": str(exc)})
             else:
                 self.send_error(404)
 
@@ -786,52 +646,17 @@ def call_generate(
     return body["result"]
 
 
-def call_render_frame(
-    motion_dir: str,
-    frame_index: int,
-    azimuth: float,
-    elevation: float,
-    *,
-    port: int = _DEFAULT_SERVE_PORT,
-    model_name: str = _DEFAULT_MODEL,
-    width: int = 512,
-    height: int = 512,
-    output_path: str | None = None,
-) -> str:
-    """Call /render_frame on the persistent worker; return absolute PNG path."""
-    import urllib.request
-
-    base = ensure_worker(port=port, model_name=model_name)
-    payload = json.dumps({
-        "motion_dir": motion_dir,
-        "frame_index": frame_index,
-        "azimuth": azimuth,
-        "elevation": elevation,
-        "width": width,
-        "height": height,
-        "output_path": output_path,
-    }).encode()
-    req = urllib.request.Request(
-        f"{base}/render_frame", data=payload,
-        headers={"Content-Type": "application/json"}, method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        body = json.loads(resp.read().decode())
-
-    if body.get("error"):
-        raise RuntimeError(body["error"])
-    url = str(body.get("url") or "")
-    if not url or not Path(url).is_file():
-        raise RuntimeError(f"render_frame returned no file (url={url!r})")
-    return url
-
-
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Motion reference generation — KiMoD")
     mode = p.add_mutually_exclusive_group()
     mode.add_argument("--serve", action="store_true", help="Persistent HTTP worker mode.")
+    mode.add_argument(
+        "--inspect-smplx",
+        action="store_true",
+        help="Diagnostic: run a tiny generation and dump the model/output schema (for wiring SMPL-X skinning).",
+    )
     p.add_argument("--serve-port", type=int, default=_DEFAULT_SERVE_PORT)
     p.add_argument("--model", type=str, default=_DEFAULT_MODEL)
     p.add_argument("--diffusion-steps", type=int, default=_DEFAULT_DIFFUSION_STEPS)
@@ -847,6 +672,10 @@ def main() -> None:
 
     if args.serve:
         serve_forever(port=args.serve_port, model_name=args.model)
+        return
+
+    if args.inspect_smplx:
+        _inspect_smplx(model_name=args.model, prompt=args.prompt or "a person walks forward")
         return
 
     # One-shot mode
@@ -869,6 +698,56 @@ def main() -> None:
         logger.exception("One-shot generation failed")
         print(json.dumps({"result": None, "error": str(exc)}))
         sys.exit(1)
+
+
+def _inspect_smplx(model_name: str, prompt: str) -> None:
+    """
+    Diagnostic helper: load the (SMPL-X) model, run a short generation, and print the
+    structure of the model + output so the skinning adapter can be confirmed/adjusted.
+    Run in the container where kimodo + the checkpoint are available.
+    """
+    import numpy as np
+
+    def _describe(v: Any) -> str:
+        if hasattr(v, "shape"):
+            return f"{type(v).__name__} shape={tuple(v.shape)} dtype={getattr(v, 'dtype', '?')}"
+        if isinstance(v, (list, tuple)):
+            return f"{type(v).__name__} len={len(v)}"
+        return type(v).__name__
+
+    model = _load_kimodo_model(model_name)
+    print("=== MODEL ===")
+    print("type:", type(model).__name__)
+    print("public attrs:", [a for a in dir(model) if not a.startswith("_")])
+    for cand in ("skeleton", "body_model", "smplx", "faces"):
+        if hasattr(model, cand):
+            print(f"model.{cand}:", _describe(getattr(model, cand)))
+    skel = getattr(model, "skeleton", None)
+    if skel is not None:
+        print("skeleton type:", type(skel).__name__)
+        print("skeleton public attrs:", [a for a in dir(skel) if not a.startswith("_")])
+
+    out: dict = model(
+        prompts=prompt,
+        num_frames=10,
+        num_denoising_steps=10,
+        multi_prompt=False,
+        num_samples=1,
+        return_numpy=True,
+        post_processing=True,
+    )
+    print("\n=== OUTPUT ===")
+    print("keys:", sorted(out.keys()))
+    for k in sorted(out.keys()):
+        print(f"  {k}: {_describe(out[k])}")
+
+    print("\n=== SKIN ATTEMPT ===")
+    try:
+        from services.motion_ref_gen_ai_service.smplx_skinning import skin_sequence
+        verts, faces = skin_sequence(out)
+        print("OK vertices:", _describe(np.asarray(verts)), "faces:", _describe(np.asarray(faces)))
+    except Exception as exc:
+        print("skin_sequence error:", exc)
 
 
 if __name__ == "__main__":

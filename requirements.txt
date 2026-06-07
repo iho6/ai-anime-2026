@@ -37,6 +37,7 @@ scikit-image
 transparent-background
 
 #non essential dependencies:
+smplx>=0.1.28
 kornia>=0.7.1
 spandrel
 pydantic~=2.0

@@ -22,11 +22,10 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
+from services import prompts
 from services.constant import LOCAL_INPUT_DIR, TIMEOUT
 from services.multi_angle_ai_service import angle_library
-from services.multi_angle_ai_service.serverless import (
-    append_default_multi_angle_background_instruction,
-)
+from services.prompts import append_default_multi_angle_background_instruction
 from services.utils import (
     fetch_comfy_history,
     task_queue,
@@ -40,7 +39,7 @@ def _load_workflow_and_angles(service_dir: str):
     api_path = os.path.join(
         workflows_dir, "comfyui-workflow-multiple-angles_api.json"
     )
-    angles_path = os.path.join(service_dir, "camera_angles.json")
+    angles_path = str(prompts.CAMERA_ANGLES_PATH)
 
     if not os.path.isfile(api_path):
         print(f"Missing API workflow: {api_path}", file=sys.stderr)

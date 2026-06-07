@@ -28,7 +28,11 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(gh api *)",
       "Bash(mkdir -p /d/Animation/anime2026_refactored/services/vid_bckgrnd_removal_ai_service)",
-      "Bash(python -m py_compile services/logic.py services/vid_bckgrnd_removal_ai_service/serverless.py)"
+      "Bash(python -m py_compile services/logic.py services/vid_bckgrnd_removal_ai_service/serverless.py)",
+      "Bash(grep -v \"//\\\\|imgStyle\\\\|imgBust\\\\|imgPad\\\\|image\\\\|IMG_\")",
+      "Bash(Get-ChildItem -Path \"D:\\\\Animation\\\\anime2026_refactored\\\\services\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)"
     ]
   }
 }

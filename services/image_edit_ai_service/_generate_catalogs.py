@@ -2,7 +2,10 @@
 import json
 import os
 
-base = os.path.dirname(os.path.abspath(__file__))
+# Catalogs now live in services/prompts/ (one folder up, then into prompts).
+base = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "prompts"
+)
 
 pose_templates = [
     "standing upright with arms relaxed at sides",

@@ -7,9 +7,9 @@ import React, {
   useState,
 } from "react";
 import {
-  apiMotionRefRenderFrame,
-  apiMotionRefRenderJoints,
-  apiMotionRefJoints,
+  apiMotionRefSaveShotImage,
+  apiMotionRefMesh,
+  apiMotionRefMeshFaces,
   apiMotionRefList,
   apiMotionRefDelete,
   apiUploadStaging,
@@ -51,6 +51,7 @@ export function MotionRefGenModal(props: {
     endSession,
     failSession,
     pushLog,
+    resetSession,
     modalProps: jobModalProps,
   } = useJobRunSession(logRef);
 
@@ -58,9 +59,13 @@ export function MotionRefGenModal(props: {
 
   // ── Motion data ────────────────────────────────────────────────────────────
   const [segments, setSegments] = useState<MotionRefSegment[]>(DEFAULT_SEGMENTS);
-  const [diffusionSteps, setDiffusionSteps] = useState(100);
   const [manifest, setManifest] = useState<MotionRefManifest | null>(null);
-  const [joints3d, setJoints3d] = useState<number[][][] | null>(null);
+  // SMPL-X mesh stream: flat float32 vertices for all frames + dims for slicing.
+  const [meshData, setMeshData] = useState<{
+    frames: Float32Array;
+    vertexCount: number;
+    frameCount: number;
+  } | null>(null);
 
   // ── Motion gallery (persisted motions) ────────────────────────────────────
   const [motions, setMotions] = useState<MotionRefListItem[]>([]);
@@ -83,7 +88,7 @@ export function MotionRefGenModal(props: {
     distance: 3,
   });
 
-  const totalFrames = joints3d?.length ?? 0;
+  const totalFrames = meshData?.frameCount ?? 0;
 
   // ── Load saved motions on open ─────────────────────────────────────────────
   useEffect(() => {
@@ -93,7 +98,7 @@ export function MotionRefGenModal(props: {
 
   // ── Playback engine ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!playing || !joints3d || joints3d.length === 0) {
+    if (!playing || !meshData || meshData.frameCount === 0) {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
       anchorRef.current = null;
@@ -106,7 +111,7 @@ export function MotionRefGenModal(props: {
       if (!a) return;
       const elapsed = (performance.now() - a.wall) / 1000;
       const nextHead = a.head + elapsed * a.fps;
-      const clamped = Math.floor(nextHead) % joints3d.length;
+      const clamped = Math.floor(nextHead) % meshData.frameCount;
       setFrameIndex(clamped);
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -117,17 +122,67 @@ export function MotionRefGenModal(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing]);
 
+  // Push the current frame's vertices into the mesh viewer.
   useEffect(() => {
-    if (!joints3d || !joints3d[frameIndex]) return;
-    skeletonRef.current?.setFrame(joints3d[frameIndex]);
-  }, [frameIndex, joints3d]);
+    if (!meshData) return;
+    const stride = meshData.vertexCount * 3;
+    const start = frameIndex * stride;
+    if (start + stride > meshData.frames.length) return;
+    skeletonRef.current?.setFrame(meshData.frames.subarray(start, start + stride));
+  }, [frameIndex, meshData]);
 
   useEffect(() => {
     if (!open) {
       setPlaying(false);
       setFrameIndex(0);
+      // Hard-reset the job session so a finished/stale loading window does not
+      // reappear when the modal is reopened (the hook instance persists).
+      resetSession();
     }
-  }, [open]);
+  }, [open, resetSession]);
+
+  // Fetch the SMPL-X mesh stream for a motion, push faces into the viewer, and
+  // return the decoded frame buffer (flat float32 vertices for all frames).
+  async function loadMeshForMotion(
+    motionKey: string,
+    vertexCount: number,
+  ): Promise<{ frames: Float32Array; vertexCount: number; frameCount: number }> {
+    // Static faces → index buffer (once).
+    const facesBuf = await apiMotionRefMeshFaces(motionKey);
+    const facesText = await decompressGzipToText(facesBuf);
+    const faces: number[][] = JSON.parse(facesText);
+    const idx = new Uint32Array(faces.length * 3);
+    for (let i = 0; i < faces.length; i++) {
+      idx[i * 3] = faces[i][0];
+      idx[i * 3 + 1] = faces[i][1];
+      idx[i * 3 + 2] = faces[i][2];
+    }
+    skeletonRef.current?.setFaces(idx);
+
+    // float16 [T,V,3] vertex stream → Float32Array.
+    const meshBuf = await apiMotionRefMesh(motionKey);
+    const bytes = await decompressGzipToBytes(meshBuf);
+    const u16 = new Uint16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.byteLength / 2));
+    const frames = new Float32Array(u16.length);
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (let i = 0; i < u16.length; i++) {
+      const v = halfToFloat(u16[i]);
+      frames[i] = v;
+      if (i % 3 === 1) {
+        if (v < minY) minY = v;
+        if (v > maxY) maxY = v;
+      }
+    }
+    // Fix the ground + camera framing once for the whole motion (stable, no bobbing).
+    if (Number.isFinite(minY) && Number.isFinite(maxY)) {
+      skeletonRef.current?.setFraming(minY, (minY + maxY) / 2);
+    }
+
+    const stride = vertexCount * 3;
+    const frameCount = stride > 0 ? Math.floor(frames.length / stride) : 0;
+    return { frames, vertexCount, frameCount };
+  }
 
   // ── Generation (fresh — no starting pose conditioning) ────────────────────
   async function runGenerate() {
@@ -137,7 +192,7 @@ export function MotionRefGenModal(props: {
     }
     setPlaying(false);
     setManifest(null);
-    setJoints3d(null);
+    setMeshData(null);
     setFrameIndex(0);
     skeletonRef.current?.resetAll();
 
@@ -149,7 +204,6 @@ export function MotionRefGenModal(props: {
       const done = await runMotionRefGenerateWsJob({
         motionName: segments[0].text.trim().slice(0, 40) || "motion",
         segments: segments.filter((s) => s.text.trim()),
-        diffusionSteps,
         onLogLine: (line) => pushLog(line),
       });
 
@@ -159,25 +213,26 @@ export function MotionRefGenModal(props: {
 
       const mf = done.result;
       setManifest(mf);
-
-      pushLog("Loading joint data…");
-      const buf = await apiMotionRefJoints(mf.motionKey);
-      const text = await decompressGzip(buf);
-      const j3d: number[][][] = JSON.parse(text);
-      setJoints3d(j3d);
-      setFrameIndex(0);
-      if (j3d.length > 0 && skeletonRef.current) {
-        skeletonRef.current.setFrame(j3d[0]);
+      if (!mf.hasMesh) {
+        throw new Error("Generation produced no SMPL-X mesh (check the worker's smplx setup / assets).");
       }
-      pushLog(`Ready — ${j3d.length} frames @ ${mf.fps} fps.`);
+
+      pushLog("Loading mesh…");
+      const md = await loadMeshForMotion(mf.motionKey, mf.vertexCount ?? 0);
+      setMeshData(md);
+      setFrameIndex(0);
+      pushLog(`Ready — ${md.frameCount} frames @ ${mf.fps} fps.`);
       endSession();
 
       // Add to motion gallery list (prepend).
       const newEntry: MotionRefListItem = {
         motionKey: mf.motionKey,
         fps: mf.fps,
-        frameCount: j3d.length,
-        jointCount: 77,
+        frameCount: md.frameCount,
+        jointCount: mf.jointCount,
+        hasMesh: true,
+        vertexCount: mf.vertexCount,
+        faceCount: mf.faceCount,
         thumbnailRelPath: "",
         segments: mf.segments ?? segments.filter((s) => s.text.trim()),
       };
@@ -190,18 +245,28 @@ export function MotionRefGenModal(props: {
   // ── Load a saved motion into the viewer ───────────────────────────────────
   async function loadMotion(item: MotionRefListItem) {
     if (busy) return;
+    if (!item.hasMesh) {
+      showError({ message: "This motion has no SMPL-X mesh — regenerate it." });
+      return;
+    }
     setPlaying(false);
-    setManifest({ motionKey: item.motionKey, fps: item.fps, frameCount: item.frameCount, segments: item.segments ?? [] });
+    setManifest({
+      motionKey: item.motionKey,
+      fps: item.fps,
+      frameCount: item.frameCount,
+      jointCount: item.jointCount,
+      hasMesh: item.hasMesh,
+      vertexCount: item.vertexCount,
+      faceCount: item.faceCount,
+      segments: item.segments ?? [],
+    });
     beginSession({ title: "Loading motion…", clearLog: false });
     await Promise.resolve();
     try {
-      const buf = await apiMotionRefJoints(item.motionKey);
-      const text = await decompressGzip(buf);
-      const j3d: number[][][] = JSON.parse(text);
-      setJoints3d(j3d);
+      const md = await loadMeshForMotion(item.motionKey, item.vertexCount ?? 0);
+      setMeshData(md);
       setFrameIndex(0);
-      if (j3d.length > 0 && skeletonRef.current) skeletonRef.current.setFrame(j3d[0]);
-      pushLog(`Loaded — ${j3d.length} frames @ ${item.fps} fps.`);
+      pushLog(`Loaded — ${md.frameCount} frames @ ${item.fps} fps.`);
       endSession();
     } catch (e) {
       failSession(e, "Could not load motion.");
@@ -216,7 +281,7 @@ export function MotionRefGenModal(props: {
       setMotions((prev) => prev.filter((m) => m.motionKey !== motionKey));
       if (manifest?.motionKey === motionKey) {
         setManifest(null);
-        setJoints3d(null);
+        setMeshData(null);
         setFrameIndex(0);
         skeletonRef.current?.resetAll();
       }
@@ -226,59 +291,48 @@ export function MotionRefGenModal(props: {
   }
 
   // ── Save shot → unified keypoint pose gallery ─────────────────────────────
-  // Both paths (motion frame render and puppet canvas capture) run ControlNet
-  // and deliver the result via onKeypointsMade.
+  // Captures a WebGL screenshot of the live viewer (puppet pose or the current
+  // playback frame) and runs SDpose/ControlNet on it — no server-side render,
+  // so the heavy KiMoD worker is never involved in the shot path. When a motion
+  // is loaded, the screenshot is also persisted as the gallery thumbnail.
   async function saveShot() {
-    const cam = skeletonRef.current?.getCameraState() ?? cameraState;
-
-    if (!manifest) {
-      // Puppet canvas capture → ControlNet
-      const dataUrl = skeletonRef.current?.captureFrame();
-      if (!dataUrl) {
-        showError({ message: "Could not capture canvas. Try again." });
-        return;
-      }
-      const blob = await (await fetch(dataUrl)).blob();
-      const file = new File([blob], `puppet_shot.png`, { type: "image/png" });
-      beginSession({ title: "Saving puppet shot", clearLog: false });
-      await Promise.resolve();
-      pushLog("Uploading canvas capture…");
-      try {
-        const { relPath } = await apiUploadStaging({ charKey, file });
-        pushLog("Running ControlNet pose detection…");
-        const done = await runReferenceMakeKeypointWsJob({
-          imageRelPath: relPath,
-          onLogLine: (line) => pushLog(line),
-        });
-        if (!done.ok || !done.result?.item) {
-          throw new Error(done.error || "Keypoint detection returned no result.");
-        }
-        onKeypointsMade?.(done.result.item);
-        pushLog("Shot saved to pose gallery.");
-        endSession();
-      } catch (e) {
-        failSession(e, "Could not save puppet shot.");
-      }
+    const dataUrl = skeletonRef.current?.captureFrame();
+    if (!dataUrl) {
+      showError({ message: "Could not capture the viewer. Try again." });
       return;
     }
+    const blob = await (await fetch(dataUrl)).blob();
+    const file = new File([blob], "motion_shot.png", { type: "image/png" });
 
-    // Motion frame → render → ControlNet
     beginSession({ title: "Saving shot", clearLog: false });
     await Promise.resolve();
-    pushLog(`Rendering frame ${frameIndex} at az=${cam.azimuth.toFixed(0)}°…`);
+    pushLog("Capturing viewer…");
     try {
-      const { shotRelPath } = await apiMotionRefRenderFrame({
-        motionKey: manifest.motionKey,
-        frameIndex,
-        azimuth: cam.azimuth,
-        elevation: cam.elevation,
-        width: 512,
-        height: 512,
-        shotName: `shot_f${frameIndex}_${Date.now()}`,
-      });
-      pushLog("Running ControlNet pose detection…");
+      // Persist the screenshot as the motion thumbnail (pure file write, no worker).
+      if (manifest) {
+        try {
+          const { shotRelPath } = await apiMotionRefSaveShotImage({
+            motionKey: manifest.motionKey,
+            pngBase64: dataUrl,
+            shotName: `shot_f${frameIndex}_${Date.now()}`,
+          });
+          setMotions((prev) =>
+            prev.map((m) =>
+              m.motionKey === manifest.motionKey
+                ? { ...m, thumbnailRelPath: shotRelPath }
+                : m
+            )
+          );
+        } catch {
+          /* thumbnail is best-effort — don't fail the shot over it */
+        }
+      }
+
+      pushLog("Uploading capture…");
+      const { relPath } = await apiUploadStaging({ charKey, file });
+      pushLog("Running SDpose keypoint detection…");
       const done = await runReferenceMakeKeypointWsJob({
-        imageRelPath: shotRelPath,
+        imageRelPath: relPath,
         onLogLine: (line) => pushLog(line),
       });
       if (!done.ok || !done.result?.item) {
@@ -289,36 +343,6 @@ export function MotionRefGenModal(props: {
       endSession();
     } catch (e) {
       failSession(e, "Could not save shot.");
-    }
-  }
-
-  // ── Save puppet pose (GPU-free matplotlib render) ─────────────────────────
-  async function savePuppetPose() {
-    const sk = skeletonRef.current;
-    if (!sk) return;
-    const joints = sk.getJoints();
-    const cam = sk.getCameraState();
-    beginSession({ title: "Saving puppet pose", clearLog: false });
-    await Promise.resolve();
-    pushLog("Rendering skeleton pose (no GPU needed)…");
-    try {
-      const { shotRelPath } = await apiMotionRefRenderJoints({
-        joints,
-        azimuth: cam.azimuth,
-        elevation: cam.elevation,
-        width: 512,
-        height: 512,
-      });
-      onKeypointsMade?.({
-        id: 0,
-        referenceRelPath: shotRelPath,
-        keypointRelPath: shotRelPath,
-      });
-      pushLog("Pose saved to pose gallery.");
-      endSession();
-      onBack ? onBack() : onClose();
-    } catch (e) {
-      failSession(e, "Could not save puppet pose.");
     }
   }
 
@@ -388,7 +412,7 @@ export function MotionRefGenModal(props: {
                 ← Back
               </button>
             )}
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Motion Ref Gen</span>
+            <span style={{ fontSize: 14 }}>Motion Ref Gen</span>
           </div>
           <button
             type="button"
@@ -399,27 +423,15 @@ export function MotionRefGenModal(props: {
           </button>
         </div>
 
-        {/* Top: viewer + timeline */}
-        <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-          {/* 3D viewer */}
-          <div style={{ padding: 12, borderRight: "1px solid rgba(255,255,255,0.1)", flexShrink: 0 }}>
-            <SkeletonViewer3D
-              ref={skeletonRef}
-              width={380}
-              height={290}
-              onCameraChange={(s) => setCameraState(s)}
-            />
-            <div style={{ fontSize: 10, color: "#555", marginTop: 4, textAlign: "center" }}>
-              Click joint to select · Drag joint to move · Drag empty area to orbit · Scroll to zoom
-            </div>
-          </div>
-
-          {/* Motion timeline */}
-          <div style={{ flex: 1, padding: 12, overflow: "auto" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", marginBottom: 8 }}>
-              Motion segments
-            </div>
-            <MotionTimeline segments={segments} onChange={setSegments} disabled={busy} />
+        {/* 3D viewer (resizable, fills width on open) */}
+        <div style={{ padding: 12, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+          <SkeletonViewer3D
+            ref={skeletonRef}
+            height={320}
+            onCameraChange={(s) => setCameraState(s)}
+          />
+          <div style={{ fontSize: 10, color: "#555", marginTop: 4 }}>
+            Drag to orbit · Scroll to zoom · Drag corner to resize
           </div>
         </div>
 
@@ -438,62 +450,43 @@ export function MotionRefGenModal(props: {
           />
         </div>
 
-        {/* Puppet actions */}
-        <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)", flexWrap: "wrap" }}>
-          <button
-            type="button" onClick={() => void savePuppetPose()} disabled={busy}
-            title="Save current puppet pose as a keypoint reference — no GPU required"
-            style={{ ...actionBtn, background: "rgba(100,220,100,0.12)", fontWeight: 600 }}
-          >
-            Save Pose
-          </button>
-          <button
-            type="button" onClick={() => skeletonRef.current?.resetAll()} disabled={busy}
-            title="Reset pose and camera to defaults" style={actionBtn}
-          >
-            Reset
-          </button>
-          <span style={{ fontSize: 10, color: "#555", marginLeft: 4 }}>Drag joints to pose · no GPU required</span>
+        {/* Motion segments */}
+        <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+          <MotionTimeline segments={segments} onChange={setSegments} disabled={busy} />
         </div>
 
-        {/* Generation + Save Shot row */}
+        {/* Actions: Generate · Reset · Save Shot (one row) */}
         <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 16px", flexWrap: "wrap", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
           <button
             type="button" onClick={() => void runGenerate()} disabled={busy}
             title="Generate a fresh KiMoD motion sequence from the text segments"
-            style={{ ...actionBtn, fontWeight: 600 }}
+            style={actionBtn}
           >
             Generate
           </button>
-          <label style={{ fontSize: 11, color: "#aaa", display: "flex", alignItems: "center", gap: 4 }}>
-            Diffusion steps
-            <input
-              type="number" min={10} max={500} step={10} value={diffusionSteps}
-              onChange={(e) => setDiffusionSteps(Math.max(10, Number(e.target.value) || 100))}
-              disabled={busy}
-              style={{ width: 64, padding: "3px 6px", background: "#222", color: "#eee", border: "1px solid rgba(255,255,255,0.2)", font: "inherit", fontSize: 12 }}
-            />
-          </label>
-          <div style={{ flex: 1 }} />
+          <button
+            type="button" onClick={() => skeletonRef.current?.resetAll()} disabled={busy}
+            title="Reset the camera to defaults" style={actionBtn}
+          >
+            Reset
+          </button>
           <button
             type="button" onClick={() => void saveShot()} disabled={busy}
-            title={manifest
-              ? `Save frame ${frameIndex} at current camera angle → ControlNet → pose gallery`
-              : "Capture puppet canvas → ControlNet → pose gallery (needs GPU)"}
+            title="Capture the viewer → SDpose keypoints → pose gallery"
             style={{ ...actionBtn, background: "rgba(255,209,102,0.15)" }}
           >
-            {manifest ? `Save Shot  (f${frameIndex} · Az ${cameraState.azimuth.toFixed(0)}°)` : "Save Shot  (puppet)"}
+            {manifest ? `Save Shot  (f${frameIndex} · Az ${cameraState.azimuth.toFixed(0)}°)` : "Save Shot"}
           </button>
         </div>
 
-        {/* Motion Gallery */}
+        {/* Animations gallery */}
         <div style={{ padding: "10px 16px" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#aaa", marginBottom: 8 }}>
-            Motion Gallery
+          <div style={{ fontSize: 11, color: "#aaa", marginBottom: 8 }}>
+            Animations
           </div>
           {motions.length === 0 ? (
             <div style={{ fontSize: 12, color: "#555", padding: "12px 0" }}>
-              No saved motions — generate one above.
+              No saved animations — generate one above.
             </div>
           ) : (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -588,7 +581,7 @@ export function MotionRefGenModal(props: {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function decompressGzip(buf: ArrayBuffer): Promise<string> {
+async function decompressGzipToBytes(buf: ArrayBuffer): Promise<Uint8Array> {
   if (typeof DecompressionStream !== "undefined") {
     const ds = new DecompressionStream("gzip");
     const writer = ds.writable.getWriter();
@@ -605,9 +598,29 @@ async function decompressGzip(buf: ArrayBuffer): Promise<string> {
     const out = new Uint8Array(total);
     let offset = 0;
     for (const c of chunks) { out.set(c, offset); offset += c.length; }
-    return new TextDecoder().decode(out);
+    return out;
   }
-  return new TextDecoder().decode(buf);
+  return new Uint8Array(buf);
+}
+
+async function decompressGzipToText(buf: ArrayBuffer): Promise<string> {
+  return new TextDecoder().decode(await decompressGzipToBytes(buf));
+}
+
+/** Decode an IEEE-754 half-precision (float16) bit pattern to a JS number. */
+function halfToFloat(h: number): number {
+  const sign = (h & 0x8000) >> 15;
+  const exp = (h & 0x7c00) >> 10;
+  const frac = h & 0x03ff;
+  let val: number;
+  if (exp === 0) {
+    val = frac * Math.pow(2, -24);
+  } else if (exp === 0x1f) {
+    val = frac ? NaN : Infinity;
+  } else {
+    val = (1 + frac / 1024) * Math.pow(2, exp - 15);
+  }
+  return sign ? -val : val;
 }
 
 const controlBtn: React.CSSProperties = {

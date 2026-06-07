@@ -23,6 +23,7 @@ try:
 except ModuleNotFoundError:  # local --test-mode should still work
     runpod = None  # type: ignore
 
+from services import prompts
 from services.constant import LOCAL_OUTPUT_DIR, TIMEOUT
 from services.utils import (
     apply_upload_local_paths_to_comfy_in_task,
@@ -170,9 +171,9 @@ def resolve_prompts_matrix(
         return matrix, ids
 
     if src == "pose":
-        cat_path = osp.join(service_dir, "pose_prompts.json")
+        cat_path = str(prompts.POSE_PROMPTS_PATH)
     elif src == "expression":
-        cat_path = osp.join(service_dir, "expression_prompts.json")
+        cat_path = str(prompts.EXPRESSION_PROMPTS_PATH)
     elif src == "file":
         rel = task.get("prompt_catalog_path")
         if not rel or not str(rel).strip():

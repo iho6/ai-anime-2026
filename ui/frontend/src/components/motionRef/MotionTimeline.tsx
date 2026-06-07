@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import type { MotionRefSegment } from "../../lib/api";
 
 /**
@@ -14,6 +14,10 @@ export function MotionTimeline(props: {
   disabled?: boolean;
 }) {
   const { segments, onChange, disabled = false } = props;
+
+  // Transient text for the duration field being edited, so it can be fully cleared
+  // (an empty <input type=number> otherwise snaps back to a default and blocks backspace).
+  const [durEdit, setDurEdit] = useState<{ i: number; val: string } | null>(null);
 
   function update(i: number, patch: Partial<MotionRefSegment>) {
     const next = segments.map((s, idx) => (idx === i ? { ...s, ...patch } : s));
@@ -30,12 +34,6 @@ export function MotionTimeline(props: {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div
-        style={{ fontSize: 11, color: "#888", marginBottom: 2 }}
-      >
-        Add motion segments — each is a text prompt + duration. Multi-segment motions are
-        automatically blended together by KiMoD.
-      </div>
       {segments.map((seg, i) => (
         <div key={i} style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
           <span style={{ fontSize: 11, color: "#666", minWidth: 18, paddingTop: 8 }}>
@@ -65,8 +63,21 @@ export function MotionTimeline(props: {
               min={0.5}
               max={30}
               step={0.5}
-              value={seg.duration}
-              onChange={(e) => update(i, { duration: Math.max(0.5, Number(e.target.value) || 3) })}
+              value={durEdit?.i === i ? durEdit.val : String(seg.duration)}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setDurEdit({ i, val: raw });
+                const n = parseFloat(raw);
+                if (raw !== "" && !Number.isNaN(n)) update(i, { duration: n });
+              }}
+              onBlur={() => {
+                if (durEdit?.i !== i) return;
+                let n = parseFloat(durEdit.val);
+                if (Number.isNaN(n)) n = 3;
+                n = Math.max(0.5, Math.min(30, n));
+                update(i, { duration: n });
+                setDurEdit(null);
+              }}
               disabled={disabled}
               style={{
                 width: "100%",
@@ -98,7 +109,7 @@ export function MotionTimeline(props: {
         disabled={disabled}
         style={{ ...addBtn, opacity: disabled ? 0.5 : 1 }}
       >
-        + Add segment
+        + Add Motion (Animates a Sequence)
       </button>
     </div>
   );

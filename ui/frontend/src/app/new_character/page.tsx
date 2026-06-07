@@ -147,7 +147,7 @@ export default function NewCharacterPage() {
     }
 
     beginSession({
-      title: draftRelPaths.length > 0 ? "Regenerating character" : "Generating character",
+      title: "Generating character",
       clearLog: true,
     });
     await Promise.resolve();
@@ -421,7 +421,7 @@ export default function NewCharacterPage() {
                     opacity: busy ? 0.7 : 1,
                   }}
                 >
-                  {draftRelPaths.length > 0 ? "Regenerate Character" : "Generate Character"}
+                  {"Generate Character"}
                 </button>
               </div>
 

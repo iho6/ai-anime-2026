@@ -21,7 +21,6 @@ from services import motion_ref_storage
 from services.character_storage import sanitize_for_folder
 from services.motion_ref_gen_ai_service.serverless import (
     call_generate,
-    call_render_frame,
     ensure_worker,
 )
 from .storage_paths import (
@@ -59,6 +58,9 @@ def motion_ref_list() -> list[dict[str, Any]]:
                 "fps": manifest.get("fps", 30),
                 "frameCount": manifest.get("frame_count", 0),
                 "jointCount": manifest.get("joint_count", 77),
+                "hasMesh": bool(manifest.get("has_mesh", False)),
+                "vertexCount": manifest.get("vertex_count", 0),
+                "faceCount": manifest.get("face_count", 0),
                 "thumbnailRelPath": thumbnail or "",
                 "segments": manifest.get("segments", []),
             }
@@ -86,113 +88,69 @@ def motion_ref_joints(motion_key: str) -> FileResponse:
     )
 
 
-# ── Render raw joints as skeleton PNG (GPU-free, matplotlib) ─────────────────
+# ── SMPL-X mesh stream (gzipped float16 vertices + static faces) ─────────────
 
-_BONES_SIMPLIFIED = [
-    # Spine + neck + head
-    (1,0),(2,1),(3,2),(4,3),(5,4),(6,5),(7,6),
-    # Left arm (to wrist)
-    (11,3),(12,11),(13,12),(14,13),
-    # Right arm (to wrist)
-    (39,3),(40,39),(41,40),(42,41),
-    # Left leg
-    (67,0),(68,67),(69,68),(70,69),(71,70),
-    # Right leg
-    (72,0),(73,72),(74,73),(75,74),(76,75),
-]
-
-
-@router.post("/motion_ref/render_joints")
-def motion_ref_render_joints(body: dict[str, Any]) -> dict[str, str]:
-    """Render a SOMA 77-joint pose as a skeleton PNG.  Pure matplotlib — no GPU."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
-
-    raw = body.get("joints")
-    if not raw or len(raw) < 7:
-        raise HTTPException(400, "joints must be a list of at least 7 [x,y,z] positions.")
-    joints = [[float(v) for v in j[:3]] for j in raw]
-
-    azimuth   = float(body.get("azimuth")   or 0)
-    elevation = float(body.get("elevation") or 20)
-    width     = int(body.get("width")   or 512)
-    height    = int(body.get("height")  or 512)
-
-    dpi = 100
-    fig = plt.figure(figsize=(width / dpi, height / dpi), dpi=dpi, facecolor="black")
-    ax  = fig.add_subplot(111, projection="3d", facecolor="black")
-    ax.set_facecolor("black")
-
-    xs = [j[0] for j in joints]
-    ys = [j[1] for j in joints]
-    zs = [j[2] for j in joints]
-
-    # Draw bones
-    for (ci, pi) in _BONES_SIMPLIFIED:
-        if ci >= len(joints) or pi >= len(joints):
-            continue
-        c, p = joints[ci], joints[pi]
-        ax.plot([p[0], c[0]], [p[2], c[2]], [p[1], c[1]],
-                color="#66aaff", linewidth=1.5, zorder=2)
-
-    # Draw joints
-    ax.scatter(xs, zs, ys, c="#ff4444", s=12, zorder=3, depthshade=False)
-
-    ax.set_xlim(-1.2, 1.2)
-    ax.set_ylim(-1.2, 1.2)
-    ax.set_zlim(-1.2, 1.0)
-    ax.axis("off")
-    ax.grid(False)
-    ax.xaxis.pane.fill = False
-    ax.yaxis.pane.fill = False
-    ax.zaxis.pane.fill = False
-
-    # Match Three.js camera: elevation from horizontal, azimuth around Y
-    ax.view_init(elev=elevation, azim=azimuth - 90)
-
-    puppet_dir = MOTION_REFS_STORAGE_ROOT / "puppet_poses"
-    puppet_dir.mkdir(parents=True, exist_ok=True)
-    out_path = puppet_dir / f"pose_{int(time.time() * 1000)}.png"
-    fig.savefig(str(out_path), dpi=dpi, bbox_inches="tight", facecolor="black", pad_inches=0)
-    plt.close(fig)
-
-    return {"shotRelPath": storage_rel_from_abs(str(out_path))}
+@router.get("/motion_ref/{motion_key}/mesh")
+def motion_ref_mesh(motion_key: str) -> FileResponse:
+    """Gzipped float16 little-endian [T, V, 3] vertex stream for the SMPL-X mesh."""
+    gz = _motion_dir(motion_key) / "mesh.f16.gz"
+    if not gz.is_file():
+        raise HTTPException(404, "mesh.f16.gz not found — this motion has no skinned mesh.")
+    return FileResponse(
+        str(gz),
+        media_type="application/gzip",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
-# ── Render one frame as PNG ───────────────────────────────────────────────────
+@router.get("/motion_ref/{motion_key}/mesh_faces")
+def motion_ref_mesh_faces(motion_key: str) -> FileResponse:
+    """Gzipped JSON face index array [F][3] for the SMPL-X mesh (static across frames)."""
+    gz = _motion_dir(motion_key) / "mesh_faces.json.gz"
+    if not gz.is_file():
+        raise HTTPException(404, "mesh_faces.json.gz not found — this motion has no skinned mesh.")
+    return FileResponse(
+        str(gz),
+        media_type="application/gzip",
+        headers={"Cache-Control": "no-cache"},
+    )
 
-@router.post("/motion_ref/{motion_key}/render_frame")
-def motion_ref_render_frame(
+
+# ── Save a client screenshot as the motion thumbnail ─────────────────────────
+
+@router.post("/motion_ref/{motion_key}/save_shot_image")
+def motion_ref_save_shot_image(
     motion_key: str,
     body: dict[str, Any],
 ) -> dict[str, str]:
+    """
+    Persist a client-side canvas screenshot (base64 PNG) into the motion's
+    ``shots/`` dir.  Pure file IO — no KiMoD worker, no rendering.  Used so the
+    Motion Gallery thumbnail populates after Save Shot.
+    """
+    import base64
+
     d = _motion_dir(motion_key)
     if not d.is_dir():
         raise HTTPException(404, "Motion not found.")
 
-    frame_index = int(body.get("frameIndex") or 0)
-    azimuth = float(body.get("azimuth") or 0)
-    elevation = float(body.get("elevation") or 20)
-    width = int(body.get("width") or 512)
-    height = int(body.get("height") or 512)
-    # Named shot — caller can pass a custom output filename stem
-    shot_name = (body.get("shotName") or f"shot_{frame_index:05d}").strip()
-    out_path = str(d / "shots" / f"{sanitize_for_folder(shot_name)}.png")
-
+    raw = str(body.get("pngBase64") or "")
+    if "," in raw:  # tolerate a data: URL prefix
+        raw = raw.split(",", 1)[1]
+    if not raw:
+        raise HTTPException(400, "pngBase64 is required.")
     try:
-        abs_path = call_render_frame(
-            str(d), frame_index, azimuth, elevation,
-            port=_DEFAULT_PORT,
-            width=width,
-            height=height,
-            output_path=out_path,
-        )
+        data = base64.b64decode(raw)
     except Exception as e:
-        raise HTTPException(500, str(e))
+        raise HTTPException(400, f"Invalid base64 PNG: {e}")
 
-    return {"shotRelPath": storage_rel_from_abs(abs_path)}
+    shot_name = (body.get("shotName") or f"shot_{int(time.time() * 1000)}").strip()
+    shots_dir = d / "shots"
+    shots_dir.mkdir(parents=True, exist_ok=True)
+    out_path = shots_dir / f"{sanitize_for_folder(shot_name)}.png"
+    out_path.write_bytes(data)
+
+    return {"shotRelPath": storage_rel_from_abs(str(out_path))}
 
 
 # ── Generation (WebSocket, streams logs) ─────────────────────────────────────
@@ -255,6 +213,9 @@ async def motion_ref_generate_ws(ws: WebSocket) -> None:
                 "fps": result["fps"],
                 "frame_count": result["frame_count"],
                 "joint_count": result["joint_count"],
+                "has_mesh": result.get("has_mesh", False),
+                "vertex_count": result.get("vertex_count", 0),
+                "face_count": result.get("face_count", 0),
                 "segments": result["segments"],
                 "model": model_name,
             })
@@ -263,6 +224,9 @@ async def motion_ref_generate_ws(ws: WebSocket) -> None:
                 "fps": result["fps"],
                 "frameCount": result["frame_count"],
                 "jointCount": result["joint_count"],
+                "hasMesh": result.get("has_mesh", False),
+                "vertexCount": result.get("vertex_count", 0),
+                "faceCount": result.get("face_count", 0),
                 "jointsRelPath": storage_rel_from_abs(result["joints_gz_path"]),
                 "segments": result["segments"],
             }

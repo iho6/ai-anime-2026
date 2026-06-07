@@ -141,7 +141,7 @@ export default function NewLocationPage() {
     }
 
     beginSession({
-      title: draftRelPaths.length > 0 ? "Regenerating location" : "Generating location",
+      title: "Generating location",
       clearLog: true,
     });
     await Promise.resolve();
@@ -414,7 +414,7 @@ export default function NewLocationPage() {
                     opacity: busy ? 0.7 : 1,
                   }}
                 >
-                  {draftRelPaths.length > 0 ? "Regenerate Location" : "Generate Location"}
+                  {"Generate Location"}
                 </button>
               </div>
 

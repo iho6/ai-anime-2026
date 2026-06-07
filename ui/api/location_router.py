@@ -255,6 +255,7 @@ async def new_location_generate_stream(payload: NewLocationGeneratePayload) -> S
             ext = src.suffix.lower() or ".png"
             dest = drafts_dir / f"draft_{unique_suffix(12)}{ext}"
             shutil.copy2(src, dest)
+            src.unlink(missing_ok=True)  # remove from characters/temp — already copied to location drafts
             result["preview_abs"] = str(dest)
         except BaseException as e:
             errors.append(e)

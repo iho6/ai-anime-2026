@@ -24,6 +24,7 @@ try:
 except ModuleNotFoundError:
     runpod = None  # type: ignore
 
+from services import prompts
 from services.constant import LOCAL_OUTPUT_DIR, TIMEOUT
 from services.utils import (
     apply_convert_local_paths_to_urls_in_task,
@@ -100,7 +101,7 @@ def normalize_outpaint_inputs(task: dict) -> dict[str, Any]:
 
     return {
         "image_url": str(image_url).strip(),
-        "prompt": str(task.get("prompt", "beautiful scenery")).strip(),
+        "prompt": str(task.get("prompt", prompts.DEFAULT_OUTPAINT_PROMPT)).strip(),
         "left": _int("left", 400),
         "top": _int("top", 0),
         "right": _int("right", 400),
@@ -267,7 +268,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--enable-default", action="store_true")
     parser.add_argument("--default-port", type=int, default=8188)
     parser.add_argument("--image-url", type=str)
-    parser.add_argument("--prompt", type=str, default="beautiful scenery")
+    parser.add_argument("--prompt", type=str, default=prompts.DEFAULT_OUTPAINT_PROMPT)
     parser.add_argument("--left", type=int, default=400)
     parser.add_argument("--top", type=int, default=0)
     parser.add_argument("--right", type=int, default=400)

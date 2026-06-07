@@ -777,8 +777,12 @@ export type MotionRefManifest = {
   fps: number;
   frameCount: number;
   jointCount: number;
+  /** Whether a skinned SMPL-X mesh was produced (mesh.f16.gz + mesh_faces.json.gz). */
+  hasMesh?: boolean;
+  vertexCount?: number;
+  faceCount?: number;
   /** Storage-relative path to joints.json.gz (served by /assets/storage/). */
-  jointsRelPath: string;
+  jointsRelPath?: string;
   segments: MotionRefSegment[];
 };
 
@@ -798,6 +802,9 @@ export type MotionRefListItem = {
   fps: number;
   frameCount: number;
   jointCount: number;
+  hasMesh?: boolean;
+  vertexCount?: number;
+  faceCount?: number;
   thumbnailRelPath: string;
   segments: MotionRefSegment[];
 };
@@ -856,19 +863,38 @@ export async function apiMotionRefJoints(motionKey: string): Promise<ArrayBuffer
   return res.arrayBuffer();
 }
 
-/** Render one frame at a specific camera angle → returns {shotRelPath}. */
-export async function apiMotionRefRenderFrame(params: {
+/** Gzipped float16 [T,V,3] SMPL-X vertex stream (decompress + decode client-side). */
+export async function apiMotionRefMesh(motionKey: string): Promise<ArrayBuffer> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/mesh`,
+    { method: "GET", credentials: "omit" }
+  );
+  if (!res.ok) throw new Error(`Failed to fetch mesh: ${res.status}`);
+  return res.arrayBuffer();
+}
+
+/** Gzipped JSON face index array [F][3] for the SMPL-X mesh (static across frames). */
+export async function apiMotionRefMeshFaces(motionKey: string): Promise<ArrayBuffer> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/mesh_faces`,
+    { method: "GET", credentials: "omit" }
+  );
+  if (!res.ok) throw new Error(`Failed to fetch mesh faces: ${res.status}`);
+  return res.arrayBuffer();
+}
+
+/**
+ * Persist a client-side canvas screenshot (base64 PNG) as the motion's
+ * gallery thumbnail. Pure file write on the backend — no KiMoD worker.
+ */
+export async function apiMotionRefSaveShotImage(params: {
   motionKey: string;
-  frameIndex: number;
-  azimuth: number;
-  elevation: number;
-  width?: number;
-  height?: number;
+  pngBase64: string;
   shotName?: string;
 }): Promise<{ shotRelPath: string }> {
   const { motionKey, ...body } = params;
   const res = await fetch(
-    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/render_frame`,
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/save_shot_image`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -893,26 +919,6 @@ export async function apiMotionRefDelete(motionKey: string): Promise<void> {
     { method: "POST", credentials: "omit" }
   );
   await readJson<{ ok: boolean }>(res);
-}
-
-/**
- * Render raw joint positions [J][3] to a PNG at the given camera angle.
- * Works without any stored motion — for puppet-mode Save Pose.
- */
-export async function apiMotionRefRenderJoints(params: {
-  joints: number[][];
-  azimuth: number;
-  elevation: number;
-  width?: number;
-  height?: number;
-}): Promise<{ shotRelPath: string }> {
-  const res = await fetch(`${API_BASE_URL}/motion_ref/render_joints`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(params),
-    credentials: "omit",
-  });
-  return readJson<{ shotRelPath: string }>(res);
 }
 
 export type ShotLayerMeta = {

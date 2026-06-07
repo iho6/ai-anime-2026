@@ -23,6 +23,7 @@ except ModuleNotFoundError:  # local --test-mode should still work
     runpod = None  # type: ignore
 
 from services.constant import LOCAL_OUTPUT_DIR, TIMEOUT
+from services import prompts
 from services.multi_angle_ai_service import angle_library
 from services.utils import (
     apply_upload_local_paths_to_comfy_in_task,
@@ -52,7 +53,7 @@ _SERVICE_DIR = osp.dirname(osp.abspath(__file__))
 workflows = load_workflows(osp.join(_SERVICE_DIR, "workflows"))
 logger.info("Loaded %s workflow(s): %s", len(workflows), list(workflows.keys()))
 
-_ANGLES_PATH = osp.join(_SERVICE_DIR, "camera_angles.json")
+_ANGLES_PATH = str(prompts.CAMERA_ANGLES_PATH)
 _camera_angles: list = []
 if osp.isfile(_ANGLES_PATH):
     with open(_ANGLES_PATH, "r", encoding="utf-8") as f:
@@ -71,13 +72,10 @@ supported_tasks: list = []
 convert_local_to_url = False
 
 
-def append_default_multi_angle_background_instruction(prompt: str) -> str:
-    """Append `, keep background blank white` after camera / user text (2511 multi-angle LoRA)."""
-    phrase = "keep background blank white"
-    p = (prompt or "").strip()
-    if not p or phrase.lower() in p.lower():
-        return p
-    return f"{p}, {phrase}"
+# Centralized in services/prompts; aliased here for back-compat with run_batch_angles import.
+append_default_multi_angle_background_instruction = (
+    prompts.append_default_multi_angle_background_instruction
+)
 
 
 def _find_image_and_prompt_nodes(workflow):

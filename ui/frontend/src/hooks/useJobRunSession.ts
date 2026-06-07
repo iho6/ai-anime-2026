@@ -79,6 +79,18 @@ export function useJobRunSession(logRef?: RefObject<SharedLogStreamHandle | null
     setSessionOutcome(null);
   }, [done]);
 
+  /**
+   * Hard reset of all session state, regardless of ``done``. Call this when the
+   * owning modal unmounts/closes so a stale "finished" job modal does not
+   * reappear the next time the modal is reopened (the hook instance persists).
+   */
+  const resetSession = useCallback(() => {
+    setOpen(false);
+    setRunning(false);
+    setDone(false);
+    setSessionOutcome(null);
+  }, []);
+
   const modalProps: JobRunModalSessionProps = useMemo(
     () => ({
       open,
@@ -105,6 +117,7 @@ export function useJobRunSession(logRef?: RefObject<SharedLogStreamHandle | null
     pushLog,
     failSession,
     requestClose,
+    resetSession,
     modalProps,
   };
 }

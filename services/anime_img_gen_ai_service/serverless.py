@@ -24,6 +24,7 @@ try:
 except ModuleNotFoundError:
     runpod = None  # type: ignore
 
+from services import prompts
 from services.constant import LOCAL_OUTPUT_DIR, TIMEOUT
 from services.utils import (
     gpu_preflight,
@@ -54,9 +55,8 @@ WORKFLOW_STEM = "image_anima_preview"
 POSITIVE_NODE_ID = "11"
 NEGATIVE_NODE_ID = "12"
 
-DEFAULT_STYLE_PREFIX = (
-    "masterpiece, best quality, score_7, safe. anime, plain white background, full body view, "
-)
+# Prompt text centralized in services/prompts; kept as a module alias for back-compat.
+DEFAULT_STYLE_PREFIX = prompts.ANIME_DEFAULT_STYLE_PREFIX
 
 
 def _coerce_task_bool(value: Any, *, default: bool = False) -> bool:
@@ -69,14 +69,7 @@ def _coerce_task_bool(value: Any, *, default: bool = False) -> bool:
     return default
 
 
-def build_positive_prompt(user_prompt: str, style_prefix: str | None = None) -> str:
-    prefix = (style_prefix or DEFAULT_STYLE_PREFIX).strip()
-    if prefix and not prefix.endswith((" ", ",")):
-        prefix = prefix + " "
-    elif prefix.endswith(","):
-        prefix = prefix + " "
-    body = (user_prompt or "").strip()
-    return prefix + body
+build_positive_prompt = prompts.build_positive_prompt
 
 
 def normalize_user_prompts(task: dict) -> list[str]:
@@ -382,7 +375,7 @@ def _run_test_mode(args: argparse.Namespace) -> None:
     elif args.prompt:
         inp = {"prompt": args.prompt}
     else:
-        inp = {"prompt": "a girl reading a book by the window, soft morning light"}
+        inp = {"prompt": prompts.ANIME_TESTMODE_DEFAULT_PROMPT}
     if args.skip_default_style_prefix:
         inp["skip_default_style_prefix"] = True
     print(json.dumps(handler({"input": inp}), indent=2))

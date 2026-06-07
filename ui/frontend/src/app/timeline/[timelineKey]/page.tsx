@@ -341,24 +341,45 @@ export default function TimelineEditorPage() {
   }
 
   // ---- Character picker (pose / expression / sequence) ---------------------
-  function onPickCharImage(charKey: string, relPath: string) {
-    setCharPickerOpen(false);
-    const swapId = changePoseClipId;
-    setChangePoseClipId(null);
-    setCharPickerInitialKey(null);
-    if (swapId) {
-      // Change Pose: replace clip's source image in-place.
+
+  /** Change Pose: import a timeline copy of the new pose, then swap the existing clip in-place. */
+  async function swapClipImage(swapId: string, relPath: string, charKey: string) {
+    beginSession({ title: "Swapping image", clearLog: true });
+    await Promise.resolve();
+    pushLog("Importing new pose…");
+    try {
+      const r = await apiTimelineImportImage({ timelineKey, sourceRelPath: relPath });
       historyUpdate((m) => ({
         ...m,
         tracks: m.tracks.map((t) => ({
           ...t,
           clips: t.clips.map((c) =>
             c.id === swapId
-              ? { ...c, srcRelPath: relPath, source: { ...c.source, charKey } }
+              ? {
+                  ...c,
+                  srcRelPath: r.srcRelPath,
+                  source: { ...c.source, charKey },
+                  naturalW: r.width || c.naturalW,
+                  naturalH: r.height || c.naturalH,
+                }
               : c
           ),
         })),
       }));
+      endSession();
+    } catch (e) {
+      failSession(e, "Could not swap image.");
+    }
+  }
+
+  function onPickCharImage(charKey: string, relPath: string) {
+    setCharPickerOpen(false);
+    const swapId = changePoseClipId;
+    setChangePoseClipId(null);
+    setCharPickerInitialKey(null);
+    if (swapId) {
+      // Change Pose: import a timeline copy first so srcRelPath is always self-contained.
+      void swapClipImage(swapId, relPath, charKey);
     } else {
       void importImageClip(relPath, { charKey });
     }
