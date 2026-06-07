@@ -1,0 +1,12 @@
+{
+  "fps": 30,
+  "frame_count": 210,
+  "joint_count": 77,
+  "segments": [
+    {
+      "text": "walking leisurely down the street",
+      "duration": 7.0
+    }
+  ],
+  "model": "kimodo-soma-rp"
+}

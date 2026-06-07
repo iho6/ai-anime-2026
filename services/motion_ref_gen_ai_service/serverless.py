@@ -183,6 +183,17 @@ def _load_kimodo_model(model_name: str = _DEFAULT_MODEL) -> Any:
     if _kimodo_src not in sys.path:
         sys.path.insert(0, _kimodo_src)
 
+    # Prepend kimodo source dir so kimodo/kimodo/__init__.py wins over
+    # the ./kimodo/ namespace package found via repo root in sys.path.
+    import sys as _sys
+    _kimodo_src = str(_SERVICE_DIR.parents[1] / 'kimodo')
+    if _kimodo_src not in _sys.path:
+        _sys.path.insert(0, _kimodo_src)
+
+    _kimodo_src = str(_SERVICE_DIR.parents[1] / 'kimodo')
+    if _kimodo_src not in sys.path:
+        sys.path.insert(0, _kimodo_src)
+
     import torch
     from kimodo import load_model
 
