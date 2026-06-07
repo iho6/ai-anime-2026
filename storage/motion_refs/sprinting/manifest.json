@@ -1,0 +1,12 @@
+{
+  "fps": 30,
+  "frame_count": 90,
+  "joint_count": 77,
+  "segments": [
+    {
+      "text": "sprinting",
+      "duration": 3.0
+    }
+  ],
+  "model": "kimodo-soma-rp"
+}
