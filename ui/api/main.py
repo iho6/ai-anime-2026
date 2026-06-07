@@ -47,6 +47,41 @@ from ui.api.ws_streaming import (  # noqa: E402
     safe_send_json,
 )
 
+# ── Persistent API settings (HF token, GitHub PAT) ───────────────────────────
+
+_SETTINGS_FILE = _ROOT / "storage" / "api_settings.json"
+
+
+def _save_api_setting(key: str, value: str) -> None:
+    """Persist a key/value setting to storage/api_settings.json."""
+    _SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        data: dict = json.loads(_SETTINGS_FILE.read_text()) if _SETTINGS_FILE.is_file() else {}
+    except Exception:
+        data = {}
+    data[key] = value
+    tmp = _SETTINGS_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, indent=2))
+    tmp.replace(_SETTINGS_FILE)
+
+
+def _load_api_settings() -> None:
+    """Load persisted settings into os.environ (only if not already set)."""
+    if not _SETTINGS_FILE.is_file():
+        return
+    try:
+        data: dict = json.loads(_SETTINGS_FILE.read_text())
+    except Exception:
+        return
+    if t := data.get("hf_token"):
+        os.environ.setdefault("HF_TOKEN", t)
+    if p := data.get("github_pat"):
+        os.environ.setdefault("GITHUB_PAT", p)
+
+
+_load_api_settings()
+
+
 
 def _cors_allow_origins() -> list[str]:
     base = [
@@ -129,6 +164,7 @@ def settings_update_hf_token(payload: HfTokenUpdatePayload) -> dict[str, Any]:
     if not token:
         raise HTTPException(status_code=400, detail="hf_token is required")
     os.environ["HF_TOKEN"] = token
+    _save_api_setting("hf_token", token)
     return {"ok": True}
 
 
@@ -158,6 +194,9 @@ async def startup_ws(ws: WebSocket) -> None:
             await safe_send_json(ws, {"type": "error", "error": "Missing github_pat"})
             return
         os.environ["GITHUB_PAT"] = github_pat
+        os.environ["HF_TOKEN"] = token
+        _save_api_setting("hf_token", token)
+        _save_api_setting("github_pat", github_pat)
 
         loop = asyncio.get_running_loop()
         q: asyncio.Queue[str] = asyncio.Queue()
