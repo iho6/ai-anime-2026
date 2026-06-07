@@ -49,6 +49,10 @@ from services.sequence_gallery_strip import gallery_item_from_frame_urls
 
 COMFY_PORT = int(os.environ.get("COMFY_PORT", 8188))
 
+# Module-level ComfyUI process handle for crash recovery.
+_comfy_proc: "subprocess.Popen | None" = None
+_comfy_port: int = COMFY_PORT
+
 # Reserved folder under ``DEFAULT_STORAGE_ROOT`` for React new-character drafts only.
 NEW_CHARACTER_DRAFT_DIRNAME = "temp"
 
@@ -198,11 +202,32 @@ def _log_cb_coalesce_tqdm_updates(
     return _inner
 
 
+def _ensure_comfy_running(log_cb: Callable[[str], None] | None = None) -> None:
+    """Restart ComfyUI if its process has exited, so service calls don't hang."""
+    global _comfy_proc, _comfy_port
+    if _comfy_proc is None:
+        return  # Never launched by us — not our responsibility
+    if _comfy_proc.poll() is None and _port_open("127.0.0.1", _comfy_port):
+        return  # Still alive and reachable
+    if log_cb:
+        log_cb("ComfyUI process has exited — restarting...")
+    _comfy_proc, _, _, _ = _launch_main_background(_comfy_port, log_cb=log_cb)
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        if _port_open("127.0.0.1", _comfy_port):
+            if log_cb:
+                log_cb(f"ComfyUI restarted and ready on port {_comfy_port}.")
+            return
+        time.sleep(0.5)
+    raise RuntimeError("ComfyUI did not restart within 120 s.")
+
+
 def _run_service_testmode(
     module: str,
     args: list[str],
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
+    _ensure_comfy_running(log_cb=log_cb)
     cmd = [sys.executable, "-m", module] + args
     proc = subprocess.Popen(
         cmd,
@@ -600,6 +625,8 @@ def _launch_main_background(
     }
     if not cache_on:
         cmd.append("--cache-none")
+    # Async weight offloading is unstable with legacy ModelPatcher (PyTorch < 2.8).
+    cmd.append("--disable-async-offload")
     if log_cb:
         log_cb("$ " + " ".join(cmd))
     popen_env = os.environ.copy()
@@ -776,9 +803,12 @@ def run_startup_setup_and_launch(
         env=env,
     )
 
+    global _comfy_proc, _comfy_port
+    _comfy_port = int(port)
     proc, forward_logs, comfy_tail, comfy_tail_lock = _launch_main_background(
         int(port), log_cb=log_cb
     )
+    _comfy_proc = proc
     if log_cb:
         log_cb("Waiting for ComfyUI to become reachable (no timeout)...")
     wait_log_t0 = time.time()
