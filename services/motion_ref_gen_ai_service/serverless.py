@@ -175,6 +175,14 @@ def _load_kimodo_model(model_name: str = _DEFAULT_MODEL) -> Any:
     if "TEXT_ENCODER_DEVICE" not in os.environ:
         os.environ["TEXT_ENCODER_DEVICE"] = "cpu"
 
+    # The repo root is prepended to sys.path by our startup code, which causes
+    # Python to find ./kimodo/ as a bare namespace package instead of the
+    # editable install. Prepend the actual kimodo source dir so that
+    # kimodo/kimodo/__init__.py is found first.
+    _kimodo_src = str(_SERVICE_DIR.parents[1] / "kimodo")
+    if _kimodo_src not in sys.path:
+        sys.path.insert(0, _kimodo_src)
+
     import torch
     from kimodo import load_model
 
