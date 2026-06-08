@@ -35,7 +35,9 @@
       "Bash(Sort-Object)",
       "Bash(cd /d \"D:\\\\Animation\\\\anime2026_refactored\")",
       "Bash(Get-ChildItem -Path \".\" -Directory)",
-      "Bash(Select-Object Name)"
+      "Bash(Select-Object Name)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Animation\\\\anime2026_refactored\\\\ui\\\\api\" -Filter \"*_router.py\" -File)",
+      "Bash(grep -nE \"^import \\(signal|subprocess|socket|os|time|threading\\)$|^import os$|import signal\" services/logic.py)"
     ]
   }
 }

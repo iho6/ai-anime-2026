@@ -1,15 +1,48 @@
 "use client";
 
-import React, { useState } from "react";
-import { apiSettingsGetHfToken, apiSettingsUpdateHfToken } from "../lib/api";
+import React, { useRef, useState } from "react";
+import {
+  apiSettingsGetHfToken,
+  apiSettingsUpdateHfToken,
+  runRestartComfyWsJob,
+} from "../lib/api";
 import { CloseIcon, GearIcon, SquareIconButton } from "./IconPrimitives";
 import { useAppError } from "./ErrorProvider";
+import { useJobRunSession } from "../hooks/useJobRunSession";
+import type { SharedLogStreamHandle } from "./SharedLogStream";
+import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 
 export function HfTokenSettingsButton() {
   const { showError } = useAppError();
   const [open, setOpen] = useState(false);
   const [hfToken, setHfToken] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const logRef = useRef<SharedLogStreamHandle | null>(null);
+  const {
+    running: restarting,
+    beginSession,
+    endSession,
+    failSession,
+    pushLog,
+    modalProps: jobModalProps,
+  } = useJobRunSession(logRef);
+
+  async function onRestartComfy() {
+    beginSession({ title: "Restarting ComfyUI (8188)…", clearLog: true });
+    await Promise.resolve();
+    pushLog("Requesting ComfyUI restart…");
+    try {
+      const done = await runRestartComfyWsJob({ onLogLine: (line) => pushLog(line) });
+      if (!done.ok) {
+        throw new Error(done.error || "Restart failed.");
+      }
+      endSession();
+      showError({ title: "Settings", message: "ComfyUI restarted on 8188." });
+    } catch (e) {
+      failSession(e, "Could not restart ComfyUI.");
+    }
+  }
 
   async function onOpen() {
     setOpen(true);
@@ -101,16 +134,29 @@ export function HfTokenSettingsButton() {
             />
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || restarting}
               onClick={() => void onUpdate()}
               className="ui-btn-black"
-              style={{ cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.7 : 1 }}
+              style={{ cursor: busy || restarting ? "not-allowed" : "pointer", opacity: busy || restarting ? 0.7 : 1 }}
             >
               Update huggingFace Token
             </button>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button
+                type="button"
+                disabled={busy || restarting}
+                onClick={() => void onRestartComfy()}
+                className="ui-btn-black"
+                title="Kill and relaunch the ComfyUI server on port 8188"
+                style={{ cursor: busy || restarting ? "not-allowed" : "pointer", opacity: busy || restarting ? 0.7 : 1 }}
+              >
+                Restart ComfyUI Server (8188)
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
+      <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
     </>
   );
 }

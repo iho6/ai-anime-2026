@@ -809,6 +809,43 @@ export type MotionRefListItem = {
   segments: MotionRefSegment[];
 };
 
+/** Kill + relaunch ComfyUI on port 8188, streaming the restart logs. */
+export function runRestartComfyWsJob(params: {
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<{ port: number }>> {
+  const { onLogLine } = params;
+  const url = wsUrlForPath("/settings/comfy/restart/ws");
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => ws.send(JSON.stringify({ type: "start" }));
+    ws.onmessage = (ev) => {
+      let data: { type?: string; line?: string };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") onLogLine(data.line);
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(data as WsDoneMessage<{ port: number }>);
+      }
+    };
+  });
+}
+
 /** Stream a motion-generation job. Logs are emitted during long inference. */
 export function runMotionRefGenerateWsJob(params: {
   motionName?: string;

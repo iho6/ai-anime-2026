@@ -14,6 +14,7 @@ import logging
 import math
 import os
 import re
+import signal
 import socket
 import subprocess
 import sys
@@ -226,6 +227,132 @@ def _ensure_comfy_running(log_cb: Callable[[str], None] | None = None) -> None:
             return
         time.sleep(0.5)
     raise RuntimeError("ComfyUI did not restart within 120 s.")
+
+
+def _kill_comfy_proc(log_cb: Callable[[str], None] | None = None) -> None:
+    """Terminate the ComfyUI process we launched (whole process group). Best-effort."""
+    global _comfy_proc
+    proc = _comfy_proc
+    if proc is None:
+        return
+    try:
+        if proc.poll() is None:
+            if os.name != "nt":
+                # Launched with start_new_session=True → its own process group.
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                except Exception:
+                    proc.terminate()
+            else:
+                proc.terminate()
+            try:
+                proc.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                if os.name != "nt":
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except Exception:
+                        proc.kill()
+                else:
+                    proc.kill()
+                try:
+                    proc.wait(timeout=5)
+                except Exception:
+                    pass
+    except Exception as e:
+        if log_cb:
+            log_cb(f"Warning while stopping ComfyUI: {e}")
+    finally:
+        _comfy_proc = None
+
+
+def _kill_port_listeners(port: int, log_cb: Callable[[str], None] | None = None) -> None:
+    """
+    Best-effort: kill any process tree LISTENing on ``port`` so a relaunch isn't blocked.
+    Catches an externally-started ComfyUI or children that outlived the parent handle.
+    """
+    try:
+        import psutil  # type: ignore
+    except Exception:
+        return
+    pids: set[int] = set()
+    try:
+        for c in psutil.net_connections(kind="inet"):
+            if (
+                c.status == psutil.CONN_LISTEN
+                and c.laddr
+                and getattr(c.laddr, "port", None) == int(port)
+                and c.pid
+            ):
+                pids.add(int(c.pid))
+    except Exception as e:
+        if log_cb:
+            log_cb(f"Could not enumerate port {port} listeners: {e}")
+        return
+    for pid in pids:
+        try:
+            p = psutil.Process(pid)
+            victims = p.children(recursive=True) + [p]
+            for v in victims:
+                try:
+                    v.terminate()
+                except Exception:
+                    pass
+            _gone, alive = psutil.wait_procs(victims, timeout=6)
+            for v in alive:
+                try:
+                    v.kill()
+                except Exception:
+                    pass
+            if log_cb:
+                log_cb(f"Stopped process {pid} listening on port {port}.")
+        except Exception:
+            pass
+
+
+def restart_comfy_server(
+    *,
+    log_cb: Callable[[str], None] | None = None,
+    port: int = COMFY_PORT,
+) -> dict[str, Any]:
+    """Kill ComfyUI and relaunch it on ``port`` (default 8188); wait until reachable."""
+    global _comfy_proc, _comfy_port
+    port = int(port)
+    _comfy_port = port
+
+    if log_cb:
+        log_cb(f"Stopping ComfyUI on port {port}…")
+    _kill_comfy_proc(log_cb)
+    _kill_port_listeners(port, log_cb)
+
+    # Wait (briefly) for the port to actually free up.
+    free_deadline = time.time() + 15
+    while _port_open("127.0.0.1", port) and time.time() < free_deadline:
+        time.sleep(0.3)
+
+    if log_cb:
+        log_cb("Launching ComfyUI…")
+    proc, forward_logs, _comfy_tail, _comfy_tail_lock = _launch_main_background(port, log_cb=log_cb)
+    _comfy_proc = proc
+
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        if _port_open("127.0.0.1", port):
+            try:
+                forward_logs.clear()
+            except Exception:
+                pass
+            if log_cb:
+                log_cb(f"ComfyUI is ready on 127.0.0.1:{port}.")
+            return {"ok": True, "port": port}
+        rc = proc.poll()
+        if rc is not None:
+            raise RuntimeError(
+                f"ComfyUI exited before the server became reachable (exit code {rc}). "
+                "See [comfy] lines above for the root cause."
+            )
+        time.sleep(0.5)
+    raise RuntimeError("ComfyUI did not become reachable within 120 s.")
 
 
 def _run_service_testmode(

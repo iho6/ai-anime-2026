@@ -168,6 +168,23 @@ def settings_update_hf_token(payload: HfTokenUpdatePayload) -> dict[str, Any]:
     return {"ok": True}
 
 
+@app.websocket("/settings/comfy/restart/ws")
+async def settings_restart_comfy_ws(ws: WebSocket) -> None:
+    """Kill and relaunch ComfyUI on port 8188, streaming the restart logs."""
+    await ws.accept()
+    try:
+        await ws.receive_json()  # {"type": "start"} — contents ignored
+        result, err = await run_with_log_stream(
+            ws, lambda log_cb: logic.restart_comfy_server(log_cb=log_cb)
+        )
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except WebSocketDisconnect:
+        return
+
+
 @app.websocket("/startup/ws")
 async def startup_ws(ws: WebSocket) -> None:
     """
