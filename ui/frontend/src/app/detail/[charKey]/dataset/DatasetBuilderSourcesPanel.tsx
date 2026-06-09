@@ -46,6 +46,7 @@ type DatasetBuilderSourcesPanelProps = {
     folderKey: string;
     inputRelPath?: string;
   }) => void;
+  onRequestBatchGenerate?: (tileId: string) => void;
   onOpenPreview: (paths: string[], index: number, title: string) => void;
   poseStripIds: string[];
   exprStripIds: string[];
@@ -76,6 +77,7 @@ export function DatasetBuilderSourcesPanel(props: DatasetBuilderSourcesPanelProp
     onPrompt,
     onAiEditTile,
     onRequestAddAngles,
+    onRequestBatchGenerate,
     onOpenPreview,
     poseStripIds,
     exprStripIds,
@@ -207,6 +209,7 @@ export function DatasetBuilderSourcesPanel(props: DatasetBuilderSourcesPanelProp
         onPrompt={onPrompt}
         onAiEditTile={onAiEditTile}
         onRequestAddAngles={onRequestAddAngles}
+        onRequestBatchGenerate={onRequestBatchGenerate}
         onOpenPreview={onOpenPreview}
         setEntries={setEntries}
         setDirty={setDirty}

@@ -55,9 +55,10 @@ export function ZoomableImage(props: {
     onMaskPaintedChange,
   } = props;
 
-  const minZoom = 1;
+  const minZoom = 0.25;
   const maxZoom = 10;
   const wheelSpeed = 0.0015;
+  const fillsContainer = fitMaxWidth === "100%" && fitMaxHeight === "100%";
 
   const [zoom, setZoom] = useState(1);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
@@ -82,37 +83,51 @@ export function ZoomableImage(props: {
   const lastNatRef = useRef<{ x: number; y: number } | null>(null);
   const hasPaintRef = useRef(false);
 
+  /** Mode A: CSS contain (no scroll). Mode B: pixel sizing + scroll/pan (zoomed or mask). */
+  const usePixelLayout = maskMode || zoom > 1;
+
   function stopDrag() {
     dragActiveRef.current = false;
     setDragging(false);
   }
 
-  useEffect(() => {
+  function resetViewportScroll() {
+    const el = viewportRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    el.scrollLeft = 0;
+  }
+
+  const measureViewport = useCallback(() => {
     const el = viewportRef.current;
     if (!el) return;
     const THRESH = 2;
-    const updateSize = () => {
-      const w = Math.max(1, Math.round(el.clientWidth));
-      const h = Math.max(1, Math.round(el.clientHeight));
-      const prev = viewportSizeCommitRef.current;
-      if (
-        prev &&
-        Math.abs(w - prev.w) < THRESH &&
-        Math.abs(h - prev.h) < THRESH
-      ) {
-        return;
-      }
-      viewportSizeCommitRef.current = { w, h };
-      setViewportSize({ w, h });
-    };
-    updateSize();
+    const w = Math.max(1, Math.round(el.clientWidth));
+    const h = Math.max(1, Math.round(el.clientHeight));
+    if (fillsContainer && (w < 8 || h < 8)) return;
+    const prev = viewportSizeCommitRef.current;
+    if (
+      prev &&
+      Math.abs(w - prev.w) < THRESH &&
+      Math.abs(h - prev.h) < THRESH
+    ) {
+      return;
+    }
+    viewportSizeCommitRef.current = { w, h };
+    setViewportSize({ w, h });
+  }, [fillsContainer]);
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    measureViewport();
     if (typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
-      requestAnimationFrame(updateSize);
+      requestAnimationFrame(measureViewport);
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [measureViewport]);
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -123,31 +138,32 @@ export function ZoomableImage(props: {
     setZoom(1);
     zoomRef.current = 1;
     stopDrag();
-    // New image: drop any painted mask.
     offscreenMaskRef.current = null;
     lastNatRef.current = null;
     paintingRef.current = false;
     hasPaintRef.current = false;
-    const el = viewportRef.current;
-    if (el) {
-      el.scrollTop = 0;
-      el.scrollLeft = 0;
-    }
+    resetViewportScroll();
   }, [src]);
 
   const viewportStyle = useMemo<React.CSSProperties>(
     () => ({
       width: fitMaxWidth,
       height: fitMaxHeight,
-      overflow: "auto",
-      scrollbarGutter: "stable",
+      maxWidth: "100%",
+      maxHeight: "100%",
+      boxSizing: "border-box",
+      ...(fillsContainer
+        ? { flex: 1, minWidth: 0, minHeight: 0 }
+        : {}),
+      overflow: usePixelLayout ? "auto" : "hidden",
+      scrollbarGutter: usePixelLayout ? "stable" : undefined,
       position: "relative",
       background: "rgba(0,0,0,0.02)",
       userSelect: dragging ? "none" : "auto",
       cursor: dragging ? "grabbing" : maskMode ? "crosshair" : zoom > 1 ? "grab" : "default",
       touchAction: "none",
     }),
-    [fitMaxWidth, fitMaxHeight, dragging, zoom, maskMode]
+    [fitMaxWidth, fitMaxHeight, fillsContainer, usePixelLayout, dragging, zoom, maskMode]
   );
 
   const baseScale = useMemo(() => {
@@ -156,23 +172,29 @@ export function ZoomableImage(props: {
     const sy = viewportSize.h / naturalSize.h;
     const fit = Math.min(sx, sy);
     if (!Number.isFinite(fit) || fit <= 0) return 1;
-    return fit;
+    return fit * 0.999;
   }, [naturalSize, viewportSize]);
 
   const renderScale = baseScale * zoom;
   const zoomedW =
-    naturalSize != null ? Math.max(1, Math.round(naturalSize.w * renderScale)) : undefined;
+    naturalSize != null
+      ? Math.max(1, Math.floor(naturalSize.w * renderScale))
+      : undefined;
   const zoomedH =
-    naturalSize != null ? Math.max(1, Math.round(naturalSize.h * renderScale)) : undefined;
-  const canApplyPixelSizing = Boolean(naturalSize && viewportSize && zoomedW && zoomedH);
+    naturalSize != null
+      ? Math.max(1, Math.floor(naturalSize.h * renderScale))
+      : undefined;
+  const canApplyPixelSizing = Boolean(
+    usePixelLayout && naturalSize && viewportSize && zoomedW && zoomedH
+  );
 
   const innerBoxStyle = useMemo<React.CSSProperties>(() => {
     const base: React.CSSProperties = {
       minWidth: "100%",
       minHeight: "100%",
       display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
+      alignItems: "flex-start",
+      justifyContent: "flex-start",
       boxSizing: "border-box",
     };
     if (!canApplyPixelSizing || !viewportSize || zoomedW === undefined || zoomedH === undefined) {
@@ -184,11 +206,8 @@ export function ZoomableImage(props: {
     }
     const vw = viewportSize.w;
     const vh = viewportSize.h;
-    // When the scaled image fits in the viewport, keep inner exactly viewport-sized so no
-    // spurious scrollbars / ResizeObserver feedback loop at min zoom.
-    const fits = zoomedW <= vw && zoomedH <= vh;
-    const innerW = fits ? vw : Math.max(vw, zoomedW);
-    const innerH = fits ? vh : Math.max(vh, zoomedH);
+    const innerW = Math.max(vw, zoomedW);
+    const innerH = Math.max(vh, zoomedH);
     return {
       ...base,
       width: innerW,
@@ -196,7 +215,7 @@ export function ZoomableImage(props: {
     };
   }, [canApplyPixelSizing, viewportSize, zoomedW, zoomedH]);
 
-  const imgStyle = useMemo<React.CSSProperties>(() => {
+  const pixelImgStyle = useMemo<React.CSSProperties>(() => {
     if (!canApplyPixelSizing) {
       return {
         maxWidth: "100%",
@@ -217,6 +236,18 @@ export function ZoomableImage(props: {
     };
   }, [canApplyPixelSizing, zoomedW, zoomedH]);
 
+  const containImgStyle = useMemo<React.CSSProperties>(
+    () => ({
+      width: "100%",
+      height: "100%",
+      objectFit: "contain",
+      display: "block",
+      transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+      transformOrigin: "center center",
+    }),
+    [zoom]
+  );
+
   // --- Mask rendering / painting --------------------------------------------
   const renderMaskDisplay = useCallback(() => {
     const disp = displayCanvasRef.current;
@@ -231,7 +262,6 @@ export function ZoomableImage(props: {
     const off = offscreenMaskRef.current;
     if (off) {
       ctx.drawImage(off, 0, 0, w, h);
-      // Recolor the white strokes to the visible display color.
       ctx.globalCompositeOperation = "source-in";
       ctx.fillStyle = maskDisplayColor;
       ctx.fillRect(0, 0, w, h);
@@ -239,7 +269,6 @@ export function ZoomableImage(props: {
     }
   }, [maskDisplayColor]);
 
-  // Ensure an offscreen mask exists at natural resolution while in mask mode.
   useEffect(() => {
     if (!maskMode || !naturalSize) return;
     const cur = offscreenMaskRef.current;
@@ -255,7 +284,6 @@ export function ZoomableImage(props: {
     return () => cancelAnimationFrame(id);
   }, [maskMode, naturalSize, renderMaskDisplay, onMaskPaintedChange]);
 
-  // Re-render the overlay whenever the displayed size changes (zoom / layout).
   useEffect(() => {
     if (!maskMode) return;
     const id = requestAnimationFrame(renderMaskDisplay);
@@ -330,7 +358,6 @@ export function ZoomableImage(props: {
     lastNatRef.current = null;
   }, []);
 
-  // Publish the imperative controller to the parent.
   useEffect(() => {
     if (!maskController) return;
     maskController.current = {
@@ -355,14 +382,6 @@ export function ZoomableImage(props: {
     };
   }, [maskController, onMaskPaintedChange, renderMaskDisplay]);
 
-  useEffect(() => {
-    if (zoom !== 1) return;
-    const el = viewportRef.current;
-    if (!el) return;
-    el.scrollLeft = 0;
-    el.scrollTop = 0;
-  }, [zoom]);
-
   /** Non-passive so ``preventDefault`` stops native scroll; React ``onWheel`` is often passive. */
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -385,17 +404,31 @@ export function ZoomableImage(props: {
       zoomRef.current = nextZoom;
       setZoom(nextZoom);
       requestAnimationFrame(() => {
-        const targetLeft = contentX * ratio - viewportX;
-        const targetTop = contentY * ratio - viewportY;
-        const maxLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
-        const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-        viewport.scrollLeft = clamp(targetLeft, 0, maxLeft);
-        viewport.scrollTop = clamp(targetTop, 0, maxTop);
+        if (nextZoom > 1) {
+          const targetLeft = contentX * ratio - viewportX;
+          const targetTop = contentY * ratio - viewportY;
+          const maxLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+          const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+          viewport.scrollLeft = clamp(targetLeft, 0, maxLeft);
+          viewport.scrollTop = clamp(targetTop, 0, maxTop);
+        } else {
+          resetViewportScroll();
+        }
       });
     };
     viewport.addEventListener("wheel", onWheel, { passive: false });
     return () => viewport.removeEventListener("wheel", onWheel);
   }, [src]);
+
+  const onImageLoadHandler = useCallback(
+    (ev: React.SyntheticEvent<HTMLImageElement>) => {
+      const w = ev.currentTarget.naturalWidth || 1;
+      const h = ev.currentTarget.naturalHeight || 1;
+      setNaturalSize({ w, h });
+      onImageLoad?.();
+    },
+    [onImageLoad]
+  );
 
   return (
     <div
@@ -404,14 +437,10 @@ export function ZoomableImage(props: {
       onDoubleClick={() => {
         if (suppressDoubleClickReset) return;
         setZoom(1);
-        const el = viewportRef.current;
-        if (el) {
-          el.scrollTop = 0;
-          el.scrollLeft = 0;
-        }
+        resetViewportScroll();
       }}
       onMouseDown={(ev) => {
-        if (maskMode) return; // left-drag paints in mask mode
+        if (maskMode) return;
         if (ev.button !== 0 || zoom <= 1) return;
         const viewport = viewportRef.current;
         if (!viewport) return;
@@ -465,43 +494,51 @@ export function ZoomableImage(props: {
       onTouchEnd={stopDrag}
       onTouchCancel={stopDrag}
     >
-      <div style={innerBoxStyle}>
-        <div style={{ position: "relative", lineHeight: 0, fontSize: 0 }}>
-          <img
-            src={src}
-            alt={alt}
-            draggable={false}
-            onError={() => {
-              onImageError?.();
-            }}
-            onLoad={(ev) => {
-              const w = ev.currentTarget.naturalWidth || 1;
-              const h = ev.currentTarget.naturalHeight || 1;
-              setNaturalSize({ w, h });
-              onImageLoad?.();
-            }}
-            style={imgStyle}
-          />
-          {maskMode && naturalSize ? (
-            <canvas
-              ref={displayCanvasRef}
-              onPointerDown={onMaskPointerDown}
-              onPointerMove={onMaskPointerMove}
-              onPointerUp={onMaskPointerUp}
-              onPointerLeave={onMaskPointerUp}
-              style={{
-                position: "absolute",
-                left: 0,
-                top: 0,
-                width: "100%",
-                height: "100%",
-                cursor: "crosshair",
-                touchAction: "none",
+      {usePixelLayout ? (
+        <div style={innerBoxStyle}>
+          <div style={{ position: "relative", lineHeight: 0, fontSize: 0 }}>
+            <img
+              src={src}
+              alt={alt}
+              draggable={false}
+              onError={() => {
+                onImageError?.();
               }}
+              onLoad={onImageLoadHandler}
+              style={pixelImgStyle}
             />
-          ) : null}
+            {maskMode && naturalSize ? (
+              <canvas
+                ref={displayCanvasRef}
+                onPointerDown={onMaskPointerDown}
+                onPointerMove={onMaskPointerMove}
+                onPointerUp={onMaskPointerUp}
+                onPointerLeave={onMaskPointerUp}
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: 0,
+                  width: "100%",
+                  height: "100%",
+                  cursor: "crosshair",
+                  touchAction: "none",
+                }}
+              />
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : (
+        <img
+          src={src}
+          alt={alt}
+          draggable={false}
+          onError={() => {
+            onImageError?.();
+          }}
+          onLoad={onImageLoadHandler}
+          style={containImgStyle}
+        />
+      )}
     </div>
   );
 }

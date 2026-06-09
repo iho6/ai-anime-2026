@@ -14,6 +14,7 @@ import json
 from fastapi import File, Form, FastAPI, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 from starlette.middleware.cors import CORSMiddleware
 
 
@@ -837,6 +838,31 @@ def detail_expression_angle_gallery_items(
             }
         )
     return out
+
+
+class GalleryDownloadZipBody(BaseModel):
+    relPaths: list[str]
+
+
+@app.post("/detail/{char_key}/gallery/download_zip")
+def detail_gallery_download_zip(char_key: str, body: GalleryDownloadZipBody) -> FileResponse:
+    try:
+        zip_abs, filename = logic.write_gallery_images_zip_file(char_key, body.relPaths)
+    except ValueError as ex:
+        raise HTTPException(status_code=400, detail=str(ex)) from ex
+
+    def _unlink(path: str) -> None:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+    return FileResponse(
+        zip_abs,
+        media_type="application/zip",
+        filename=filename,
+        background=BackgroundTask(_unlink, zip_abs),
+    )
 
 
 @app.get("/detail/{char_key}/dataset/folder_names")

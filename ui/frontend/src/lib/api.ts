@@ -2548,6 +2548,26 @@ export async function apiExpressionGallerySplit(
   return readJson<GallerySplit>(res);
 }
 
+export async function apiGalleryDownloadZip(
+  charKey: string,
+  relPaths: string[]
+): Promise<Blob> {
+  const res = await fetch(
+    `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/gallery/download_zip`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ relPaths }),
+      credentials: "omit",
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Gallery zip download failed (${res.status})`);
+  }
+  return res.blob();
+}
+
 export async function apiExpressionAngleItems(
   charKey: string,
   exprKey: string
@@ -3023,6 +3043,20 @@ export async function apiSequenceFolderNames(charKey: string): Promise<string[]>
   );
   const data = await readJson<{ names: string[] }>(res);
   return data.names;
+}
+
+/** Persist the display order of sequence folders (drag-reorder). */
+export async function apiSequenceFolderOrder(charKey: string, order: string[]): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/sequence/folder_order`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ order }),
+      credentials: "omit",
+    }
+  );
+  await readJson<{ ok: boolean }>(res);
 }
 
 export async function apiSequenceCreate(params: {

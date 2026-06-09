@@ -2,14 +2,22 @@
 
 import React from "react";
 
-/** Matches SequenceEditor timeline shell: resize viewport; inner tiles stay fixed size. */
-export function ResizableScrollGallery(props: {
-  children: React.ReactNode;
-  className?: string;
-  "aria-label"?: string;
-}) {
+/** Matches SequenceEditor timeline shell: resize viewport; inner tiles stay fixed size.
+ *
+ * Forwards a ref to the outer `overflow:auto` viewport `<div>` so callers can attach a dnd-kit
+ * droppable to the *clipped* viewport (not the tall inner content), keeping stacked scroll
+ * galleries' droppable rects from overlapping. */
+export const ResizableScrollGallery = React.forwardRef<
+  HTMLDivElement,
+  {
+    children: React.ReactNode;
+    className?: string;
+    "aria-label"?: string;
+  }
+>(function ResizableScrollGallery(props, ref) {
   return (
     <div
+      ref={ref}
       className={props.className}
       aria-label={props["aria-label"]}
       title="Drag the corner to resize the gallery panel"
@@ -29,4 +37,4 @@ export function ResizableScrollGallery(props: {
       {props.children}
     </div>
   );
-}
+});

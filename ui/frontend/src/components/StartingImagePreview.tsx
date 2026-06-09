@@ -73,33 +73,38 @@ export function StartingImagePreview(props: {
     flexDirection: "column",
   };
 
+  const zoomStageStyle: React.CSSProperties = hideControls
+    ? {
+        flex: 1,
+        minHeight: 0,
+        minWidth: 0,
+        display: "flex",
+        flexDirection: "column",
+      }
+    : {
+        width: fitMaxWidth,
+        height: fitMaxHeight,
+        flexShrink: 0,
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
+      };
+
   const zoomBlock = (
-    <ZoomableImage
-      src={zoomSrc}
-      fitMaxWidth={fitMaxWidth}
-      fitMaxHeight={fitMaxHeight}
-      onImageError={onImageError}
-    />
+    <div style={zoomStageStyle}>
+      <ZoomableImage
+        src={zoomSrc}
+        fitMaxWidth="100%"
+        fitMaxHeight="100%"
+        onImageError={onImageError}
+      />
+    </div>
   );
 
   return (
     <>
       <div style={outerStyle} onContextMenu={hideControls ? undefined : openContextMenu}>
-        {hideControls ? (
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              minWidth: 0,
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            {zoomBlock}
-          </div>
-        ) : (
-          zoomBlock
-        )}
+        {zoomBlock}
         {hideControls ? null : (
           <div
             style={{

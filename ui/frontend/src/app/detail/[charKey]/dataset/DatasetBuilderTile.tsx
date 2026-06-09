@@ -11,7 +11,6 @@ import type { SharedLogStreamHandle } from "../../../../components/SharedLogStre
 import { SortableItemInContainer } from "../../../../components/dnd/SortableMultiGrid";
 import type { BuilderEntry } from "./builderTypes";
 import { buildBuilderEntriesPreserve, displayRelPath } from "./datasetBuilderStripUtils";
-import { SEQUENCE_BUILDER_DRAG_MIME } from "./sequenceGalleryUtils";
 
 const TILE = 120;
 
@@ -66,6 +65,8 @@ export type DatasetBuilderTileProps = {
     /** Gallery-relative path for the tile (base image used as Comfy input when set). */
     inputRelPath?: string;
   }) => void;
+  /** Open Batch Generate for the selection (ensuring this tile is included). */
+  onRequestBatchGenerate?: (tileId: string) => void;
   onOpenPreview: (paths: string[], index: number, title: string) => void;
   setEntries: React.Dispatch<React.SetStateAction<BuilderEntry[]>>;
   setDirty: React.Dispatch<React.SetStateAction<boolean>>;
@@ -97,6 +98,7 @@ function DatasetBuilderTileInner(props: DatasetBuilderTileProps) {
     onPrompt,
     onAiEditTile,
     onRequestAddAngles,
+    onRequestBatchGenerate,
     onOpenPreview,
     setEntries,
     setDirty,
@@ -126,6 +128,15 @@ function DatasetBuilderTileInner(props: DatasetBuilderTileProps) {
           if (!rel) return;
           const items: ContextMenuItem[] = [
             { key: "aiEdit", label: "AI Edit", onSelect: () => onAiEditTile(e) },
+            ...(onRequestBatchGenerate
+              ? [
+                  {
+                    key: "batchGen",
+                    label: "Batch Generate",
+                    onSelect: () => onRequestBatchGenerate(e.tileId),
+                  } as ContextMenuItem,
+                ]
+              : []),
             ...(onRequestAddAngles &&
             (e.sourceKind === "pose" || e.sourceKind === "expr") &&
             isLikelyFolderBaseTile(e)
@@ -319,48 +330,6 @@ function DatasetBuilderTileInner(props: DatasetBuilderTileProps) {
             style={{ margin: 0 }}
           />
         </label>
-        {rel && !e.builderHidden ? (
-          <span
-            role="button"
-            aria-label="Drag to a sequence"
-            title="Drag to a sequence"
-            draggable={!busy}
-            onMouseDown={(ev) => ev.stopPropagation()}
-            onPointerDown={(ev) => ev.stopPropagation()}
-            onClick={(ev) => ev.stopPropagation()}
-            onDragStart={(ev) => {
-              ev.stopPropagation();
-              ev.dataTransfer.effectAllowed = "copy";
-              ev.dataTransfer.setData(
-                SEQUENCE_BUILDER_DRAG_MIME,
-                JSON.stringify({ relPath: rel })
-              );
-              const img = ev.currentTarget
-                .closest("button")
-                ?.querySelector("img") as HTMLImageElement | null;
-              if (img) ev.dataTransfer.setDragImage(img, 24, 24);
-            }}
-            style={{
-              position: "absolute",
-              right: 4,
-              bottom: 4,
-              zIndex: 2,
-              width: 20,
-              height: 20,
-              display: "grid",
-              placeItems: "center",
-              background: "rgba(255,255,255,0.85)",
-              border: "1px solid rgba(0,0,0,0.4)",
-              borderRadius: 3,
-              cursor: "grab",
-              fontSize: 12,
-              lineHeight: 1,
-              userSelect: "none",
-            }}
-          >
-            {"\u2832"}
-          </span>
-        ) : null}
       </button>
     </SortableItemInContainer>
   );
@@ -388,6 +357,7 @@ function tilePropsEqual(prev: DatasetBuilderTileProps, next: DatasetBuilderTileP
     prev.onPrompt === next.onPrompt &&
     prev.onAiEditTile === next.onAiEditTile &&
     prev.onRequestAddAngles === next.onRequestAddAngles &&
+    prev.onRequestBatchGenerate === next.onRequestBatchGenerate &&
     prev.onOpenPreview === next.onOpenPreview &&
     prev.setEntries === next.setEntries &&
     prev.setDirty === next.setDirty &&

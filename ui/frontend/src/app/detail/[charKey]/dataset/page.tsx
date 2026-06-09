@@ -17,21 +17,16 @@ import {
   apiDatasetSavedCommit,
   apiDatasetSavedOrder,
   apiPoseAngleGroups,
-  apiSequenceCreate,
-  apiSequenceGet,
-  apiSequenceFolderDelete,
-  apiSequenceFolderDuplicate,
-  apiSequenceFolderNames,
-  apiSequenceFolderRename,
-  apiSequencePut,
+  apiPoseCatalog,
+  apiExpressionCatalog,
+  type PoseCatalogItem,
+  type ExpressionCatalogItem,
   apiUploadStaging,
   assetUrlFromRelPath,
   BuilderSourceItem,
   runDetailWsJob,
-  runShotMakeAngleWsJob,
   type AngleGroup,
 } from "../../../../lib/api";
-import { SequenceEditor } from "./SequenceEditor";
 import {
   DesktopContextMenu,
   ContextMenuItem,
@@ -43,7 +38,7 @@ import { GalleryImageLightbox } from "../../../../components/GalleryImageLightbo
 import { ConnectedJobRunModal } from "../../../../components/ConnectedJobRunModal";
 import { useJobRunSession, type BeginSessionOpts } from "../../../../hooks/useJobRunSession";
 import { AiEditModal } from "../../../../components/AiEditModal";
-import { AngleSubsetModal } from "../../../../components/AngleSubsetModal";
+import { BatchGenerateModal, type BatchGenerateSelection } from "../../../../components/BatchGenerateModal";
 import { CameraAngleModal } from "../../../../components/CameraAngleModal";
 import { useAppError } from "../../../../components/ErrorProvider";
 import { SortableGrid, SortableItem } from "../../../../components/dnd/SortableGrid";
@@ -58,7 +53,6 @@ import {
   syncBuilderStripsFromApi,
 } from "./datasetBuilderStripUtils";
 import { DatasetBuilderTab } from "./DatasetBuilderTab";
-import { addImageToSequenceGallery } from "./datasetSequenceDrop";
 
 const TILE = 120;
 
@@ -90,12 +84,9 @@ export default function DatasetPage() {
   const params = useParams<{ charKey: string }>();
   const charKey = params?.charKey ?? "";
 
-  const [view, setView] = useState<"builder" | "saved" | "sequence">("builder");
+  const [view, setView] = useState<"builder" | "saved">("builder");
   const [dirty, setDirty] = useState(false);
   const [folderNames, setFolderNames] = useState<string[]>([]);
-  const [sequenceNames, setSequenceNames] = useState<string[]>([]);
-  const [sequenceFolderKey, setSequenceFolderKey] = useState<string | null>(null);
-  const sequenceFlushRef = useRef<null | (() => Promise<void>)>(null);
   const [entries, setEntries] = useState<BuilderEntry[]>([]);
   const [builderPoseStripIds, setBuilderPoseStripIds] = useState<string[]>([]);
   const [builderExprStripIds, setBuilderExprStripIds] = useState<string[]>([]);
@@ -141,59 +132,25 @@ export default function DatasetPage() {
     inputRelPath?: string;
   } | null>(null);
   const [datasetAngleGroups, setDatasetAngleGroups] = useState<AngleGroup[]>([]);
+  const [datasetPoseCatalog, setDatasetPoseCatalog] = useState<PoseCatalogItem[]>([]);
+  const [datasetExprCatalog, setDatasetExprCatalog] = useState<ExpressionCatalogItem[]>([]);
   // Per-tile single-angle camera gizmo (right-click "Add angle").
   const [datasetCameraAngleOpen, setDatasetCameraAngleOpen] = useState(false);
   const [datasetCameraImageUrl, setDatasetCameraImageUrl] = useState<string | null>(null);
-  // Batch Angle (checkbox grid) over selected builder tiles (toolbar button).
-  const [datasetBatchAngleOpen, setDatasetBatchAngleOpen] = useState(false);
-
-  // Sequence gallery-frame single-angle camera gizmo (right-click "New Angle").
-  const [seqAngleOpen, setSeqAngleOpen] = useState(false);
-  const [seqAngleImageUrl, setSeqAngleImageUrl] = useState<string | null>(null);
-  const seqAngleCtxRef = useRef<{
-    seqName: string;
-    galleryItemId: string;
-    relPath: string;
-  } | null>(null);
+  // Batch Generate (angles / expression / pose) over selected builder tiles (toolbar button).
+  const [datasetBatchGenOpen, setDatasetBatchGenOpen] = useState(false);
 
   const [aiEditOpen, setAiEditOpen] = useState(false);
-  const [aiEditMode, setAiEditMode] = useState<"builder" | "saved" | "sequence">("builder");
+  const [aiEditMode, setAiEditMode] = useState<"builder" | "saved">("builder");
   const [aiEditSourceRelPath, setAiEditSourceRelPath] = useState<string>("");
   const [aiEditBuilderCtx, setAiEditBuilderCtx] = useState<BuilderEntry | null>(null);
   const [aiEditSavedCtx, setAiEditSavedCtx] = useState<SavedEntry | null>(null);
-  const [aiEditSequenceName, setAiEditSequenceName] = useState<string>("");
-  const [aiEditSequenceGalleryItemId, setAiEditSequenceGalleryItemId] = useState<string>("");
 
   const refreshStrip = useCallback(async () => {
     if (!charKey) return;
     const names = await apiDatasetFolderNames(charKey);
     setFolderNames(names);
   }, [charKey]);
-
-  const refreshSequenceStrip = useCallback(async () => {
-    if (!charKey) return;
-    const names = await apiSequenceFolderNames(charKey);
-    setSequenceNames(names);
-  }, [charKey]);
-
-  const onSequenceEditorError = useCallback(
-    (msg: string, err?: unknown) => {
-      showError({ message: msg, error: err });
-    },
-    [showError]
-  );
-
-  const onDropBuilderImageOnSequence = useCallback(
-    async (sequenceName: string, sourceRelPath: string) => {
-      try {
-        await addImageToSequenceGallery(charKey, sequenceName, sourceRelPath);
-        await refreshSequenceStrip();
-      } catch (e) {
-        showError({ message: "Could not add image to sequence gallery.", error: e });
-      }
-    },
-    [charKey, refreshSequenceStrip, showError]
-  );
 
   const openAiEditBuilder = useCallback(
     (entry: BuilderEntry) => {
@@ -229,83 +186,6 @@ export default function DatasetPage() {
       setAiEditOpen(true);
     },
     [savedName, showError]
-  );
-
-  const openAiEditSequenceGallery = useCallback(
-    (ctx: { relPath: string; galleryItemId: string }) => {
-      if (!sequenceFolderKey) {
-        showError({ message: "AI Edit: sequence name missing." });
-        return;
-      }
-      const rel = (ctx.relPath || "").trim();
-      if (!rel) {
-        showError({ message: "AI Edit: source image not found." });
-        return;
-      }
-      setAiEditMode("sequence");
-      setAiEditBuilderCtx(null);
-      setAiEditSavedCtx(null);
-      setAiEditSequenceName(sequenceFolderKey);
-      setAiEditSequenceGalleryItemId(ctx.galleryItemId);
-      setAiEditSourceRelPath(rel);
-      setAiEditOpen(true);
-    },
-    [sequenceFolderKey, showError]
-  );
-
-  const openNewAngleSequenceGallery = useCallback(
-    (ctx: { relPath: string; galleryItemId: string }) => {
-      if (!sequenceFolderKey) {
-        showError({ message: "New Angle: sequence name missing." });
-        return;
-      }
-      const rel = (ctx.relPath || "").trim();
-      if (!rel) {
-        showError({ message: "New Angle: source image not found." });
-        return;
-      }
-      seqAngleCtxRef.current = {
-        seqName: sequenceFolderKey,
-        galleryItemId: ctx.galleryItemId,
-        relPath: rel,
-      };
-      setSeqAngleImageUrl(assetUrlFromRelPath(rel));
-      setSeqAngleOpen(true);
-    },
-    [sequenceFolderKey, showError]
-  );
-
-  const applyNewAngleSequenceGallery = useCallback(
-    async (angleId: number) => {
-      setSeqAngleOpen(false);
-      const ctx = seqAngleCtxRef.current;
-      seqAngleCtxRef.current = null;
-      if (!charKey || !ctx) return;
-
-      beginSession({ title: "Generating new angle", clearLog: true });
-      try {
-        const done = await runShotMakeAngleWsJob({
-          imageRelPath: ctx.relPath,
-          angleId,
-          onLogLine: (line) => logRef.current?.pushLine(line),
-        });
-        const newRel = done.result?.relPath;
-        if (!done.ok || !newRel) {
-          throw new Error(done.error ?? "Angle generation returned no image.");
-        }
-        const manifest = await apiSequenceGet(charKey, ctx.seqName);
-        const gi = manifest.gallery.findIndex((g) => g.id === ctx.galleryItemId);
-        if (gi < 0) throw new Error("New Angle: sequence gallery item no longer exists");
-        const nextGallery = manifest.gallery.map((g, i) =>
-          i === gi ? { ...g, relPath: newRel } : g
-        );
-        await apiSequencePut(charKey, ctx.seqName, { ...manifest, gallery: nextGallery });
-        endSession();
-      } catch (err) {
-        failSession(err, "New Angle failed.");
-      }
-    },
-    [charKey, beginSession, endSession, failSession, apiSequenceGet, apiSequencePut]
   );
 
   const mergeBuilderFromApi = useCallback(
@@ -351,8 +231,6 @@ export default function DatasetPage() {
       const mode = aiEditMode;
       const builderCtx = aiEditBuilderCtx;
       const savedCtx = aiEditSavedCtx;
-      const seqName = aiEditSequenceName;
-      const seqGalleryItemId = aiEditSequenceGalleryItemId;
 
       setAiEditOpen(false);
       beginSession({ title: "AI Editing", clearLog: false });
@@ -399,31 +277,6 @@ export default function DatasetPage() {
 
           // Show the new file immediately in saved strip.
           await openSavedDataset(savedName);
-        } else {
-          if (!seqName) throw new Error("AI Edit: sequence name missing");
-          if (!seqGalleryItemId) throw new Error("AI Edit: sequence gallery item missing");
-          const done = await runDetailWsJob<{ fileRelPath: string }>({
-            charKey,
-            pathSuffix: "/dataset/ws",
-            payload: {
-              job: "ai_edit_sequence_gallery_image",
-              sequenceName: seqName,
-              sourceRelPath: aiEditSourceRelPath,
-              promptText,
-              ...(maskPngBase64 ? { maskPngBase64 } : {}),
-            },
-            onLogLine: (line) => logRef.current?.pushLine(line),
-          });
-          if (!done.ok || !done.result?.fileRelPath) {
-            throw new Error(done.error ?? "AI Edit sequence gallery image failed");
-          }
-          const manifest = await apiSequenceGet(charKey, seqName);
-          const gi = manifest.gallery.findIndex((g) => g.id === seqGalleryItemId);
-          if (gi < 0) throw new Error("AI Edit: sequence gallery item no longer exists");
-          const nextGallery = manifest.gallery.map((g, i) =>
-            i === gi ? { ...g, relPath: done.result!.fileRelPath } : g
-          );
-          await apiSequencePut(charKey, seqName, { ...manifest, gallery: nextGallery });
         }
       } catch (err) {
         failSession(err, "AI Edit failed.");
@@ -436,8 +289,6 @@ export default function DatasetPage() {
       aiEditSourceRelPath,
       aiEditBuilderCtx,
       aiEditSavedCtx,
-      aiEditSequenceName,
-      aiEditSequenceGalleryItemId,
       charKey,
       entries,
       beginSession,
@@ -445,8 +296,6 @@ export default function DatasetPage() {
       failSession,
       mergeBuilderFromApi,
       openSavedDataset,
-      apiSequenceGet,
-      apiSequencePut,
       savedName,
     ]
   );
@@ -465,75 +314,139 @@ export default function DatasetPage() {
     setDatasetCameraAngleOpen(true);
   }
 
-  // Toolbar "Batch Angle" -> checkbox grid applied to selected builder tiles.
-  async function openDatasetBatchAngles() {
+  // Toolbar "Batch Generate" -> angles / expression / pose for the selected builder tiles.
+  async function openDatasetBatchGenerate(ensureTileId?: string) {
     if (!charKey) return;
+    if (ensureTileId) {
+      setSelectedBuilder((prev) => (prev.has(ensureTileId) ? prev : new Set(prev).add(ensureTileId)));
+    }
     const selected = entries.filter(
-      (e) => selectedBuilder.has(e.tileId) && !e.removed
+      (e) => (selectedBuilder.has(e.tileId) || e.tileId === ensureTileId) && !e.removed
     );
     if (!selected.length) {
       showError({ message: "Select one or more tiles first (checkboxes)." });
       return;
     }
     try {
-      // The 96 angle groups are identical across pose/expr; load once for display.
-      const ag = await apiPoseAngleGroups(charKey);
+      // Angle groups are identical across pose/expr; catalogs drive the Expression/Pose sections.
+      const [ag, pc, ec] = await Promise.all([
+        apiPoseAngleGroups(charKey),
+        apiPoseCatalog(charKey),
+        apiExpressionCatalog(charKey),
+      ]);
       setDatasetAngleGroups(ag);
-      setDatasetBatchAngleOpen(true);
+      setDatasetPoseCatalog(pc);
+      setDatasetExprCatalog(ec);
+      setDatasetBatchGenOpen(true);
     } catch (e) {
-      showError({ message: "Failed to load angle groups.", error: e });
+      showError({ message: "Failed to load Batch Generate options.", error: e });
     }
   }
 
-  async function confirmDatasetBatchAngles(selectedAngleIds: number[]) {
-    setDatasetBatchAngleOpen(false);
-    if (!charKey || !selectedAngleIds.length) return;
+  async function confirmDatasetBatchGenerate(sel: BatchGenerateSelection) {
+    setDatasetBatchGenOpen(false);
+    if (!charKey) return;
     const selected = entries.filter(
       (e) => selectedBuilder.has(e.tileId) && !e.removed
     );
     if (!selected.length) return;
 
-    // Group selected tiles by kind, then by folderKey, collecting source paths.
-    const groups: { kind: "pose" | "expr"; folderKey: string; rels: string[] }[] = [];
-    for (const kind of ["pose", "expr"] as const) {
-      const byFolder = new Map<string, string[]>();
-      for (const e of selected.filter((x) => x.sourceKind === kind)) {
-        const arr = byFolder.get(e.folderKey) ?? [];
-        if (e.sourceRelPath) arr.push(e.sourceRelPath);
-        byFolder.set(e.folderKey, arr);
-      }
-      for (const [folderKey, rels] of byFolder) {
-        groups.push({ kind, folderKey, rels });
-      }
-    }
-    if (!groups.length) return;
+    const hasAngles = sel.angleIds.length > 0;
+    const hasPose = sel.poseItems.length > 0 || sel.posePrompts.length > 0;
+    const hasExpr = sel.exprItems.length > 0 || sel.exprPrompts.length > 0;
+    if (!hasAngles && !hasPose && !hasExpr) return;
 
-    beginSession({ title: "Generating angles", clearLog: true });
-    let anglesSessionOk = false;
+    // Wrap short prompt descriptions the same way the /create checklist does.
+    const wrapPose = (s: string) =>
+      `Edit the subject to ${s.trim()}, keep identity and clothing coherent unless impossible.`;
+    const wrapExpr = (s: string) => `Edit the face to show ${s.trim()}, keep identity coherent.`;
+
+    beginSession({ title: "Batch generating", clearLog: true });
+    let sessionOk = false;
     try {
-      for (const g of groups) {
-        const payload: Record<string, unknown> = {
-          job: "angles",
-          angleIds: selectedAngleIds,
-        };
-        if (g.kind === "pose") payload.poseKeys = [g.folderKey];
-        else payload.exprKeys = [g.folderKey];
-        if (g.rels.length) payload.inputRelPaths = g.rels;
-
-        const done = await runDetailWsJob({
-          charKey,
-          pathSuffix: g.kind === "pose" ? "/pose/ws" : "/expression/ws",
-          payload,
-          onLogLine: (line) => logRef.current?.pushLine(line),
-        });
-        if (!done.ok) {
-          failSession(
-            new Error(done.error ?? "Angle generation failed."),
-            "Angle generation failed."
-          );
-          return;
+      // ── Angles: grouped by kind + folder (reuse the original grouping) ──────
+      if (hasAngles) {
+        const groups: { kind: "pose" | "expr"; folderKey: string; rels: string[] }[] = [];
+        for (const kind of ["pose", "expr"] as const) {
+          const byFolder = new Map<string, string[]>();
+          for (const e of selected.filter((x) => x.sourceKind === kind)) {
+            const arr = byFolder.get(e.folderKey) ?? [];
+            if (e.sourceRelPath) arr.push(e.sourceRelPath);
+            byFolder.set(e.folderKey, arr);
+          }
+          for (const [folderKey, rels] of byFolder) groups.push({ kind, folderKey, rels });
+        }
+        for (const g of groups) {
+          const payload: Record<string, unknown> = { job: "angles", angleIds: sel.angleIds };
+          if (g.kind === "pose") payload.poseKeys = [g.folderKey];
+          else payload.exprKeys = [g.folderKey];
+          if (g.rels.length) payload.inputRelPaths = g.rels;
+          const done = await runDetailWsJob({
+            charKey,
+            pathSuffix: g.kind === "pose" ? "/pose/ws" : "/expression/ws",
+            payload,
+            onLogLine: (line) => logRef.current?.pushLine(line),
+          });
+          if (!done.ok) {
+            failSession(new Error(done.error ?? "Angle generation failed."), "Angle generation failed.");
+            return;
+          }
         }
       }
+
+      // ── Catalog + custom prompts: per selected tile, base = its source image ──
+      const tilesWithRel = selected.filter((e) => e.sourceRelPath);
+      const runCatalogAndPrompts = async (
+        suffix: "/pose/ws" | "/expression/ws",
+        items: { catalogId: number; label: string }[],
+        prompts: string[]
+      ) => {
+        for (const e of tilesWithRel) {
+          if (items.length) {
+            const done = await runDetailWsJob({
+              charKey,
+              pathSuffix: suffix,
+              payload: { job: "generate_catalog", baseRelPath: e.sourceRelPath, items },
+              onLogLine: (line) => logRef.current?.pushLine(line),
+            });
+            if (!done.ok) {
+              failSession(new Error(done.error ?? "Generation failed."), "Batch generate failed.");
+              return false;
+            }
+          }
+          if (prompts.length) {
+            const done = await runDetailWsJob({
+              charKey,
+              pathSuffix: suffix,
+              payload: { job: "generate_prompts", baseRelPath: e.sourceRelPath, prompts },
+              onLogLine: (line) => logRef.current?.pushLine(line),
+            });
+            if (!done.ok) {
+              failSession(new Error(done.error ?? "Generation failed."), "Batch generate failed.");
+              return false;
+            }
+          }
+        }
+        return true;
+      };
+
+      if (hasExpr) {
+        const ok = await runCatalogAndPrompts(
+          "/expression/ws",
+          sel.exprItems,
+          sel.exprPrompts.map(wrapExpr)
+        );
+        if (!ok) return;
+      }
+      if (hasPose) {
+        const ok = await runCatalogAndPrompts(
+          "/pose/ws",
+          sel.poseItems,
+          sel.posePrompts.map(wrapPose)
+        );
+        if (!ok) return;
+      }
+
       const preserve = new Map(
         entries.map((e) => [
           e.tileId,
@@ -546,11 +459,11 @@ export default function DatasetPage() {
         ])
       );
       await mergeBuilderFromApi(preserve);
-      anglesSessionOk = true;
+      sessionOk = true;
     } catch (e) {
-      failSession(e, "Angle generation failed.");
+      failSession(e, "Batch generate failed.");
     } finally {
-      if (anglesSessionOk) endSession();
+      if (sessionOk) endSession();
     }
   }
 
@@ -625,14 +538,7 @@ export default function DatasetPage() {
     if (!charKey) return;
     void mergeBuilderFromApi(new Map());
     void refreshStrip();
-    void refreshSequenceStrip();
-  }, [charKey, mergeBuilderFromApi, refreshStrip, refreshSequenceStrip]);
-
-  useEffect(() => {
-    if (view === "sequence" && !sequenceFolderKey) {
-      setView("builder");
-    }
-  }, [view, sequenceFolderKey]);
+  }, [charKey, mergeBuilderFromApi, refreshStrip]);
 
   function toggleSel(setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string, on: boolean) {
     setter((prev) => {
@@ -812,69 +718,6 @@ export default function DatasetPage() {
     endSession();
   }
 
-  async function createSequenceFromSelection() {
-    if (!selectedBuilder.size) {
-      showError({ message: "Select at least one image to create a sequence." });
-      return;
-    }
-    const name = await askText({
-      title: "Create Sequence",
-      message: "Name for folder under sequence/ (required):",
-      defaultValue: "",
-      confirmText: "Create",
-    });
-    if (!name?.trim()) {
-      showError({ message: "A sequence name is required." });
-      return;
-    }
-    const orderedIds = builderStripOrderedTileIds(
-      entries,
-      builderPoseStripIds,
-      builderExprStripIds,
-      { requireSelectable: true }
-    );
-    const exportEntries = orderedIds
-      .filter((id) => selectedBuilder.has(id))
-      .map((id) => entries.find((e) => e.tileId === id))
-      .filter((e): e is BuilderEntry => Boolean(e))
-      .map((e) => {
-        const rel = displayRelPath(e);
-        if (!rel) return null;
-        return {
-          sourceKind: e.sourceKind,
-          folderKey: e.folderKey,
-          fileRelPath: rel,
-        };
-      })
-      .filter(Boolean) as { sourceKind: string; folderKey: string; fileRelPath: string }[];
-    if (!exportEntries.length) {
-      showError({
-        message:
-          "No images in selection (check removed, hidden on this page, or missing files).",
-      });
-      return;
-    }
-    beginSession({ title: "Creating sequence", clearLog: true });
-    pushLog(`Sequence name: ${name.trim()}`);
-    pushLog(`Source entries: ${exportEntries.length}`);
-    pushLog("Calling create sequence API…");
-    try {
-      const r = await apiSequenceCreate({
-        charKey,
-        name: name.trim(),
-        entries: exportEntries,
-      });
-      pushLog(r.message);
-      await refreshSequenceStrip();
-      setSequenceFolderKey(r.folderName);
-      setView("sequence");
-      setSelectedBuilder(new Set());
-      endSession();
-    } catch (e) {
-      failSession(e, "Create sequence failed.");
-    }
-  }
-
   async function openSavedDataset(name: string) {
     const imgs = await apiDatasetImages(charKey, name);
     setSavedName(name);
@@ -893,18 +736,6 @@ export default function DatasetPage() {
   }
 
   function handleBack() {
-    if (view === "sequence") {
-      void (async () => {
-        try {
-          await (sequenceFlushRef.current?.() ?? Promise.resolve());
-        } catch {
-          /* best-effort flush */
-        }
-        setSequenceFolderKey(null);
-        setView("builder");
-      })();
-      return;
-    }
     if (view === "saved") {
       setView("builder");
       return;
@@ -1026,9 +857,7 @@ export default function DatasetPage() {
             setBuilderAnchorTileId={setBuilderAnchorTileId}
             onBuilderTileCheckboxChange={onBuilderTileCheckboxChange}
             folderNames={folderNames}
-            sequenceNames={sequenceNames}
             refreshStrip={refreshStrip}
-            refreshSequenceStrip={refreshSequenceStrip}
             setMenu={setMenu}
             showError={showError}
             askText={askText}
@@ -1038,22 +867,19 @@ export default function DatasetPage() {
             logRef={logRef}
             onAiEditTile={openAiEditBuilder}
             onRequestAddAngles={openDatasetBuilderAddAngles}
+            onRequestBatchGenerate={(tileId) => void openDatasetBatchGenerate(tileId)}
             onOpenPreview={(paths, index, title) => setLightbox({ paths, index, title })}
             builderPoseStripIds={builderPoseStripIds}
             builderExprStripIds={builderExprStripIds}
             setBuilderPoseStripIds={setBuilderPoseStripIds}
             setBuilderExprStripIds={setBuilderExprStripIds}
-            setView={setView}
-            setSequenceFolderKey={setSequenceFolderKey}
             onSaveDatasetFolder={saveDatasetFolder}
             onOpenSavedDataset={openSavedDataset}
-            onCreateSequenceFromSelection={createSequenceFromSelection}
             onBatchRemoveBackground={() => void batchRemoveBackground(Array.from(selectedBuilder))}
             onBatchAddNoise={() => void batchAddNoise(Array.from(selectedBuilder))}
             onBatchRestoreBackground={() => batchRestoreBackground(Array.from(selectedBuilder))}
             onBatchRemoveNoise={() => batchRemoveNoise(Array.from(selectedBuilder))}
-            onBatchAngle={() => void openDatasetBatchAngles()}
-            onDropBuilderImageOnSequence={onDropBuilderImageOnSequence}
+            onBatchGenerate={() => void openDatasetBatchGenerate()}
             beginRemoveBackgroundModal={beginRemoveBackgroundModal}
             endRemoveBackgroundModal={endRemoveBackgroundModal}
             failRmbgJob={failRmbgJob}
@@ -1088,26 +914,6 @@ export default function DatasetPage() {
             onRenameDataset={renameDatasetAndStay}
             onAiEditTile={openAiEditSaved}
           />
-        ) : view === "sequence" && sequenceFolderKey ? (
-          <div>
-            <div style={{ marginBottom: 8 }}>Sequence: {sequenceFolderKey}</div>
-            <SequenceEditor
-              charKey={charKey}
-              sequenceName={sequenceFolderKey}
-              onError={onSequenceEditorError}
-              onAiEditSequenceGallery={openAiEditSequenceGallery}
-              onNewAngleSequenceGallery={openNewAngleSequenceGallery}
-              jobModal={{
-                begin: beginSession,
-                end: endSession,
-                fail: failSession,
-                log: pushLog,
-              }}
-              registerFlushSave={(fn) => {
-                sequenceFlushRef.current = fn;
-              }}
-            />
-          </div>
         ) : null}
       </div>
 
@@ -1134,23 +940,14 @@ export default function DatasetPage() {
         }}
       />
 
-      <AngleSubsetModal
-        open={datasetBatchAngleOpen}
-        title="Batch Angle: generate angles for the selected tiles."
-        groups={datasetAngleGroups}
-        onCancel={() => setDatasetBatchAngleOpen(false)}
-        onConfirm={(ids) => void confirmDatasetBatchAngles(ids)}
-      />
-
-      <CameraAngleModal
-        open={seqAngleOpen}
-        title="New Angle"
-        imageUrl={seqAngleImageUrl}
-        onCancel={() => {
-          setSeqAngleOpen(false);
-          seqAngleCtxRef.current = null;
-        }}
-        onConfirm={(angleId) => void applyNewAngleSequenceGallery(angleId)}
+      <BatchGenerateModal
+        open={datasetBatchGenOpen}
+        title="Batch Generate: angles / expression / pose for the selected tiles."
+        angleGroups={datasetAngleGroups}
+        poseCatalog={datasetPoseCatalog}
+        exprCatalog={datasetExprCatalog}
+        onCancel={() => setDatasetBatchGenOpen(false)}
+        onConfirm={(s) => void confirmDatasetBatchGenerate(s)}
       />
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />

@@ -37,7 +37,9 @@
       "Bash(Get-ChildItem -Path \".\" -Directory)",
       "Bash(Select-Object Name)",
       "Bash(Get-ChildItem -Path \"D:\\\\Animation\\\\anime2026_refactored\\\\ui\\\\api\" -Filter \"*_router.py\" -File)",
-      "Bash(grep -nE \"^import \\(signal|subprocess|socket|os|time|threading\\)$|^import os$|import signal\" services/logic.py)"
+      "Bash(grep -nE \"^import \\(signal|subprocess|socket|os|time|threading\\)$|^import os$|import signal\" services/logic.py)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Animation\\\\anime2026_refactored\" -Directory -Depth 2)",
+      "Bash(cd \"D:\\\\Animation\\\\anime2026_refactored\" && grep -n \"def create_sequence_from_sources\\\\|def list_sequence_folder_names\\\\|def read_sequence_manifest\\\\|def write_sequence_manifest\\\\|def _sequence_root\\\\|def.*sequence_folder\\\\|sequence_order\\\\|def empty_sequence\\\\|def create_empty\" services/logic.py | head; echo \"=== list_sequence_folder_names body ===\"; sed -n '/def list_sequence_folder_names/,/^def /p' services/logic.py | head -40)"
     ]
   }
 }

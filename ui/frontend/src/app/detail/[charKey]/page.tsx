@@ -61,12 +61,24 @@ export default function DetailGatePage() {
 
   const tiles = useMemo(() => {
     return [
-      { label: "New Pose", href: `/detail/${encodeURIComponent(charKey)}/pose` },
       {
-        label: "New Expression",
-        href: `/detail/${encodeURIComponent(charKey)}/expression`,
+        key: "create",
+        label: (
+          <span style={{ lineHeight: 1.35 }}>
+            Pose
+            <br />
+            Expression
+            <br />
+            Animation
+          </span>
+        ),
+        href: `/detail/${encodeURIComponent(charKey)}/create`,
       },
-      { label: "Build Dataset and Sequence", href: `/detail/${encodeURIComponent(charKey)}/dataset` },
+      {
+        key: "dataset",
+        label: "Build Dataset and Sequence",
+        href: `/detail/${encodeURIComponent(charKey)}/dataset`,
+      },
     ];
   }, [charKey]);
 
@@ -210,6 +222,7 @@ export default function DetailGatePage() {
           >
             {detailPreviewRelPath ? (
               <StartingImagePreview
+                key={detailPreviewRelPath}
                 hideControls
                 storageRelPath={detailPreviewRelPath}
                 imageSrc={`${assetUrlFromRelPath(detailPreviewRelPath)}?v=${coverVersion}`}
@@ -219,8 +232,6 @@ export default function DetailGatePage() {
                 onNext={() => {}}
                 onDeleteCacheEntry={() => {}}
                 onImageError={() => {}}
-                fitMaxWidth="100%"
-                fitMaxHeight={`${PREVIEW_H}px`}
               />
             ) : (
               <div
@@ -293,7 +304,7 @@ export default function DetailGatePage() {
           >
             {tiles.map((t) => (
               <SquareButton
-                key={t.label}
+                key={t.key}
                 onClick={() => router.push(t.href)}
                 variant="tile"
                 tone="dark"

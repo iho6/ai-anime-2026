@@ -23,6 +23,16 @@ def sequence_folder_names(char_key: str) -> dict[str, list[str]]:
     return {"names": logic.list_sequence_folder_names(char_key)}
 
 
+class SequenceFolderOrderBody(BaseModel):
+    order: list[str]
+
+
+@router.post("/detail/{char_key}/sequence/folder_order")
+def sequence_folder_order(char_key: str, body: SequenceFolderOrderBody) -> dict[str, bool]:
+    logic.set_sequence_folder_order(char_key, body.order)
+    return {"ok": True}
+
+
 class SequenceCreateEntry(BaseModel):
     sourceKind: str
     folderKey: str
@@ -45,8 +55,7 @@ def sequence_create(char_key: str, body: SequenceCreateBody) -> dict[str, str]:
             raise HTTPException(400, f"Invalid source_kind: {e.sourceKind}")
         abs_path = str(resolve_storage_rel_file(e.fileRelPath))
         entries_out.append({"file_path": abs_path})
-    if not entries_out:
-        raise HTTPException(400, "No images in sequence.")
+    # Empty entries are allowed: creates an empty sequence to drag images into.
     try:
         folder = logic.create_sequence_from_sources(char_key, name, entries_out)
     except ValueError as ex:

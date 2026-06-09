@@ -5090,6 +5090,7 @@ HIDDEN_EXPR_IMAGES = "hidden_expression_images"
 GALLERY_FLAT_MIGRATED_V1 = "gallery_flat_migrated_v1"
 GALLERY_LAYOUT_V2 = "gallery_layout_v2"
 GALLERY_FILENAME_V3 = "gallery_filename_v3"
+SEQUENCE_FOLDER_ORDER = "sequence_folder_order"
 
 POSE_GALLERY_BASE_STEM = "pose_000"
 EXPR_GALLERY_BASE_STEM = "expr_000"
@@ -7009,6 +7010,61 @@ def write_dataset_folder_zip_file(char_key: str, dataset_name: str) -> tuple[str
     return tmp_path, f"{root_name}.zip"
 
 
+def write_gallery_images_zip_file(char_key: str, rel_paths: list[str]) -> tuple[str, str]:
+    """Zip pose/expression gallery images by storage-relative paths.
+
+    Returns ``(absolute_path_to_temp_zip, suggested_download_filename.zip)``.
+    The caller must delete the temp file after the response is sent.
+    """
+    character = get_character_paths(char_key)
+    char_root = character.character_dir.resolve()
+    root_storage = DEFAULT_STORAGE_ROOT.resolve()
+
+    seen: set[str] = set()
+    entries: list[tuple[Path, str]] = []
+    for raw in rel_paths or []:
+        rel_norm = str(raw).strip().replace("\\", "/").lstrip("/")
+        if not rel_norm or rel_norm in seen:
+            continue
+        seen.add(rel_norm)
+        abs_p = (DEFAULT_STORAGE_ROOT / rel_norm).resolve()
+        if root_storage != abs_p and root_storage not in abs_p.parents:
+            raise ValueError(f"Path escapes storage root: {rel_norm}")
+        if char_root != abs_p and char_root not in abs_p.parents:
+            raise ValueError(f"Path is outside character folder: {rel_norm}")
+        if not abs_p.is_file():
+            raise ValueError(f"Image not found: {rel_norm}")
+        try:
+            rel_to_char = abs_p.relative_to(char_root)
+        except ValueError as e:
+            raise ValueError(f"Path must be under character folder: {rel_norm}") from e
+        top = rel_to_char.parts[0] if rel_to_char.parts else ""
+        if top not in ("poses", "expressions"):
+            raise ValueError(f"Path must be under poses/ or expressions/: {rel_norm}")
+        if not _is_gallery_image_file(abs_p):
+            raise ValueError(f"Not a supported gallery image: {rel_norm}")
+        entries.append((abs_p, rel_to_char.as_posix()))
+
+    if not entries:
+        raise ValueError("No gallery images to download.")
+
+    fd, tmp_path = tempfile.mkstemp(suffix=".zip", prefix="gallery_zip_")
+    os.close(fd)
+    try:
+        with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for abs_p, arcname in entries:
+                zf.write(abs_p, arcname=arcname)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+    safe_key = sanitize_for_folder(char_key) or "gallery"
+    return tmp_path, f"{safe_key}_gallery.zip"
+
+
 def delete_dataset_folder(char_key: str, dataset_name: str) -> None:
     folder = dataset_folder_path(char_key, dataset_name)
     if not folder.exists():
@@ -7689,10 +7745,43 @@ def list_sequence_folder_names(char_key: str) -> list[str]:
     root = character.sequences_dir
     if not root.exists():
         return []
-    return sorted(
+    on_disk = sorted(
         [p.name for p in root.iterdir() if p.is_dir()],
         key=lambda s: s.lower(),
     )
+    # Apply the persisted custom order (self-healing): saved order first, then any new folders
+    # (alphabetical), dropping folders that no longer exist.
+    st = read_gallery_ui_state(char_key)
+    saved = [str(x) for x in (st.get(SEQUENCE_FOLDER_ORDER) or [])]
+    on_disk_set = set(on_disk)
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for name in saved:
+        if name in on_disk_set and name not in seen:
+            ordered.append(name)
+            seen.add(name)
+    for name in on_disk:
+        if name not in seen:
+            ordered.append(name)
+            seen.add(name)
+    return ordered
+
+
+def set_sequence_folder_order(char_key: str, names: list[str]) -> None:
+    """Persist the display order of sequence folders (deduped, existing folders only)."""
+    character = get_character_paths(char_key)
+    root = character.sequences_dir
+    on_disk = {p.name for p in root.iterdir() if p.is_dir()} if root.exists() else set()
+    seen: set[str] = set()
+    order: list[str] = []
+    for raw in names or []:
+        name = str(raw).strip()
+        if name in on_disk and name not in seen:
+            order.append(name)
+            seen.add(name)
+    st = read_gallery_ui_state(char_key)
+    st[SEQUENCE_FOLDER_ORDER] = order
+    write_gallery_ui_state(char_key, st)
 
 
 def sequence_folder_path(char_key: str, sequence_name: str) -> Path:

@@ -15,6 +15,7 @@ import {
   DragOverlay,
   DragOverEvent,
   DragStartEvent,
+  MeasuringStrategy,
   PointerSensor,
   useDroppable,
   useSensor,
@@ -104,6 +105,16 @@ export function SortableMultiGrid(props: {
    * matching DatasetBuilderDndShell. Use for visible/hidden gallery splits.
    */
   crossContainerPreview?: boolean;
+  /**
+   * Force the inflated, pointer-first `galleryCollisionDetection` (forgiving crossing/targeting) even
+   * when `crossContainerPreview` is off. Use when you want easy hit-targeting without the reflow-based
+   * placeholder preview (which can cause layout/collision feedback loops on flex-wrap grids).
+   */
+  forgivingCollision?: boolean;
+  /** Fires when the hovered container changes during a drag (null when none / drag ends). */
+  onOverContainerChange?: (containerId: ContainerKey | null) => void;
+  /** Fires with the drag's source container on start, null on end/cancel. */
+  onActiveContainerChange?: (containerId: ContainerKey | null) => void;
   style?: CSSProperties;
 }) {
   const {
@@ -114,8 +125,23 @@ export function SortableMultiGrid(props: {
     renderItem,
     renderDragOverlay,
     crossContainerPreview = true,
+    forgivingCollision,
+    onOverContainerChange,
+    onActiveContainerChange,
     style,
   } = props;
+  const lastOverFiredRef = useRef<ContainerKey | null>(null);
+  const fireOverContainer = (next: ContainerKey | null) => {
+    if (lastOverFiredRef.current === next) return;
+    lastOverFiredRef.current = next;
+    onOverContainerChange?.(next);
+  };
+  const lastActiveFiredRef = useRef<ContainerKey | null>(null);
+  const fireActiveContainer = (next: ContainerKey | null) => {
+    if (lastActiveFiredRef.current === next) return;
+    lastActiveFiredRef.current = next;
+    onActiveContainerChange?.(next);
+  };
   const [overContainerId, setOverContainerId] = useState<ContainerKey | null>(
     null
   );
@@ -139,10 +165,10 @@ export function SortableMultiGrid(props: {
 
   const collisionDetection = useMemo(
     () =>
-      crossContainerPreview
+      forgivingCollision || crossContainerPreview
         ? galleryCollisionDetection()
         : builderSurfaceCollisionDetection(),
-    [crossContainerPreview]
+    [forgivingCollision, crossContainerPreview]
   );
 
   const useOverlayClone = Boolean(renderDragOverlay);
@@ -153,6 +179,7 @@ export function SortableMultiGrid(props: {
         <DndContext
           sensors={sensors}
           collisionDetection={collisionDetection}
+          measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
           onDragStart={(ev: DragStartEvent) => {
             if (disabled) return;
             const sourceContainerId = String(
@@ -162,6 +189,8 @@ export function SortableMultiGrid(props: {
               setPreviewItemsIfChanged(setPreviewItems, null);
             }
             setOverContainerId(sourceContainerId || null);
+            fireOverContainer(sourceContainerId || null);
+            fireActiveContainer(sourceContainerId || null);
             lastItemOverIdRef.current = null;
             lastItemTargetContainerIdRef.current = null;
             lastOverRectRef.current = null;
@@ -179,7 +208,10 @@ export function SortableMultiGrid(props: {
                   (ev.over.data.current as { containerId?: string } | null)?.containerId ?? ""
                 )
               : "";
-            if (oc) setOverContainerId(oc);
+            if (oc) {
+              setOverContainerId(oc);
+              fireOverContainer(oc);
+            }
 
             const over = ev.over;
             const aid = String(ev.active.id);
@@ -312,6 +344,8 @@ export function SortableMultiGrid(props: {
             }
 
             setOverContainerId(null);
+            fireOverContainer(null);
+            fireActiveContainer(null);
 
             let insertAfter = false;
             if (endItemOver && ev.over) {
@@ -339,6 +373,8 @@ export function SortableMultiGrid(props: {
           }}
           onDragCancel={() => {
             setOverContainerId(null);
+            fireOverContainer(null);
+            fireActiveContainer(null);
             setActiveDrag(null);
             if (crossContainerPreview) {
               setPreviewItemsIfChanged(setPreviewItems, null);

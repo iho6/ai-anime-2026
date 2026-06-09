@@ -316,12 +316,23 @@ export function SequencePreviewLightbox(props: Props) {
                   enterCrop();
                 }}
               >
-                <ZoomableImage
-                  src={src}
-                  fitMaxWidth="100%"
-                  fitMaxHeight="100%"
-                  suppressDoubleClickReset
-                />
+                {playing ? (
+                  // While playing, render a fixed contained image (no per-frame re-fit / zoom) so
+                  // frames of differing dimensions don't jump in size.
+                  <img
+                    src={src}
+                    alt=""
+                    draggable={false}
+                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                  />
+                ) : (
+                  <ZoomableImage
+                    src={src}
+                    fitMaxWidth="100%"
+                    fitMaxHeight="100%"
+                    suppressDoubleClickReset
+                  />
+                )}
               </div>
             ) : (
               <img
