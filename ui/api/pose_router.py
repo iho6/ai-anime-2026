@@ -236,7 +236,34 @@ async def pose_job_ws(ws: WebSocket, char_key: str) -> None:
         return str(p)
 
     try:
-        if job == "generate_prompts":
+        if job == "generate_video_ref_sequence":
+            video_ref_id = (msg.get("videoRefId") or "").strip()
+            if not video_ref_id:
+                raise ValueError("videoRefId is required.")
+            prompts = msg.get("prompts") or []
+            if not isinstance(prompts, list):
+                raise ValueError("prompts must be a list")
+            texts = [str(p).strip() for p in prompts if str(p).strip()]
+            input_abs = base_abs_from_msg()
+
+            def work_video_seq(log_cb):
+                return logic.generate_pose_sequence_from_video_ref(
+                    char_key,
+                    video_ref_id,
+                    input_abs,
+                    texts,
+                    log_cb=log_cb,
+                )
+
+            result, err = await run_with_log_stream(ws, work_video_seq)
+            if err:
+                await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+            else:
+                await safe_send_json(
+                    ws, {"type": "done", "ok": True, "result": result}
+                )
+
+        elif job == "generate_prompts":
             prompts = msg.get("prompts") or []
             if not isinstance(prompts, list):
                 raise ValueError("prompts must be a list")

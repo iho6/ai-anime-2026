@@ -32,7 +32,11 @@ def save_staging_upload(char_key: str, data: bytes, original_name: str) -> str:
     dest_dir = character.character_dir / ".react_staging"
     dest_dir.mkdir(parents=True, exist_ok=True)
     suffix = Path(original_name or "").suffix.lower()
-    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}:
+    _allowed = {
+        ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif",
+        ".mp4", ".webm", ".mov", ".mkv", ".avi",
+    }
+    if suffix not in _allowed:
         suffix = ".png"
     dest = dest_dir / f"upload_{unique_suffix()}{suffix}"
     dest.write_bytes(data)

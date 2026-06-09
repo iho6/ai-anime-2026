@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 
 from services import logic, reference_storage
 from .ws_streaming import run_with_log_stream, safe_send_json
@@ -86,6 +87,38 @@ def reference_image_commit(body: dict[str, str]) -> dict[str, Any]:
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     return {"item": {"itemId": entry["id"], "relPath": entry["relPath"]}}
+
+
+@router.websocket("/reference/make_keypoint_video/ws")
+async def reference_make_keypoint_video_ws(ws: WebSocket) -> None:
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+    try:
+        video_rel = (msg.get("videoRelPath") or "").strip()
+        if not video_rel:
+            raise ValueError("videoRelPath is required.")
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            entry = logic.make_reference_keypoint_video(video_rel, log_cb=log_cb)
+            return {
+                "item": {
+                    "id": entry["id"],
+                    "videoRelPath": entry["videoRelPath"],
+                    "fps": entry.get("fps", 24),
+                    "frameSequence": entry.get("frameSequence") or {},
+                }
+            }
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
 
 
 @router.websocket("/reference/make_keypoint/ws")
@@ -181,10 +214,104 @@ def reference_images_reorder(body: dict[str, list[str]]) -> dict[str, bool]:
     return {"ok": True}
 
 
+@router.get("/reference/keypoints/layout")
+def reference_keypoints_layout() -> dict[str, Any]:
+    return reference_storage.get_keypoints_layout()
+
+
 @router.post("/reference/keypoints/reorder")
-def reference_keypoints_reorder(body: dict[str, list[str]]) -> dict[str, bool]:
-    order = body.get("order") or []
-    reference_storage.set_keypoints_order([str(x) for x in order])
+def reference_keypoints_reorder(body: dict[str, Any]) -> dict[str, bool]:
+    scope = str(body.get("scope") or "flat").strip()
+    order = [str(x) for x in (body.get("order") or [])]
+    if scope == "folder":
+        folder_id = str(body.get("folderId") or "").strip()
+        if not folder_id:
+            raise HTTPException(400, "folderId is required for folder scope.")
+        reference_storage.set_keypoint_folder_order(folder_id, order)
+    elif scope == "root":
+        reference_storage.set_keypoints_root_order(order)
+    else:
+        reference_storage.set_keypoints_order(order)
+    return {"ok": True}
+
+
+class KeypointFolderBody(BaseModel):
+    name: str
+    itemIds: list[str]
+
+
+class KeypointFolderAssignBody(BaseModel):
+    folderId: str | None = None
+    itemIds: list[str]
+
+
+@router.post("/reference/keypoints/folders")
+def reference_keypoints_create_folder(body: KeypointFolderBody) -> dict[str, Any]:
+    try:
+        folder = reference_storage.create_keypoint_folder(body.name, body.itemIds)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"folder": folder}
+
+
+@router.post("/reference/keypoints/folders/assign")
+def reference_keypoints_assign_folder(body: KeypointFolderAssignBody) -> dict[str, bool]:
+    try:
+        reference_storage.assign_keypoints_to_folder(body.folderId, body.itemIds)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"ok": True}
+
+
+@router.delete("/reference/keypoints/folders/{folder_id}")
+def reference_keypoints_delete_folder(folder_id: str) -> dict[str, bool]:
+    ok = reference_storage.delete_keypoint_folder(folder_id)
+    if not ok:
+        raise HTTPException(404, "Folder not found.")
+    return {"ok": True}
+
+
+@router.get("/reference/keypoints/video/{video_id}")
+def reference_keypoint_video_get(video_id: str) -> dict[str, Any]:
+    entry = reference_storage.get_keypoint_video(video_id)
+    if not entry:
+        raise HTTPException(404, "Video reference not found.")
+    return {
+        "id": entry["id"],
+        "videoRelPath": entry["videoRelPath"],
+        "fps": entry.get("fps", 24),
+        "frameSequence": entry.get("frameSequence") or {},
+    }
+
+
+class KeypointVideoStripBody(BaseModel):
+    frameSequence: dict[str, Any]
+
+
+@router.put("/reference/keypoints/video/{video_id}/frame_sequence")
+def reference_keypoint_video_update_strip(
+    video_id: str,
+    body: KeypointVideoStripBody,
+) -> dict[str, Any]:
+    try:
+        entry = reference_storage.update_keypoint_video_strip(
+            video_id, body.frameSequence
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {
+        "id": entry["id"],
+        "videoRelPath": entry["videoRelPath"],
+        "fps": entry.get("fps", 24),
+        "frameSequence": entry.get("frameSequence") or {},
+    }
+
+
+@router.delete("/reference/keypoints/video/{video_id}")
+def reference_keypoint_video_delete(video_id: str) -> dict[str, bool]:
+    ok = reference_storage.delete_keypoint_video(video_id)
+    if not ok:
+        raise HTTPException(404, "Video reference not found.")
     return {"ok": True}
 
 

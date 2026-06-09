@@ -102,6 +102,7 @@ export default function DatasetPage() {
     endSession,
     pushLog,
     failSession,
+    setRunningStatus,
     modalProps: jobModalProps,
   } = useJobRunSession(logRef);
 
@@ -232,8 +233,16 @@ export default function DatasetPage() {
       const builderCtx = aiEditBuilderCtx;
       const savedCtx = aiEditSavedCtx;
 
+      const onWsLogLine = (line: string) => {
+        pushLog(line);
+        const s = line.replace(/\s+/g, " ").trim();
+        setRunningStatus(s.length > 120 ? `${s.slice(0, 119)}…` : s);
+      };
+
       setAiEditOpen(false);
-      beginSession({ title: "AI Editing", clearLog: false });
+      beginSession({ title: "AI Editing", clearLog: true, runningStatus: "AI editing…" });
+      await Promise.resolve();
+      pushLog("AI editing…");
 
       try {
         if (mode === "builder") {
@@ -248,7 +257,7 @@ export default function DatasetPage() {
               promptText,
               ...(maskPngBase64 ? { maskPngBase64 } : {}),
             },
-            onLogLine: (line) => logRef.current?.pushLine(line),
+            onLogLine: onWsLogLine,
           });
           if (!done.ok || !done.result?.previewRelPath) {
             throw new Error(done.error ?? "AI Edit builder preview failed");
@@ -269,7 +278,7 @@ export default function DatasetPage() {
               promptText,
               ...(maskPngBase64 ? { maskPngBase64 } : {}),
             },
-            onLogLine: (line) => logRef.current?.pushLine(line),
+            onLogLine: onWsLogLine,
           });
           if (!done.ok) {
             throw new Error(done.error ?? "AI Edit saved image failed");
@@ -296,7 +305,9 @@ export default function DatasetPage() {
       failSession,
       mergeBuilderFromApi,
       openSavedDataset,
+      pushLog,
       savedName,
+      setRunningStatus,
     ]
   );
 

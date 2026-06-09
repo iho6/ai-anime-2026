@@ -472,7 +472,10 @@ export function TimelineCharacterPicker(props: {
         charKey={newPosePanel?.charKey ?? ""}
         busy={poseBusy}
         onCancel={() => setRefPickerOpen(false)}
-        onPickSaved={(ref) => { setNewPoseRef(ref); setRefPickerOpen(false); }}
+        onUseSelected={(sel) => {
+          if (sel.singles[0]) setNewPoseRef(sel.singles[0]);
+          setRefPickerOpen(false);
+        }}
         onPickNew={() => setRefPickerOpen(false)}
         onGenerateBase={() => setRefPickerOpen(false)}
         onOpenMotionRef={() => {

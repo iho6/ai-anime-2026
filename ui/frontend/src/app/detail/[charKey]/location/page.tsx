@@ -376,6 +376,7 @@ export default function LocationDetailPage() {
     beginSession,
     endSession,
     failSession,
+    pushLog,
     setRunningStatus,
     modalProps: jobModalProps,
   } = useJobRunSession(logRef);
@@ -915,20 +916,21 @@ export default function LocationDetailPage() {
         open={outpaintOpen}
         title="Outpaint"
         imageSrc={baseRel ? assetUrlFromRelPath(baseRel) : ""}
-        busy={busy}
+        busy={uiBusy}
         placeholder="Describe the scenery that you want to outpaint"
         actionLabel="Outpaint"
         onCancel={() => setOutpaintOpen(false)}
         onGenerate={async (promptText) => {
-          setBusy(true);
+          setOutpaintOpen(false);
+          beginSession({ title: "Outpainting", clearLog: true, runningStatus: "Outpainting…" });
+          await Promise.resolve();
+          pushLog("Outpainting…");
           try {
             await apiLocationOutpaint({ locationKey, promptText });
             await refresh();
-            setOutpaintOpen(false);
+            endSession();
           } catch (e) {
-            showError({ message: "Outpaint failed.", error: e });
-          } finally {
-            setBusy(false);
+            failSession(e, "Outpaint failed.");
           }
         }}
       />
@@ -943,14 +945,17 @@ export default function LocationDetailPage() {
         open={aiOpen}
         title="AI Edit"
         imageSrc={aiCtx ? assetUrlFromRelPath(aiCtx.relPath) : ""}
-        busy={busy}
+        busy={uiBusy}
         placeholder="Describe the edit (e.g. 'empty forest background' or 'add a bench')"
         onCancel={() => setAiOpen(false)}
         onGenerate={async (promptText, maskPngBase64) => {
           const ctx = aiCtx;
           if (!ctx) return;
           const section = ctx.folderKey === "lighting" ? "lighting" : "view";
-          setBusy(true);
+          setAiOpen(false);
+          beginSession({ title: "AI Editing", clearLog: true, runningStatus: "AI editing…" });
+          await Promise.resolve();
+          pushLog("AI editing…");
           try {
             await apiLocationAiEdit({
               locationKey,
@@ -960,11 +965,9 @@ export default function LocationDetailPage() {
               maskPngBase64,
             });
             await refresh();
-            setAiOpen(false);
+            endSession();
           } catch (e) {
-            showError({ message: "AI Edit failed.", error: e });
-          } finally {
-            setBusy(false);
+            failSession(e, "AI Edit failed.");
           }
         }}
       />

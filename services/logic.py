@@ -3487,6 +3487,160 @@ def generate_pose_starting_images_from_prompts(
     return created
 
 
+def _generate_pose_image_edit_url(
+    character_name: str,
+    base_image_path: str,
+    prompt_text: str,
+    *,
+    keypoint_image_path: str | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """Run image-edit pose generation and return the result URL (no pose gallery save)."""
+    effective = (prompt_text or "").strip()
+    kp = (keypoint_image_path or "").strip()
+    use_closeup_hint = bool(kp and character_base_closeup_composite_abs_path(character_name))
+    if not effective:
+        if kp:
+            base_p = DEFAULT_KEYPOINT_ONLY_POSE_PROMPT
+            effective = (
+                _append_closeup_keypoint_pose_hint(base_p)
+                if use_closeup_hint
+                else _append_keypoint_only_pose_hint(base_p)
+            )
+        else:
+            raise ValueError("No prompt text provided.")
+    elif kp:
+        effective = (
+            _append_closeup_keypoint_pose_hint(effective)
+            if use_closeup_hint
+            else _append_keypoint_only_pose_hint(effective)
+        )
+
+    body = _run_service_testmode(
+        "services.image_edit_ai_service.serverless",
+        [
+            "--test-mode",
+            "--enable-default",
+            "--default-port",
+            str(COMFY_PORT),
+            "--image-url",
+            base_image_path,
+            "--prompt-source",
+            "inline",
+            "--prompts-json",
+            json.dumps([effective]),
+            *_image_edit_aux_keypoint_cli_args(character_name, keypoint_image_path),
+            "--convert-local-to-url",
+        ],
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise RuntimeError(str(body["error"]))
+    results: list[dict[str, Any]] = body.get("results") or []
+    if not results:
+        raise RuntimeError("Image-edit returned no results.")
+    url = results[0].get("url")
+    if not isinstance(url, str) or not url.strip():
+        raise RuntimeError("Image-edit result missing url.")
+    return url.strip()
+
+
+def generate_pose_sequence_from_video_ref(
+    char_key: str,
+    video_ref_id: str,
+    base_image_path: str,
+    prompt_texts: list[str],
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """
+    Generate one pose image per visible video-ref keypoint frame and store as a
+    frameSequence folder inside a new auto-named character sequence.
+    """
+    from services import reference_storage
+    from services.sequence_gallery_strip import gallery_item_from_frame_urls
+
+    entry = reference_storage.get_keypoint_video(video_ref_id)
+    if not entry:
+        raise ValueError(f"Video reference not found: {video_ref_id}")
+    fs = entry.get("frameSequence") or {}
+    strip = fs.get("strip") if isinstance(fs.get("strip"), list) else []
+    visible = [
+        s
+        for s in strip
+        if isinstance(s, dict)
+        and s.get("kind") == "image"
+        and not s.get("hidden")
+        and str(s.get("relPath") or "").strip()
+    ]
+    if not visible:
+        raise ValueError("Video reference has no visible keypoint frames.")
+
+    prompt = ""
+    for p in prompt_texts or []:
+        if str(p).strip():
+            prompt = str(p).strip()
+            break
+
+    base_name = sanitize_for_folder(str(video_ref_id)) or "video"
+    ts = int(time.time())
+    seq_name = f"video_{base_name}_{ts}"
+    existing = set(list_sequence_folder_names(char_key))
+    while seq_name in existing:
+        seq_name = f"video_{base_name}_{ts}_{unique_suffix(4)}"
+
+    character = get_character_paths(char_key)
+    folder = character.sequence_dir(seq_name)
+    if folder.exists():
+        raise ValueError(f"Sequence {seq_name!r} already exists.")
+    ensure_dirs(folder, folder / "gallery", folder / "cells")
+    fps = int(entry.get("fps") or 24)
+    write_sequence_manifest(
+        char_key,
+        seq_name,
+        {
+            "version": 1,
+            "fps": fps,
+            "gallery": [],
+            "frames": [],
+            "previewAspect": "16:9",
+            "timelineViewStep": 1,
+        },
+    )
+
+    frame_urls: list[str] = []
+    for i, slot in enumerate(visible):
+        kp_rel = str(slot.get("relPath") or "").strip()
+        if kp_rel.lower().startswith("references/"):
+            kp_abs = str(reference_storage.resolve_rel(kp_rel))
+        else:
+            kp_abs = str(resolve_storage_rel_path_to_abs(kp_rel))
+        if log_cb:
+            log_cb(f"Generating pose frame {i + 1}/{len(visible)}…")
+        url = _generate_pose_image_edit_url(
+            char_key,
+            base_image_path,
+            prompt,
+            keypoint_image_path=kp_abs,
+            log_cb=log_cb,
+        )
+        frame_urls.append(url)
+
+    built = gallery_item_from_frame_urls(
+        char_key=char_key,
+        sequence_name=seq_name,
+        frame_urls=frame_urls,
+        gallery_subdir_prefix="posevid",
+        error_tag="Pose video ref",
+    )
+    gallery_item = built["galleryItem"]
+    manifest = read_sequence_manifest(char_key, seq_name)
+    gallery = manifest.get("gallery") if isinstance(manifest.get("gallery"), list) else []
+    gallery.append(gallery_item)
+    manifest["gallery"] = gallery
+    write_sequence_manifest(char_key, seq_name, manifest)
+    return {"sequenceName": seq_name, "galleryItemId": gallery_item.get("id")}
+
+
 def generate_expression_starting_image(
     character_name: str,
     expression_catalog_id: int,
@@ -7550,6 +7704,54 @@ def _write_pose_refs_manifest(char_key: str, entries: list[dict[str, Any]]) -> N
     p.write_text(json.dumps(to_persist, indent=2), encoding="utf-8")
 
 
+def run_pose_keypoint_for_video_frames(
+    video_abs_path: str,
+    log_cb: Callable[[str], None] | None = None,
+) -> list[str]:
+    """
+    Run ``pose_keypoint_ai_service`` on a video with per-frame export.
+    Returns local absolute paths of keypoint PNGs in frame order.
+    """
+    src = Path(video_abs_path)
+    if not src.is_file():
+        raise ValueError(f"Input video not found: {src}")
+    body = _run_service_testmode(
+        "services.pose_keypoint_ai_service.serverless",
+        [
+            "--test-mode",
+            "--enable-default",
+            "--default-port",
+            str(COMFY_PORT),
+            "--video-url",
+            video_abs_path,
+            "--export-frame",
+            "--convert-local-to-url",
+        ],
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise RuntimeError(str(body["error"]))
+    results = body.get("results") or []
+    if not results:
+        raise RuntimeError("Pose keypoint service returned no results.")
+    item = results[0]
+    if item.get("kind") != "frames":
+        raise RuntimeError("Expected per-frame keypoint output from video.")
+    urls = item.get("urls") or []
+    if not urls:
+        raise RuntimeError("Pose keypoint video export returned no frame urls.")
+    out: list[str] = []
+    for i, url in enumerate(urls):
+        if not isinstance(url, str) or not url.strip():
+            continue
+        dest = Path(tempfile.gettempdir()) / f"kp_vid_{unique_suffix()}_{i:06d}.png"
+        download_url_to_file(url.strip(), dest)
+        out.append(str(dest))
+    if not out:
+        raise RuntimeError("Failed to download keypoint video frames.")
+    return out
+
+
 def run_pose_keypoint_for_image(
     image_abs_path: str,
     log_cb: Callable[[str], None] | None = None,
@@ -7693,6 +7895,44 @@ def commit_reference_image(preview_rel: str) -> dict[str, Any]:
     from services import reference_storage
 
     return reference_storage.commit_preview(preview_rel)
+
+
+def make_reference_keypoint_video(
+    video_rel_path: str,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Run SD pose service on a video and store per-frame ref/kp pairs globally."""
+    from services import reference_storage
+    from services.utils import extract_video_frames_to_pngs
+
+    rel_norm = str(video_rel_path).replace("\\", "/").lstrip("/")
+    if rel_norm.lower().startswith("references/"):
+        abs_path = str(reference_storage.resolve_rel(rel_norm))
+    else:
+        abs_path = str(resolve_storage_rel_path_to_abs(rel_norm))
+    if not Path(abs_path).is_file():
+        raise ValueError(f"Reference video not found: {video_rel_path}")
+
+    ref_tmp = Path(tempfile.mkdtemp(prefix="ref_vid_frames_"))
+    try:
+        ref_frames = extract_video_frames_to_pngs(abs_path, str(ref_tmp))
+        kp_frames = run_pose_keypoint_for_video_frames(abs_path, log_cb=log_cb)
+        n = min(len(ref_frames), len(kp_frames))
+        if n < 1:
+            raise RuntimeError("Video keypoint extraction produced no frames.")
+        if len(ref_frames) != len(kp_frames) and log_cb:
+            log_cb(
+                f"Note: ref frame count ({len(ref_frames)}) != kp frame count "
+                f"({len(kp_frames)}); using first {n}."
+            )
+        return reference_storage.add_keypoint_video(
+            abs_path,
+            ref_frames[:n],
+            kp_frames[:n],
+            fps=24,
+        )
+    finally:
+        shutil.rmtree(ref_tmp, ignore_errors=True)
 
 
 def make_reference_keypoint(

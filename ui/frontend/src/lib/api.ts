@@ -2353,6 +2353,24 @@ export async function apiReferenceImagesReorder(order: string[]): Promise<void> 
   if (!res.ok) await readJson(res);
 }
 
+export type KeypointFolder = { id: string; name: string };
+
+export type KeypointsLayout = {
+  folders: KeypointFolder[];
+  rootOrder: string[];
+  folderOrder: Record<string, string[]>;
+  items: PoseReference[];
+  videoItems: KeypointVideoReference[];
+};
+
+export async function apiReferenceKeypointsLayout(): Promise<KeypointsLayout> {
+  const res = await fetch(`${API_BASE_URL}/reference/keypoints/layout`, {
+    method: "GET",
+    credentials: "omit",
+  });
+  return readJson<KeypointsLayout>(res);
+}
+
 export async function apiReferenceKeypointsReorder(
   order: string[]
 ): Promise<void> {
@@ -2362,6 +2380,55 @@ export async function apiReferenceKeypointsReorder(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ order }),
   });
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceKeypointsReorderRoot(
+  order: string[]
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/reference/keypoints/reorder`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scope: "root", order }),
+  });
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceKeypointsReorderFolder(
+  folderId: string,
+  order: string[]
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/reference/keypoints/reorder`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scope: "folder", folderId, order }),
+  });
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceKeypointFolderCreate(
+  name: string,
+  itemIds: string[]
+): Promise<KeypointFolder> {
+  const res = await fetch(`${API_BASE_URL}/reference/keypoints/folders`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, itemIds }),
+  });
+  const data = await readJson<{ folder: KeypointFolder }>(res);
+  return data.folder;
+}
+
+export async function apiReferenceKeypointFolderDelete(
+  folderId: string
+): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/reference/keypoints/folders/${encodeURIComponent(folderId)}`,
+    { method: "DELETE", credentials: "omit" }
+  );
   if (!res.ok) await readJson(res);
 }
 
@@ -2379,6 +2446,78 @@ export async function apiReferenceKeypointDelete(id: string): Promise<void> {
     { method: "DELETE", credentials: "omit" }
   );
   if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceKeypointVideoUpdateStrip(
+  videoId: string,
+  frameSequence: FrameSequencePayload
+): Promise<KeypointVideoReference> {
+  const res = await fetch(
+    `${API_BASE_URL}/reference/keypoints/video/${encodeURIComponent(videoId)}/frame_sequence`,
+    {
+      method: "PUT",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frameSequence }),
+    }
+  );
+  return readJson<KeypointVideoReference>(res);
+}
+
+export async function apiReferenceKeypointVideoDelete(videoId: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/reference/keypoints/video/${encodeURIComponent(videoId)}`,
+    { method: "DELETE", credentials: "omit" }
+  );
+  if (!res.ok) await readJson(res);
+}
+
+/** Run SD pose service on a video; resolves with per-frame keypoint video ref. */
+export function runReferenceMakeKeypointVideoWsJob(params: {
+  videoRelPath: string;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<{ item: KeypointVideoReference }>> {
+  const url = wsUrlForPath("/reference/make_keypoint_video/ws");
+  const { onLogLine, ...payload } = params;
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => {
+      ws.send(JSON.stringify(payload));
+    };
+    ws.onmessage = (ev) => {
+      let data: {
+        type?: string;
+        line?: string;
+        ok?: boolean;
+        error?: string;
+        result?: { item: KeypointVideoReference };
+      };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") {
+        onLogLine(data.line);
+      }
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(data as WsDoneMessage<{ item: KeypointVideoReference }>);
+      }
+    };
+  });
 }
 
 /** Generate a Flux2 t2i reference preview. Resolves with the preview rel path. */
@@ -2999,6 +3138,19 @@ export type FrameSequencePayload = {
   sequenceGroupId: string;
   strip: FrameSequenceStripSlot[];
   hidden: FrameSequenceHiddenItem[];
+};
+
+export type KeypointVideoStripSlot = FrameSequenceStripSlot & {
+  referenceRelPath?: string;
+};
+
+export type KeypointVideoReference = {
+  id: string;
+  videoRelPath: string;
+  fps: number;
+  frameSequence: FrameSequencePayload & {
+    strip: KeypointVideoStripSlot[];
+  };
 };
 
 export type SequenceGalleryItem = {

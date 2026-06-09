@@ -59,7 +59,7 @@ export function AiEditModal(props: {
         position: "fixed",
         inset: 0,
         background: "rgba(0,0,0,0.6)",
-        zIndex: 9997,
+        zIndex: 10040,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

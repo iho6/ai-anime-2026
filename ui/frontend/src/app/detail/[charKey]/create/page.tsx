@@ -25,8 +25,10 @@ import {
   GallerySplit,
   GallerySplitItem,
   PoseReference,
+  type KeypointVideoReference,
   runDetailWsJob,
   runReferenceMakeKeypointWsJob,
+  runReferenceMakeKeypointVideoWsJob,
   runReferenceGenerateWsJob,
   runShotRemoveBgWsJob,
   runShotMakeAngleWsJob,
@@ -61,7 +63,10 @@ import { AiEditModal } from "../../../../components/AiEditModal";
 import type { SharedLogStreamHandle } from "../../../../components/SharedLogStream";
 import { ConnectedJobRunModal } from "../../../../components/ConnectedJobRunModal";
 import { useJobRunSession } from "../../../../hooks/useJobRunSession";
-import { ReferencePicker } from "../../../../components/ReferencePicker";
+import {
+  ReferencePicker,
+  type ReferencePickerSelection,
+} from "../../../../components/ReferencePicker";
 import { MotionRefGenModal } from "../../../../components/MotionRefGenModal";
 import { StartingImagePreview } from "../../../../components/StartingImagePreview";
 import { ZoomableImage } from "../../../../components/ZoomableImage";
@@ -73,6 +78,39 @@ import { ResizableScrollGallery } from "../../../../components/ResizableScrollGa
 const POSE_FLAT_FOLDER_KEY = "flat";
 
 type StartingImageState = { stack: string[]; index: number };
+
+type ActiveReference =
+  | { kind: "single"; ref: PoseReference }
+  | { kind: "video"; ref: KeypointVideoReference };
+
+function activeReferenceHasKeypoint(ar: ActiveReference | null): boolean {
+  if (!ar) return false;
+  if (ar.kind === "single") return !!(ar.ref.keypointRelPath || "").trim();
+  const strip = ar.ref.frameSequence?.strip ?? [];
+  return strip.some((s) => s.kind === "image" && !s.hidden && (s.relPath || "").trim());
+}
+
+function activeReferenceKeypointPreview(ar: ActiveReference | null): string | null {
+  if (!ar) return null;
+  if (ar.kind === "single") return ar.ref.keypointRelPath || null;
+  const strip = ar.ref.frameSequence?.strip ?? [];
+  const visible = strip.find((s) => s.kind === "image" && !s.hidden && s.relPath);
+  if (visible?.relPath) return visible.relPath;
+  const any = strip.find((s) => s.kind === "image" && s.relPath);
+  return any?.relPath ?? null;
+}
+
+function activeReferenceThumbPreview(ar: ActiveReference | null): string | null {
+  if (!ar) return null;
+  if (ar.kind === "single") return ar.ref.referenceRelPath || null;
+  const strip = ar.ref.frameSequence?.strip ?? [];
+  for (const s of strip) {
+    if (s.kind !== "image") continue;
+    const refRel = (s as { referenceRelPath?: string }).referenceRelPath;
+    if (refRel) return refRel;
+  }
+  return activeReferenceKeypointPreview(ar);
+}
 
 function mergeStackAfterGeneration(prev: StartingImageState, lastRel: string): StartingImageState {
   const idx = Math.min(Math.max(0, prev.index), Math.max(0, prev.stack.length - 1));
@@ -238,7 +276,7 @@ export default function CreatePage() {
   const [seqAngleImageUrl, setSeqAngleImageUrl] = useState<string | null>(null);
   const seqAngleCtxRef = useRef<{ seqName: string; galleryItemId: string; relPath: string } | null>(null);
 
-  const [referenceRef, setReferenceRef] = useState<PoseReference | null>(null);
+  const [activeReference, setActiveReference] = useState<ActiveReference | null>(null);
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
   const [motionRefOpen, setMotionRefOpen] = useState(false);
   // Single shared file-import input (routes into genType gallery).
@@ -333,6 +371,7 @@ export default function CreatePage() {
         showError({ message: "AI Edit: source image not found." });
         return;
       }
+      setAiEditSeqCtx(null);
       setAiEditType(type);
       setAiEditPoseKey(poseFolderKey);
       setAiEditSourceRelPath(sourceRelPath);
@@ -363,13 +402,27 @@ export default function CreatePage() {
 
   const onAiEditGeneratePose = useCallback(
     async (promptText: string, maskPngBase64?: string) => {
-      if (!charKey || !aiEditSourceRelPath) return;
+      if (!charKey || !aiEditSourceRelPath) {
+        showError({ message: "AI Edit: source image not found." });
+        return;
+      }
+
+      const onWsLogLine = (line: string) => {
+        pushLog(line);
+        setRunningStatus(truncateJobModalStatusLine(line));
+      };
 
       // ── Sequence gallery-frame branch ───────────────────────────────────────
       if (aiEditSeqCtx) {
         const { seqName, galleryItemId } = aiEditSeqCtx;
         setAiEditOpen(false);
-        beginSession({ title: "AI Editing sequence frame", clearLog: false });
+        beginSession({
+          title: "AI Editing sequence frame",
+          clearLog: true,
+          runningStatus: "AI editing…",
+        });
+        await Promise.resolve();
+        pushLog("AI editing…");
         try {
           const done = await runDetailWsJob<{ fileRelPath: string }>({
             charKey,
@@ -381,7 +434,7 @@ export default function CreatePage() {
               promptText,
               ...(maskPngBase64 ? { maskPngBase64 } : {}),
             },
-            onLogLine: (line) => logRef.current?.pushLine(line),
+            onLogLine: onWsLogLine,
           });
           if (!done.ok || !done.result?.fileRelPath) {
             throw new Error(done.error ?? "AI Edit sequence frame failed");
@@ -403,11 +456,20 @@ export default function CreatePage() {
         return;
       }
 
-      if (!aiEditPoseKey) return;
+      if (!aiEditPoseKey) {
+        showError({ message: "AI Edit: gallery item not found." });
+        return;
+      }
 
       const aiPose = aiEditType === "pose";
       setAiEditOpen(false);
-      beginSession({ title: aiPose ? "AI Editing pose" : "AI Editing expression", clearLog: false });
+      beginSession({
+        title: aiPose ? "AI Editing pose" : "AI Editing expression",
+        clearLog: true,
+        runningStatus: "AI editing…",
+      });
+      await Promise.resolve();
+      pushLog("AI editing…");
       try {
         const done = await runDetailWsJob<{ newRelPath: string }>({
           charKey,
@@ -419,19 +481,33 @@ export default function CreatePage() {
             promptText,
             ...(maskPngBase64 ? { maskPngBase64 } : {}),
           },
-          onLogLine: (line) => logRef.current?.pushLine(line),
+          onLogLine: onWsLogLine,
         });
         if (!done.ok) {
-          throw new Error(done.error ?? "AI Edit pose failed");
+          throw new Error(done.error ?? "AI Edit failed");
         }
         await refreshGallery();
       } catch (err) {
-        failSession(err, "AI Edit pose failed.");
+        failSession(err, "AI Edit failed.");
         return;
       }
       endSession();
     },
-    [aiEditPoseKey, aiEditSourceRelPath, aiEditType, aiEditSeqCtx, beginSession, charKey, endSession, failSession, refreshGallery, loadSequences]
+    [
+      aiEditPoseKey,
+      aiEditSourceRelPath,
+      aiEditType,
+      aiEditSeqCtx,
+      beginSession,
+      charKey,
+      endSession,
+      failSession,
+      pushLog,
+      refreshGallery,
+      loadSequences,
+      setRunningStatus,
+      showError,
+    ]
   );
 
   // New Angle on a Sequence gallery frame.
@@ -533,33 +609,58 @@ export default function CreatePage() {
     async (file: File) => {
       if (!charKey) return;
       setReferencePickerOpen(false);
+      const isVideo = file.type.startsWith("video/");
       let uploadComplete = false;
       try {
         beginSession({
-          title: "Uploading reference image…",
+          title: isVideo ? "Uploading reference video…" : "Uploading reference image…",
           clearLog: true,
-          runningStatus: "Uploading reference image…",
+          runningStatus: isVideo
+            ? "Uploading reference video…"
+            : "Uploading reference image…",
         });
         const { relPath } = await apiUploadStaging({ charKey, file });
         uploadComplete = true;
-        setTitle("Converting image to pose keypoints");
+        setTitle(
+          isVideo
+            ? "Converting video to keypoint sequence"
+            : "Converting image to pose keypoints"
+        );
         setRunningStatus("Starting keypoint conversion…");
         pushLog("Upload complete. Starting keypoint job…");
-        const done = await runReferenceMakeKeypointWsJob({
-          imageRelPath: relPath,
-          onLogLine: (line) => {
-            logRef.current?.pushLine(line);
-            setRunningStatus(truncateJobModalStatusLine(line));
-          },
-        });
-        if (!done.ok) throw new Error(done.error ?? "Keypoint generation failed");
-        if (done.result) {
-          setReferenceRef({
-            id: done.result.item.id,
-            referenceRelPath: done.result.item.referenceRelPath,
-            keypointRelPath: done.result.item.keypointRelPath,
+        if (isVideo) {
+          const done = await runReferenceMakeKeypointVideoWsJob({
+            videoRelPath: relPath,
+            onLogLine: (line) => {
+              logRef.current?.pushLine(line);
+              setRunningStatus(truncateJobModalStatusLine(line));
+            },
           });
-          clearPosePromptUiForKeypointReference();
+          if (!done.ok) throw new Error(done.error ?? "Video keypoint generation failed");
+          if (done.result) {
+            setActiveReference({ kind: "video", ref: done.result.item });
+            clearPosePromptUiForKeypointReference();
+          }
+        } else {
+          const done = await runReferenceMakeKeypointWsJob({
+            imageRelPath: relPath,
+            onLogLine: (line) => {
+              logRef.current?.pushLine(line);
+              setRunningStatus(truncateJobModalStatusLine(line));
+            },
+          });
+          if (!done.ok) throw new Error(done.error ?? "Keypoint generation failed");
+          if (done.result) {
+            setActiveReference({
+              kind: "single",
+              ref: {
+                id: done.result.item.id,
+                referenceRelPath: done.result.item.referenceRelPath,
+                keypointRelPath: done.result.item.keypointRelPath,
+              },
+            });
+            clearPosePromptUiForKeypointReference();
+          }
         }
         endSession();
       } catch (err) {
@@ -567,6 +668,8 @@ export default function CreatePage() {
           err,
           uploadComplete
             ? "Failed to generate keypoints."
+            : isVideo
+            ? "Failed to upload reference video."
             : "Failed to upload reference image."
         );
       }
@@ -584,12 +687,31 @@ export default function CreatePage() {
   );
 
   const onReferencePickSaved = useCallback((ref: PoseReference) => {
-    setReferencePickerOpen(false);
-    setReferenceRef(ref);
+    setActiveReference({ kind: "single", ref });
     if ((ref.keypointRelPath || "").trim()) {
       clearPosePromptUiForKeypointReference();
     }
   }, [clearPosePromptUiForKeypointReference]);
+
+  async function onReferenceUseSelected(sel: ReferencePickerSelection) {
+    const { singles, videos } = sel;
+    if (!singles.length && !videos.length) return;
+    setReferencePickerOpen(false);
+    if (videos.length === 1 && singles.length === 0) {
+      setActiveReference({ kind: "video", ref: videos[0] });
+      clearPosePromptUiForKeypointReference();
+      return;
+    }
+    if (singles.length === 1 && videos.length === 0) {
+      onReferencePickSaved(singles[0]);
+      return;
+    }
+    for (const ref of singles) {
+      setActiveReference({ kind: "single", ref });
+      clearPosePromptUiForKeypointReference();
+      await runGenerate({ keypointRelPath: ref.keypointRelPath });
+    }
+  }
 
   const onReferenceGenerateBase = useCallback(
     async (promptText: string) => {
@@ -622,10 +744,13 @@ export default function CreatePage() {
         });
         if (!done.ok) throw new Error(done.error ?? "Keypoint generation failed");
         if (done.result) {
-          setReferenceRef({
-            id: done.result.item.id,
-            referenceRelPath: done.result.item.referenceRelPath,
-            keypointRelPath: done.result.item.keypointRelPath,
+          setActiveReference({
+            kind: "single",
+            ref: {
+              id: done.result.item.id,
+              referenceRelPath: done.result.item.referenceRelPath,
+              keypointRelPath: done.result.item.keypointRelPath,
+            },
           });
           clearPosePromptUiForKeypointReference();
         }
@@ -651,7 +776,7 @@ export default function CreatePage() {
     setStarting({ stack: [], index: 0 });
     setSelectedPose(new Set());
     setSelectedExpr(new Set());
-    setReferenceRef(null);
+    setActiveReference(null);
     clearPosePromptUiForKeypointReference();
     (async () => {
       const ensured = await apiPoseEnsureBase(charKey);
@@ -811,6 +936,11 @@ export default function CreatePage() {
             });
           },
         });
+        items.push({
+          key: "removeBg",
+          label: "Remove Background",
+          onSelect: () => void removeBgForPoseItem(item, menuType),
+        });
       } else {
         items.push({
           key: "addAngle",
@@ -822,6 +952,11 @@ export default function CreatePage() {
             );
             setAngleDialogOpen(true);
           },
+        });
+        items.push({
+          key: "removeBg",
+          label: "Remove Background",
+          onSelect: () => void removeBgForPoseItem(item, menuType),
         });
         items.push({
           key: "hide",
@@ -837,7 +972,14 @@ export default function CreatePage() {
       items.push({
         key: "download",
         label: "Download",
-        onSelect: () => downloadRelPath(item.relPath),
+        onSelect: () => {
+          const relPaths = collectSelectedGalleryRelPaths();
+          if (relPaths.length > 1) {
+            void downloadSelectedGallery();
+          } else {
+            downloadRelPath(item.relPath);
+          }
+        },
       });
       items.push({
         key: "deleteImage",
@@ -857,11 +999,6 @@ export default function CreatePage() {
               showError({ message: "Delete image failed.", error: err });
             }
           })(),
-      });
-      items.push({
-        key: "removeBg",
-        label: "Remove Background",
-        onSelect: () => void removeBgForPoseItem(item, menuType),
       });
       if (selectedPose.size + selectedExpr.size > 1) {
         items.push({
@@ -894,47 +1031,72 @@ export default function CreatePage() {
     }
   }
 
-  async function runGenerate() {
+  async function runGenerate(opts?: { keypointRelPath?: string }) {
     if (!charKey) return;
     if (!activeStartingRel) {
       showError({ message: "Please choose an input image first." });
       return;
     }
-    if (!promptTextsForGeneration.length && !referenceRef?.keypointRelPath) {
+    const videoRef = activeReference?.kind === "video" ? activeReference.ref : null;
+    const keypointRelPath =
+      opts?.keypointRelPath ??
+      (activeReference?.kind === "single" ? activeReference.ref.keypointRelPath : undefined);
+    if (!promptTextsForGeneration.length && !keypointRelPath && !videoRef) {
       showError({ message: "Enter a prompt (or load a reference keypoint) first." });
       return;
     }
     beginSession({ title: "Generating", clearLog: true });
     let poseSessionEndOk = false;
     try {
-      // Single prompt (and optional keypoint-only default) → generate_prompts.
-      const done = await runDetailWsJob<{
-        firstPoseKey: string | null;
-        lastInputRelPath: string;
-      }>({
-        charKey,
-        pathSuffix: wsSuffix,
-        payload: {
-          job: "generate_prompts",
-          baseRelPath: activeStartingRel,
-          prompts: promptTextsForGeneration,
-          ...(referenceRef?.keypointRelPath
-            ? { keypointRelPath: referenceRef.keypointRelPath }
-            : {}),
-        },
-        onLogLine: (line) => logRef.current?.pushLine(line),
-      });
-      if (!done.ok) {
-        failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
-        return;
+      if (videoRef) {
+        const done = await runDetailWsJob<{
+          sequenceName: string;
+          galleryItemId: string;
+        }>({
+          charKey,
+          pathSuffix: wsSuffix,
+          payload: {
+            job: "generate_video_ref_sequence",
+            videoRefId: videoRef.id,
+            baseRelPath: activeStartingRel,
+            prompts: promptTextsForGeneration,
+          },
+          onLogLine: (line) => logRef.current?.pushLine(line),
+        });
+        if (!done.ok) {
+          failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
+          return;
+        }
+        const r = done.result!;
+        await loadSequences();
+        if (r.sequenceName) setActiveSequence(r.sequenceName);
+        poseSessionEndOk = true;
+      } else {
+        const done = await runDetailWsJob<{
+          firstPoseKey: string | null;
+          lastInputRelPath: string;
+        }>({
+          charKey,
+          pathSuffix: wsSuffix,
+          payload: {
+            job: "generate_prompts",
+            baseRelPath: activeStartingRel,
+            prompts: promptTextsForGeneration,
+            ...(keypointRelPath ? { keypointRelPath } : {}),
+          },
+          onLogLine: (line) => logRef.current?.pushLine(line),
+        });
+        if (!done.ok) {
+          failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
+          return;
+        }
+        const r = done.result!;
+        if (r.lastInputRelPath) {
+          setStarting((prev) => mergeStackAfterGeneration(prev, r.lastInputRelPath));
+        }
+        await refreshGallery();
+        poseSessionEndOk = true;
       }
-      const r = done.result!;
-      if (r.lastInputRelPath) {
-        setStarting((prev) => mergeStackAfterGeneration(prev, r.lastInputRelPath));
-      }
-      await refreshGallery();
-
-      poseSessionEndOk = true;
     } catch (e) {
       failSession(e, "Generation failed");
     } finally {
@@ -1577,7 +1739,7 @@ export default function CreatePage() {
               >
                 Add Reference
               </button>
-              {referenceRef && (
+              {activeReference && activeReferenceThumbPreview(activeReference) ? (
                 <div
                   style={{
                     width: 140,
@@ -1585,19 +1747,36 @@ export default function CreatePage() {
                     flexShrink: 0,
                     border: "1px solid rgba(0,0,0,0.35)",
                     overflow: "hidden",
+                    position: "relative",
                   }}
                 >
+                  {activeReference.kind === "video" ? (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 4,
+                        left: 4,
+                        zIndex: 1,
+                        fontSize: 10,
+                        padding: "1px 4px",
+                        background: "rgba(0,0,0,0.65)",
+                        color: "#fff",
+                      }}
+                    >
+                      Video
+                    </span>
+                  ) : null}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={assetUrlFromRelPath(referenceRef.referenceRelPath)}
+                    src={assetUrlFromRelPath(activeReferenceThumbPreview(activeReference)!)}
                     alt="Reference"
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     draggable={false}
                   />
                 </div>
-              )}
+              ) : null}
             </div>
-            {referenceRef ? (
+            {activeReference && activeReferenceKeypointPreview(activeReference) ? (
               <div
                 style={{ position: "relative" }}
                 onContextMenu={(e) => {
@@ -1610,14 +1789,14 @@ export default function CreatePage() {
                       {
                         key: "clear-ref",
                         label: "Clear reference",
-                        onSelect: () => setReferenceRef(null),
+                        onSelect: () => setActiveReference(null),
                       },
                     ],
                   });
                 }}
               >
                 <ZoomableImage
-                  src={assetUrlFromRelPath(referenceRef.keypointRelPath)}
+                  src={assetUrlFromRelPath(activeReferenceKeypointPreview(activeReference)!)}
                   alt="Keypoint preview"
                   fitMaxWidth={STARTING_PREVIEW_MAX_W}
                   fitMaxHeight={STARTING_PREVIEW_MAX_H}
@@ -1650,47 +1829,54 @@ export default function CreatePage() {
         </div>
 
         <div style={{ marginBottom: 10, opacity: 0.95 }}>
-          {referenceRef?.keypointRelPath
-            ? `Describe the ${isPose ? "pose" : "expression"} to generate. With a reference keypoint loaded, the prompt is optional and defaults to matching the reference pose.`
+          {activeReferenceHasKeypoint(activeReference)
+            ? activeReference?.kind === "video"
+              ? `Describe the pose to generate. With a video keypoint sequence loaded, generation creates a new Sequence folder (not flat gallery images). Prompt is optional.`
+              : `Describe the ${isPose ? "pose" : "expression"} to generate. With a reference keypoint loaded, the prompt is optional and defaults to matching the reference pose.`
             : `Describe the ${isPose ? "pose" : "expression"} to generate.`}
         </div>
 
-        <textarea
-          value={singlePrompt}
-          disabled={uiBusy}
-          onChange={(e) => setSinglePrompt(e.target.value)}
-          placeholder={
-            referenceRef?.keypointRelPath
-              ? "Provide description of reference pose (optional)"
-              : isPose
-              ? "Input new pose description"
-              : "Input new expression description"
-          }
-          rows={3}
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            padding: "8px 10px",
-            border: "1px solid rgba(0,0,0,0.35)",
-            background: "transparent",
-            color: "inherit",
-            fontSize: 14,
-            resize: "vertical",
-            marginBottom: 16,
-          }}
-        />
-
-        <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 12, marginBottom: 16 }}>
+        <div style={{ position: "relative", marginBottom: 16 }}>
+          <textarea
+            value={singlePrompt}
+            disabled={uiBusy}
+            onChange={(e) => setSinglePrompt(e.target.value)}
+            placeholder={
+              activeReferenceHasKeypoint(activeReference)
+                ? "Provide description of reference pose (optional)"
+                : isPose
+                ? "Input new pose description"
+                : "Input new expression description"
+            }
+            rows={3}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "8px 10px",
+              paddingBottom: 40,
+              paddingRight: 96,
+              border: "1px solid rgba(0,0,0,0.35)",
+              background: "transparent",
+              color: "inherit",
+              fontSize: 14,
+              resize: "vertical",
+              display: "block",
+            }}
+          />
           <button
             type="button"
             disabled={uiBusy}
             onClick={() => void runGenerate()}
             style={{
+              position: "absolute",
+              bottom: 8,
+              right: 8,
               borderRadius: 0,
               border: "1px solid rgba(0,0,0,0.5)",
               background: "transparent",
               padding: "8px 12px",
-              cursor: "pointer",
+              cursor: uiBusy ? "not-allowed" : "pointer",
+              opacity: uiBusy ? 0.5 : 1,
             }}
           >
             Generate
@@ -2073,8 +2259,6 @@ export default function CreatePage() {
         }}
       />
 
-      <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
-
       <CameraAngleModal
         open={angleDialogOpen}
         title="New Angle"
@@ -2099,7 +2283,10 @@ export default function CreatePage() {
         title="AI Edit"
         imageSrc={aiEditSourceRelPath ? assetUrlFromRelPath(aiEditSourceRelPath) : ""}
         busy={uiBusy}
-        onCancel={() => setAiEditOpen(false)}
+        onCancel={() => {
+          setAiEditOpen(false);
+          setAiEditSeqCtx(null);
+        }}
         onGenerate={(promptText, maskPngBase64) =>
           void onAiEditGeneratePose(promptText, maskPngBase64)
         }
@@ -2111,7 +2298,7 @@ export default function CreatePage() {
           charKey={charKey}
           busy={uiBusy}
           onCancel={() => setReferencePickerOpen(false)}
-          onPickSaved={onReferencePickSaved}
+          onUseSelected={(refs) => void onReferenceUseSelected(refs)}
           onPickNew={onReferencePickNew}
           onGenerateBase={onReferenceGenerateBase}
           onOpenMotionRef={() => {
@@ -2202,6 +2389,8 @@ export default function CreatePage() {
           </div>
         </div>
       ) : null}
+
+      <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
 
       {seqPreview ? (
         <SequencePreviewLightbox
