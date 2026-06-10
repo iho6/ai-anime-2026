@@ -2,22 +2,149 @@
 
 import React, { useMemo, useState } from "react";
 import { assetUrlFromRelPath, CoverCandidate } from "../lib/api";
+import { TriangleIcon } from "./IconPrimitives";
+
+export type ImagePickerSection = {
+  title: string;
+  images: CoverCandidate[];
+  defaultOpen?: boolean;
+};
+
+type PickerThumb = { relPath: string; caption: string; url: string };
+
+function ImagePickerTileGrid(props: {
+  thumbs: PickerThumb[];
+  selected: string;
+  onSelect: (relPath: string) => void;
+}) {
+  const { thumbs, selected, onSelect } = props;
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+        gap: 10,
+        paddingBottom: 8,
+      }}
+    >
+      {thumbs.map((t) => {
+        const isOn = selected === t.relPath;
+        return (
+          <button
+            key={t.relPath}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              onSelect(t.relPath);
+            }}
+            className={`image-picker-tile${isOn ? " image-picker-tile--selected" : ""}`}
+            style={{
+              borderRadius: 0,
+              border: "1px solid transparent",
+              background: "transparent",
+              padding: 6,
+              cursor: "pointer",
+            }}
+          >
+            <img
+              src={t.url}
+              alt=""
+              style={{
+                width: "100%",
+                aspectRatio: "1/1",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CollapsiblePickerSection(props: {
+  section: ImagePickerSection;
+  selected: string;
+  onSelect: (relPath: string) => void;
+  emptyText: string;
+}) {
+  const { section, selected, onSelect, emptyText } = props;
+  const [open, setOpen] = useState(section.defaultOpen ?? true);
+
+  const thumbs = useMemo(
+    () =>
+      section.images.map((img) => ({
+        relPath: img.relPath,
+        caption: img.caption,
+        url: assetUrlFromRelPath(img.relPath),
+      })),
+    [section.images]
+  );
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          background: "transparent",
+          border: "none",
+          color: "white",
+          cursor: "pointer",
+          padding: "4px 0",
+          width: "100%",
+          textAlign: "left",
+          fontSize: 14,
+        }}
+      >
+        <span
+          style={{
+            display: "inline-flex",
+            transform: open ? "none" : "rotate(-90deg)",
+            transition: "transform 120ms ease",
+          }}
+        >
+          <TriangleIcon direction="down" />
+        </span>
+        <span>{section.title}</span>
+        <span style={{ opacity: 0.55, fontSize: 12 }}>({section.images.length})</span>
+      </button>
+
+      {open ? (
+        thumbs.length === 0 ? (
+          <div style={{ opacity: 0.55, fontSize: 13, padding: "4px 0 8px 22px" }}>{emptyText}</div>
+        ) : (
+          <div style={{ paddingTop: 4 }}>
+            <ImagePickerTileGrid thumbs={thumbs} selected={selected} onSelect={onSelect} />
+          </div>
+        )
+      ) : null}
+    </div>
+  );
+}
 
 export function ImagePickerModal(props: {
   open: boolean;
   title: string;
-  images: CoverCandidate[];
+  images?: CoverCandidate[];
+  sections?: ImagePickerSection[];
   okText: string;
   cancelText: string;
   onPick: (relPath: string) => void;
   onCancel: () => void;
 }) {
-  const { open, title, images, okText, cancelText, onPick, onCancel } = props;
+  const { open, title, images = [], sections, okText, cancelText, onPick, onCancel } = props;
   const [selected, setSelected] = useState<string>("");
 
   React.useEffect(() => {
     if (!open) setSelected("");
   }, [open]);
+
+  const useSections = Boolean(sections?.length);
 
   const thumbs = useMemo(() => {
     return images.map((img) => ({
@@ -81,46 +208,19 @@ export function ImagePickerModal(props: {
             padding: "0 12px",
           }}
         >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
-              gap: 10,
-              paddingBottom: 8,
-            }}
-          >
-            {thumbs.map((t) => {
-              const isOn = selected === t.relPath;
-              return (
-                <button
-                  key={t.relPath}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setSelected(t.relPath);
-                  }}
-                  className={`image-picker-tile${isOn ? " image-picker-tile--selected" : ""}`}
-                  style={{
-                    borderRadius: 0,
-                    border: "1px solid transparent",
-                    background: "transparent",
-                    padding: 6,
-                    cursor: "pointer",
-                  }}
-                >
-                  <img
-                    src={t.url}
-                    alt=""
-                    style={{
-                      width: "100%",
-                      aspectRatio: "1/1",
-                      objectFit: "contain",
-                      display: "block",
-                    }}
-                  />
-                </button>
-              );
-            })}
-          </div>
+          {useSections ? (
+            sections!.map((section) => (
+              <CollapsiblePickerSection
+                key={section.title}
+                section={section}
+                selected={selected}
+                onSelect={setSelected}
+                emptyText={`No ${section.title.toLowerCase()} images`}
+              />
+            ))
+          ) : (
+            <ImagePickerTileGrid thumbs={thumbs} selected={selected} onSelect={setSelected} />
+          )}
         </div>
 
         <div
@@ -160,4 +260,3 @@ export function ImagePickerModal(props: {
     </div>
   );
 }
-

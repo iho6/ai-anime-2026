@@ -58,7 +58,10 @@ import { buildFlatGalleryLightboxPaths } from "../../../../lib/galleryLightboxOr
 import { CameraAngleModal } from "../../../../components/CameraAngleModal";
 import { DesktopContextMenu, ContextMenuItem } from "../../../../components/DesktopContextMenu";
 import { DetailSubpageChrome } from "../../../../components/DetailSubpageChrome";
-import { ImagePickerModal } from "../../../../components/ImagePickerModal";
+import {
+  ImagePickerModal,
+  type ImagePickerSection,
+} from "../../../../components/ImagePickerModal";
 import { AiEditModal } from "../../../../components/AiEditModal";
 import type { SharedLogStreamHandle } from "../../../../components/SharedLogStream";
 import { ConnectedJobRunModal } from "../../../../components/ConnectedJobRunModal";
@@ -239,7 +242,7 @@ export default function CreatePage() {
 
   const [starting, setStarting] = useState<StartingImageState>({ stack: [], index: 0 });
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerImages, setPickerImages] = useState<CoverCandidate[]>([]);
+  const [pickerSections, setPickerSections] = useState<ImagePickerSection[]>([]);
 
 
   // Single-prompt generate (the batch prompt/catalog checklist moved to the dataset Batch Generate).
@@ -798,8 +801,11 @@ export default function CreatePage() {
     return f ? [f] : [];
   }, [singlePrompt, genType]);
 
-  async function loadStartingImageCandidates(): Promise<CoverCandidate[]> {
-    if (!charKey) return [];
+  async function loadStartingImageCandidates(): Promise<{
+    pose: CoverCandidate[];
+    expression: CoverCandidate[];
+  }> {
+    if (!charKey) return { pose: [], expression: [] };
     const [pose, expr] = await Promise.all([
       apiPoseGallerySplit(charKey),
       apiExpressionGallerySplit(charKey),
@@ -818,15 +824,25 @@ export default function CreatePage() {
       seen.add(it.relPath);
       out.push({ relPath: it.relPath, caption: `${it.kind}:${it.folderKey}` });
     }
-    return dedupeStartingCandidatesForPose000(out);
+    const combined = dedupeStartingCandidatesForPose000(out);
+    const poseList: CoverCandidate[] = [];
+    const expressionList: CoverCandidate[] = [];
+    for (const c of combined) {
+      if (/[\\/]expressions[\\/]/i.test(c.relPath)) expressionList.push(c);
+      else poseList.push(c);
+    }
+    return { pose: poseList, expression: expressionList };
   }
 
   async function chooseInputFromLibrary() {
     if (!charKey) return;
     try {
       setBusy(true);
-      const imgs = await loadStartingImageCandidates();
-      setPickerImages(imgs);
+      const { pose, expression } = await loadStartingImageCandidates();
+      setPickerSections([
+        { title: "Pose", images: pose, defaultOpen: true },
+        { title: "Expression", images: expression, defaultOpen: true },
+      ]);
       setPickerOpen(true);
     } catch (err) {
       showError({ message: "Failed to load starting image candidates.", error: err });
@@ -2246,7 +2262,7 @@ export default function CreatePage() {
         title="Choose input image"
         okText="Use"
         cancelText="Cancel"
-        images={pickerImages}
+        sections={pickerSections}
         onCancel={() => setPickerOpen(false)}
         onPick={(relPath) => {
           setPickerOpen(false);

@@ -9484,3 +9484,189 @@ def duplicate_sequence_asset(
     shutil.copy2(src, dest)
     rel = dest.resolve().relative_to(root)
     return str(rel).replace("\\", "/")
+
+
+def probe_audio_meta(path: Path | str) -> dict[str, Any]:
+    """Return ``{durationSec}`` for an audio file via PyAV."""
+    import av
+
+    p = Path(path)
+    duration_sec = 0.0
+    with av.open(str(p)) as container:
+        if container.duration:
+            duration_sec = float(container.duration) / float(av.time_base)
+        else:
+            stream = next((s for s in container.streams if s.type == "audio"), None)
+            if stream is not None and stream.duration is not None and stream.time_base is not None:
+                duration_sec = float(stream.duration) * float(stream.time_base)
+    return {"durationSec": round(max(duration_sec, 0.0), 4)}
+
+
+def run_sound_gen(
+    *,
+    prompt: str,
+    duration_sec: float = 30.0,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """Generate sound via Stable Audio Open 1.0; returns local path or URL."""
+    effective = (prompt or "").strip()
+    if not effective:
+        raise ValueError("prompt is required for sound generation.")
+    duration_sec = min(max(float(duration_sec), 1.0), 47.6)
+
+    body = _run_service_testmode(
+        "services.sound_gen_ai_service.serverless",
+        [
+            "--test-mode",
+            "--enable-default",
+            "--default-port",
+            str(COMFY_PORT),
+            "--prompt",
+            effective,
+            "--duration",
+            str(duration_sec),
+        ],
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise RuntimeError(str(body["error"]))
+
+    results = body.get("results") or []
+    for r in results:
+        if isinstance(r, dict):
+            ref = r.get("url") or r.get("local_path")
+            if isinstance(ref, str) and ref:
+                return ref
+    raise RuntimeError("Sound generation produced no output.")
+
+
+def run_music_gen(
+    *,
+    tags: str,
+    lyrics: str = "",
+    duration_sec: float = 120.0,
+    bpm: int = 120,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """Generate music via ACE-Step 1.5; returns local path or URL."""
+    effective_tags = (tags or "").strip()
+    if not effective_tags:
+        raise ValueError("tags are required for music generation.")
+
+    body = _run_service_testmode(
+        "services.music_gen_ai_service.serverless",
+        [
+            "--test-mode",
+            "--enable-default",
+            "--default-port",
+            str(COMFY_PORT),
+            "--tags",
+            effective_tags,
+            "--lyrics",
+            lyrics or "",
+            "--duration",
+            str(float(duration_sec)),
+            "--bpm",
+            str(int(bpm)),
+        ],
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise RuntimeError(str(body["error"]))
+
+    results = body.get("results") or []
+    for r in results:
+        if isinstance(r, dict):
+            ref = r.get("url") or r.get("local_path")
+            if isinstance(ref, str) and ref:
+                return ref
+    raise RuntimeError("Music generation produced no output.")
+
+
+def _audio_ref_to_local(ref: str, log_cb: Callable[[str], None] | None = None) -> str:
+    if ref and Path(ref).is_file():
+        return str(Path(ref).resolve())
+    if ref and (ref.startswith("http://") or ref.startswith("https://")):
+        dest = Path(tempfile.gettempdir()) / f"aud_{unique_suffix()}.mp3"
+        download_url_to_file(ref, dest)
+        return str(dest)
+    raise RuntimeError(f"Could not resolve audio file: {ref!r}")
+
+
+def generate_reference_audio(
+    *,
+    mode: str,
+    prompt: str = "",
+    style: str = "",
+    lyrics: str = "",
+    duration_sec: float = 120.0,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Generate sound or music and register it in the global audio gallery."""
+    from services import audio_reference_storage
+
+    m = (mode or "audio").strip().lower()
+    if m == "music":
+        tags = (style or "").strip()
+        lyric_text = lyrics or ""
+        if not tags:
+            raise ValueError("Music style description is required.")
+        ref = run_music_gen(
+            tags=tags,
+            lyrics=lyric_text,
+            duration_sec=duration_sec,
+            log_cb=log_cb,
+        )
+    else:
+        tags = (prompt or "").strip()
+        if not tags:
+            raise ValueError("Audio prompt is required.")
+        sound_dur = min(max(float(duration_sec), 1.0), 47.6)
+        ref = run_sound_gen(
+            prompt=tags,
+            duration_sec=sound_dur,
+            log_cb=log_cb,
+        )
+
+    local = _audio_ref_to_local(ref, log_cb=log_cb)
+    meta = probe_audio_meta(local)
+    dur = meta.get("durationSec") or float(duration_sec)
+    entry = audio_reference_storage.add_audio_item(
+        local,
+        mode=m,
+        tags=tags,
+        label=tags[:80],
+    )
+    return {
+        "item": {
+            "id": entry["id"],
+            "relPath": entry["relPath"],
+            "mode": entry.get("mode"),
+            "tags": entry.get("tags"),
+            **({"label": entry["label"]} if entry.get("label") else {}),
+        },
+        "durationSec": dur,
+    }
+
+
+def import_audio_to_timeline_clip(
+    source_abs_path: Path | str,
+    dest_dir: Path | str,
+) -> dict[str, Any]:
+    """Copy an audio file into ``dest_dir`` and return ``{absPath, durationSec}``."""
+    import shutil
+    import uuid
+
+    src = Path(source_abs_path)
+    if not src.is_file():
+        raise ValueError(f"Audio not found: {source_abs_path}")
+    dest = Path(dest_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    ext = src.suffix.lower() or ".mp3"
+    out_path = dest / f"clip_{uuid.uuid4().hex}{ext}"
+    shutil.copy2(src, out_path)
+    meta = probe_audio_meta(out_path)
+    return {
+        "absPath": str(out_path.resolve()),
+        "durationSec": meta.get("durationSec") or 0.0,
+    }

@@ -1,8 +1,15 @@
+import { assetUrlFromRelPath } from "../../lib/api";
 import type {
   TimelineClip,
   TimelineManifest,
   TimelineTrack,
 } from "../../lib/api";
+import { trajectoryTransformAt } from "./TrajectoryEditor";
+
+export type ClipTransform = { x: number; y: number; scale: number };
+export type ClipRect = { left: number; top: number; width: number; height: number };
+
+export const IMAGE_CLIP_DEFAULT_SEC = 3;
 
 let _idSeq = 0;
 export function genId(prefix: string): string {
@@ -12,6 +19,228 @@ export function genId(prefix: string): string {
 
 export function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+/** Logical output frame for fit math (preview + export reference). */
+export function referenceFrameSize(
+  previewAspect: TimelineManifest["previewAspect"]
+): { w: number; h: number } {
+  const w = 1920;
+  const h = Math.round(w / aspectRatio(previewAspect));
+  return { w, h };
+}
+
+/** Contained box size for an image inside a frame (same math as imageRectFor). */
+export function containedBoxSize(
+  nW: number,
+  nH: number,
+  frameW: number,
+  frameH: number
+): { w: number; h: number } {
+  let baseW = frameW;
+  let baseH = frameH;
+  if (nW > 0 && nH > 0 && frameW > 0 && frameH > 0) {
+    const imgA = nW / nH;
+    const frmA = frameW / frameH;
+    if (imgA > frmA) {
+      baseW = frameW;
+      baseH = frameW / imgA;
+    } else {
+      baseH = frameH;
+      baseW = frameH * imgA;
+    }
+  }
+  return { w: baseW, h: baseH };
+}
+
+/**
+ * On-screen rectangle (in frame px) of a clip's displayed image, given the
+ * frame size + the clip's natural aspect + its transform. Matches an
+ * ``object-fit: contain`` base box, then applies scale (about center) and the
+ * fractional translate.
+ */
+export function clipImageRect(
+  clip: TimelineClip,
+  tf: ClipTransform,
+  frameW: number,
+  frameH: number
+): ClipRect {
+  const nW = clip.naturalW ?? 0;
+  const nH = clip.naturalH ?? 0;
+  const { w: baseW, h: baseH } = containedBoxSize(nW, nH, frameW, frameH);
+  const w = baseW * tf.scale;
+  const h = baseH * tf.scale;
+  const cx = frameW / 2 + tf.x * frameW;
+  const cy = frameH / 2 + tf.y * frameH;
+  return { left: cx - w / 2, top: cy - h / 2, width: w, height: h };
+}
+
+export const PREVIEW_ALIGN_SNAP_PX = 8;
+
+export type AlignGuide = {
+  axis: "x" | "y";
+  pos: number;
+  kind: "center" | "border";
+};
+
+/** Inverse of clipImageRect: fractional x/y from a rect's center position. */
+export function clipTransformFromRectCenter(
+  rect: ClipRect,
+  frameW: number,
+  frameH: number
+): Pick<ClipTransform, "x" | "y"> {
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  return {
+    x: frameW > 0 ? (cx - frameW / 2) / frameW : 0,
+    y: frameH > 0 ? (cy - frameH / 2) / frameH : 0,
+  };
+}
+
+type SnapCandidate = { delta: number; guide: AlignGuide };
+
+function snapAxis(
+  candidates: SnapCandidate[],
+  thresholdPx: number
+): { delta: number; guide: AlignGuide | null } {
+  let bestDelta = 0;
+  let bestDist = thresholdPx;
+  let bestGuide: AlignGuide | null = null;
+  for (const c of candidates) {
+    const dist = Math.abs(c.delta);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestDelta = c.delta;
+      bestGuide = c.guide;
+    }
+  }
+  return { delta: bestDelta, guide: bestGuide };
+}
+
+/** Snap clip rect to frame center and borders; nearest target per axis within threshold. */
+export function snapClipRectToFrame(
+  rect: ClipRect,
+  frameW: number,
+  frameH: number,
+  thresholdPx = PREVIEW_ALIGN_SNAP_PX
+): { rect: ClipRect; guides: AlignGuide[] } {
+  const guides: AlignGuide[] = [];
+  let { left, top, width, height } = rect;
+
+  const cx = left + width / 2;
+  const right = left + width;
+  const xSnap = snapAxis(
+    [
+      { delta: frameW / 2 - cx, guide: { axis: "x", pos: frameW / 2, kind: "center" } },
+      { delta: -left, guide: { axis: "x", pos: 0, kind: "border" } },
+      { delta: frameW - right, guide: { axis: "x", pos: frameW, kind: "border" } },
+    ],
+    thresholdPx
+  );
+  left += xSnap.delta;
+  if (xSnap.guide) guides.push(xSnap.guide);
+
+  const cy = top + height / 2;
+  const bottom = top + height;
+  const ySnap = snapAxis(
+    [
+      { delta: frameH / 2 - cy, guide: { axis: "y", pos: frameH / 2, kind: "center" } },
+      { delta: -top, guide: { axis: "y", pos: 0, kind: "border" } },
+      { delta: frameH - bottom, guide: { axis: "y", pos: frameH, kind: "border" } },
+    ],
+    thresholdPx
+  );
+  top += ySnap.delta;
+  if (ySnap.guide) guides.push(ySnap.guide);
+
+  return { rect: { left, top, width, height }, guides };
+}
+
+/** Effective transform at playhead (trajectory interpolation when present). */
+export function clipTransformAtPlayhead(clip: TimelineClip, playhead: number): ClipTransform {
+  const traj = trajectoryTransformAt(clip, playhead);
+  if (traj) return traj;
+  return clip.transform ?? defaultImageClipTransform();
+}
+
+/** Initial transform for a newly imported image: centered, scale 1 (contain handled in layout). */
+export function defaultImageClipTransform(): ClipTransform {
+  return { x: 0, y: 0, scale: 1 };
+}
+
+/** Build a standard image clip object for addClip(). */
+export function buildAudioClip(params: {
+  srcRelPath: string;
+  durationSec: number;
+  start?: number;
+}): TimelineClip {
+  const dur = Math.max(0.05, params.durationSec);
+  return {
+    id: genId("clip"),
+    type: "audio",
+    srcRelPath: params.srcRelPath,
+    start: params.start ?? 0,
+    inPoint: 0,
+    outPoint: dur,
+    speed: 1,
+    duration: dur,
+    srcDuration: dur,
+  };
+}
+
+export function buildImageClip(params: {
+  srcRelPath: string;
+  width: number;
+  height: number;
+  source?: TimelineClip["source"];
+  start?: number;
+  durationSec?: number;
+}): TimelineClip {
+  const dur = params.durationSec ?? IMAGE_CLIP_DEFAULT_SEC;
+  return {
+    id: genId("clip"),
+    type: "image",
+    srcRelPath: params.srcRelPath,
+    start: params.start ?? 0,
+    inPoint: 0,
+    outPoint: dur,
+    speed: 1,
+    duration: dur,
+    ...(params.width > 0 ? { naturalW: params.width } : {}),
+    ...(params.height > 0 ? { naturalH: params.height } : {}),
+    ...(params.source ? { source: params.source } : {}),
+    transform: defaultImageClipTransform(),
+  };
+}
+
+export function clipTrackLabel(clip: TimelineClip): string {
+  if (clip.type === "image" && clip.source?.combined) return "combined";
+  return clip.type;
+}
+
+export function loadImageDimensionsFromUrl(url: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => reject(new Error("Could not load image dimensions."));
+    img.src = url;
+  });
+}
+
+/** Resolve dimensions from API result, falling back to client-side image load. */
+export async function resolveImportDimensions(
+  srcRelPath: string,
+  apiWidth: number,
+  apiHeight: number
+): Promise<{ width: number; height: number }> {
+  if (apiWidth > 0 && apiHeight > 0) return { width: apiWidth, height: apiHeight };
+  try {
+    const dims = await loadImageDimensionsFromUrl(assetUrlFromRelPath(srcRelPath));
+    return { width: dims.w, height: dims.h };
+  } catch {
+    return { width: apiWidth, height: apiHeight };
+  }
 }
 
 /** Preview box aspect ratio (width / height). */
@@ -80,4 +309,117 @@ export function appendClipToTrack(track: TimelineTrack, clip: TimelineClip): Tim
   let start = 0;
   for (const c of track.clips) start = Math.max(start, clipEnd(c));
   return { ...track, clips: [...track.clips, { ...clip, start }] };
+}
+
+function loadHTMLImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+    img.src = url;
+  });
+}
+
+async function clipWithResolvedDims(clip: TimelineClip): Promise<TimelineClip> {
+  const { width, height } = await resolveImportDimensions(
+    clip.srcRelPath,
+    clip.naturalW ?? 0,
+    clip.naturalH ?? 0
+  );
+  return {
+    ...clip,
+    ...(width > 0 ? { naturalW: width } : {}),
+    ...(height > 0 ? { naturalH: height } : {}),
+  };
+}
+
+/** Map overlay draw rect from reference-frame coords into backdrop-native pixel placement. */
+export function overlayShotLayerPlacement(params: {
+  ovRect: ClipRect;
+  bgRect: ClipRect;
+  overlayNaturalW: number;
+  overlayNaturalH: number;
+  backdropNaturalW: number;
+  backdropNaturalH: number;
+}): { x: number; y: number; scale: number } {
+  const {
+    ovRect,
+    bgRect,
+    overlayNaturalW,
+    overlayNaturalH,
+    backdropNaturalW,
+    backdropNaturalH,
+  } = params;
+  const scale = overlayNaturalW > 0 ? ovRect.width / overlayNaturalW : 1;
+  const x =
+    bgRect.width > 0
+      ? (ovRect.left - bgRect.left) * (backdropNaturalW / bgRect.width)
+      : 0;
+  const y =
+    bgRect.height > 0
+      ? (ovRect.top - bgRect.top) * (backdropNaturalH / bgRect.height)
+      : 0;
+  return { x, y, scale };
+}
+
+export type TimelineCompositeResult = {
+  base64: string;
+  bgRect: ClipRect;
+  ovRect: ClipRect;
+  backdropNaturalW: number;
+  backdropNaturalH: number;
+  overlayNaturalW: number;
+  overlayNaturalH: number;
+};
+
+/**
+ * Flatten backdrop + overlay to PNG at reference-frame resolution, matching
+ * preview layout (contain box + per-clip transform at playhead).
+ */
+export async function buildTimelineCompositePngBase64(params: {
+  backdrop: TimelineClip;
+  overlay: TimelineClip;
+  previewAspect: TimelineManifest["previewAspect"];
+  playhead: number;
+}): Promise<TimelineCompositeResult> {
+  const backdrop = await clipWithResolvedDims(params.backdrop);
+  const overlay = await clipWithResolvedDims(params.overlay);
+  const { w: frameW, h: frameH } = referenceFrameSize(params.previewAspect);
+
+  const tfBg = clipTransformAtPlayhead(backdrop, params.playhead);
+  const tfOv = clipTransformAtPlayhead(overlay, params.playhead);
+  const bgRect = clipImageRect(backdrop, tfBg, frameW, frameH);
+  const ovRect = clipImageRect(overlay, tfOv, frameW, frameH);
+
+  const [bgImg, overlayImg] = await Promise.all([
+    loadHTMLImage(assetUrlFromRelPath(backdrop.srcRelPath)),
+    loadHTMLImage(assetUrlFromRelPath(overlay.srcRelPath)),
+  ]);
+
+  const backdropNaturalW = backdrop.naturalW ?? bgImg.naturalWidth;
+  const backdropNaturalH = backdrop.naturalH ?? bgImg.naturalHeight;
+  const overlayNaturalW = overlay.naturalW ?? overlayImg.naturalWidth;
+  const overlayNaturalH = overlay.naturalH ?? overlayImg.naturalHeight;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = frameW;
+  canvas.height = frameH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not get 2D canvas context.");
+
+  ctx.drawImage(bgImg, bgRect.left, bgRect.top, bgRect.width, bgRect.height);
+  ctx.drawImage(overlayImg, ovRect.left, ovRect.top, ovRect.width, ovRect.height);
+
+  const base64 = canvas.toDataURL("image/png").split(",", 2)[1] ?? "";
+
+  return {
+    base64,
+    bgRect,
+    ovRect,
+    backdropNaturalW,
+    backdropNaturalH,
+    overlayNaturalW,
+    overlayNaturalH,
+  };
 }

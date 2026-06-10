@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { TimelineManifest, TimelineClip, TimelineTrack } from "../../lib/api";
 import { TrackLabelTag } from "./TrackLabelTag";
-import { clamp, clipEnd, timelineDuration } from "./timelineUtil";
+import { clamp, clipEnd, clipTrackLabel, timelineDuration } from "./timelineUtil";
 
 const LABEL_W = 120;
 const ROW_H = 56;
@@ -39,6 +39,11 @@ export function TimelineTracks(props: {
     clientY: number
   ) => void;
   onTrackContextMenu: (trackId: string, clientX: number, clientY: number) => void;
+  onSurfaceContextMenu?: (
+    trackId: string | null,
+    clientX: number,
+    clientY: number
+  ) => void;
 }) {
   const {
     manifest,
@@ -52,6 +57,7 @@ export function TimelineTracks(props: {
     setPxPerSec,
     onClipContextMenu,
     onTrackContextMenu,
+    onSurfaceContextMenu,
   } = props;
 
   const dragRef = useRef<DragState | null>(null);
@@ -69,15 +75,19 @@ export function TimelineTracks(props: {
     const el = laneAreaRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      const rect = el.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
       if (e.shiftKey) {
         // Shift+wheel → horizontal scroll.
         el.scrollLeft += e.deltaY || e.deltaX;
         e.preventDefault();
         return;
       }
+      if (offsetX < LABEL_W) {
+        // Track name / ruler corner — don't hijack wheel for zoom.
+        return;
+      }
       e.preventDefault();
-      const rect = el.getBoundingClientRect();
-      const offsetX = e.clientX - rect.left;
       const cursorTime = (offsetX + el.scrollLeft - LABEL_W) / pxPerSec;
       zoomAnchorRef.current = { cursorTime: Math.max(0, cursorTime), offsetX };
       const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
@@ -400,6 +410,12 @@ export function TimelineTracks(props: {
               onSelectClip(null, false);
               seekFromClientX(e.clientX);
             }}
+            onContextMenu={(e) => {
+              if (!onSurfaceContextMenu) return;
+              e.preventDefault();
+              e.stopPropagation();
+              onSurfaceContextMenu(null, e.clientX, e.clientY);
+            }}
           >
             {Array.from({ length: Math.ceil(contentSec) + 1 }).map((_, s) => (
               <div
@@ -460,6 +476,12 @@ export function TimelineTracks(props: {
                   seekFromClientX(e.clientX);
                 }
               }}
+              onContextMenu={(e) => {
+                if (!onSurfaceContextMenu || e.target !== e.currentTarget) return;
+                e.preventDefault();
+                e.stopPropagation();
+                onSurfaceContextMenu(track.id, e.clientX, e.clientY);
+              }}
             >
               {track.clips.map((clip) => {
                 const left = clip.start * pxPerSec;
@@ -504,8 +526,8 @@ export function TimelineTracks(props: {
                     }}
                   >
                     {clip.type === "audio" && !clip.srcRelPath
-                      ? "♪ music (placeholder)"
-                      : `${clip.type} · ${clip.speed !== 1 ? `${clip.speed}× · ` : ""}${clip.duration.toFixed(1)}s`}
+                      ? "♪ audio (empty)"
+                      : `${clipTrackLabel(clip)} · ${clip.speed !== 1 ? `${clip.speed}× · ` : ""}${clip.duration.toFixed(1)}s`}
                     {clip.trajectory && (
                       <span style={{ marginLeft: 4, fontSize: 8, opacity: 0.75 }} title="Has trajectory">↗</span>
                     )}

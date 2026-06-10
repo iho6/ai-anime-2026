@@ -3,11 +3,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  apiLocationHubItems,
-  apiShotHubItems,
   apiTimelineGet,
+  apiTimelineImportAudio,
   apiTimelineImportImage,
   apiTimelinePut,
+  AudioReference,
+  runReferenceAudioGenerateWsJob,
   assetUrlFromRelPath,
   runTimelineAiEditWsJob,
   runTimelineExportMp4WsJob,
@@ -43,23 +44,23 @@ import {
   SequenceVideoChoice,
 } from "../../../components/timeline/SequenceVideoPicker";
 import { TimelineCharacterPicker } from "../../../components/TimelineCharacterPicker";
+import { TimelineLocationPicker } from "../../../components/TimelineLocationPicker";
+import { TimelineAudioPicker } from "../../../components/TimelineAudioPicker";
 import type { TrajectoryWaypoint } from "../../../components/timeline/TrajectoryEditor";
 import {
-  ImageSourcePickerModal,
-  PickerItem,
-} from "../../../components/timeline/ImageSourcePickerModal";
-import {
   appendClipToTrack,
+  buildAudioClip,
+  buildImageClip,
+  buildTimelineCompositePngBase64,
   clipEnd,
   formatTime,
   genId,
   newAudioTrack,
   newVideoTrack,
+  overlayShotLayerPlacement,
+  resolveImportDimensions,
   timelineDuration,
 } from "../../../components/timeline/timelineUtil";
-
-const IMAGE_CLIP_DEFAULT_SEC = 3;
-const MUSIC_CLIP_DEFAULT_SEC = 5;
 
 export default function TimelineEditorPage() {
   const router = useRouter();
@@ -100,7 +101,7 @@ export default function TimelineEditorPage() {
   const [charPickerInitialKey, setCharPickerInitialKey] = useState<string | null>(null);
   const [changePoseClipId, setChangePoseClipId] = useState<string | null>(null);
   const [locPickerOpen, setLocPickerOpen] = useState(false);
-  const [shotPickerOpen, setShotPickerOpen] = useState(false);
+  const [audioPickerOpen, setAudioPickerOpen] = useState(false);
 
   // New Angle modal (for character clips).
   const [cameraAngleOpen, setCameraAngleOpen] = useState(false);
@@ -121,6 +122,12 @@ export default function TimelineEditorPage() {
     y: number;
     trackId: string;
   }>({ open: false, x: 0, y: 0, trackId: "" });
+  const [surfaceMenu, setSurfaceMenu] = useState<{
+    open: boolean;
+    x: number;
+    y: number;
+    trackId: string | null;
+  }>({ open: false, x: 0, y: 0, trackId: null });
 
   // ---- Load + debounced autosave ------------------------------------------
   const loadedRef = useRef(false);
@@ -258,19 +265,85 @@ export default function TimelineEditorPage() {
     }));
   }
 
-  function addMusic(targetTrackId?: string) {
+  function openAudioPicker(targetTrackId?: string) {
     targetTrackRef.current = targetTrackId ?? null;
-    const clip: TimelineClip = {
-      id: genId("clip"),
-      type: "audio",
-      srcRelPath: "",
-      start: 0,
-      inPoint: 0,
-      outPoint: MUSIC_CLIP_DEFAULT_SEC,
-      speed: 1,
-      duration: MUSIC_CLIP_DEFAULT_SEC,
-    };
-    addClip("audio", clip);
+    setAudioPickerOpen(true);
+  }
+
+  async function importAudioClipToTimeline(sourceRelPath: string, durationSec: number) {
+    const imported = await apiTimelineImportAudio({
+      timelineKey,
+      sourceRelPath,
+    });
+    const dur = imported.durationSec || durationSec;
+    addClip(
+      "audio",
+      buildAudioClip({
+        srcRelPath: imported.srcRelPath,
+        durationSec: dur,
+      })
+    );
+  }
+
+  async function onGenerateAudio(prompt: string) {
+    setAudioPickerOpen(false);
+    beginSession({ title: "Generating audio", clearLog: true });
+    await Promise.resolve();
+    pushLog("Running ACE-Step audio generation…");
+    try {
+      const done = await runReferenceAudioGenerateWsJob({
+        mode: "audio",
+        prompt,
+        onLogLine: pushLog,
+      });
+      if (!done.ok || !done.result?.item?.relPath) {
+        throw new Error(done.error ?? "Audio generation failed.");
+      }
+      pushLog("Importing audio to timeline…");
+      await importAudioClipToTimeline(done.result.item.relPath, done.result.durationSec);
+      endSession();
+    } catch (e) {
+      failSession(e, "Audio generation failed.");
+    }
+  }
+
+  async function onGenerateMusic(style: string, lyrics: string) {
+    setAudioPickerOpen(false);
+    beginSession({ title: "Generating music", clearLog: true });
+    await Promise.resolve();
+    pushLog("Running ACE-Step music generation…");
+    try {
+      const done = await runReferenceAudioGenerateWsJob({
+        mode: "music",
+        style,
+        lyrics,
+        onLogLine: pushLog,
+      });
+      if (!done.ok || !done.result?.item?.relPath) {
+        throw new Error(done.error ?? "Music generation failed.");
+      }
+      pushLog("Importing music to timeline…");
+      await importAudioClipToTimeline(done.result.item.relPath, done.result.durationSec);
+      endSession();
+    } catch (e) {
+      failSession(e, "Music generation failed.");
+    }
+  }
+
+  async function onAudioGalleryUseSelected(items: AudioReference[]) {
+    if (!items.length) return;
+    setAudioPickerOpen(false);
+    beginSession({ title: "Importing audio", clearLog: true });
+    await Promise.resolve();
+    try {
+      for (const item of items) {
+        pushLog(`Importing ${item.label || item.id}…`);
+        await importAudioClipToTimeline(item.relPath, 120);
+      }
+      endSession();
+    } catch (e) {
+      failSession(e, "Could not import audio.");
+    }
   }
 
   async function onPickSequence(choice: SequenceVideoChoice) {
@@ -321,19 +394,20 @@ export default function TimelineEditorPage() {
     pushLog("Importing image…");
     try {
       const r = await apiTimelineImportImage({ timelineKey, sourceRelPath });
-      addClip("video", {
-        id: genId("clip"),
-        type: "image",
-        srcRelPath: r.srcRelPath,
-        start: 0,
-        inPoint: 0,
-        outPoint: IMAGE_CLIP_DEFAULT_SEC,
-        speed: 1,
-        duration: IMAGE_CLIP_DEFAULT_SEC,
-        naturalW: r.width || undefined,
-        naturalH: r.height || undefined,
-        source,
-      });
+      const { width, height } = await resolveImportDimensions(
+        r.srcRelPath,
+        r.width || 0,
+        r.height || 0
+      );
+      addClip(
+        "video",
+        buildImageClip({
+          srcRelPath: r.srcRelPath,
+          width,
+          height,
+          source,
+        })
+      );
       endSession();
     } catch (e) {
       failSession(e, "Could not import image.");
@@ -349,6 +423,11 @@ export default function TimelineEditorPage() {
     pushLog("Importing new pose…");
     try {
       const r = await apiTimelineImportImage({ timelineKey, sourceRelPath: relPath });
+      const { width, height } = await resolveImportDimensions(
+        r.srcRelPath,
+        r.width || 0,
+        r.height || 0
+      );
       historyUpdate((m) => ({
         ...m,
         tracks: m.tracks.map((t) => ({
@@ -359,8 +438,8 @@ export default function TimelineEditorPage() {
                   ...c,
                   srcRelPath: r.srcRelPath,
                   source: { ...c.source, charKey },
-                  naturalW: r.width || c.naturalW,
-                  naturalH: r.height || c.naturalH,
+                  naturalW: width || c.naturalW,
+                  naturalH: height || c.naturalH,
                 }
               : c
           ),
@@ -421,13 +500,23 @@ export default function TimelineEditorPage() {
       if (!done.ok || !newRel) throw new Error(done.error || "Angle generation returned no image.");
       // Re-import the new image and replace clip in-place.
       const r = await apiTimelineImportImage({ timelineKey, sourceRelPath: newRel });
+      const { width, height } = await resolveImportDimensions(
+        r.srcRelPath,
+        r.width || 0,
+        r.height || 0
+      );
       historyUpdate((m) => ({
         ...m,
         tracks: m.tracks.map((t) => ({
           ...t,
           clips: t.clips.map((c) =>
             c.id === clipId
-              ? { ...c, srcRelPath: r.srcRelPath, naturalW: r.width || c.naturalW, naturalH: r.height || c.naturalH }
+              ? {
+                  ...c,
+                  srcRelPath: r.srcRelPath,
+                  naturalW: width || c.naturalW,
+                  naturalH: height || c.naturalH,
+                }
               : c
           ),
         })),
@@ -452,53 +541,33 @@ export default function TimelineEditorPage() {
     return [backdrop, overlay];
   }
 
-  function loadHTMLImage(url: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
-      img.src = url;
-    });
-  }
-
-  async function buildCompositeFromRelPaths(bgRel: string, overlayRel: string, bgW: number, bgH: number): Promise<string> {
-    const [bgImg, overlayImg] = await Promise.all([
-      loadHTMLImage(assetUrlFromRelPath(bgRel)),
-      loadHTMLImage(assetUrlFromRelPath(overlayRel)),
-    ]);
-    const canvas = document.createElement("canvas");
-    canvas.width = bgW || bgImg.naturalWidth || 512;
-    canvas.height = bgH || bgImg.naturalHeight || 512;
-    const ctx = canvas.getContext("2d")!;
-    ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-    // Scale overlay to fit within bg, centered.
-    const scale = Math.min(canvas.width / (overlayImg.naturalWidth || 1), canvas.height / (overlayImg.naturalHeight || 1));
-    const w = (overlayImg.naturalWidth || canvas.width) * scale;
-    const h = (overlayImg.naturalHeight || canvas.height) * scale;
-    ctx.drawImage(overlayImg, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
-    return canvas.toDataURL("image/png").split(",")[1] ?? "";
-  }
-
   async function runJointGenerate(mode: "i2i" | "as_is") {
     const pair = getOverlappingCharBgPair();
-    if (!pair) return;
+    if (!pair || !manifest) return;
     const [backdrop, overlay] = pair;
     beginSession({ title: mode === "i2i" ? "Generating scene" : "Combining images", clearLog: true });
     await Promise.resolve();
     pushLog("Building composite…");
     try {
-      const composite = await buildCompositeFromRelPaths(
-        backdrop.srcRelPath,
-        overlay.srcRelPath,
-        backdrop.naturalW ?? 0,
-        backdrop.naturalH ?? 0,
-      );
+      const compositeResult = await buildTimelineCompositePngBase64({
+        backdrop,
+        overlay,
+        previewAspect: manifest.previewAspect,
+        playhead,
+      });
+      const placement = overlayShotLayerPlacement({
+        ovRect: compositeResult.ovRect,
+        bgRect: compositeResult.bgRect,
+        overlayNaturalW: compositeResult.overlayNaturalW,
+        overlayNaturalH: compositeResult.overlayNaturalH,
+        backdropNaturalW: compositeResult.backdropNaturalW,
+        backdropNaturalH: compositeResult.backdropNaturalH,
+      });
       const charKey = overlay.source?.charKey ?? "";
       const layers: ShotLayerMeta[] = [{
         charKey,
         imageRelPath: overlay.srcRelPath,
-        x: 0, y: 0, scale: 1,
+        ...placement,
       }];
       pushLog("Sending to generation…");
       const done = await runShotCreateWsJob({
@@ -506,7 +575,7 @@ export default function TimelineEditorPage() {
         locationKey: backdrop.source?.locationKey ?? null,
         locationImageRelPath: backdrop.srcRelPath,
         characters: layers,
-        compositePngBase64: composite,
+        compositePngBase64: compositeResult.base64,
         promptText: "",
         mode,
         onLogLine: (line) => pushLog(line),
@@ -514,29 +583,23 @@ export default function TimelineEditorPage() {
       if (!done.ok || !done.result?.outputRelPath) {
         throw new Error(done.error ?? "Shot generation failed.");
       }
-      await importImageClip(done.result.outputRelPath, { shotKey: done.result.shotKey });
+      await importImageClip(done.result.outputRelPath, {
+        shotKey: done.result.shotKey,
+        combined: true,
+      });
       endSession();
     } catch (e) {
       failSession(e, "Joint generation failed.");
     }
   }
 
-  function onPickLocation(item: PickerItem) {
+  function onPickLocationImage(locationKey: string, relPath: string) {
     setLocPickerOpen(false);
-    if (!item.coverRelPath) {
+    if (!relPath) {
       showError({ message: "That location has no image to import." });
       return;
     }
-    void importImageClip(item.coverRelPath, { locationKey: item.key });
-  }
-
-  function onPickShot(item: PickerItem) {
-    setShotPickerOpen(false);
-    if (!item.coverRelPath) {
-      showError({ message: "That shot has no image to import." });
-      return;
-    }
-    void importImageClip(item.coverRelPath, { shotKey: item.key });
+    void importImageClip(relPath, { locationKey });
   }
 
   // ---- Clip operations -----------------------------------------------------
@@ -602,13 +665,23 @@ export default function TimelineEditorPage() {
       const newRel = done.result?.relPath;
       if (!done.ok || !newRel) throw new Error(done.error || "Background removal failed.");
       const r = await apiTimelineImportImage({ timelineKey, sourceRelPath: newRel });
+      const { width, height } = await resolveImportDimensions(
+        r.srcRelPath,
+        r.width || 0,
+        r.height || 0
+      );
       historyUpdate((m) => ({
         ...m,
         tracks: m.tracks.map((t) => ({
           ...t,
           clips: t.clips.map((c) =>
             c.id === clipId
-              ? { ...c, srcRelPath: r.srcRelPath, naturalW: r.width || c.naturalW, naturalH: r.height || c.naturalH }
+              ? {
+                  ...c,
+                  srcRelPath: r.srcRelPath,
+                  naturalW: width || c.naturalW,
+                  naturalH: height || c.naturalH,
+                }
               : c
           ),
         })),
@@ -836,19 +909,17 @@ export default function TimelineEditorPage() {
       });
       const r = done.result;
       if (!done.ok || !r?.srcRelPath) throw new Error(done.error || "AI edit returned no image.");
+      const { width, height } = await resolveImportDimensions(
+        r.srcRelPath,
+        r.width || 0,
+        r.height || 0
+      );
       insertClipOnNewTrack(
-        {
-          id: genId("clip"),
-          type: "image",
+        buildImageClip({
           srcRelPath: r.srcRelPath,
-          start: 0,
-          inPoint: 0,
-          outPoint: IMAGE_CLIP_DEFAULT_SEC,
-          speed: 1,
-          duration: IMAGE_CLIP_DEFAULT_SEC,
-          naturalW: r.width || undefined,
-          naturalH: r.height || undefined,
-        },
+          width,
+          height,
+        }),
         tgt.start,
         "AI Edit"
       );
@@ -1100,11 +1171,10 @@ export default function TimelineEditorPage() {
     if (!isAudio) {
       items.push(
         { key: "addChar", label: "Add Character", onSelect: open(() => { setCharPickerInitialKey(null); setChangePoseClipId(null); setCharPickerOpen(true); }) },
-        { key: "addLoc", label: "Add Location", onSelect: open(() => setLocPickerOpen(true)) },
-        { key: "addShot", label: "Add Shot", onSelect: open(() => setShotPickerOpen(true)) }
+        { key: "addLoc", label: "Add Location", onSelect: open(() => setLocPickerOpen(true)) }
       );
     }
-    items.push({ key: "addMusic", label: "Add Music (placeholder)", onSelect: open(() => addMusic(tid)) });
+    items.push({ key: "addAudio", label: "Add Audio", onSelect: open(() => openAudioPicker(tid)) });
     items.push({
       key: "delTrack",
       label: "Delete track",
@@ -1116,6 +1186,56 @@ export default function TimelineEditorPage() {
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackMenu, manifest]);
+
+  const surfaceMenuItems: ContextMenuItem[] = useMemo(() => {
+    if (!surfaceMenu.open) return [];
+    const tid = surfaceMenu.trackId;
+    const close = () => setSurfaceMenu((s) => ({ ...s, open: false }));
+    const open = (fn: () => void) => () => {
+      targetTrackRef.current = tid;
+      close();
+      fn();
+    };
+    return [
+      {
+        key: "addTrack",
+        label: "+ Track",
+        onSelect: () => {
+          close();
+          addVideoTrack();
+        },
+      },
+      {
+        key: "addChar",
+        label: "Add Character",
+        disabled: busy,
+        onSelect: open(() => {
+          setCharPickerInitialKey(null);
+          setChangePoseClipId(null);
+          setCharPickerOpen(true);
+        }),
+      },
+      {
+        key: "addLoc",
+        label: "Add Location",
+        disabled: busy,
+        onSelect: open(() => setLocPickerOpen(true)),
+      },
+      {
+        key: "addAudio",
+        label: "Add Audio",
+        disabled: busy,
+        onSelect: open(() => openAudioPicker(tid ?? undefined)),
+      },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surfaceMenu, busy]);
+
+  function openSurfaceContextMenu(trackId: string | null, x: number, y: number) {
+    setClipMenu((s) => ({ ...s, open: false }));
+    setTrackMenu((s) => ({ ...s, open: false }));
+    setSurfaceMenu({ open: true, x, y, trackId });
+  }
 
   function togglePlay() {
     if (total <= 0) return;
@@ -1320,18 +1440,8 @@ export default function TimelineEditorPage() {
         >
           Add Location
         </button>
-        <button
-          onClick={() => {
-            targetTrackRef.current = null;
-            setShotPickerOpen(true);
-          }}
-          style={toolBtn}
-          disabled={busy}
-        >
-          Add Shot
-        </button>
-        <button onClick={() => addMusic()} style={toolBtn} disabled={busy}>
-          Add Music
+        <button onClick={() => openAudioPicker()} style={toolBtn} disabled={busy}>
+          Add Audio
         </button>
         <button onClick={() => void runExportMp4()} style={toolBtn} disabled={busy} title="Compile all clips into a single MP4">
           Export MP4
@@ -1350,8 +1460,14 @@ export default function TimelineEditorPage() {
       {/* Tracks */}
       <div style={{ padding: "0 20px 24px" }}>
         {manifest.tracks.length === 0 ? (
-          <div style={{ color: "#888", padding: 20, border: "1px dashed rgba(255,255,255,0.2)" }}>
-            No tracks yet. Use “+ Track”, then add a character video, location, shot, or music.
+          <div
+            style={{ color: "#888", padding: 20, border: "1px dashed rgba(255,255,255,0.2)" }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              openSurfaceContextMenu(null, e.clientX, e.clientY);
+            }}
+          >
+            No tracks yet. Use “+ Track”, then add a character video, location, or audio.
           </div>
         ) : (
           <TimelineTracks
@@ -1373,6 +1489,7 @@ export default function TimelineEditorPage() {
             onTrackContextMenu={(trackId, x, y) =>
               setTrackMenu({ open: true, x, y, trackId })
             }
+            onSurfaceContextMenu={openSurfaceContextMenu}
           />
         )}
       </div>
@@ -1390,29 +1507,18 @@ export default function TimelineEditorPage() {
         onPickSequence={onPickCharSequence}
         onCancel={() => { setCharPickerOpen(false); setChangePoseClipId(null); setCharPickerInitialKey(null); }}
       />
-      <ImageSourcePickerModal
+      <TimelineLocationPicker
         open={locPickerOpen}
-        title="Add Location"
-        load={async () =>
-          (await apiLocationHubItems()).map((l) => ({
-            key: l.locationKey,
-            coverRelPath: l.coverRelPath,
-          }))
-        }
         onCancel={() => setLocPickerOpen(false)}
-        onPick={onPickLocation}
+        onPickImage={onPickLocationImage}
       />
-      <ImageSourcePickerModal
-        open={shotPickerOpen}
-        title="Add Shot"
-        load={async () =>
-          (await apiShotHubItems()).map((s) => ({
-            key: s.shotKey,
-            coverRelPath: s.coverRelPath,
-          }))
-        }
-        onCancel={() => setShotPickerOpen(false)}
-        onPick={onPickShot}
+      <TimelineAudioPicker
+        open={audioPickerOpen}
+        busy={busy}
+        onCancel={() => setAudioPickerOpen(false)}
+        onGenerateAudio={(prompt) => void onGenerateAudio(prompt)}
+        onGenerateMusic={(style, lyrics) => void onGenerateMusic(style, lyrics)}
+        onUseSelected={(items) => void onAudioGalleryUseSelected(items)}
       />
 
       {/* Context menus */}
@@ -1429,6 +1535,13 @@ export default function TimelineEditorPage() {
         y={trackMenu.y}
         items={trackMenuItems}
         onClose={() => setTrackMenu((s) => ({ ...s, open: false }))}
+      />
+      <DesktopContextMenu
+        open={surfaceMenu.open}
+        x={surfaceMenu.x}
+        y={surfaceMenu.y}
+        items={surfaceMenuItems}
+        onClose={() => setSurfaceMenu((s) => ({ ...s, open: false }))}
       />
 
       <CameraAngleModal

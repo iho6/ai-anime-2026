@@ -458,6 +458,7 @@ export type TimelineClip = {
     galleryItemId?: string;
     shotKey?: string;
     locationKey?: string;
+    combined?: boolean;
   };
 };
 
@@ -558,6 +559,28 @@ export async function apiTimelineImportImage(params: {
     }
   );
   return readJson<{ type: "image"; srcRelPath: string; width: number; height: number }>(res);
+}
+
+export type TimelineAudioClipResult = {
+  type: "audio";
+  srcRelPath: string;
+  durationSec: number;
+};
+
+export async function apiTimelineImportAudio(params: {
+  timelineKey: string;
+  sourceRelPath: string;
+}): Promise<TimelineAudioClipResult> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(params.timelineKey)}/import_audio`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sourceRelPath: params.sourceRelPath }),
+      credentials: "omit",
+    }
+  );
+  return readJson<TimelineAudioClipResult>(res);
 }
 
 /** Materialize a character sequence (or one gallery video item) into an mp4 clip. */
@@ -2355,6 +2378,21 @@ export async function apiReferenceImagesReorder(order: string[]): Promise<void> 
 
 export type KeypointFolder = { id: string; name: string };
 
+export type AudioReference = {
+  id: string;
+  relPath: string;
+  label?: string;
+  mode?: "audio" | "music";
+  tags?: string;
+};
+
+export type AudioLayout = {
+  folders: KeypointFolder[];
+  rootOrder: string[];
+  folderOrder: Record<string, string[]>;
+  items: AudioReference[];
+};
+
 export type KeypointsLayout = {
   folders: KeypointFolder[];
   rootOrder: string[];
@@ -2446,6 +2484,122 @@ export async function apiReferenceKeypointDelete(id: string): Promise<void> {
     { method: "DELETE", credentials: "omit" }
   );
   if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceAudioLayout(): Promise<AudioLayout> {
+  const res = await fetch(`${API_BASE_URL}/reference/audio/layout`, {
+    method: "GET",
+    credentials: "omit",
+  });
+  return readJson<AudioLayout>(res);
+}
+
+export async function apiReferenceAudioReorderRoot(order: string[]): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/reference/audio/reorder`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scope: "root", order }),
+  });
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceAudioReorderFolder(
+  folderId: string,
+  order: string[]
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/reference/audio/reorder`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scope: "folder", folderId, order }),
+  });
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceAudioFolderCreate(
+  name: string,
+  itemIds: string[]
+): Promise<KeypointFolder> {
+  const res = await fetch(`${API_BASE_URL}/reference/audio/folders`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, itemIds }),
+  });
+  const data = await readJson<{ folder: KeypointFolder }>(res);
+  return data.folder;
+}
+
+export async function apiReferenceAudioFolderDelete(folderId: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/reference/audio/folders/${encodeURIComponent(folderId)}`,
+    { method: "DELETE", credentials: "omit" }
+  );
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceAudioDelete(id: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/reference/audio/${encodeURIComponent(id)}`,
+    { method: "DELETE", credentials: "omit" }
+  );
+  if (!res.ok) await readJson(res);
+}
+
+/** Generate ACE-Step audio and register in the global audio gallery. */
+export function runReferenceAudioGenerateWsJob(params: {
+  mode: "audio" | "music";
+  prompt?: string;
+  style?: string;
+  lyrics?: string;
+  duration?: number;
+  onLogLine: (line: string) => void;
+}): Promise<
+  WsDoneMessage<{ item: AudioReference; durationSec: number }>
+> {
+  const url = wsUrlForPath("/reference/audio/generate/ws");
+  const { onLogLine, ...payload } = params;
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => {
+      ws.send(JSON.stringify(payload));
+    };
+    ws.onmessage = (ev) => {
+      let data: {
+        type?: string;
+        line?: string;
+        ok?: boolean;
+        error?: string;
+        result?: { item: AudioReference; durationSec: number };
+      };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") {
+        onLogLine(data.line);
+        return;
+      }
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(data as WsDoneMessage<{ item: AudioReference; durationSec: number }>);
+      }
+    };
+  });
 }
 
 export async function apiReferenceKeypointVideoUpdateStrip(

@@ -1,0 +1,75 @@
+{
+  "3": {
+    "inputs": {
+      "seed": 42,
+      "steps": 50,
+      "cfg": 7,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1,
+      "model": ["4", 0],
+      "positive": ["8", 0],
+      "negative": ["8", 1],
+      "latent_image": ["5", 0]
+    },
+    "class_type": "KSampler"
+  },
+  "4": {
+    "inputs": {
+      "ckpt_name": "stable-audio-open-1.0.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple"
+  },
+  "5": {
+    "inputs": {
+      "seconds": 30,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentAudio"
+  },
+  "6": {
+    "inputs": {
+      "text": "",
+      "clip": ["10", 0]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "7": {
+    "inputs": {
+      "text": "",
+      "clip": ["10", 0]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "8": {
+    "inputs": {
+      "positive": ["6", 0],
+      "negative": ["7", 0],
+      "seconds_start": 0,
+      "seconds_total": 30
+    },
+    "class_type": "ConditioningStableAudio"
+  },
+  "10": {
+    "inputs": {
+      "clip_name": "t5-base.safetensors",
+      "type": "stable_audio"
+    },
+    "class_type": "CLIPLoader"
+  },
+  "12": {
+    "inputs": {
+      "samples": ["3", 0],
+      "vae": ["4", 2]
+    },
+    "class_type": "VAEDecodeAudio"
+  },
+  "19": {
+    "inputs": {
+      "filename_prefix": "audio/ComfyUI",
+      "quality": "V0",
+      "audio": ["12", 0]
+    },
+    "class_type": "SaveAudioMP3"
+  }
+}

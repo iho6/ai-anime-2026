@@ -30,6 +30,8 @@ python utils/download_models.py --background-removal
 python utils/download_models.py --pose-keypoint
 python utils/download_models.py --flf-lightning
 python utils/download_models.py --img2video-hunyuan-15
+python utils/download_models.py --sound-gen
+python utils/download_models.py --music-gen
 python utils/download_models.py --all
 ```
 
@@ -40,6 +42,8 @@ python utils/download_models.py --all
 - `--background-removal` -> `background_removal_ai_service` (RMBG-2.0 into `models/RMBG/RMBG-2.0`)
 - `--flf-lightning` -> `flf2video_ai_service`
 - `--img2video-hunyuan-15` -> `img2video_ai_service` (Hunyuan Video 1.5 720p I2V)
+- `--sound-gen` -> `sound_gen_ai_service` (Stable Audio Open 1.0)
+- `--music-gen` -> `music_gen_ai_service` (ACE-Step 1.5 turbo)
 - `--all` -> runs all model-based service downloads together (deduplicates repeated destination paths)
 
 ## Character web UI (React + FastAPI)

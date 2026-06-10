@@ -12,6 +12,8 @@ Usage:
     python utils/download_models.py --flf-lightning [--hf-token YOUR_TOKEN]
     python utils/download_models.py --flux-fill --hf-token YOUR_TOKEN  # mask edit + outpaint
     python utils/download_models.py --qwen-t2i  # reference t2i gen (Qwen-Image 2512)
+    python utils/download_models.py --sound-gen  # Stable Audio Open 1.0 (sound_gen_ai_service)
+    python utils/download_models.py --music-gen  # ACE-Step 1.5 turbo (music_gen_ai_service)
     python utils/download_models.py --all  # all stacks (deduplicated)
     python utils/download_models.py --all --force-redownload  # re-fetch HF weights (testing)
 """
@@ -214,6 +216,44 @@ QWEN_T2I_MODELS = [
     },
 ]
 
+# Stable Audio Open 1.0 — sound_gen_ai_service.
+SOUND_GEN_MODELS = [
+    {
+        "name": "stable-audio-open-1.0.safetensors (Checkpoint)",
+        "url": "https://huggingface.co/stabilityai/stable-audio-open-1.0/resolve/main/model.safetensors",
+        "path": "comfyui/models/checkpoints/stable-audio-open-1.0.safetensors",
+    },
+    {
+        "name": "t5-base.safetensors (Text Encoder)",
+        "url": "https://huggingface.co/google-t5/t5-base/resolve/main/model.safetensors",
+        "path": "comfyui/models/text_encoders/t5-base.safetensors",
+    },
+]
+
+# ACE-Step 1.5 turbo — music_gen_ai_service.
+MUSIC_GEN_MODELS = [
+    {
+        "name": "acestep_v1.5_turbo.safetensors (Diffusion Model)",
+        "url": "https://huggingface.co/Comfy-Org/ace_step_1.5_ComfyUI_files/resolve/main/split_files/diffusion_models/acestep_v1.5_turbo.safetensors",
+        "path": "comfyui/models/diffusion_models/acestep_v1.5_turbo.safetensors",
+    },
+    {
+        "name": "qwen_0.6b_ace15.safetensors (Text Encoder)",
+        "url": "https://huggingface.co/Comfy-Org/ace_step_1.5_ComfyUI_files/resolve/main/split_files/text_encoders/qwen_0.6b_ace15.safetensors",
+        "path": "comfyui/models/text_encoders/qwen_0.6b_ace15.safetensors",
+    },
+    {
+        "name": "qwen_4b_ace15.safetensors (Text Encoder LLM)",
+        "url": "https://huggingface.co/Comfy-Org/ace_step_1.5_ComfyUI_files/resolve/main/split_files/text_encoders/qwen_4b_ace15.safetensors",
+        "path": "comfyui/models/text_encoders/qwen_4b_ace15.safetensors",
+    },
+    {
+        "name": "ace_1.5_vae.safetensors (VAE)",
+        "url": "https://huggingface.co/Comfy-Org/ace_step_1.5_ComfyUI_files/resolve/main/split_files/vae/ace_1.5_vae.safetensors",
+        "path": "comfyui/models/vae/ace_1.5_vae.safetensors",
+    },
+]
+
 
 SERVICE_MODEL_MAP = {
     "multi_angle": MULTI_ANGLE_MODELS,
@@ -223,6 +263,8 @@ SERVICE_MODEL_MAP = {
     "flf_lightning": FLF_LIGHTNING_MODELS,
     "flux_fill": FLUX_FILL_MODELS,
     "qwen_t2i": QWEN_T2I_MODELS,
+    "sound_gen": SOUND_GEN_MODELS,
+    "music_gen": MUSIC_GEN_MODELS,
 }
 
 
@@ -434,6 +476,10 @@ def _collect_selected_models(args) -> list[dict]:
             selected_keys.append("flux_fill")
         if args.qwen_t2i:
             selected_keys.append("qwen_t2i")
+        if args.sound_gen:
+            selected_keys.append("sound_gen")
+        if args.music_gen:
+            selected_keys.append("music_gen")
 
     selected_models: list[dict] = []
     for key in selected_keys:
@@ -513,6 +559,8 @@ def main():
             "  python utils/download_models.py --flf-lightning\n"
             "  python utils/download_models.py --flux-fill --hf-token hf_xxx\n"
             "  python utils/download_models.py --qwen-t2i\n"
+            "  python utils/download_models.py --sound-gen\n"
+            "  python utils/download_models.py --music-gen\n"
             "  python utils/download_models.py --all"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -572,6 +620,24 @@ def main():
         ),
     )
     parser.add_argument(
+        "--sound-gen",
+        action="store_true",
+        dest="sound_gen",
+        help=(
+            "Download Stable Audio Open 1.0 weights for sound_gen_ai_service "
+            "(timeline Audio tab)"
+        ),
+    )
+    parser.add_argument(
+        "--music-gen",
+        action="store_true",
+        dest="music_gen",
+        help=(
+            "Download ACE-Step 1.5 turbo weights for music_gen_ai_service "
+            "(timeline Music tab)"
+        ),
+    )
+    parser.add_argument(
         "--all",
         action="store_true",
         help="Download all service model stacks with deduplication by destination path",
@@ -601,6 +667,8 @@ def main():
         and not args.flf_lightning
         and not args.flux_fill
         and not args.qwen_t2i
+        and not args.sound_gen
+        and not args.music_gen
         and not args.all
     ):
         parser.print_help()

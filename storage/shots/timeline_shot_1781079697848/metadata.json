@@ -1,0 +1,19 @@
+{
+  "shotName": "timeline_shot_1781079697848",
+  "locationKey": "flala_courtyard",
+  "locationImageRelPath": "timelines/Exp1/clips/clip_37d1d44772bb40369627794dcda5e46a.png",
+  "characters": [
+    {
+      "charKey": "Blue",
+      "imageRelPath": "timelines/Exp1/clips/clip_daaffc2c75724c64868f65f304b7f600.png",
+      "x": 152.69034999256243,
+      "y": 294.3412274061177,
+      "scale": 1.251746811277787
+    }
+  ],
+  "prompt": "",
+  "prependedPrompt": "",
+  "mode": "as_is",
+  "createdAt": "2026-06-10T08:21:39.164893+00:00",
+  "outputRelPath": "shots/timeline_shot_1781079697848/generated.png"
+}

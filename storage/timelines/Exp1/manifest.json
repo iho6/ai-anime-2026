@@ -29,6 +29,26 @@
             "y": 0.36702904508210055,
             "scale": 1.1429429965825926
           }
+        },
+        {
+          "id": "clip_mq7skp49_3",
+          "type": "image",
+          "srcRelPath": "timelines/Exp1/clips/clip_daaffc2c75724c64868f65f304b7f600.png",
+          "start": 13.987603759765625,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "Blue"
+          },
+          "transform": {
+            "x": 0.01237673407989303,
+            "y": 0.1396795804257897,
+            "scale": 0.6675982993481531
+          }
         }
       ],
       "hidden": false
@@ -55,8 +75,8 @@
             "sequenceName": "camera_full_body"
           },
           "transform": {
-            "x": -0.21657123139603499,
-            "y": 0.11469611244542655,
+            "x": 0.008805221915384548,
+            "y": 0.0020080046797216478,
             "scale": 0.5142109406193148
           }
         },
@@ -84,7 +104,7 @@
           "id": "clip_mq24skho_5",
           "type": "image",
           "srcRelPath": "Buan/poses/pose_001.png",
-          "start": 8.536533183288574,
+          "start": 8.987603759765625,
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
@@ -191,7 +211,7 @@
             "locationKey": "flala_courtyard"
           },
           "transform": {
-            "x": 0.25710447241111917,
+            "x": -0.10349699687911701,
             "y": -0.026775755497177214,
             "scale": 0.6458376133735086
           }
@@ -215,9 +235,87 @@
             "y": -0.02644033265673553,
             "scale": 1
           }
+        },
+        {
+          "id": "clip_mq7ra3r2_1",
+          "type": "image",
+          "srcRelPath": "timelines/Exp1/clips/clip_37d1d44772bb40369627794dcda5e46a.png",
+          "start": 13.832117389869689,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "flala_courtyard"
+          },
+          "transform": {
+            "x": 0.009658861775626979,
+            "y": 0.006439320443754565,
+            "scale": 0.9435516914718772
+          }
+        },
+        {
+          "id": "clip_mq7sv7f7_1",
+          "type": "image",
+          "srcRelPath": "timelines/Exp1/clips/clip_228fe9e6b560499295c3b8197225d918.png",
+          "start": 17.420960163307186,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1920,
+          "naturalH": 1920,
+          "source": {
+            "shotKey": "timeline_shot_1781079697848"
+          },
+          "transform": {
+            "x": -0.06680500707633309,
+            "y": 0.07481617227447042,
+            "scale": 0.5621262098246895
+          }
+        },
+        {
+          "id": "clip_mq7uzjgi_1",
+          "type": "image",
+          "srcRelPath": "timelines/Exp1/clips/clip_8da256040159402d89290eca8071b221.png",
+          "start": 20.420960163307186,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1920,
+          "naturalH": 1920,
+          "source": {
+            "shotKey": "timeline_shot_1781079697848"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
         }
       ],
       "hidden": false
+    },
+    {
+      "id": "trk_mq7v047e_3",
+      "name": "Video 4",
+      "kind": "video",
+      "clips": []
+    },
+    {
+      "id": "trk_mq7v04oh_5",
+      "name": "Video 5",
+      "kind": "video",
+      "clips": []
+    },
+    {
+      "id": "trk_mq7v0a8h_7",
+      "name": "Video 6",
+      "kind": "video",
+      "clips": []
     }
   ]
 }

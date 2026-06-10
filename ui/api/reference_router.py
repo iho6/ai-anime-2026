@@ -14,7 +14,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from services import logic, reference_storage
+from services import audio_reference_storage, logic, reference_storage
 from .ws_streaming import run_with_log_stream, safe_send_json
 
 router = APIRouter(tags=["reference"])
@@ -323,3 +323,87 @@ def reference_image_delete(image_id: str) -> dict[str, bool]:
 @router.delete("/reference/keypoints/{keypoint_id}")
 def reference_keypoint_delete(keypoint_id: str) -> dict[str, bool]:
     return {"ok": reference_storage.delete_keypoint(keypoint_id)}
+
+
+# --- audio gallery -----------------------------------------------------------
+
+
+@router.get("/reference/audio/layout")
+def reference_audio_layout() -> dict[str, Any]:
+    return audio_reference_storage.get_audio_layout()
+
+
+@router.websocket("/reference/audio/generate/ws")
+async def reference_audio_generate_ws(ws: WebSocket) -> None:
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+    try:
+        mode = (msg.get("mode") or "audio").strip()
+        prompt = (msg.get("prompt") or "").strip()
+        style = (msg.get("style") or "").strip()
+        lyrics = msg.get("lyrics") or ""
+        duration_sec = float(msg.get("duration") or 120)
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            return logic.generate_reference_audio(
+                mode=mode,
+                prompt=prompt,
+                style=style,
+                lyrics=str(lyrics),
+                duration_sec=duration_sec,
+                log_cb=log_cb,
+            )
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
+class AudioFolderBody(BaseModel):
+    name: str
+    itemIds: list[str]
+
+
+@router.post("/reference/audio/folders")
+def reference_audio_create_folder(body: AudioFolderBody) -> dict[str, Any]:
+    try:
+        folder = audio_reference_storage.create_audio_folder(body.name, body.itemIds)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"folder": folder}
+
+
+@router.post("/reference/audio/reorder")
+def reference_audio_reorder(body: dict[str, Any]) -> dict[str, bool]:
+    scope = str(body.get("scope") or "flat").strip()
+    order = [str(x) for x in (body.get("order") or [])]
+    if scope == "folder":
+        folder_id = str(body.get("folderId") or "").strip()
+        if not folder_id:
+            raise HTTPException(400, "folderId is required for folder scope.")
+        audio_reference_storage.set_audio_folder_order(folder_id, order)
+    elif scope == "root":
+        audio_reference_storage.set_audio_root_order(order)
+    else:
+        audio_reference_storage.set_audio_root_order(order)
+    return {"ok": True}
+
+
+@router.delete("/reference/audio/folders/{folder_id}")
+def reference_audio_delete_folder(folder_id: str) -> dict[str, bool]:
+    ok = audio_reference_storage.delete_audio_folder(folder_id)
+    if not ok:
+        raise HTTPException(404, "Folder not found.")
+    return {"ok": True}
+
+
+@router.delete("/reference/audio/{audio_id}")
+def reference_audio_delete(audio_id: str) -> dict[str, bool]:
+    return {"ok": audio_reference_storage.delete_audio_item(audio_id)}

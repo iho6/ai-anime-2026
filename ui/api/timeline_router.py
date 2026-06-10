@@ -115,6 +115,26 @@ def timeline_put_manifest(timeline_key: str, body: dict[str, Any]) -> dict[str, 
     return {"ok": True}
 
 
+@router.post("/timeline/{timeline_key}/import_audio")
+def timeline_import_audio(timeline_key: str, body: dict[str, str]) -> dict[str, Any]:
+    """Copy a gallery audio file into the timeline's ``clips/`` folder."""
+    d = _timeline_dir(timeline_key)
+    if not d.is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    rel = (body.get("sourceRelPath") or "").strip()
+    if not rel:
+        raise HTTPException(400, "sourceRelPath is required.")
+    src_abs = str(resolve_storage_rel_file(rel))
+    info = logic.import_audio_to_timeline_clip(
+        src_abs, timeline_storage.timeline_clips_dir(timeline_key)
+    )
+    return {
+        "type": "audio",
+        "srcRelPath": storage_rel_from_abs(info["absPath"]),
+        "durationSec": info.get("durationSec") or 0,
+    }
+
+
 @router.post("/timeline/{timeline_key}/import_image")
 def timeline_import_image(timeline_key: str, body: dict[str, str]) -> dict[str, Any]:
     """Copy a location/shot/character image into the timeline's ``clips/`` folder

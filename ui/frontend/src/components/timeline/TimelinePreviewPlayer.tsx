@@ -6,13 +6,15 @@ import {
   activeClipAt,
   aspectRatio,
   clamp,
+  clipImageRect,
+  clipTransformFromRectCenter,
+  snapClipRectToFrame,
   sourceTimeAt,
   timelineDuration,
+  type AlignGuide,
+  type ClipTransform,
 } from "./timelineUtil";
 import { TrajectoryEditor, TrajectoryWaypoint, trajectoryTransformAt } from "./TrajectoryEditor";
-
-type Transform = { x: number; y: number; scale: number };
-type Rect = { left: number; top: number; width: number; height: number };
 
 /**
  * Resolve the effective transform for a clip at a given playhead time.
@@ -25,46 +27,12 @@ function clipTransform(
   playhead: number,
   isTrajectoryActive: boolean,
   isPlaying: boolean
-): Transform {
+): ClipTransform {
   if (isPlaying || isTrajectoryActive) {
     const traj = trajectoryTransformAt(clip, playhead);
     if (traj) return traj;
   }
   return clip.transform ?? { x: 0, y: 0, scale: 1 };
-}
-
-/**
- * On-screen rectangle (in frame px) of a clip's displayed image, given the
- * frame size + the clip's natural aspect + its transform. Matches an
- * ``object-fit: contain`` base box, then applies scale (about center) and the
- * fractional translate.
- */
-function imageRectFor(
-  clip: TimelineClip,
-  tf: Transform,
-  frameW: number,
-  frameH: number
-): Rect {
-  let baseW = frameW;
-  let baseH = frameH;
-  const nW = clip.naturalW;
-  const nH = clip.naturalH;
-  if (nW && nH && frameW > 0 && frameH > 0) {
-    const imgA = nW / nH;
-    const frmA = frameW / frameH;
-    if (imgA > frmA) {
-      baseW = frameW;
-      baseH = frameW / imgA;
-    } else {
-      baseH = frameH;
-      baseW = frameH * imgA;
-    }
-  }
-  const w = baseW * tf.scale;
-  const h = baseH * tf.scale;
-  const cx = frameW / 2 + tf.x * frameW;
-  const cy = frameH / 2 + tf.y * frameH;
-  return { left: cx - w / 2, top: cy - h / 2, width: w, height: h };
 }
 
 /**
@@ -84,7 +52,7 @@ export function TimelinePreviewPlayer(props: {
   onPlayheadChange: (t: number) => void;
   onEnded: () => void;
   onSelectClip: (clipId: string | null, additive?: boolean) => void;
-  onClipTransformChange: (clipId: string, transform: Transform) => void;
+  onClipTransformChange: (clipId: string, transform: ClipTransform) => void;
   onTransformStart?: () => void;
   onClipContextMenu?: (clipId: string, x: number, y: number) => void;
   trajectoryClipId?: string | null;
@@ -116,6 +84,7 @@ export function TimelinePreviewPlayer(props: {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const mediaRefs = useRef<Map<string, HTMLVideoElement | HTMLAudioElement>>(new Map());
   const [frameSize, setFrameSize] = useState({ w: 0, h: 0 });
+  const [alignGuides, setAlignGuides] = useState<AlignGuide[]>([]);
 
   useEffect(() => {
     const el = frameRef.current;
@@ -216,7 +185,7 @@ export function TimelinePreviewPlayer(props: {
         clipId: string;
         startX: number;
         startY: number;
-        orig: Transform;
+        orig: ClipTransform;
         w: number;
         h: number;
       }
@@ -252,11 +221,27 @@ export function TimelinePreviewPlayer(props: {
     if (d.mode === "move") {
       const x = d.orig.x + (e.clientX - d.startX) / d.w;
       const y = d.orig.y + (e.clientY - d.startY) / d.h;
-      onClipTransformChange(d.clipId, {
-        ...d.orig,
-        x: clamp(x, -1.5, 1.5),
-        y: clamp(y, -1.5, 1.5),
-      });
+      const clip = videoTracks.flatMap((t) => t.clips).find((c) => c.id === d.clipId);
+      const frameW = d.w;
+      const frameH = d.h;
+      if (clip && frameW > 0 && frameH > 0) {
+        const rawRect = clipImageRect(clip, { ...d.orig, x, y }, frameW, frameH);
+        const { rect: snappedRect, guides } = snapClipRectToFrame(rawRect, frameW, frameH);
+        const snapped = clipTransformFromRectCenter(snappedRect, frameW, frameH);
+        setAlignGuides(guides);
+        onClipTransformChange(d.clipId, {
+          ...d.orig,
+          x: clamp(snapped.x, -1.5, 1.5),
+          y: clamp(snapped.y, -1.5, 1.5),
+        });
+      } else {
+        setAlignGuides([]);
+        onClipTransformChange(d.clipId, {
+          ...d.orig,
+          x: clamp(x, -1.5, 1.5),
+          y: clamp(y, -1.5, 1.5),
+        });
+      }
     } else {
       const scale = clamp(d.orig.scale + ((e.clientX - d.startX) / d.w) * 2, 0.1, 6);
       onClipTransformChange(d.clipId, { ...d.orig, scale });
@@ -267,6 +252,7 @@ export function TimelinePreviewPlayer(props: {
     if (dragRef.current) {
       (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
       dragRef.current = null;
+      setAlignGuides([]);
     }
   }
 
@@ -303,10 +289,10 @@ export function TimelinePreviewPlayer(props: {
             if (!clip) return null;
             const z = videoTracks.length - i;
             const tf = clipTransform(clip, playhead, clip.id === trajectoryClipId, playing);
-            const rect = imageRectFor(clip, tf, frameSize.w, frameSize.h);
+            const rect = clipImageRect(clip, tf, frameSize.w, frameSize.h);
             const src = assetUrlFromRelPath(clip.srcRelPath);
             const mediaStyle: React.CSSProperties = {
-              width: "100%", height: "100%", objectFit: "fill", display: "block", pointerEvents: "none",
+              width: "100%", height: "100%", objectFit: "contain", display: "block", pointerEvents: "none",
             };
             return (
               <div key={clip.id} style={{ position: "absolute", left: rect.left, top: rect.top, width: rect.width, height: rect.height, zIndex: z }}>
@@ -333,7 +319,7 @@ export function TimelinePreviewPlayer(props: {
           if (!clip) return null;
           const z = videoTracks.length - i;
           const tf = clipTransform(clip, playhead, clip.id === trajectoryClipId, playing);
-          const rect = imageRectFor(clip, tf, frameSize.w, frameSize.h);
+          const rect = clipImageRect(clip, tf, frameSize.w, frameSize.h);
           const selected = clip.id === selectedClipId;
           return (
             <div
@@ -381,6 +367,36 @@ export function TimelinePreviewPlayer(props: {
             </div>
           );
         })}
+
+        {/* Alignment guide lines (shown while dragging) */}
+        {alignGuides.length > 0 ? (
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 9998 }}>
+            {alignGuides.map((guide, i) => (
+              <div
+                key={`${guide.axis}-${guide.pos}-${guide.kind}-${i}`}
+                style={
+                  guide.axis === "x"
+                    ? {
+                        position: "absolute",
+                        left: guide.pos,
+                        top: 0,
+                        bottom: 0,
+                        width: 0,
+                        borderLeft: `1px dashed ${guide.kind === "center" ? "#5ad7ff" : "#ffd166"}`,
+                      }
+                    : {
+                        position: "absolute",
+                        top: guide.pos,
+                        left: 0,
+                        right: 0,
+                        height: 0,
+                        borderTop: `1px dashed ${guide.kind === "center" ? "#5ad7ff" : "#ffd166"}`,
+                      }
+                }
+              />
+            ))}
+          </div>
+        ) : null}
 
         {/* Trajectory editor overlay */}
         {trajectoryClipId && (() => {
