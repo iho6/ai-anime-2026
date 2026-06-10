@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation";
 import {
   apiLocationAiEdit,
-  apiLocationOutpaint,
   apiLocationAngleGroups,
   apiLocationDeleteItems,
   apiLocationGallerySplit,
@@ -390,7 +389,6 @@ export default function LocationDetailPage() {
   });
   const [aiOpen, setAiOpen] = useState(false);
   const [aiCtx, setAiCtx] = useState<LocationGalleryItem | null>(null);
-  const [outpaintOpen, setOutpaintOpen] = useState(false);
   const [lightbox, setLightbox] = useState<{ paths: string[]; index: number; title: string } | null>(null);
 
   const refresh = useCallback(async () => {
@@ -707,11 +705,11 @@ export default function LocationDetailPage() {
           </button>
           <button
             type="button"
-            disabled={uiBusy || !baseRel}
+            disabled={uiBusy}
             style={toolBtnStyle()}
             onClick={() => {
               exitCropMode();
-              setOutpaintOpen(true);
+              showError({ message: "Coming soon" });
             }}
           >
             Outpaint
@@ -912,28 +910,6 @@ export default function LocationDetailPage() {
         onClose={() => setMenu((m) => ({ ...m, open: false }))}
       />
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
-      <AiEditModal
-        open={outpaintOpen}
-        title="Outpaint"
-        imageSrc={baseRel ? assetUrlFromRelPath(baseRel) : ""}
-        busy={uiBusy}
-        placeholder="Describe the scenery that you want to outpaint"
-        actionLabel="Outpaint"
-        onCancel={() => setOutpaintOpen(false)}
-        onGenerate={async (promptText) => {
-          setOutpaintOpen(false);
-          beginSession({ title: "Outpainting", clearLog: true, runningStatus: "Outpainting…" });
-          await Promise.resolve();
-          pushLog("Outpainting…");
-          try {
-            await apiLocationOutpaint({ locationKey, promptText });
-            await refresh();
-            endSession();
-          } catch (e) {
-            failSession(e, "Outpaint failed.");
-          }
-        }}
-      />
       <CameraAngleModal
         open={angleDialogOpen}
         title="New Angle"

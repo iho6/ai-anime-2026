@@ -285,7 +285,7 @@ export default function TimelineEditorPage() {
     );
   }
 
-  async function onGenerateAudio(prompt: string) {
+  async function onGenerateAudio(prompt: string, durationSec: number) {
     setAudioPickerOpen(false);
     beginSession({ title: "Generating audio", clearLog: true });
     await Promise.resolve();
@@ -294,6 +294,7 @@ export default function TimelineEditorPage() {
       const done = await runReferenceAudioGenerateWsJob({
         mode: "audio",
         prompt,
+        duration: durationSec,
         onLogLine: pushLog,
       });
       if (!done.ok || !done.result?.item?.relPath) {
@@ -307,7 +308,7 @@ export default function TimelineEditorPage() {
     }
   }
 
-  async function onGenerateMusic(style: string, lyrics: string) {
+  async function onGenerateMusic(style: string, lyrics: string, durationSec: number) {
     setAudioPickerOpen(false);
     beginSession({ title: "Generating music", clearLog: true });
     await Promise.resolve();
@@ -317,6 +318,7 @@ export default function TimelineEditorPage() {
         mode: "music",
         style,
         lyrics,
+        duration: durationSec,
         onLogLine: pushLog,
       });
       if (!done.ok || !done.result?.item?.relPath) {
@@ -1516,8 +1518,10 @@ export default function TimelineEditorPage() {
         open={audioPickerOpen}
         busy={busy}
         onCancel={() => setAudioPickerOpen(false)}
-        onGenerateAudio={(prompt) => void onGenerateAudio(prompt)}
-        onGenerateMusic={(style, lyrics) => void onGenerateMusic(style, lyrics)}
+        onGenerateAudio={(prompt, durationSec) => void onGenerateAudio(prompt, durationSec)}
+        onGenerateMusic={(style, lyrics, durationSec) =>
+          void onGenerateMusic(style, lyrics, durationSec)
+        }
         onUseSelected={(items) => void onAudioGalleryUseSelected(items)}
       />
 

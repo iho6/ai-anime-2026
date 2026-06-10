@@ -28,14 +28,26 @@ Every step I take, I'm carving out my own
 Shout it out, I'm alive tonight
 Burning bright in the dead of night`;
 
+const AUDIO_DURATION_DEFAULT = 30;
+const AUDIO_DURATION_MIN = 1;
+const AUDIO_DURATION_MAX = 47.6;
+const MUSIC_DURATION_DEFAULT = 120;
+const MUSIC_DURATION_MIN = 1;
+const MUSIC_DURATION_MAX = 300;
+
+function clampDuration(n: number, min: number, max: number, fallback: number): number {
+  if (Number.isNaN(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
 export type TimelineAudioPickerTab = "audio" | "music";
 
 export function TimelineAudioPicker(props: {
   open: boolean;
   busy: boolean;
   onCancel: () => void;
-  onGenerateAudio: (prompt: string) => void;
-  onGenerateMusic: (style: string, lyrics: string) => void;
+  onGenerateAudio: (prompt: string, durationSec: number) => void;
+  onGenerateMusic: (style: string, lyrics: string, durationSec: number) => void;
   onUseSelected: (items: AudioReference[]) => void;
 }) {
   if (!props.open) return null;
@@ -45,8 +57,8 @@ export function TimelineAudioPicker(props: {
 function TimelineAudioPickerOpen(props: {
   busy: boolean;
   onCancel: () => void;
-  onGenerateAudio: (prompt: string) => void;
-  onGenerateMusic: (style: string, lyrics: string) => void;
+  onGenerateAudio: (prompt: string, durationSec: number) => void;
+  onGenerateMusic: (style: string, lyrics: string, durationSec: number) => void;
   onUseSelected: (items: AudioReference[]) => void;
 }) {
   const { busy, onCancel, onGenerateAudio, onGenerateMusic, onUseSelected } = props;
@@ -54,8 +66,10 @@ function TimelineAudioPickerOpen(props: {
 
   const [tab, setTab] = useState<TimelineAudioPickerTab>("audio");
   const [audioPrompt, setAudioPrompt] = useState("");
+  const [audioDurationSec, setAudioDurationSec] = useState(AUDIO_DURATION_DEFAULT);
   const [musicStyle, setMusicStyle] = useState("");
   const [musicLyrics, setMusicLyrics] = useState("");
+  const [musicDurationSec, setMusicDurationSec] = useState(MUSIC_DURATION_DEFAULT);
   const [layout, setLayout] = useState<AudioLayout>({
     folders: [],
     rootOrder: [],
@@ -260,12 +274,51 @@ function TimelineAudioPickerOpen(props: {
                 marginBottom: 8,
               }}
             />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <label style={{ fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>
+                Duration (s)
+              </label>
+              <input
+                type="number"
+                min={AUDIO_DURATION_MIN}
+                max={AUDIO_DURATION_MAX}
+                step={0.1}
+                value={audioDurationSec}
+                disabled={busy}
+                onChange={(e) => {
+                  const n = parseFloat(e.target.value);
+                  if (!Number.isNaN(n)) setAudioDurationSec(n);
+                }}
+                onBlur={() =>
+                  setAudioDurationSec((d) =>
+                    clampDuration(d, AUDIO_DURATION_MIN, AUDIO_DURATION_MAX, AUDIO_DURATION_DEFAULT)
+                  )
+                }
+                style={{
+                  width: 80,
+                  padding: "4px 6px",
+                  background: "transparent",
+                  color: "#eee",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  font: "inherit",
+                  fontSize: 12,
+                }}
+              />
+            </div>
             <button
               type="button"
               disabled={!canGenerateAudio}
               onClick={() => {
                 const p = audioPrompt.trim();
-                if (p) onGenerateAudio(p);
+                if (!p) return;
+                const dur = clampDuration(
+                  audioDurationSec,
+                  AUDIO_DURATION_MIN,
+                  AUDIO_DURATION_MAX,
+                  AUDIO_DURATION_DEFAULT
+                );
+                setAudioDurationSec(dur);
+                onGenerateAudio(p, dur);
               }}
               style={{
                 width: "100%",
@@ -321,13 +374,52 @@ function TimelineAudioPickerOpen(props: {
                 marginBottom: 8,
               }}
             />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <label style={{ fontSize: 11, color: "#aaa", whiteSpace: "nowrap" }}>
+                Duration (s)
+              </label>
+              <input
+                type="number"
+                min={MUSIC_DURATION_MIN}
+                max={MUSIC_DURATION_MAX}
+                step={1}
+                value={musicDurationSec}
+                disabled={busy}
+                onChange={(e) => {
+                  const n = parseFloat(e.target.value);
+                  if (!Number.isNaN(n)) setMusicDurationSec(n);
+                }}
+                onBlur={() =>
+                  setMusicDurationSec((d) =>
+                    clampDuration(d, MUSIC_DURATION_MIN, MUSIC_DURATION_MAX, MUSIC_DURATION_DEFAULT)
+                  )
+                }
+                style={{
+                  width: 80,
+                  padding: "4px 6px",
+                  background: "transparent",
+                  color: "#eee",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  font: "inherit",
+                  fontSize: 12,
+                }}
+              />
+            </div>
             <button
               type="button"
               disabled={!canGenerateMusic}
               onClick={() => {
                 const s = musicStyle.trim();
                 const l = musicLyrics.trim();
-                if (s && l) onGenerateMusic(s, l);
+                if (!s || !l) return;
+                const dur = clampDuration(
+                  musicDurationSec,
+                  MUSIC_DURATION_MIN,
+                  MUSIC_DURATION_MAX,
+                  MUSIC_DURATION_DEFAULT
+                );
+                setMusicDurationSec(dur);
+                onGenerateMusic(s, l, dur);
               }}
               style={{
                 width: "100%",
