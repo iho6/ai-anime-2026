@@ -53,6 +53,10 @@
         "3",
         0
       ],
+      "conditioning": [
+        "10",
+        0
+      ],
       "positive_coords": "",
       "negative_coords": "",
       "threshold": 0.5,
@@ -123,6 +127,19 @@
     "class_type": "SaveImage",
     "_meta": {
       "title": "Save Mask Frames"
+    }
+  },
+  "10": {
+    "inputs": {
+      "clip": [
+        "4",
+        1
+      ],
+      "text": ""
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "SAM3 Text"
     }
   }
 }

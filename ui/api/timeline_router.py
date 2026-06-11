@@ -336,14 +336,23 @@ async def timeline_i2v_ws(ws: WebSocket, timeline_key: str) -> None:
         await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
 
 
-def _parse_segment_coords(msg: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _parse_segment_coords_relaxed(msg: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     pos = msg.get("positiveCoords") or msg.get("positive_coords") or []
     neg = msg.get("negativeCoords") or msg.get("negative_coords") or []
-    if not isinstance(pos, list) or not pos:
-        raise ValueError("positiveCoords must be a non-empty list.")
+    if not isinstance(pos, list):
+        raise ValueError("positiveCoords must be a list when provided.")
     if not isinstance(neg, list):
         raise ValueError("negativeCoords must be a list when provided.")
     return pos, neg
+
+
+def _parse_segment_prompt(msg: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str | None]:
+    pos, neg = _parse_segment_coords_relaxed(msg)
+    raw = msg.get("textPrompt") or msg.get("text_prompt") or ""
+    text = str(raw).strip() if raw is not None else ""
+    if not pos and not text:
+        raise ValueError("Provide at least one positive point or a text prompt.")
+    return pos, neg, text or None
 
 
 def _segment_clip_fields(msg: dict[str, Any]) -> dict[str, Any]:
@@ -374,7 +383,7 @@ async def timeline_segment_preview_ws(ws: WebSocket, timeline_key: str) -> None:
         if not _timeline_dir(timeline_key).is_dir():
             raise ValueError("Timeline not found.")
         fields = _segment_clip_fields(msg)
-        pos, neg = _parse_segment_coords(msg)
+        pos, neg, text_prompt = _parse_segment_prompt(msg)
         src_abs = str(resolve_storage_rel_file(fields["rel"]))
 
         def work(log_cb: Any) -> dict[str, Any]:
@@ -383,6 +392,7 @@ async def timeline_segment_preview_ws(ws: WebSocket, timeline_key: str) -> None:
                 source_abs_path=src_abs,
                 positive_coords=pos,
                 negative_coords=neg,
+                text_prompt=text_prompt,
                 in_point_sec=fields["in_point_sec"],
                 local_time_sec=fields["local_time_sec"],
                 speed=fields["speed"],
@@ -411,7 +421,7 @@ async def timeline_segment_ws(ws: WebSocket, timeline_key: str) -> None:
         if not _timeline_dir(timeline_key).is_dir():
             raise ValueError("Timeline not found.")
         fields = _segment_clip_fields(msg)
-        pos, neg = _parse_segment_coords(msg)
+        pos, neg, text_prompt = _parse_segment_prompt(msg)
         src_abs = str(resolve_storage_rel_file(fields["rel"]))
 
         def work(log_cb: Any) -> dict[str, Any]:
@@ -421,6 +431,7 @@ async def timeline_segment_ws(ws: WebSocket, timeline_key: str) -> None:
                 dest_dir=timeline_storage.timeline_clips_dir(timeline_key),
                 positive_coords=pos,
                 negative_coords=neg,
+                text_prompt=text_prompt,
                 in_point_sec=fields["in_point_sec"],
                 local_time_sec=fields["local_time_sec"],
                 speed=fields["speed"],

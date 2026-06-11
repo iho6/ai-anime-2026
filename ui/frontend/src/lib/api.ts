@@ -844,6 +844,7 @@ export function runTimelineSegmentPreviewWsJob(params: {
   clipType: "image" | "video";
   positiveCoords: Sam3Point[];
   negativeCoords?: Sam3Point[];
+  textPrompt?: string;
   inPointSec?: number;
   localTimeSec?: number;
   speed?: number;
@@ -864,6 +865,7 @@ export function runTimelineSegmentWsJob(params: {
   clipType: "image" | "video";
   positiveCoords: Sam3Point[];
   negativeCoords?: Sam3Point[];
+  textPrompt?: string;
   inPointSec?: number;
   localTimeSec?: number;
   speed?: number;

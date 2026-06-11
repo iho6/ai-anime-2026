@@ -9453,6 +9453,15 @@ def ai_edit_to_timeline_clip(
     return {"absPath": str(out_path), "width": width, "height": height}
 
 
+def _validate_sam3_segment_input(
+    positive: list[dict[str, Any]], text_prompt: str | None
+) -> str:
+    text = (text_prompt or "").strip()
+    if not positive and not text:
+        raise ValueError("Provide at least one positive point or a text prompt.")
+    return text
+
+
 def _sam3_coords_json(positive: list[dict[str, Any]], negative: list[dict[str, Any]]) -> tuple[str, str]:
     pos_out: list[dict[str, int]] = []
     for pt in positive or []:
@@ -9462,8 +9471,6 @@ def _sam3_coords_json(positive: list[dict[str, Any]], negative: list[dict[str, A
             pos_out.append({"x": int(pt["x"]), "y": int(pt["y"])})
         except (KeyError, TypeError, ValueError):
             continue
-    if not pos_out:
-        raise ValueError("At least one positive point is required.")
     neg_out: list[dict[str, int]] = []
     for pt in negative or []:
         if not isinstance(pt, dict):
@@ -9482,10 +9489,12 @@ def _run_sam3_segment_service(
     video_abs_path: str | None = None,
     positive_coords: list[dict[str, Any]],
     negative_coords: list[dict[str, Any]] | None = None,
+    text_prompt: str | None = None,
     ref_frame_index: int = 0,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
-    pos_json, neg_json = _sam3_coords_json(positive_coords, negative_coords or [])
+    text = _validate_sam3_segment_input(positive_coords or [], text_prompt)
+    pos_json, neg_json = _sam3_coords_json(positive_coords or [], negative_coords or [])
     args = [
         "--test-mode",
         "--enable-default",
@@ -9501,6 +9510,8 @@ def _run_sam3_segment_service(
         str(max(0, int(ref_frame_index))),
         "--convert-local-to-url",
     ]
+    if text:
+        args.extend(["--text-prompt", text])
     if job == "video_masks":
         if not video_abs_path:
             raise ValueError("video_abs_path is required for video_masks.")
@@ -9613,6 +9624,7 @@ def run_sam3_segment_preview(
     image_abs_path: str,
     positive_coords: list[dict[str, Any]],
     negative_coords: list[dict[str, Any]] | None = None,
+    text_prompt: str | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> str:
     """Run SAM3 mask preview; returns temp path to grayscale mask PNG."""
@@ -9621,6 +9633,7 @@ def run_sam3_segment_preview(
         image_abs_path=image_abs_path,
         positive_coords=positive_coords,
         negative_coords=negative_coords,
+        text_prompt=text_prompt,
         log_cb=log_cb,
     )
     tmp = Path(tempfile.gettempdir()) / f"sam3_preview_{unique_suffix()}"
@@ -9633,6 +9646,7 @@ def run_sam3_segment_image_rgba(
     image_abs_path: str,
     positive_coords: list[dict[str, Any]],
     negative_coords: list[dict[str, Any]] | None = None,
+    text_prompt: str | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> str:
     """Segment image to RGBA PNG cutout (transparent outside mask)."""
@@ -9641,6 +9655,7 @@ def run_sam3_segment_image_rgba(
         image_abs_path=image_abs_path,
         positive_coords=positive_coords,
         negative_coords=negative_coords,
+        text_prompt=text_prompt,
         log_cb=log_cb,
     )
     tmp = Path(tempfile.gettempdir()) / f"sam3_rgba_{unique_suffix()}"
@@ -9732,6 +9747,7 @@ def run_sam3_segment_video(
     video_abs_path: str,
     positive_coords: list[dict[str, Any]],
     negative_coords: list[dict[str, Any]] | None = None,
+    text_prompt: str | None = None,
     ref_frame_index: int = 0,
     output_path: str | Path | None = None,
     log_cb: Callable[[str], None] | None = None,
@@ -9742,6 +9758,7 @@ def run_sam3_segment_video(
         video_abs_path=video_abs_path,
         positive_coords=positive_coords,
         negative_coords=negative_coords,
+        text_prompt=text_prompt,
         ref_frame_index=ref_frame_index,
         log_cb=log_cb,
     )
@@ -9769,6 +9786,7 @@ def segment_preview_mask_png_base64(
     source_abs_path: str,
     positive_coords: list[dict[str, Any]],
     negative_coords: list[dict[str, Any]] | None = None,
+    text_prompt: str | None = None,
     in_point_sec: float = 0.0,
     local_time_sec: float = 0.0,
     speed: float = 1.0,
@@ -9792,6 +9810,7 @@ def segment_preview_mask_png_base64(
             image_abs_path=image_path,
             positive_coords=positive_coords,
             negative_coords=negative_coords,
+            text_prompt=text_prompt,
             log_cb=log_cb,
         )
         raw = Path(mask_path).read_bytes()
@@ -9808,6 +9827,7 @@ def segment_to_timeline_clip(
     dest_dir: Path | str,
     positive_coords: list[dict[str, Any]],
     negative_coords: list[dict[str, Any]] | None = None,
+    text_prompt: str | None = None,
     in_point_sec: float = 0.0,
     local_time_sec: float = 0.0,
     speed: float = 1.0,
@@ -9834,6 +9854,7 @@ def segment_to_timeline_clip(
             video_abs_path=source_abs_path,
             positive_coords=positive_coords,
             negative_coords=negative_coords,
+            text_prompt=text_prompt,
             ref_frame_index=ref_idx,
             output_path=out_path,
             log_cb=log_cb,
@@ -9850,6 +9871,7 @@ def segment_to_timeline_clip(
         image_abs_path=source_abs_path,
         positive_coords=positive_coords,
         negative_coords=negative_coords,
+        text_prompt=text_prompt,
         log_cb=log_cb,
     )
     out_path = dest / f"clip_{uuid.uuid4().hex}_seg.png"

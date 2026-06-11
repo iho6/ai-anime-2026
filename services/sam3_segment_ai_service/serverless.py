@@ -1,5 +1,5 @@
 """
-SAM 3.1 point-prompt segmentation — RunPod serverless + local --test-mode.
+SAM 3.1 segmentation (points and/or text) — RunPod serverless + local --test-mode.
 
 Jobs: image_mask (preview), image_rgba (PNG cutout), video_masks (per-frame masks).
 """
@@ -61,6 +61,23 @@ _KEY_RGBA = "sam3_image_rgba_api"
 _KEY_VIDEO = "sam3_video_masks_api"
 
 
+def _normalize_text_prompt(raw: str | None) -> str:
+    return (raw or "").strip()
+
+
+def _validate_sam3_prompts(pos: list[Any], text: str) -> None:
+    if not pos and not text:
+        raise ValueError("Provide at least one positive point or a text prompt.")
+
+
+def _patch_sam3_text(workflow: dict[str, Any], text: str) -> None:
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        if node.get("class_type") == "CLIPTextEncode":
+            node.setdefault("inputs", {})["text"] = text
+
+
 def _coords_to_json(coords: list[dict[str, Any]] | None) -> str:
     out: list[dict[str, int]] = []
     for pt in coords or []:
@@ -97,6 +114,7 @@ def _patch_image_workflow(
     image_input_ref: str,
     positive_coords: str,
     negative_coords: str,
+    text_prompt: str = "",
 ) -> dict[str, Any]:
     w = deepcopy(workflow)
     for nid, node in w.items():
@@ -107,6 +125,7 @@ def _patch_image_workflow(
     _patch_sam3_detect(
         w, positive_coords=positive_coords, negative_coords=negative_coords
     )
+    _patch_sam3_text(w, text_prompt)
     return w
 
 
@@ -117,6 +136,7 @@ def _patch_video_workflow(
     ref_frame_index: int,
     positive_coords: str,
     negative_coords: str,
+    text_prompt: str = "",
 ) -> dict[str, Any]:
     w = deepcopy(workflow)
     for node in w.values():
@@ -130,6 +150,7 @@ def _patch_video_workflow(
     _patch_sam3_detect(
         w, positive_coords=positive_coords, negative_coords=negative_coords
     )
+    _patch_sam3_text(w, text_prompt)
     return w
 
 
@@ -184,18 +205,24 @@ def _run_workflow(
     return prompt_id, paths
 
 
-def _coords_from_task(task: dict) -> tuple[str, str]:
+def _prompt_from_task(task: dict) -> tuple[str, str, str]:
     pos = task.get("positive_coords")
     neg = task.get("negative_coords")
     if pos is None:
         pos = task.get("positiveCoords")
     if neg is None:
         neg = task.get("negativeCoords")
-    if not isinstance(pos, list) or not pos:
-        raise ValueError("At least one positive_coords point is required.")
+    if pos is None:
+        pos = []
+    if not isinstance(pos, list):
+        raise ValueError("positive_coords must be a list when provided.")
     if neg is not None and not isinstance(neg, list):
         raise ValueError("negative_coords must be a list when provided.")
-    return _coords_to_json(pos), _coords_to_json(neg or [])
+    text = _normalize_text_prompt(
+        task.get("text_prompt") or task.get("textPrompt")
+    )
+    _validate_sam3_prompts(pos, text)
+    return _coords_to_json(pos), _coords_to_json(neg or []), text
 
 
 @timing_decorator
@@ -217,7 +244,7 @@ def handler(job_input: dict) -> dict:
             return response
 
         job = (task.get("job") or "image_mask").strip().lower()
-        pos_json, neg_json = _coords_from_task(task)
+        pos_json, neg_json, text_prompt = _prompt_from_task(task)
 
         gpu_err, gpu_detail = gpu_preflight()
         if gpu_err:
@@ -252,6 +279,7 @@ def handler(job_input: dict) -> dict:
                 ),
                 positive_coords=pos_json,
                 negative_coords=neg_json,
+                text_prompt=text_prompt,
             )
             _pid, paths = _run_workflow(w, addr)
             urls: list[str] = []
@@ -287,6 +315,7 @@ def handler(job_input: dict) -> dict:
                 ref_frame_index=ref_idx,
                 positive_coords=pos_json,
                 negative_coords=neg_json,
+                text_prompt=text_prompt,
             )
             _pid, paths = _run_workflow(w, addr)
             urls = []
@@ -324,6 +353,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--video-url", type=str, default=None)
     p.add_argument("--positive-coords", type=str, default="[]")
     p.add_argument("--negative-coords", type=str, default="[]")
+    p.add_argument("--text-prompt", type=str, default="")
     p.add_argument("--ref-frame-index", type=int, default=0)
     p.add_argument("--convert-local-to-url", action="store_true")
     return p.parse_args()
@@ -350,6 +380,7 @@ def _run_test_mode(args: argparse.Namespace) -> None:
         "job": job,
         "positive_coords": pos,
         "negative_coords": neg,
+        "text_prompt": _normalize_text_prompt(args.text_prompt),
         "ref_frame_index": args.ref_frame_index,
     }
     if job == "video_masks":

@@ -27,6 +27,10 @@
         "1",
         0
       ],
+      "conditioning": [
+        "6",
+        0
+      ],
       "positive_coords": "",
       "negative_coords": "",
       "threshold": 0.5,
@@ -61,6 +65,19 @@
     "class_type": "SaveImage",
     "_meta": {
       "title": "Save Mask"
+    }
+  },
+  "6": {
+    "inputs": {
+      "clip": [
+        "2",
+        1
+      ],
+      "text": ""
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "SAM3 Text"
     }
   }
 }

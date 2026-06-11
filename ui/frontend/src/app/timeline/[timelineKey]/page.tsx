@@ -1092,7 +1092,11 @@ export default function TimelineEditorPage() {
   }
 
   const onSegmentPreview = useCallback(
-    async (positive: Sam3Point[], negative: Sam3Point[]): Promise<string | null> => {
+    async (
+      positive: Sam3Point[],
+      negative: Sam3Point[],
+      textPrompt?: string
+    ): Promise<string | null> => {
       const tgt = segmentTargetRef.current;
       if (!tgt || !timelineKey) return null;
       const done = await runTimelineSegmentPreviewWsJob({
@@ -1101,6 +1105,7 @@ export default function TimelineEditorPage() {
         clipType: tgt.type,
         positiveCoords: positive,
         negativeCoords: negative,
+        textPrompt,
         inPointSec: tgt.inPoint,
         localTimeSec: tgt.localTimeSec,
         speed: tgt.speed,
@@ -1112,7 +1117,11 @@ export default function TimelineEditorPage() {
     [timelineKey]
   );
 
-  async function runSegmentSave(positive: Sam3Point[], negative: Sam3Point[]) {
+  async function runSegmentSave(
+    positive: Sam3Point[],
+    negative: Sam3Point[],
+    textPrompt?: string
+  ) {
     const tgt = segmentTargetRef.current;
     setSegmentOpen(false);
     segmentTargetRef.current = null;
@@ -1127,6 +1136,7 @@ export default function TimelineEditorPage() {
         clipType: tgt.type,
         positiveCoords: positive,
         negativeCoords: negative,
+        textPrompt,
         inPointSec: tgt.inPoint,
         localTimeSec: tgt.localTimeSec,
         speed: tgt.speed,
@@ -1933,7 +1943,9 @@ export default function TimelineEditorPage() {
           segmentTargetRef.current = null;
         }}
         onPreview={onSegmentPreview}
-        onSave={(positive, negative) => void runSegmentSave(positive, negative)}
+        onSave={(positive, negative, textPrompt) =>
+          void runSegmentSave(positive, negative, textPrompt)
+        }
       />
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />

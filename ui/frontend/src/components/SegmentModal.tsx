@@ -30,9 +30,14 @@ export function SegmentModal(props: {
   onCancel: () => void;
   onPreview: (
     positive: Sam3Point[],
-    negative: Sam3Point[]
+    negative: Sam3Point[],
+    textPrompt?: string
   ) => Promise<string | null>;
-  onSave: (positive: Sam3Point[], negative: Sam3Point[]) => void | Promise<void>;
+  onSave: (
+    positive: Sam3Point[],
+    negative: Sam3Point[],
+    textPrompt?: string
+  ) => void | Promise<void>;
 }) {
   const {
     open,
@@ -47,6 +52,7 @@ export function SegmentModal(props: {
 
   const [positive, setPositive] = useState<Sam3Point[]>([]);
   const [negative, setNegative] = useState<Sam3Point[]>([]);
+  const [textPrompt, setTextPrompt] = useState("");
   const [maskB64, setMaskB64] = useState<string | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
@@ -59,9 +65,12 @@ export function SegmentModal(props: {
   const resetState = useCallback(() => {
     setPositive([]);
     setNegative([]);
+    setTextPrompt("");
     setMaskB64(null);
     setNaturalSize(null);
   }, []);
+
+  const hasPrompt = positive.length > 0 || textPrompt.trim().length > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -84,15 +93,15 @@ export function SegmentModal(props: {
   }, [open, clipType, mediaSrc, videoSeekSec]);
 
   const refreshPreview = useCallback(
-    async (pos: Sam3Point[], neg: Sam3Point[]) => {
-      if (!pos.length) {
+    async (pos: Sam3Point[], neg: Sam3Point[], text: string) => {
+      if (!pos.length && !text.trim()) {
         setMaskB64(null);
         return;
       }
       const gen = ++previewGenRef.current;
       setPreviewBusy(true);
       try {
-        const b64 = await onPreview(pos, neg);
+        const b64 = await onPreview(pos, neg, text.trim() || undefined);
         if (gen === previewGenRef.current) {
           setMaskB64(b64);
         }
@@ -110,15 +119,15 @@ export function SegmentModal(props: {
   );
 
   useEffect(() => {
-    if (!open || !positive.length) {
+    if (!open || !hasPrompt) {
       setMaskB64(null);
       return;
     }
     const t = window.setTimeout(() => {
-      void refreshPreview(positive, negative);
+      void refreshPreview(positive, negative, textPrompt);
     }, 400);
     return () => window.clearTimeout(t);
-  }, [open, positive, negative, refreshPreview]);
+  }, [open, positive, negative, textPrompt, hasPrompt, refreshPreview]);
 
   const onMediaLoad = useCallback(() => {
     if (clipType === "image" && imgRef.current) {
@@ -156,15 +165,16 @@ export function SegmentModal(props: {
     }
   };
 
-  const clearPoints = () => {
+  const clearPrompt = () => {
     setPositive([]);
     setNegative([]);
+    setTextPrompt("");
     setMaskB64(null);
   };
 
   if (!open) return null;
 
-  const canSave = !busy && !previewBusy && positive.length > 0 && Boolean(maskB64);
+  const canSave = !busy && !previewBusy && hasPrompt && Boolean(maskB64);
 
   const pointStyle = (kind: "pos" | "neg"): React.CSSProperties => ({
     position: "absolute",
@@ -255,11 +265,28 @@ export function SegmentModal(props: {
               color: "rgba(255,255,255,0.85)",
             }}
           >
-            Click to include a region. Shift+click to exclude.{" "}
+            Click to include a region. Shift+click to exclude. Optional text
+            prompt (e.g. person, red car). Text and points are combined.{" "}
             {clipType === "video"
               ? "Preview uses the frame at the playhead."
               : null}
           </div>
+          <input
+            type="text"
+            value={textPrompt}
+            disabled={busy || previewBusy}
+            placeholder="Text prompt (optional), e.g. person or cat:2, dog"
+            onChange={(e) => setTextPrompt(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              fontSize: 13,
+              background: "#1a1a1a",
+              border: "1px solid rgba(255,255,255,0.2)",
+              color: "#eee",
+              borderRadius: 4,
+            }}
+          />
           <div
             ref={mediaWrapRef}
             style={{
@@ -345,13 +372,13 @@ export function SegmentModal(props: {
           <button
             type="button"
             className="ui-btn-black"
-            disabled={busy || (!positive.length && !negative.length)}
+            disabled={busy || (!positive.length && !negative.length && !textPrompt.trim())}
             onClick={(e) => {
               e.preventDefault();
-              clearPoints();
+              clearPrompt();
             }}
           >
-            Clear points
+            Clear
           </button>
           <button
             type="button"
@@ -363,7 +390,7 @@ export function SegmentModal(props: {
             }}
             onClick={(e) => {
               e.preventDefault();
-              void onSave(positive, negative);
+              void onSave(positive, negative, textPrompt.trim() || undefined);
             }}
           >
             Save segment
