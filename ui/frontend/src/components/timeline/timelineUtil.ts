@@ -4,9 +4,15 @@ import type {
   TimelineManifest,
   TimelineTrack,
 } from "../../lib/api";
-import { trajectoryTransformAt } from "./TrajectoryEditor";
+import { resolveTrajectoryTransformAt } from "./trajectoryMotion";
 
-export type ClipTransform = { x: number; y: number; scale: number };
+export type ClipTransform = {
+  x: number;
+  y: number;
+  scale: number;
+  rotation?: number;
+  opacity?: number;
+};
 export type ClipRect = { left: number; top: number; width: number; height: number };
 
 export const IMAGE_CLIP_DEFAULT_SEC = 3;
@@ -156,9 +162,9 @@ export function snapClipRectToFrame(
   return { rect: { left, top, width, height }, guides };
 }
 
-/** Effective transform at playhead (trajectory interpolation when present). */
+/** Effective transform at playhead (trajectory + motion when present). */
 export function clipTransformAtPlayhead(clip: TimelineClip, playhead: number): ClipTransform {
-  const traj = trajectoryTransformAt(clip, playhead);
+  const traj = resolveTrajectoryTransformAt(clip, playhead, { applyMotion: true });
   if (traj) return traj;
   return clip.transform ?? defaultImageClipTransform();
 }
@@ -407,9 +413,27 @@ export async function buildTimelineCompositePngBase64(params: {
   canvas.height = frameH;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not get 2D canvas context.");
+  const context = ctx;
 
-  ctx.drawImage(bgImg, bgRect.left, bgRect.top, bgRect.width, bgRect.height);
-  ctx.drawImage(overlayImg, ovRect.left, ovRect.top, ovRect.width, ovRect.height);
+  function drawLayer(
+    img: HTMLImageElement,
+    rect: ClipRect,
+    tf: ClipTransform
+  ) {
+    const rot = tf.rotation ?? 0;
+    const op = tf.opacity ?? 1;
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    context.save();
+    context.globalAlpha = op;
+    context.translate(cx, cy);
+    if (rot !== 0) context.rotate((rot * Math.PI) / 180);
+    context.drawImage(img, -rect.width / 2, -rect.height / 2, rect.width, rect.height);
+    context.restore();
+  }
+
+  drawLayer(bgImg, bgRect, tfBg);
+  drawLayer(overlayImg, ovRect, tfOv);
 
   const base64 = canvas.toDataURL("image/png").split(",", 2)[1] ?? "";
 

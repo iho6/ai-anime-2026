@@ -419,6 +419,21 @@ export type HubTimeline = {
 
 export type TimelineClipType = "video" | "image" | "audio";
 
+/** Procedural motion layered on top of trajectory waypoints (preview playback). */
+export type TrajectoryMotionId =
+  | "none"
+  | "pulse"
+  | "sway"
+  | "flicker"
+  | "drift"
+  | "bounce"
+  | "orbit"
+  | "overshoot"
+  | "bob"
+  | "shake"
+  | "wiggle"
+  | "jitter";
+
 export type TimelineClip = {
   id: string;
   type: TimelineClipType;
@@ -442,6 +457,10 @@ export type TimelineClip = {
   transform?: { x: number; y: number; scale: number };
   /** Motion path: clip moves through these waypoints over its duration. */
   trajectory?: {
+    /** Procedural oscillation on top of the path (preview + MP4 export). */
+    motion?: TrajectoryMotionId;
+    /** Intensity 0–100 for motion amplitude. */
+    motionAmount?: number;
     waypoints: Array<{
       t: number;       // 0–1 fraction of clip duration
       x: number;       // same space as transform.x (fractional from center)
@@ -670,6 +689,20 @@ type TimelineImageClipResult = {
   height: number;
 };
 
+export type Sam3Point = { x: number; y: number };
+
+type TimelineSegmentClipResult = {
+  type: "image" | "video";
+  srcRelPath: string;
+  width: number;
+  height: number;
+  durationSec?: number;
+};
+
+type TimelineSegmentPreviewResult = {
+  maskPngBase64: string;
+};
+
 /** Shared WS runner for timeline generation jobs (FLF / I2V / AI-edit). */
 function runTimelineGenWsJob<T>(
   path: string,
@@ -753,6 +786,46 @@ export function runTimelineAiEditWsJob(params: {
   const { timelineKey, onLogLine, ...payload } = params;
   return runTimelineGenWsJob<TimelineImageClipResult>(
     `/timeline/${encodeURIComponent(timelineKey)}/ai_edit/ws`,
+    payload,
+    onLogLine
+  );
+}
+
+/** SAM3 mask preview for timeline segment UI (image or video frame). */
+export function runTimelineSegmentPreviewWsJob(params: {
+  timelineKey: string;
+  clipRelPath: string;
+  clipType: "image" | "video";
+  positiveCoords: Sam3Point[];
+  negativeCoords?: Sam3Point[];
+  inPointSec?: number;
+  localTimeSec?: number;
+  speed?: number;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<TimelineSegmentPreviewResult>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<TimelineSegmentPreviewResult>(
+    `/timeline/${encodeURIComponent(timelineKey)}/segment_preview/ws`,
+    payload,
+    onLogLine
+  );
+}
+
+/** SAM3 segment → new transparent clip in timeline storage. */
+export function runTimelineSegmentWsJob(params: {
+  timelineKey: string;
+  clipRelPath: string;
+  clipType: "image" | "video";
+  positiveCoords: Sam3Point[];
+  negativeCoords?: Sam3Point[];
+  inPointSec?: number;
+  localTimeSec?: number;
+  speed?: number;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<TimelineSegmentClipResult>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<TimelineSegmentClipResult>(
+    `/timeline/${encodeURIComponent(timelineKey)}/segment/ws`,
     payload,
     onLogLine
   );

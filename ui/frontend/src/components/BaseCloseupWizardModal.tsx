@@ -157,7 +157,6 @@ export function BaseCloseupWizardModal(props: Props) {
 
   const currentStepKey = (steps[stepIndex]?.stepKey || "front") as StepKey;
   const currentLabel = STEP_LABEL[currentStepKey] || "Angle";
-  const isLast = stepIndex >= 3;
   const canLast = stepIndex > 0;
   const canNext = stepIndex < 3;
   const previewUrl = previewRelPath ? `${assetUrlFromRelPath(previewRelPath)}?v=${bust}` : "";
@@ -393,10 +392,10 @@ export function BaseCloseupWizardModal(props: Props) {
             >
               Regenerate
             </button>
-            {isLast ? (
+            {allSaved ? (
               <button
                 className="ui-btn-black"
-                disabled={busy || !allSaved}
+                disabled={busy}
                 style={disabledBtnStyle}
                 onClick={() =>
                   withBusy(async () => {

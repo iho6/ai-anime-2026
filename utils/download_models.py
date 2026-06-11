@@ -14,6 +14,7 @@ Usage:
     python utils/download_models.py --qwen-t2i  # reference t2i gen (Qwen-Image 2512)
     python utils/download_models.py --sound-gen  # Stable Audio Open 1.0 (sound_gen_ai_service)
     python utils/download_models.py --music-gen  # ACE-Step 1.5 turbo (music_gen_ai_service)
+    python utils/download_models.py --sam3  # SAM 3.1 multiplex (sam3_segment_ai_service)
     python utils/download_models.py --all  # all stacks (deduplicated)
     python utils/download_models.py --all --force-redownload  # re-fetch HF weights (testing)
 """
@@ -254,6 +255,15 @@ MUSIC_GEN_MODELS = [
     },
 ]
 
+# SAM 3.1 Multiplex — sam3_segment_ai_service (timeline segment).
+SAM3_MODELS = [
+    {
+        "name": "sam3.1_multiplex_fp16.safetensors (SAM 3.1 checkpoint)",
+        "url": "https://huggingface.co/Comfy-Org/sam3.1/resolve/main/checkpoints/sam3.1_multiplex_fp16.safetensors",
+        "path": "comfyui/models/checkpoints/sam3.1_multiplex_fp16.safetensors",
+    },
+]
+
 
 SERVICE_MODEL_MAP = {
     "multi_angle": MULTI_ANGLE_MODELS,
@@ -265,6 +275,7 @@ SERVICE_MODEL_MAP = {
     "qwen_t2i": QWEN_T2I_MODELS,
     "sound_gen": SOUND_GEN_MODELS,
     "music_gen": MUSIC_GEN_MODELS,
+    "sam3": SAM3_MODELS,
 }
 
 
@@ -480,6 +491,8 @@ def _collect_selected_models(args) -> list[dict]:
             selected_keys.append("sound_gen")
         if args.music_gen:
             selected_keys.append("music_gen")
+        if args.sam3:
+            selected_keys.append("sam3")
 
     selected_models: list[dict] = []
     for key in selected_keys:
@@ -561,6 +574,7 @@ def main():
             "  python utils/download_models.py --qwen-t2i\n"
             "  python utils/download_models.py --sound-gen\n"
             "  python utils/download_models.py --music-gen\n"
+            "  python utils/download_models.py --sam3\n"
             "  python utils/download_models.py --all"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -638,6 +652,14 @@ def main():
         ),
     )
     parser.add_argument(
+        "--sam3",
+        action="store_true",
+        help=(
+            "Download SAM 3.1 multiplex checkpoint for sam3_segment_ai_service "
+            "(timeline Segment)"
+        ),
+    )
+    parser.add_argument(
         "--all",
         action="store_true",
         help="Download all service model stacks with deduplication by destination path",
@@ -669,6 +691,7 @@ def main():
         and not args.qwen_t2i
         and not args.sound_gen
         and not args.music_gen
+        and not args.sam3
         and not args.all
     ):
         parser.print_help()

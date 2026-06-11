@@ -1,0 +1,128 @@
+{
+  "1": {
+    "inputs": {
+      "file": "input.mp4"
+    },
+    "class_type": "LoadVideo",
+    "_meta": {
+      "title": "Load Video"
+    }
+  },
+  "2": {
+    "inputs": {
+      "video": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "GetVideoComponents",
+    "_meta": {
+      "title": "Get Video Components"
+    }
+  },
+  "3": {
+    "inputs": {
+      "image": [
+        "2",
+        0
+      ],
+      "batch_index": 0,
+      "length": 1
+    },
+    "class_type": "ImageFromBatch",
+    "_meta": {
+      "title": "Reference Frame"
+    }
+  },
+  "4": {
+    "inputs": {
+      "ckpt_name": "sam3.1_multiplex_fp16.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load SAM3.1"
+    }
+  },
+  "5": {
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "image": [
+        "3",
+        0
+      ],
+      "positive_coords": "",
+      "negative_coords": "",
+      "threshold": 0.5,
+      "refine_iterations": 2,
+      "individual_masks": false
+    },
+    "class_type": "SAM3_Detect",
+    "_meta": {
+      "title": "SAM3 Detect (seed)"
+    }
+  },
+  "6": {
+    "inputs": {
+      "images": [
+        "2",
+        0
+      ],
+      "model": [
+        "4",
+        0
+      ],
+      "initial_mask": [
+        "5",
+        0
+      ],
+      "detection_threshold": 0.5,
+      "max_objects": 1,
+      "detect_interval": 1
+    },
+    "class_type": "SAM3_VideoTrack",
+    "_meta": {
+      "title": "SAM3 Video Track"
+    }
+  },
+  "7": {
+    "inputs": {
+      "track_data": [
+        "6",
+        0
+      ],
+      "object_indices": ""
+    },
+    "class_type": "SAM3_TrackToMask",
+    "_meta": {
+      "title": "Track To Mask"
+    }
+  },
+  "8": {
+    "inputs": {
+      "mask": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "MaskToImage",
+    "_meta": {
+      "title": "Mask To Image"
+    }
+  },
+  "9": {
+    "inputs": {
+      "filename_prefix": "sam3_vmask",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Mask Frames"
+    }
+  }
+}

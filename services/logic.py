@@ -2535,6 +2535,8 @@ def generate_current_closeup_wizard(
         step_key,
         unsaved_generated_abs_by_step=_closeup_unsaved_preview_paths(session),
     )
+    if saved:
+        _flush_closeup_composites_from_session_saved(char_key, saved)
     return {
         "stepKey": step_key,
         "stepLabel": label,
@@ -2563,6 +2565,8 @@ def save_current_closeup_and_advance(
     char_key = str(session["charKey"])
     _persist_closeup_candidate_to_session_saved(session, char_key, step_key, candidate_abs)
     saved = dict(session.get("saved") or {})
+    if saved:
+        _flush_closeup_composites_from_session_saved(char_key, saved)
     gen_saved = dict(session.get("generatedAbsByStep") or {})
     gen_saved.pop(step_key, None)
     session["generatedAbsByStep"] = gen_saved
@@ -2622,6 +2626,8 @@ def save_current_closeup_only(session_id: str) -> dict[str, Any]:
         step_key,
         unsaved_generated_abs_by_step=_closeup_unsaved_preview_paths(session),
     )
+    if saved:
+        _flush_closeup_composites_from_session_saved(char_key, saved)
     return {
         "stepKey": step_key,
         "stepLabel": label,
@@ -2692,28 +2698,55 @@ def go_next_closeup_wizard(session_id: str) -> dict[str, Any]:
     }
 
 
-def _write_closeup_and_combined(char_key: str, saved: dict[str, str]) -> tuple[str, str]:
+_CLOSEUP_QUADRANT_SLOTS: dict[str, tuple[int, int]] = {
+    "front": (0, 0),
+    "left": (1, 0),
+    "right": (0, 1),
+    "back": (1, 1),
+}
+_CLOSEUP_COMPOSITE_TILE_SIZE = 768
+_CLOSEUP_COMPOSITE_BG_RGB = (18, 18, 18)
+
+
+def _build_closeup_quadrant_image(saved: dict[str, str], *, allow_partial: bool) -> Any:
     from PIL import Image, ImageOps
 
-    character = get_character_paths(char_key)
-    size = 768
-    quadrant = Image.new("RGB", (size * 2, size * 2), (18, 18, 18))
-    slots = {
-        "front": (0, 0),
-        "left": (1, 0),
-        "right": (0, 1),
-        "back": (1, 1),
-    }
-    for step, (cx, cy) in slots.items():
+    size = _CLOSEUP_COMPOSITE_TILE_SIZE
+    quadrant = Image.new("RGB", (size * 2, size * 2), _CLOSEUP_COMPOSITE_BG_RGB)
+    blank_tile = Image.new("RGB", (size, size), _CLOSEUP_COMPOSITE_BG_RGB)
+    for step, (cx, cy) in _CLOSEUP_QUADRANT_SLOTS.items():
         rel = saved.get(step)
         if not rel:
+            if allow_partial:
+                quadrant.paste(blank_tile, (cx * size, cy * size))
+                continue
             raise ValueError(f"Missing saved step: {step}")
         src = resolve_storage_rel_path_to_abs(rel)
         if not src.is_file():
+            if allow_partial:
+                quadrant.paste(blank_tile, (cx * size, cy * size))
+                continue
             raise ValueError(f"Missing saved image file for {step}")
         img = Image.open(src).convert("RGB")
         tile = ImageOps.fit(img, (size, size), method=Image.Resampling.LANCZOS)
         quadrant.paste(tile, (cx * size, cy * size))
+    return quadrant
+
+
+def _write_closeup_and_combined(
+    char_key: str,
+    saved: dict[str, str],
+    *,
+    allow_partial: bool = False,
+) -> tuple[str | None, str | None]:
+    from PIL import Image, ImageOps
+
+    if not saved:
+        return None, None
+
+    character = get_character_paths(char_key)
+    size = _CLOSEUP_COMPOSITE_TILE_SIZE
+    quadrant = _build_closeup_quadrant_image(saved, allow_partial=allow_partial)
     closeup_abs = character.base_dir / "base_closeup.png"
     quadrant.save(closeup_abs, format="PNG")
 
@@ -2723,12 +2756,20 @@ def _write_closeup_and_combined(char_key: str, saved: dict[str, str]) -> tuple[s
     base_src = Path(base_src_abs_s)
     base_img = Image.open(base_src).convert("RGB")
     base_square = ImageOps.fit(base_img, (size * 2, size * 2), method=Image.Resampling.LANCZOS)
-    combined = Image.new("RGB", (size * 4, size * 2), (18, 18, 18))
+    combined = Image.new("RGB", (size * 4, size * 2), _CLOSEUP_COMPOSITE_BG_RGB)
     combined.paste(base_square, (0, 0))
     combined.paste(quadrant, (size * 2, 0))
     combined_abs = character.base_dir / "base_combined.png"
     combined.save(combined_abs, format="PNG")
     return _abs_to_storage_rel(closeup_abs), _abs_to_storage_rel(combined_abs)
+
+
+def _flush_closeup_composites_from_session_saved(
+    char_key: str, saved: dict[str, str]
+) -> tuple[str | None, str | None]:
+    if not saved:
+        return None, None
+    return _write_closeup_and_combined(char_key, saved, allow_partial=True)
 
 
 def _seed_closeup_views_to_expression_gallery(char_key: str) -> None:
@@ -2778,7 +2819,11 @@ def save_all_closeup_wizard(session_id: str) -> dict[str, Any]:
     session = _closeup_session(session_id)
     saved = dict(session.get("saved") or {})
     char_key = str(session["charKey"])
-    closeup_rel, combined_rel = _write_closeup_and_combined(char_key, saved)
+    closeup_rel, combined_rel = _write_closeup_and_combined(
+        char_key, saved, allow_partial=False
+    )
+    if not closeup_rel or not combined_rel:
+        raise ValueError("All four closeup angles must be saved before finalize.")
     _seed_closeup_views_to_expression_gallery(char_key)
     return {
         "closeupRelPath": closeup_rel,
@@ -2793,6 +2838,9 @@ def close_closeup_wizard(session_id: str) -> None:
         s = _closeup_wizard_sessions.pop(session_id, None)
     if not s:
         return
+    saved = dict(s.get("saved") or {})
+    if saved:
+        _flush_closeup_composites_from_session_saved(str(s["charKey"]), saved)
     for p in (s.get("tempFiles") or []):
         try:
             Path(str(p)).unlink(missing_ok=True)
@@ -9403,6 +9451,422 @@ def ai_edit_to_timeline_clip(
     except Exception:
         pass
     return {"absPath": str(out_path), "width": width, "height": height}
+
+
+def _sam3_coords_json(positive: list[dict[str, Any]], negative: list[dict[str, Any]]) -> tuple[str, str]:
+    pos_out: list[dict[str, int]] = []
+    for pt in positive or []:
+        if not isinstance(pt, dict):
+            continue
+        try:
+            pos_out.append({"x": int(pt["x"]), "y": int(pt["y"])})
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not pos_out:
+        raise ValueError("At least one positive point is required.")
+    neg_out: list[dict[str, int]] = []
+    for pt in negative or []:
+        if not isinstance(pt, dict):
+            continue
+        try:
+            neg_out.append({"x": int(pt["x"]), "y": int(pt["y"])})
+        except (KeyError, TypeError, ValueError):
+            continue
+    return json.dumps(pos_out), json.dumps(neg_out)
+
+
+def _run_sam3_segment_service(
+    *,
+    job: str,
+    image_abs_path: str | None = None,
+    video_abs_path: str | None = None,
+    positive_coords: list[dict[str, Any]],
+    negative_coords: list[dict[str, Any]] | None = None,
+    ref_frame_index: int = 0,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    pos_json, neg_json = _sam3_coords_json(positive_coords, negative_coords or [])
+    args = [
+        "--test-mode",
+        "--enable-default",
+        "--default-port",
+        str(COMFY_PORT),
+        "--job",
+        job,
+        "--positive-coords",
+        pos_json,
+        "--negative-coords",
+        neg_json,
+        "--ref-frame-index",
+        str(max(0, int(ref_frame_index))),
+        "--convert-local-to-url",
+    ]
+    if job == "video_masks":
+        if not video_abs_path:
+            raise ValueError("video_abs_path is required for video_masks.")
+        args.extend(["--video-url", video_abs_path])
+    else:
+        if not image_abs_path:
+            raise ValueError("image_abs_path is required.")
+        args.extend(["--image-url", image_abs_path])
+    body = _run_service_testmode(
+        "services.sam3_segment_ai_service.serverless",
+        args,
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise RuntimeError(str(body["error"]))
+    result = body.get("result")
+    if not isinstance(result, dict):
+        raise RuntimeError("SAM3 segment returned no result.")
+    return result
+
+
+def _download_sam3_output_urls(result: dict[str, Any], dest_dir: Path) -> list[str]:
+    urls = result.get("urls")
+    if not isinstance(urls, list) or not urls:
+        url = result.get("url")
+        if isinstance(url, str) and url.strip():
+            urls = [url.strip()]
+        else:
+            raise RuntimeError("SAM3 segment result missing url(s).")
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    paths: list[str] = []
+    for i, url in enumerate(urls):
+        if not isinstance(url, str) or not url.strip():
+            continue
+        ext = infer_ext_from_url(url) or ".png"
+        dest = dest_dir / f"sam3_{unique_suffix(8)}_{i:05d}{ext}"
+        download_url_to_file(url.strip(), dest)
+        paths.append(str(dest))
+    if not paths:
+        raise RuntimeError("SAM3 segment produced no downloadable outputs.")
+    return paths
+
+
+def mask_to_rgba_cutout(*, image_abs_path: str, mask_abs_path: str) -> str:
+    """Apply grayscale mask (white=keep) as alpha; write temp RGBA PNG."""
+    from PIL import Image
+
+    base = Image.open(image_abs_path).convert("RGBA")
+    mask = Image.open(mask_abs_path).convert("L").resize(base.size)
+    base.putalpha(mask)
+    dest = Path(tempfile.gettempdir()) / f"sam3_rgba_{unique_suffix()}.png"
+    base.save(dest, format="PNG")
+    return str(dest)
+
+
+def probe_video_fps_and_frame_count(video_path: str | Path) -> tuple[float, int]:
+    import av
+
+    p = Path(video_path)
+    with av.open(str(p)) as container:
+        stream = container.streams.video[0]
+        fps = float(stream.average_rate or stream.base_rate or 24)
+        total = int(stream.frames or 0)
+        if total <= 0 and stream.duration and stream.time_base:
+            dur_sec = float(stream.duration * stream.time_base)
+            total = max(0, int(round(dur_sec * fps)))
+    return fps, total
+
+
+def video_ref_frame_index(
+    video_path: str | Path,
+    *,
+    in_point_sec: float = 0.0,
+    local_time_sec: float = 0.0,
+    speed: float = 1.0,
+) -> int:
+    """Map timeline-local time to a source frame index."""
+    fps, total = probe_video_fps_and_frame_count(video_path)
+    sp = max(0.01, float(speed))
+    source_t = max(0.0, float(in_point_sec) + float(local_time_sec) * sp)
+    idx = int(round(source_t * fps))
+    if total > 0:
+        idx = min(max(0, idx), total - 1)
+    return idx
+
+
+def extract_video_frame_to_temp(
+    video_path: str | Path,
+    frame_index: int,
+) -> str:
+    """Extract one frame from a video as a temp PNG for SAM preview."""
+    import av
+
+    p = Path(video_path)
+    if not p.is_file():
+        raise ValueError(f"Video not found: {p}")
+    idx = max(0, int(frame_index))
+    dest = Path(tempfile.gettempdir()) / f"sam3_frame_{unique_suffix()}.png"
+    with av.open(str(p)) as container:
+        stream = container.streams.video[0]
+        for i, frame in enumerate(container.decode(stream)):
+            if i == idx:
+                frame.to_image().save(dest)
+                return str(dest)
+    raise ValueError(f"Frame index {idx} out of range for {p.name}")
+
+
+def run_sam3_segment_preview(
+    *,
+    image_abs_path: str,
+    positive_coords: list[dict[str, Any]],
+    negative_coords: list[dict[str, Any]] | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """Run SAM3 mask preview; returns temp path to grayscale mask PNG."""
+    result = _run_sam3_segment_service(
+        job="image_mask",
+        image_abs_path=image_abs_path,
+        positive_coords=positive_coords,
+        negative_coords=negative_coords,
+        log_cb=log_cb,
+    )
+    tmp = Path(tempfile.gettempdir()) / f"sam3_preview_{unique_suffix()}"
+    paths = _download_sam3_output_urls(result, tmp)
+    return paths[0]
+
+
+def run_sam3_segment_image_rgba(
+    *,
+    image_abs_path: str,
+    positive_coords: list[dict[str, Any]],
+    negative_coords: list[dict[str, Any]] | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """Segment image to RGBA PNG cutout (transparent outside mask)."""
+    result = _run_sam3_segment_service(
+        job="image_rgba",
+        image_abs_path=image_abs_path,
+        positive_coords=positive_coords,
+        negative_coords=negative_coords,
+        log_cb=log_cb,
+    )
+    tmp = Path(tempfile.gettempdir()) / f"sam3_rgba_{unique_suffix()}"
+    paths = _download_sam3_output_urls(result, tmp)
+    return paths[0]
+
+
+def composite_video_with_masks(
+    *,
+    video_abs_path: str,
+    mask_paths: list[str],
+    output_path: str | Path,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """
+    Composite source video frames with per-frame mask PNGs; write WebM VP9+alpha.
+    """
+    import av
+    import numpy as np
+    from PIL import Image
+
+    def _log(msg: str) -> None:
+        logger.info(msg)
+        if log_cb:
+            log_cb(msg)
+
+    src = Path(video_abs_path)
+    out = Path(output_path)
+    if not src.is_file():
+        raise ValueError(f"Video not found: {src}")
+    if not mask_paths:
+        raise ValueError("mask_paths is empty.")
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    in_container = av.open(str(src))
+    in_stream = in_container.streams.video[0]
+    fps = float(in_stream.average_rate or in_stream.base_rate or 24)
+    src_w = in_stream.width
+    src_h = in_stream.height
+    _log(f"Compositing segment video {src_w}x{src_h} @ {fps:.2f} fps")
+
+    out_container = av.open(str(out), mode="w", format="webm")
+    out_stream = out_container.add_stream("libvpx-vp9", rate=fps)
+    out_stream.width = src_w
+    out_stream.height = src_h
+    out_stream.pix_fmt = "yuva420p"
+    out_stream.options = {
+        "crf": "10",
+        "b:v": "0",
+        "deadline": "realtime",
+        "cpu-used": "8",
+        "row-mt": "1",
+        "auto-alt-ref": "0",
+    }
+
+    frame_idx = 0
+    with in_container, out_container:
+        for packet in in_container.demux(in_stream):
+            for av_frame in packet.decode():
+                mask_path = mask_paths[min(frame_idx, len(mask_paths) - 1)]
+                with Image.open(mask_path) as m_im:
+                    mask = m_im.convert("L").resize((src_w, src_h))
+                    alpha = np.asarray(mask, dtype=np.uint8)
+                rgb = av_frame.to_ndarray(format="rgb24")
+                rgba = np.dstack([rgb, alpha])
+                out_frame = av.VideoFrame.from_ndarray(rgba, format="rgba")
+                out_frame = out_frame.reformat(format="yuva420p")
+                out_frame.pts = frame_idx
+                out_frame.time_base = out_stream.codec_context.time_base
+                for pkt in out_stream.encode(out_frame):
+                    out_container.mux(pkt)
+                frame_idx += 1
+        for pkt in out_stream.encode():
+            out_container.mux(pkt)
+
+    duration = frame_idx / fps if fps > 0 else 0.0
+    return {
+        "absPath": str(out.resolve()),
+        "width": src_w,
+        "height": src_h,
+        "fps": fps,
+        "durationSec": duration,
+        "frame_count": frame_idx,
+    }
+
+
+def run_sam3_segment_video(
+    *,
+    video_abs_path: str,
+    positive_coords: list[dict[str, Any]],
+    negative_coords: list[dict[str, Any]] | None = None,
+    ref_frame_index: int = 0,
+    output_path: str | Path | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Track segment across video frames; return WebM+alpha path and metadata."""
+    result = _run_sam3_segment_service(
+        job="video_masks",
+        video_abs_path=video_abs_path,
+        positive_coords=positive_coords,
+        negative_coords=negative_coords,
+        ref_frame_index=ref_frame_index,
+        log_cb=log_cb,
+    )
+    tmp_masks = Path(tempfile.gettempdir()) / f"sam3_vmasks_{unique_suffix()}"
+    mask_paths = _download_sam3_output_urls(result, tmp_masks)
+    out = (
+        Path(output_path)
+        if output_path
+        else Path(tempfile.gettempdir()) / f"sam3_vseg_{unique_suffix()}.webm"
+    )
+    try:
+        return composite_video_with_masks(
+            video_abs_path=video_abs_path,
+            mask_paths=mask_paths,
+            output_path=out,
+            log_cb=log_cb,
+        )
+    finally:
+        shutil.rmtree(tmp_masks, ignore_errors=True)
+
+
+def segment_preview_mask_png_base64(
+    *,
+    clip_type: str,
+    source_abs_path: str,
+    positive_coords: list[dict[str, Any]],
+    negative_coords: list[dict[str, Any]] | None = None,
+    in_point_sec: float = 0.0,
+    local_time_sec: float = 0.0,
+    speed: float = 1.0,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """Return base64 PNG mask (no data: prefix) for UI overlay."""
+    kind = (clip_type or "image").strip().lower()
+    image_path = source_abs_path
+    temp_frame: str | None = None
+    try:
+        if kind == "video":
+            ref_idx = video_ref_frame_index(
+                source_abs_path,
+                in_point_sec=in_point_sec,
+                local_time_sec=local_time_sec,
+                speed=speed,
+            )
+            temp_frame = extract_video_frame_to_temp(source_abs_path, ref_idx)
+            image_path = temp_frame
+        mask_path = run_sam3_segment_preview(
+            image_abs_path=image_path,
+            positive_coords=positive_coords,
+            negative_coords=negative_coords,
+            log_cb=log_cb,
+        )
+        raw = Path(mask_path).read_bytes()
+        return base64.b64encode(raw).decode("ascii")
+    finally:
+        if temp_frame:
+            Path(temp_frame).unlink(missing_ok=True)
+
+
+def segment_to_timeline_clip(
+    *,
+    clip_type: str,
+    source_abs_path: str,
+    dest_dir: Path | str,
+    positive_coords: list[dict[str, Any]],
+    negative_coords: list[dict[str, Any]] | None = None,
+    in_point_sec: float = 0.0,
+    local_time_sec: float = 0.0,
+    speed: float = 1.0,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Segment source media and persist into timeline ``clips/`` directory."""
+    import uuid
+
+    from PIL import Image
+
+    kind = (clip_type or "image").strip().lower()
+    dest = Path(dest_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+
+    if kind == "video":
+        ref_idx = video_ref_frame_index(
+            source_abs_path,
+            in_point_sec=in_point_sec,
+            local_time_sec=local_time_sec,
+            speed=speed,
+        )
+        out_path = dest / f"clip_{uuid.uuid4().hex}_seg.webm"
+        info = run_sam3_segment_video(
+            video_abs_path=source_abs_path,
+            positive_coords=positive_coords,
+            negative_coords=negative_coords,
+            ref_frame_index=ref_idx,
+            output_path=out_path,
+            log_cb=log_cb,
+        )
+        return {
+            "absPath": info["absPath"],
+            "width": info.get("width") or 0,
+            "height": info.get("height") or 0,
+            "type": "video",
+            "durationSec": info.get("durationSec") or 0.0,
+        }
+
+    rgba_temp = run_sam3_segment_image_rgba(
+        image_abs_path=source_abs_path,
+        positive_coords=positive_coords,
+        negative_coords=negative_coords,
+        log_cb=log_cb,
+    )
+    out_path = dest / f"clip_{uuid.uuid4().hex}_seg.png"
+    shutil.copy2(rgba_temp, out_path)
+    width = height = 0
+    try:
+        with Image.open(out_path) as im:
+            width, height = int(im.width), int(im.height)
+    except Exception:
+        pass
+    return {
+        "absPath": str(out_path),
+        "width": width,
+        "height": height,
+        "type": "image",
+        "durationSec": 0.0,
+    }
 
 
 def create_sequence_from_sources(

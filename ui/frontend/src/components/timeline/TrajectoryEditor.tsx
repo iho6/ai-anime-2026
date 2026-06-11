@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useCallback, useRef, useState } from "react";
-import { assetUrlFromRelPath, TimelineClip } from "../../lib/api";
+import { assetUrlFromRelPath, TimelineClip, TrajectoryMotionId } from "../../lib/api";
+import { TRAJECTORY_MOTION_OPTIONS } from "./trajectoryMotion";
 
 export type TrajectoryWaypoint = NonNullable<TimelineClip["trajectory"]>["waypoints"][number];
 
@@ -16,6 +17,7 @@ type Props = {
   onPlayheadSync: (clipTime: number) => void;
   /** Called when the user requests to delete the entire trajectory. */
   onDeleteTrajectory?: () => void;
+  onMotionChange?: (motion: TrajectoryMotionId, motionAmount: number) => void;
 };
 
 // ── Coordinate helpers ────────────────────────────────────────────────────────
@@ -141,8 +143,19 @@ const HIT_RADIUS = 14;    // pointer hit area around diamonds
 const SEG_HIT_DIST = 8;   // max px from path line to trigger segment drag
 
 export function TrajectoryEditor(props: Props) {
-  const { clip, frameW, frameH, playing, onWaypointsChange, onPlayheadSync, onDeleteTrajectory } = props;
+  const {
+    clip,
+    frameW,
+    frameH,
+    playing,
+    onWaypointsChange,
+    onPlayheadSync,
+    onDeleteTrajectory,
+    onMotionChange,
+  } = props;
   const wps = clip.trajectory?.waypoints ?? [];
+  const motion = clip.trajectory?.motion ?? "none";
+  const motionAmount = clip.trajectory?.motionAmount ?? 50;
 
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [ghostScale, setGhostScale] = useState<number | null>(null);
@@ -407,6 +420,68 @@ export function TrajectoryEditor(props: Props) {
 
   return (
     <>
+      {/* Motion toolbar */}
+      <div
+        style={{
+          position: "absolute",
+          top: 8,
+          left: 8,
+          zIndex: 55,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "6px 10px",
+          background: "rgba(20,20,20,0.88)",
+          border: "1px solid rgba(255,255,255,0.15)",
+          borderRadius: 4,
+          fontSize: 12,
+          color: "#eee",
+          pointerEvents: "all",
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <label
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
+          title="Procedural motion on the path (applied in preview and MP4 export)"
+        >
+          <span style={{ opacity: 0.85 }}>Motion</span>
+          <select
+            value={motion}
+            onChange={(e) =>
+              onMotionChange?.(e.target.value as TrajectoryMotionId, motionAmount)
+            }
+            style={{
+              background: "#2a2a2a",
+              color: "#eee",
+              border: "1px solid rgba(255,255,255,0.2)",
+              borderRadius: 3,
+              padding: "2px 6px",
+              fontSize: 12,
+            }}
+          >
+            {TRAJECTORY_MOTION_OPTIONS.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ opacity: 0.85 }}>Intensity</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={motionAmount}
+            onChange={(e) =>
+              onMotionChange?.(motion, Number(e.target.value))
+            }
+            style={{ width: 88, opacity: motion === "none" ? 0.45 : 1 }}
+          />
+          <span style={{ minWidth: 24, opacity: 0.7, fontSize: 11 }}>{motionAmount}</span>
+        </label>
+      </div>
+
       {/* Ghost image when waypoint selected */}
       {ghostWp && ghostSrc && (() => {
         const r = ghostRect(ghostWp);
@@ -584,37 +659,4 @@ export function TrajectoryEditor(props: Props) {
   );
 }
 
-// ── Trajectory interpolation (used by preview player) ─────────────────────────
-
-export function trajectoryTransformAt(
-  clip: TimelineClip,
-  playhead: number
-): { x: number; y: number; scale: number } | null {
-  const wps = clip.trajectory?.waypoints;
-  if (!wps || wps.length < 2) return null;
-
-  const t = clamp((playhead - clip.start) / clip.duration, 0, 1);
-
-  // Find segment
-  let i = wps.length - 2;
-  for (let j = 0; j < wps.length - 1; j++) {
-    if (t <= wps[j + 1].t) { i = j; break; }
-  }
-
-  const a = wps[i], b = wps[i + 1];
-  const span = b.t - a.t;
-  const s = span < 1e-9 ? 0 : clamp((t - a.t) / span, 0, 1);
-
-  let x: number, y: number;
-  if (a.cpx != null && a.cpy != null) {
-    // Quadratic bezier
-    const cp = { x: a.cpx, y: a.cpy };
-    x = (1 - s) * (1 - s) * a.x + 2 * (1 - s) * s * cp.x + s * s * b.x;
-    y = (1 - s) * (1 - s) * a.y + 2 * (1 - s) * s * cp.y + s * s * b.y;
-  } else {
-    x = lerp(a.x, b.x, s);
-    y = lerp(a.y, b.y, s);
-  }
-
-  return { x, y, scale: lerp(a.scale, b.scale, s) };
-}
+export { trajectoryTransformAt } from "./trajectoryMotion";

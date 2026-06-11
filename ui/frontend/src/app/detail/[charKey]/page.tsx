@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   apiHubCover,
@@ -57,6 +57,13 @@ export default function DetailGatePage() {
           setDetailPreviewRelPath("");
         }
       });
+  }, [charKey]);
+
+  const refreshDetailPreview = useCallback(async () => {
+    if (!charKey) return;
+    const c = await apiHubCover(charKey);
+    setDetailPreviewRelPath(c.detailPreviewRelPath);
+    setCoverVersion((v) => v + 1);
   }, [charKey]);
 
   const tiles = useMemo(() => {
@@ -327,12 +334,17 @@ export default function DetailGatePage() {
         open={closeupWizardOpen}
         charKey={charKey}
         title="Regenerate Closeup Angles"
-        onClose={() => setCloseupWizardOpen(false)}
+        onClose={async () => {
+          setCloseupWizardOpen(false);
+          try {
+            await refreshDetailPreview();
+          } catch {
+            /* preview may still be full-body if nothing was generated */
+          }
+        }}
         onDone={async () => {
           setCloseupWizardOpen(false);
-          const c = await apiHubCover(charKey);
-          setDetailPreviewRelPath(c.detailPreviewRelPath);
-          setCoverVersion((v) => v + 1);
+          await refreshDetailPreview();
         }}
       />
     </div>

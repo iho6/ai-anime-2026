@@ -531,6 +531,14 @@ export function TimelineTracks(props: {
                     {clip.trajectory && (
                       <span style={{ marginLeft: 4, fontSize: 8, opacity: 0.75 }} title="Has trajectory">↗</span>
                     )}
+                    {clip.trajectory?.motion && clip.trajectory.motion !== "none" && (
+                      <span
+                        style={{ marginLeft: 4, fontSize: 8, opacity: 0.75 }}
+                        title={`Motion: ${clip.trajectory.motion}`}
+                      >
+                        ≋
+                      </span>
+                    )}
                     {/* Trim handles */}
                     <div
                       onPointerDown={(e) => onClipPointerDown(e, track, clip, "trimL")}

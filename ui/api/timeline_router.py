@@ -9,8 +9,6 @@ videos, location/shot images, and music placeholders. Timelines live under
 from __future__ import annotations
 
 import shutil
-import subprocess
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -338,6 +336,115 @@ async def timeline_i2v_ws(ws: WebSocket, timeline_key: str) -> None:
         await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
 
 
+def _parse_segment_coords(msg: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    pos = msg.get("positiveCoords") or msg.get("positive_coords") or []
+    neg = msg.get("negativeCoords") or msg.get("negative_coords") or []
+    if not isinstance(pos, list) or not pos:
+        raise ValueError("positiveCoords must be a non-empty list.")
+    if not isinstance(neg, list):
+        raise ValueError("negativeCoords must be a list when provided.")
+    return pos, neg
+
+
+def _segment_clip_fields(msg: dict[str, Any]) -> dict[str, Any]:
+    rel = (msg.get("clipRelPath") or msg.get("clip_rel_path") or "").strip()
+    clip_type = (msg.get("clipType") or msg.get("clip_type") or "image").strip().lower()
+    if not rel:
+        raise ValueError("clipRelPath is required.")
+    if clip_type not in ("image", "video"):
+        raise ValueError("clipType must be 'image' or 'video'.")
+    return {
+        "rel": rel,
+        "clip_type": clip_type,
+        "in_point_sec": float(msg.get("inPointSec") or msg.get("in_point_sec") or 0),
+        "local_time_sec": float(msg.get("localTimeSec") or msg.get("local_time_sec") or 0),
+        "speed": float(msg.get("speed") or 1.0),
+    }
+
+
+@router.websocket("/timeline/{timeline_key}/segment_preview/ws")
+async def timeline_segment_preview_ws(ws: WebSocket, timeline_key: str) -> None:
+    """SAM3 mask preview for a timeline clip frame (image or video at playhead)."""
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+    try:
+        if not _timeline_dir(timeline_key).is_dir():
+            raise ValueError("Timeline not found.")
+        fields = _segment_clip_fields(msg)
+        pos, neg = _parse_segment_coords(msg)
+        src_abs = str(resolve_storage_rel_file(fields["rel"]))
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            mask_b64 = logic.segment_preview_mask_png_base64(
+                clip_type=fields["clip_type"],
+                source_abs_path=src_abs,
+                positive_coords=pos,
+                negative_coords=neg,
+                in_point_sec=fields["in_point_sec"],
+                local_time_sec=fields["local_time_sec"],
+                speed=fields["speed"],
+                log_cb=log_cb,
+            )
+            return {"maskPngBase64": mask_b64}
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
+@router.websocket("/timeline/{timeline_key}/segment/ws")
+async def timeline_segment_ws(ws: WebSocket, timeline_key: str) -> None:
+    """SAM3 segment → RGBA PNG (image) or WebM+alpha (video) in timeline clips/."""
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+    try:
+        if not _timeline_dir(timeline_key).is_dir():
+            raise ValueError("Timeline not found.")
+        fields = _segment_clip_fields(msg)
+        pos, neg = _parse_segment_coords(msg)
+        src_abs = str(resolve_storage_rel_file(fields["rel"]))
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            info = logic.segment_to_timeline_clip(
+                clip_type=fields["clip_type"],
+                source_abs_path=src_abs,
+                dest_dir=timeline_storage.timeline_clips_dir(timeline_key),
+                positive_coords=pos,
+                negative_coords=neg,
+                in_point_sec=fields["in_point_sec"],
+                local_time_sec=fields["local_time_sec"],
+                speed=fields["speed"],
+                log_cb=log_cb,
+            )
+            out: dict[str, Any] = {
+                "type": info.get("type") or fields["clip_type"],
+                "srcRelPath": storage_rel_from_abs(info["absPath"]),
+                "width": info.get("width") or 0,
+                "height": info.get("height") or 0,
+            }
+            if out["type"] == "video":
+                out["durationSec"] = float(info.get("durationSec") or 0)
+            return out
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
 @router.websocket("/timeline/{timeline_key}/ai_edit/ws")
 async def timeline_ai_edit_ws(ws: WebSocket, timeline_key: str) -> None:
     """AI-edit a timeline image clip (prompt + optional mask) → new image clip."""
@@ -384,7 +491,7 @@ async def timeline_ai_edit_ws(ws: WebSocket, timeline_key: str) -> None:
 
 @router.websocket("/timeline/{timeline_key}/export_mp4/ws")
 async def timeline_export_mp4_ws(ws: WebSocket, timeline_key: str) -> None:
-    """Concatenate all clips in timeline order into a single MP4 via ffmpeg."""
+    """Composite timeline manifest to MP4 (multi-track video + mixed audio)."""
     await ws.accept()
     try:
         await ws.receive_json()  # consume handshake (no payload needed)
@@ -399,68 +506,12 @@ async def timeline_export_mp4_ws(ws: WebSocket, timeline_key: str) -> None:
         manifest = timeline_storage.read_manifest(timeline_key)
 
         def work(log_cb: Any) -> dict[str, Any]:
-            fps = int(manifest.get("fps", 30))
-            clips = []
-            for track in manifest.get("tracks", []):
-                if track.get("hidden"):
-                    continue
-                if track.get("kind") != "video":
-                    continue
-                for clip in sorted(track.get("clips", []), key=lambda c: c.get("start", 0)):
-                    rel = (clip.get("srcRelPath") or "").strip()
-                    if not rel:
-                        continue
-                    from .storage_paths import resolve_storage_rel_file as _rsrf
-                    abs_p = str(_rsrf(rel))
-                    if not Path(abs_p).is_file():
-                        log_cb(f"Skipping missing: {rel}")
-                        continue
-                    clips.append({
-                        "path": abs_p,
-                        "type": clip.get("type", "image"),
-                        "duration": float(clip.get("duration", 3)),
-                    })
+            from services.timeline_export import write_timeline_manifest_mp4
 
-            if not clips:
-                raise ValueError("No video/image clips found.")
-
-            log_cb(f"Exporting {len(clips)} clip(s)...")
             out_dir = d / "exports"
             out_dir.mkdir(parents=True, exist_ok=True)
             out_path = out_dir / f"export_{int(time.time())}.mp4"
-
-            seg_paths: list[str] = []
-            try:
-                with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-                    concat_file = f.name
-                    for i, clip in enumerate(clips):
-                        if clip["type"] == "image":
-                            seg = str(out_dir / f"_seg_{i}.mp4")
-                            seg_paths.append(seg)
-                            subprocess.run([
-                                "ffmpeg", "-y", "-loop", "1", "-i", clip["path"],
-                                "-t", str(clip["duration"]), "-r", str(fps),
-                                "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                                seg,
-                            ], check=True, capture_output=True)
-                            f.write(f"file '{seg}'\n")
-                            log_cb(f"Converted image clip {i + 1}/{len(clips)}")
-                        else:
-                            f.write(f"file '{clip['path']}'\n")
-
-                subprocess.run([
-                    "ffmpeg", "-y", "-f", "concat", "-safe", "0",
-                    "-i", concat_file, "-c", "copy", str(out_path),
-                ], check=True, capture_output=True)
-            finally:
-                for s in seg_paths:
-                    try:
-                        Path(s).unlink()
-                    except OSError:
-                        pass
-
-            log_cb(f"Done -> {out_path.name}")
+            write_timeline_manifest_mp4(manifest, d, out_path, log_cb)
             return {"relPath": storage_rel_from_abs(str(out_path))}
 
         result, err = await run_with_log_stream(ws, work)

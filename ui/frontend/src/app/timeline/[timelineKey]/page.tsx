@@ -16,6 +16,9 @@ import {
   runTimelineI2vWsJob,
   runTimelineImportSequenceWsJob,
   runTimelineVideoRemoveBgWsJob,
+  runTimelineSegmentPreviewWsJob,
+  runTimelineSegmentWsJob,
+  type Sam3Point,
   runShotCreateWsJob,
   runShotMakeAngleWsJob,
   runShotRemoveBgWsJob,
@@ -24,8 +27,10 @@ import {
   TimelineClip,
   TimelineManifest,
   ShotLayerMeta,
+  TrajectoryMotionId,
 } from "../../../lib/api";
 import { AiEditModal } from "../../../components/AiEditModal";
+import { SegmentModal } from "../../../components/SegmentModal";
 import { CameraAngleModal } from "../../../components/CameraAngleModal";
 import {
   DesktopContextMenu,
@@ -92,6 +97,19 @@ export default function TimelineEditorPage() {
   const [aiEditOpen, setAiEditOpen] = useState(false);
   const [aiEditImageSrc, setAiEditImageSrc] = useState("");
   const aiEditTargetRef = useRef<{ srcRelPath: string; start: number } | null>(null);
+  const [segmentOpen, setSegmentOpen] = useState(false);
+  const [segmentMediaSrc, setSegmentMediaSrc] = useState("");
+  const [segmentVideoSeekSec, setSegmentVideoSeekSec] = useState(0);
+  const [segmentClipType, setSegmentClipType] = useState<"image" | "video">("image");
+  const segmentTargetRef = useRef<{
+    clipId: string;
+    srcRelPath: string;
+    type: "image" | "video";
+    start: number;
+    inPoint: number;
+    speed: number;
+    localTimeSec: number;
+  } | null>(null);
   const previewResizeRef = useRef<{ startY: number; orig: number } | null>(null);
 
   // Pickers + which track a newly-imported clip should land on.
@@ -185,26 +203,6 @@ export default function TimelineEditorPage() {
     setManifest(snap);
     setHistoryTick((t) => t + 1);
   }, []);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
-        return;
-      }
-      if (!(e.ctrlKey || e.metaKey)) return;
-      const k = e.key.toLowerCase();
-      if (k === "z" && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      } else if ((k === "z" && e.shiftKey) || k === "y") {
-        e.preventDefault();
-        redo();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo]);
 
   // ---- Track targeting -----------------------------------------------------
   const updateManifest = useCallback(
@@ -605,20 +603,7 @@ export default function TimelineEditorPage() {
   }
 
   // ---- Clip operations -----------------------------------------------------
-  function deleteClip(trackId: string, clipId: string) {
-    // Robust: if trackId is empty (e.g., from preview right-click), match by clipId across all tracks.
-    historyUpdate((m) => ({
-      ...m,
-      tracks: m.tracks.map((t) =>
-        (t.id === trackId || (!trackId && t.clips.some((c) => c.id === clipId)))
-          ? { ...t, clips: t.clips.filter((c) => c.id !== clipId) }
-          : t
-      ),
-    }));
-    setSelectedClipIds((prev) => prev.filter((x) => x !== clipId));
-  }
-
-  /** Delete a set of clip IDs in one undo-able operation. */
+  /** Delete clip(s) by ID in one undo-able operation (works across all tracks). */
   function deleteClips(clipIds: string[]) {
     const idSet = new Set(clipIds);
     historyUpdate((m) => ({
@@ -630,6 +615,67 @@ export default function TimelineEditorPage() {
     }));
     setSelectedClipIds((prev) => prev.filter((x) => !idSet.has(x)));
   }
+
+  useEffect(() => {
+    function isEditableTarget(target: EventTarget | null): boolean {
+      const t = target as HTMLElement | null;
+      return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+    }
+
+    function modalBlocksDelete(): boolean {
+      return (
+        aiEditOpen ||
+        segmentOpen ||
+        cameraAngleOpen ||
+        charPickerOpen ||
+        locPickerOpen ||
+        audioPickerOpen ||
+        seqPickerOpen ||
+        jobModalProps.open
+      );
+    }
+
+    function onKey(e: KeyboardEvent) {
+      if (isEditableTarget(e.target)) return;
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (!e.ctrlKey && !e.metaKey && !modalBlocksDelete() && selectedClipIds.length > 0) {
+          e.preventDefault();
+          const ids = [...selectedClipIds];
+          deleteClips(ids);
+          if (trajectoryClipId && ids.includes(trajectoryClipId)) {
+            setTrajectoryClipId(null);
+          }
+        }
+        return;
+      }
+
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((k === "z" && e.shiftKey) || k === "y") {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    undo,
+    redo,
+    selectedClipIds,
+    trajectoryClipId,
+    aiEditOpen,
+    segmentOpen,
+    cameraAngleOpen,
+    charPickerOpen,
+    locPickerOpen,
+    audioPickerOpen,
+    seqPickerOpen,
+    jobModalProps.open,
+  ]);
 
   function updateClipTrajectory(clipId: string, trajectory: TimelineClip["trajectory"]) {
     historyUpdate((m) => ({
@@ -647,7 +693,23 @@ export default function TimelineEditorPage() {
       tracks: m.tracks.map((t) => ({
         ...t,
         clips: t.clips.map((c) =>
-          c.id === clipId ? { ...c, trajectory: { waypoints } } : c
+          c.id === clipId && c.trajectory
+            ? { ...c, trajectory: { ...c.trajectory, waypoints } }
+            : c
+        ),
+      })),
+    }));
+  }
+
+  function onMotionChange(clipId: string, motion: TrajectoryMotionId, motionAmount: number) {
+    updateManifest((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          c.id === clipId && c.trajectory
+            ? { ...c, trajectory: { ...c.trajectory, motion, motionAmount } }
+            : c
         ),
       })),
     }));
@@ -893,6 +955,117 @@ export default function TimelineEditorPage() {
     setAiEditOpen(true);
   }
 
+  function openSegment(clipId: string) {
+    const found = findClip(clipId);
+    if (!found) return;
+    const c = found.clip;
+    if (c.type !== "image" && c.type !== "video") return;
+    const localTimeSec = Math.max(0, playhead - c.start);
+    const inPoint = c.inPoint ?? 0;
+    const speed = c.speed && c.speed > 0 ? c.speed : 1;
+    const sourceSeekSec = inPoint + localTimeSec * speed;
+    segmentTargetRef.current = {
+      clipId,
+      srcRelPath: c.srcRelPath,
+      type: c.type,
+      start: c.start,
+      inPoint,
+      speed,
+      localTimeSec,
+    };
+    setSegmentClipType(c.type);
+    setSegmentMediaSrc(assetUrlFromRelPath(c.srcRelPath));
+    setSegmentVideoSeekSec(sourceSeekSec);
+    setSegmentOpen(true);
+    setClipMenu((s) => ({ ...s, open: false }));
+  }
+
+  const onSegmentPreview = useCallback(
+    async (positive: Sam3Point[], negative: Sam3Point[]): Promise<string | null> => {
+      const tgt = segmentTargetRef.current;
+      if (!tgt || !timelineKey) return null;
+      const done = await runTimelineSegmentPreviewWsJob({
+        timelineKey,
+        clipRelPath: tgt.srcRelPath,
+        clipType: tgt.type,
+        positiveCoords: positive,
+        negativeCoords: negative,
+        inPointSec: tgt.inPoint,
+        localTimeSec: tgt.localTimeSec,
+        speed: tgt.speed,
+        onLogLine: () => {},
+      });
+      if (!done.ok) throw new Error(done.error || "Segment preview failed.");
+      return done.result?.maskPngBase64 ?? null;
+    },
+    [timelineKey]
+  );
+
+  async function runSegmentSave(positive: Sam3Point[], negative: Sam3Point[]) {
+    const tgt = segmentTargetRef.current;
+    setSegmentOpen(false);
+    segmentTargetRef.current = null;
+    if (!tgt || !timelineKey) return;
+    beginSession({ title: "Segmenting", clearLog: true });
+    await Promise.resolve();
+    pushLog("Running SAM 3.1 segmentation…");
+    try {
+      const done = await runTimelineSegmentWsJob({
+        timelineKey,
+        clipRelPath: tgt.srcRelPath,
+        clipType: tgt.type,
+        positiveCoords: positive,
+        negativeCoords: negative,
+        inPointSec: tgt.inPoint,
+        localTimeSec: tgt.localTimeSec,
+        speed: tgt.speed,
+        onLogLine: (line) => pushLog(line),
+      });
+      const r = done.result;
+      if (!done.ok || !r?.srcRelPath) {
+        throw new Error(done.error || "Segment returned no clip.");
+      }
+      if (r.type === "video") {
+        const dur = r.durationSec || 5;
+        insertClipOnNewTrack(
+          {
+            id: genId("clip"),
+            type: "video",
+            srcRelPath: r.srcRelPath,
+            start: 0,
+            inPoint: 0,
+            outPoint: dur,
+            speed: 1,
+            duration: dur,
+            srcDuration: dur,
+            naturalW: r.width || undefined,
+            naturalH: r.height || undefined,
+          },
+          tgt.start,
+          "Segment"
+        );
+      } else {
+        const { width, height } = await resolveImportDimensions(
+          r.srcRelPath,
+          r.width || 0,
+          r.height || 0
+        );
+        insertClipOnNewTrack(
+          buildImageClip({
+            srcRelPath: r.srcRelPath,
+            width,
+            height,
+          }),
+          tgt.start,
+          "Segment"
+        );
+      }
+      endSession();
+    } catch (e) {
+      failSession(e, "Segment failed.");
+    }
+  }
+
   async function runAiEdit(prompt: string, maskPngBase64?: string) {
     setAiEditOpen(false);
     const tgt = aiEditTargetRef.current;
@@ -1029,8 +1202,7 @@ export default function TimelineEditorPage() {
     const isCharImage = isImage && Boolean(rc?.clip.source?.charKey);
     const twoImagesSelected = selectedImageClips().length === 2;
     const pair = getOverlappingCharBgPair();
-    // Multi-delete: if the right-clicked clip is part of the current selection, delete all selected.
-    const isMultiDelete = selectedClipIds.length > 1 && selectedClipIds.includes(clipMenu.clipId);
+    const isVideo = rc?.clip.type === "video";
 
     const items: ContextMenuItem[] = [
       {
@@ -1045,67 +1217,6 @@ export default function TimelineEditorPage() {
       },
     ];
 
-    // Video clip BG removal
-    if (rc?.clip.type === "video") {
-      items.push({
-        key: "removeVideoBg",
-        label: "Remove Background (video)",
-        disabled: busy,
-        onSelect: () => void removeVideoClipBg(clipMenu.clipId),
-      });
-    }
-
-    // Image-specific actions — hidden when a char+bg pair is selected
-    if (isImage && !pair) {
-      if (isCharImage) {
-        items.push({
-          key: "changePose",
-          label: "Change Pose",
-          onSelect: () => {
-            setClipMenu((s) => ({ ...s, open: false }));
-            setChangePoseClipId(clipMenu.clipId);
-            setCharPickerInitialKey(rc!.clip.source!.charKey ?? null);
-            setCharPickerOpen(true);
-          },
-        });
-      }
-      items.push(
-        {
-          key: "newAngle",
-          label: "New Angle",
-          disabled: busy,
-          onSelect: () => openClipAngle(clipMenu.clipId),
-        },
-        {
-          key: "removeBg",
-          label: "Remove Background",
-          disabled: busy,
-          onSelect: () => void removeClipBg(clipMenu.clipId),
-        },
-        {
-          key: "aiedit",
-          label: "AI Edit",
-          disabled: busy,
-          onSelect: () => openAiEdit(clipMenu.clipId),
-        },
-        {
-          key: "i2v",
-          label: "I2V (image to video)",
-          disabled: busy,
-          onSelect: () => void runI2v(clipMenu.clipId),
-        }
-      );
-      items.push({
-        key: "flf",
-        label: twoImagesSelected
-          ? "FLF (selected 2 images to video)"
-          : "FLF (select 2 image clips first)",
-        disabled: busy || !twoImagesSelected,
-        onSelect: () => void runFlf(),
-      });
-    }
-
-    // Combine buttons — only shown when a valid char+bg pair is selected
     if (pair) {
       items.push(
         {
@@ -1123,8 +1234,62 @@ export default function TimelineEditorPage() {
       );
     }
 
-    // Trajectory (image and video clips)
-    if (isImage || rc?.clip.type === "video") {
+    if (isImage && !pair) {
+      items.push({
+        key: "newAngle",
+        label: "New Angle",
+        disabled: busy,
+        onSelect: () => openClipAngle(clipMenu.clipId),
+      });
+      if (isCharImage) {
+        items.push({
+          key: "changePose",
+          label: "Change Pose",
+          onSelect: () => {
+            setClipMenu((s) => ({ ...s, open: false }));
+            setChangePoseClipId(clipMenu.clipId);
+            setCharPickerInitialKey(rc!.clip.source!.charKey ?? null);
+            setCharPickerOpen(true);
+          },
+        });
+      }
+    }
+
+    if (isImage || isVideo) {
+      items.push({
+        key: "segment",
+        label: "Segment",
+        disabled: busy,
+        onSelect: () => openSegment(clipMenu.clipId),
+      });
+    }
+
+    if (isImage && !pair) {
+      items.push({
+        key: "removeBg",
+        label: "Remove Background",
+        disabled: busy,
+        onSelect: () => void removeClipBg(clipMenu.clipId),
+      });
+    } else if (isVideo) {
+      items.push({
+        key: "removeVideoBg",
+        label: "Remove Background (video)",
+        disabled: busy,
+        onSelect: () => void removeVideoClipBg(clipMenu.clipId),
+      });
+    }
+
+    if (isImage && !pair) {
+      items.push({
+        key: "aiedit",
+        label: "AI Edit",
+        disabled: busy,
+        onSelect: () => openAiEdit(clipMenu.clipId),
+      });
+    }
+
+    if (isImage || isVideo) {
       items.push({
         key: "trajectory",
         label: rc?.clip.trajectory ? "Edit Trajectory" : "Add Trajectory",
@@ -1133,6 +1298,8 @@ export default function TimelineEditorPage() {
           if (!clip.trajectory) {
             const tf = clip.transform ?? { x: 0, y: 0, scale: 1 };
             updateClipTrajectory(clip.id, {
+              motion: "none",
+              motionAmount: 50,
               waypoints: [
                 { t: 0, x: tf.x, y: tf.y, scale: tf.scale },
                 { t: 1, x: tf.x, y: tf.y, scale: tf.scale },
@@ -1144,20 +1311,28 @@ export default function TimelineEditorPage() {
       });
     }
 
-    items.push({
-      key: "delete",
-      label: isMultiDelete ? `Delete ${selectedClipIds.length} clips` : "Delete clip",
-      onSelect: () => {
-        if (isMultiDelete) {
-          deleteClips(selectedClipIds);
-        } else {
-          deleteClip(clipMenu.trackId, clipMenu.clipId);
+    if (isImage && !pair) {
+      items.push(
+        {
+          key: "i2v",
+          label: "I2V (image to video)",
+          disabled: busy,
+          onSelect: () => void runI2v(clipMenu.clipId),
+        },
+        {
+          key: "flf",
+          label: twoImagesSelected
+            ? "FLF (selected 2 images to video)"
+            : "FLF (select 2 image clips first)",
+          disabled: busy || !twoImagesSelected,
+          onSelect: () => void runFlf(),
         }
-      },
-    });
+      );
+    }
+
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clipMenu, playhead, manifest, selectedClipIds, busy]);
+  }, [clipMenu, playhead, manifest, busy]);
 
   const trackMenuItems: ContextMenuItem[] = useMemo(() => {
     if (!trackMenu.open) return [];
@@ -1340,6 +1515,7 @@ export default function TimelineEditorPage() {
           }}
           trajectoryClipId={trajectoryClipId}
           onWaypointChange={onWaypointChange}
+          onMotionChange={onMotionChange}
           onDeleteTrajectory={(clipId) => { updateClipTrajectory(clipId, undefined); setTrajectoryClipId(null); }}
           height={previewHeight}
         />
@@ -1568,6 +1744,20 @@ export default function TimelineEditorPage() {
         onGenerate={(promptText, maskPngBase64) =>
           void runAiEdit(promptText, maskPngBase64)
         }
+      />
+
+      <SegmentModal
+        open={segmentOpen}
+        clipType={segmentClipType}
+        mediaSrc={segmentMediaSrc}
+        videoSeekSec={segmentVideoSeekSec}
+        busy={busy}
+        onCancel={() => {
+          setSegmentOpen(false);
+          segmentTargetRef.current = null;
+        }}
+        onPreview={onSegmentPreview}
+        onSave={(positive, negative) => void runSegmentSave(positive, negative)}
       />
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />

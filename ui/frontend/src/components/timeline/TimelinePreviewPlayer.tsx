@@ -14,7 +14,9 @@ import {
   type AlignGuide,
   type ClipTransform,
 } from "./timelineUtil";
-import { TrajectoryEditor, TrajectoryWaypoint, trajectoryTransformAt } from "./TrajectoryEditor";
+import { TrajectoryEditor, TrajectoryWaypoint } from "./TrajectoryEditor";
+import { resolveTrajectoryTransformAt } from "./trajectoryMotion";
+import type { TrajectoryMotionId } from "../../lib/api";
 
 /**
  * Resolve the effective transform for a clip at a given playhead time.
@@ -29,10 +31,12 @@ function clipTransform(
   isPlaying: boolean
 ): ClipTransform {
   if (isPlaying || isTrajectoryActive) {
-    const traj = trajectoryTransformAt(clip, playhead);
+    const traj = resolveTrajectoryTransformAt(clip, playhead, {
+      applyMotion: isPlaying || isTrajectoryActive,
+    });
     if (traj) return traj;
   }
-  return clip.transform ?? { x: 0, y: 0, scale: 1 };
+  return { ...(clip.transform ?? { x: 0, y: 0, scale: 1 }), rotation: 0, opacity: 1 };
 }
 
 /**
@@ -57,6 +61,11 @@ export function TimelinePreviewPlayer(props: {
   onClipContextMenu?: (clipId: string, x: number, y: number) => void;
   trajectoryClipId?: string | null;
   onWaypointChange?: (clipId: string, waypoints: TrajectoryWaypoint[]) => void;
+  onMotionChange?: (
+    clipId: string,
+    motion: TrajectoryMotionId,
+    motionAmount: number
+  ) => void;
   onDeleteTrajectory?: (clipId: string) => void;
   height?: number;
 }) {
@@ -74,6 +83,7 @@ export function TimelinePreviewPlayer(props: {
     onClipContextMenu,
     trajectoryClipId,
     onWaypointChange,
+    onMotionChange,
     onDeleteTrajectory,
     height = 260,
   } = props;
@@ -294,18 +304,40 @@ export function TimelinePreviewPlayer(props: {
             const mediaStyle: React.CSSProperties = {
               width: "100%", height: "100%", objectFit: "contain", display: "block", pointerEvents: "none",
             };
+            const rot = tf.rotation ?? 0;
+            const op = tf.opacity ?? 1;
             return (
-              <div key={clip.id} style={{ position: "absolute", left: rect.left, top: rect.top, width: rect.width, height: rect.height, zIndex: z }}>
+              <div
+                key={clip.id}
+                style={{
+                  position: "absolute",
+                  left: rect.left,
+                  top: rect.top,
+                  width: rect.width,
+                  height: rect.height,
+                  zIndex: z,
+                  transform: rot !== 0 ? `rotate(${rot}deg)` : undefined,
+                  transformOrigin: "center center",
+                }}
+              >
                 {clip.type === "image" ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={src} alt="" draggable={false} style={mediaStyle} />
+                  <img
+                    src={src}
+                    alt=""
+                    draggable={false}
+                    style={{ ...mediaStyle, opacity: op }}
+                  />
                 ) : (
                   <video
                     ref={(el) => {
                       if (el) mediaRefs.current.set(clip.id, el);
                       else mediaRefs.current.delete(clip.id);
                     }}
-                    src={src} muted playsInline style={mediaStyle}
+                    src={src}
+                    muted
+                    playsInline
+                    style={{ ...mediaStyle, opacity: op }}
                   />
                 )}
               </div>
@@ -410,6 +442,9 @@ export function TimelinePreviewPlayer(props: {
               frameH={frameSize.h}
               playing={playing}
               onWaypointsChange={(wps) => onWaypointChange?.(trajClip.id, wps)}
+              onMotionChange={(motion, motionAmount) =>
+                onMotionChange?.(trajClip.id, motion, motionAmount)
+              }
               onPlayheadSync={onPlayheadChange}
               onDeleteTrajectory={() => onDeleteTrajectory?.(trajClip.id)}
             />
