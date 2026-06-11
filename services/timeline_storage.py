@@ -64,7 +64,7 @@ def unique_timeline_key(base_name: str) -> str:
 
 def default_manifest() -> dict[str, Any]:
     return {
-        "version": 1,
+        "version": 2,
         "fps": 24,
         "previewAspect": "16:9",
         "tracks": [],

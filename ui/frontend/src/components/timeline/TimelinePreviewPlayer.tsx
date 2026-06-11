@@ -1,29 +1,37 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { assetUrlFromRelPath, TimelineManifest, TimelineClip } from "../../lib/api";
+import {
+  assetUrlFromRelPath,
+  TimelineManifest,
+  TimelineClip,
+  TimelineGeometry,
+  TimelineText,
+} from "../../lib/api";
 import {
   activeClipAt,
+  activeLayersAt,
+  type ActiveLayer,
   aspectRatio,
   clamp,
   clipImageRect,
   clipTransformFromRectCenter,
   snapClipRectToFrame,
   sourceTimeAt,
+  sourceTimeAtWithTransition,
   timelineDuration,
   type AlignGuide,
   type ClipTransform,
 } from "./timelineUtil";
+import type { TimelineTrack } from "../../lib/api";
 import { TrajectoryEditor, TrajectoryWaypoint } from "./TrajectoryEditor";
 import { resolveTrajectoryTransformAt } from "./trajectoryMotion";
 import type { TrajectoryMotionId } from "../../lib/api";
-
-/**
- * Resolve the effective transform for a clip at a given playhead time.
- * Trajectory interpolation only applies while playing or while the clip
- * is the active trajectory clip — otherwise the static transform is used
- * so manual dragging in the preview continues to work normally.
- */
+import { GeometryClipLayer } from "./GeometryClipLayer";
+import { GeometryEditor } from "./GeometryEditor";
+import { TextClipLayer } from "./TextClipLayer";
+import { TextStyleBar, type TextStyleModal } from "./TextStyleBar";
+import { TextPickerModals } from "./TextPickerModals";
 function clipTransform(
   clip: TimelineClip,
   playhead: number,
@@ -39,14 +47,6 @@ function clipTransform(
   return { ...(clip.transform ?? { x: 0, y: 0, scale: 1 }), rotation: 0, opacity: 1 };
 }
 
-/**
- * Browser real-time composite preview. Stacks one element per *visible* video
- * track (top track = topmost layer) plus audio elements, all driven by a single
- * playhead clock owned by the parent. While playing, a rAF loop advances the
- * playhead; media elements run natively and are re-seeked on (de)activation and
- * when the parent scrubs. Each layer is clickable to select it, and when paused
- * the selected layer can be moved/scaled directly (handles hug the image).
- */
 export function TimelinePreviewPlayer(props: {
   manifest: TimelineManifest;
   playing: boolean;
@@ -60,6 +60,8 @@ export function TimelinePreviewPlayer(props: {
   onTransformStart?: () => void;
   onClipContextMenu?: (clipId: string, x: number, y: number) => void;
   trajectoryClipId?: string | null;
+  geometryEditClipId?: string | null;
+  textEditClipId?: string | null;
   onWaypointChange?: (clipId: string, waypoints: TrajectoryWaypoint[]) => void;
   onMotionChange?: (
     clipId: string,
@@ -67,6 +69,13 @@ export function TimelinePreviewPlayer(props: {
     motionAmount: number
   ) => void;
   onDeleteTrajectory?: (clipId: string) => void;
+  onGeometryChange?: (clipId: string, geometry: TimelineGeometry) => void;
+  onGeometryCommit?: () => void;
+  onExitGeometryEdit?: () => void;
+  onTextChange?: (clipId: string, patch: Partial<TimelineText>) => void;
+  onTextContentChange?: (clipId: string, content: string) => void;
+  onTextEditEnd?: () => void;
+  onRequestTextEdit?: (clipId: string) => void;
   height?: number;
 }) {
   const {
@@ -82,9 +91,18 @@ export function TimelinePreviewPlayer(props: {
     onTransformStart,
     onClipContextMenu,
     trajectoryClipId,
+    geometryEditClipId,
+    textEditClipId,
     onWaypointChange,
     onMotionChange,
     onDeleteTrajectory,
+    onGeometryChange,
+    onGeometryCommit,
+    onExitGeometryEdit,
+    onTextChange,
+    onTextContentChange,
+    onTextEditEnd,
+    onRequestTextEdit,
     height = 260,
   } = props;
 
@@ -95,6 +113,16 @@ export function TimelinePreviewPlayer(props: {
   const mediaRefs = useRef<Map<string, HTMLVideoElement | HTMLAudioElement>>(new Map());
   const [frameSize, setFrameSize] = useState({ w: 0, h: 0 });
   const [alignGuides, setAlignGuides] = useState<AlignGuide[]>([]);
+  const [textStyleModal, setTextStyleModal] = useState<TextStyleModal>(null);
+
+  const selectedClip = useMemo(() => {
+    if (!selectedClipId) return null;
+    for (const t of manifest.tracks) {
+      const c = t.clips.find((x) => x.id === selectedClipId);
+      if (c) return c;
+    }
+    return null;
+  }, [manifest.tracks, selectedClipId]);
 
   useEffect(() => {
     const el = frameRef.current;
@@ -109,7 +137,6 @@ export function TimelinePreviewPlayer(props: {
     return () => ro.disconnect();
   }, []);
 
-  // Visible tracks only (hidden tracks excluded from playback compositing).
   const videoTracks = useMemo(
     () => manifest.tracks.filter((t) => t.kind === "video" && !t.hidden),
     [manifest.tracks]
@@ -119,7 +146,6 @@ export function TimelinePreviewPlayer(props: {
     [manifest.tracks]
   );
 
-  // rAF master clock while playing.
   const rafRef = useRef<number | null>(null);
   const anchorRef = useRef<{ wall: number; head: number } | null>(null);
 
@@ -151,17 +177,27 @@ export function TimelinePreviewPlayer(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, total]);
 
-  // Sync media elements: seek + play/pause to match the current playhead.
   useEffect(() => {
     const seen = new Set<string>();
     const allTracks = [...videoTracks, ...audioTracks];
     for (const track of allTracks) {
-      const clip = activeClipAt(track, playhead);
-      if (!clip || clip.type === "image") continue;
+      const clipsToSync =
+        track.kind === "video"
+          ? activeLayersAt(track, playhead)
+              .filter((l) => l.clip.type === "video" && l.opacity > 0.01)
+              .map((l) => l.clip)
+          : (() => {
+              const c = activeClipAt(track, playhead);
+              return c?.type === "video" ? [c] : [];
+            })();
+      for (const clip of clipsToSync) {
       seen.add(clip.id);
       const el = mediaRefs.current.get(clip.id);
       if (!el) continue;
-      const want = sourceTimeAt(clip, playhead);
+      const want =
+        track.kind === "video"
+          ? sourceTimeAtWithTransition(clip, playhead, track)
+          : sourceTimeAt(clip, playhead);
       el.playbackRate = clip.speed || 1;
       if (!playing) {
         if (!el.paused) el.pause();
@@ -182,13 +218,13 @@ export function TimelinePreviewPlayer(props: {
         }
         if (el.paused) void el.play().catch(() => {});
       }
+      }
     }
     for (const [id, el] of mediaRefs.current) {
       if (!seen.has(id) && !el.paused) el.pause();
     }
   }, [playhead, playing, videoTracks, audioTracks]);
 
-  // --- Layer move / scale drag (operates on a specific clip) --------------
   const dragRef = useRef<
     | {
         mode: "move" | "scale";
@@ -207,11 +243,13 @@ export function TimelinePreviewPlayer(props: {
     clip: TimelineClip,
     mode: "move" | "scale"
   ) {
+    if (geometryEditClipId === clip.id) return;
+    if (textEditClipId === clip.id) return;
     e.preventDefault();
     e.stopPropagation();
     const additive = e.shiftKey || e.ctrlKey || e.metaKey;
     onSelectClip(clip.id, additive);
-    if (!editable) return; // selection only while playing
+    if (!editable) return;
     onTransformStart?.();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     dragRef.current = {
@@ -266,14 +304,124 @@ export function TimelinePreviewPlayer(props: {
     }
   }
 
-  const noVisibleLayer = videoTracks.every((t) => !activeClipAt(t, playhead));
+  function layerVisible(layer: ActiveLayer): boolean {
+    if (layer.opacity > 0.001) return true;
+    if (layer.clipPath) return true;
+    if (layer.slideOffsetX || layer.slideOffsetY) return true;
+    return false;
+  }
+
+  const videoRenderLayers = useMemo(() => {
+    const out: Array<{
+      clip: TimelineClip;
+      layer: ActiveLayer;
+      trackZ: number;
+      track: TimelineTrack;
+    }> = [];
+    videoTracks.forEach((track, i) => {
+      const trackZ = videoTracks.length - i;
+      for (const layer of activeLayersAt(track, playhead)) {
+        if (layerVisible(layer)) {
+          out.push({ clip: layer.clip, layer, trackZ, track });
+        }
+      }
+    });
+    return out;
+  }, [videoTracks, playhead]);
+
+  const interactionLayers = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ clip: TimelineClip; trackZ: number; track: TimelineTrack }> = [];
+    videoTracks.forEach((track, i) => {
+      const trackZ = videoTracks.length - i;
+      const layers = activeLayersAt(track, playhead).filter(layerVisible);
+      for (let j = layers.length - 1; j >= 0; j--) {
+        const { clip } = layers[j];
+        if (seen.has(clip.id)) continue;
+        seen.add(clip.id);
+        out.push({ clip, trackZ, track });
+      }
+    });
+    return out;
+  }, [videoTracks, playhead]);
+
+  const noVisibleLayer = videoRenderLayers.length === 0;
+
+  function renderClipContent(clip: TimelineClip, op: number) {
+    if (clip.type === "geometry") {
+      return <GeometryClipLayer clip={clip} opacity={op} />;
+    }
+    if (clip.type === "text") {
+      const editing = textEditClipId === clip.id && editable;
+      return (
+        <TextClipLayer
+          clip={clip}
+          opacity={op}
+          editing={editing}
+          onContentChange={(content) => onTextContentChange?.(clip.id, content)}
+          onEditEnd={onTextEditEnd}
+        />
+      );
+    }
+    if (clip.type === "image") {
+      const src = assetUrlFromRelPath(clip.srcRelPath);
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt=""
+          draggable={false}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            display: "block",
+            pointerEvents: "none",
+            opacity: op,
+          }}
+        />
+      );
+    }
+    if (clip.type === "video") {
+      const src = assetUrlFromRelPath(clip.srcRelPath);
+      return (
+        <video
+          ref={(el) => {
+            if (el) mediaRefs.current.set(clip.id, el);
+            else mediaRefs.current.delete(clip.id);
+          }}
+          src={src}
+          muted
+          playsInline
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            display: "block",
+            pointerEvents: "none",
+            opacity: op,
+          }}
+        />
+      );
+    }
+    return null;
+  }
+
+  const selectedTextRect =
+    selectedClip?.type === "text" && selectedClipId
+      ? clipImageRect(
+          selectedClip,
+          clipTransform(selectedClip, playhead, false, playing),
+          frameSize.w,
+          frameSize.h
+        )
+      : null;
 
   return (
     <div style={{ display: "flex", justifyContent: "center" }}>
       <div
         ref={frameRef}
         onPointerDown={(e) => {
-          // Click on empty frame background → deselect.
           if (e.target === e.currentTarget) onSelectClip(null, false);
         }}
         style={{
@@ -286,79 +434,60 @@ export function TimelinePreviewPlayer(props: {
           boxShadow: "0 0 0 1px rgba(0,0,0,0.6)",
         }}
       >
-        {/*
-          Two-pass rendering:
-          Pass 1 (inside overflow:hidden) — images clipped to the frame boundary.
-          Pass 2 (outside overflow:hidden) — pointer events + selection outlines that can extend beyond the frame.
-        */}
-
-        {/* Pass 1: image layer — clipped to frame */}
         <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
-          {videoTracks.map((track, i) => {
-            const clip = activeClipAt(track, playhead);
-            if (!clip) return null;
-            const z = videoTracks.length - i;
+          {videoRenderLayers.map(({ clip, layer, trackZ }) => {
             const tf = clipTransform(clip, playhead, clip.id === trajectoryClipId, playing);
             const rect = clipImageRect(clip, tf, frameSize.w, frameSize.h);
-            const src = assetUrlFromRelPath(clip.srcRelPath);
-            const mediaStyle: React.CSSProperties = {
-              width: "100%", height: "100%", objectFit: "contain", display: "block", pointerEvents: "none",
-            };
             const rot = tf.rotation ?? 0;
-            const op = tf.opacity ?? 1;
+            const op = (tf.opacity ?? 1) * layer.opacity;
+            const slideX = layer.slideOffsetX ?? 0;
+            const slideY = layer.slideOffsetY ?? 0;
+            const transforms = [
+              rot !== 0 ? `rotate(${rot}deg)` : "",
+              slideX !== 0 || slideY !== 0
+                ? `translate(${slideX * rect.width}px, ${slideY * rect.height}px)`
+                : "",
+            ].filter(Boolean);
             return (
               <div
-                key={clip.id}
+                key={`${clip.id}-${layer.role}-${layer.progress}`}
                 style={{
                   position: "absolute",
                   left: rect.left,
                   top: rect.top,
                   width: rect.width,
                   height: rect.height,
-                  zIndex: z,
-                  transform: rot !== 0 ? `rotate(${rot}deg)` : undefined,
+                  zIndex: trackZ,
+                  opacity: op,
+                  clipPath: layer.clipPath,
+                  overflow: layer.clipPath ? "hidden" : undefined,
+                  transform: transforms.length > 0 ? transforms.join(" ") : undefined,
                   transformOrigin: "center center",
                 }}
               >
-                {clip.type === "image" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={src}
-                    alt=""
-                    draggable={false}
-                    style={{ ...mediaStyle, opacity: op }}
-                  />
-                ) : (
-                  <video
-                    ref={(el) => {
-                      if (el) mediaRefs.current.set(clip.id, el);
-                      else mediaRefs.current.delete(clip.id);
-                    }}
-                    src={src}
-                    muted
-                    playsInline
-                    style={{ ...mediaStyle, opacity: op }}
-                  />
-                )}
+                {renderClipContent(clip, 1)}
               </div>
             );
           })}
         </div>
 
-        {/* Pass 2: interaction + outline layer — overflow visible, outlines extend beyond frame */}
-        {videoTracks.map((track, i) => {
-          const clip = activeClipAt(track, playhead);
-          if (!clip) return null;
-          const z = videoTracks.length - i;
+        {interactionLayers.map(({ clip, trackZ }) => {
           const tf = clipTransform(clip, playhead, clip.id === trajectoryClipId, playing);
           const rect = clipImageRect(clip, tf, frameSize.w, frameSize.h);
           const selected = clip.id === selectedClipId;
+          const inShapeEdit = geometryEditClipId === clip.id;
           return (
             <div
-              key={clip.id}
+              key={`hit-${clip.id}`}
               onPointerDown={(e) => beginDrag(e, clip, "move")}
               onPointerMove={onDragMove}
               onPointerUp={endDrag}
+              onDoubleClick={(e) => {
+                if (clip.type === "text" && editable) {
+                  e.stopPropagation();
+                  onRequestTextEdit?.(clip.id);
+                }
+              }}
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -370,16 +499,19 @@ export function TimelinePreviewPlayer(props: {
                 top: rect.top,
                 width: rect.width,
                 height: rect.height,
-                zIndex: z,
-                cursor: editable ? "move" : "pointer",
-                outline: selected
-                  ? editable ? "2px dashed #ffd166" : "2px solid #5ad7ff"
-                  : "none",
+                zIndex: trackZ + 100,
+                cursor: editable && !inShapeEdit ? "move" : "pointer",
+                outline:
+                  selected && !inShapeEdit
+                    ? editable
+                      ? "2px dashed #ffd166"
+                      : "2px solid #5ad7ff"
+                    : "none",
                 outlineOffset: 2,
+                pointerEvents: inShapeEdit ? "none" : "auto",
               }}
             >
-              {/* Scale handle */}
-              {selected && editable ? (
+              {selected && editable && !inShapeEdit && textEditClipId !== clip.id ? (
                 <div
                   onPointerDown={(e) => beginDrag(e, clip, "scale")}
                   onPointerMove={onDragMove}
@@ -400,7 +532,6 @@ export function TimelinePreviewPlayer(props: {
           );
         })}
 
-        {/* Alignment guide lines (shown while dragging) */}
         {alignGuides.length > 0 ? (
           <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 9998 }}>
             {alignGuides.map((guide, i) => (
@@ -430,7 +561,6 @@ export function TimelinePreviewPlayer(props: {
           </div>
         ) : null}
 
-        {/* Trajectory editor overlay */}
         {trajectoryClipId && (() => {
           const trajClip = videoTracks.flatMap((t) => t.clips).find((c) => c.id === trajectoryClipId);
           if (!trajClip || !trajClip.trajectory) return null;
@@ -451,7 +581,46 @@ export function TimelinePreviewPlayer(props: {
           );
         })()}
 
-        {/* Hidden audio elements for music/audio tracks. */}
+        {geometryEditClipId && (() => {
+          const gClip = videoTracks.flatMap((t) => t.clips).find((c) => c.id === geometryEditClipId);
+          if (!gClip || !gClip.geometry) return null;
+          const tf = clipTransform(gClip, playhead, false, playing);
+          return (
+            <GeometryEditor
+              key={gClip.id}
+              clip={gClip}
+              frameW={frameSize.w}
+              frameH={frameSize.h}
+              transform={tf}
+              onGeometryChange={(g) => onGeometryChange?.(gClip.id, g)}
+              onCommit={onGeometryCommit}
+              onExit={onExitGeometryEdit}
+            />
+          );
+        })()}
+
+        {selectedClip?.type === "text" &&
+        selectedClip.text &&
+        selectedTextRect &&
+        editable &&
+        !playing &&
+        textEditClipId !== selectedClip.id ? (
+          <TextStyleBar
+            clip={selectedClip}
+            rect={selectedTextRect}
+            onOpenModal={setTextStyleModal}
+          />
+        ) : null}
+
+        {selectedClip?.type === "text" && selectedClip.text && textStyleModal ? (
+          <TextPickerModals
+            open={textStyleModal}
+            text={selectedClip.text}
+            onClose={() => setTextStyleModal(null)}
+            onChange={(patch) => onTextChange?.(selectedClip.id, patch)}
+          />
+        ) : null}
+
         {audioTracks.map((track) => {
           const clip = activeClipAt(track, playhead);
           if (!clip || clip.type !== "audio" || !clip.srcRelPath) return null;

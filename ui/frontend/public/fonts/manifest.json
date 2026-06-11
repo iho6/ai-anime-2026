@@ -1,0 +1,18 @@
+{
+  "open-sans/OpenSans-Regular": "open-sans\\OpenSans-Regular.ttf",
+  "lato/Lato-Regular": "lato\\Lato-Regular.ttf",
+  "montserrat/Montserrat-Regular": "montserrat\\Montserrat-Regular.ttf",
+  "raleway/Raleway-Regular": "raleway\\Raleway-Regular.ttf",
+  "poppins/Poppins-Regular": "poppins\\Poppins-Regular.ttf",
+  "nunito/Nunito-Regular": "nunito\\Nunito-Regular.ttf",
+  "source-sans-3/SourceSans3-Regular": "source-sans-3\\SourceSans3-Regular.ttf",
+  "ubuntu/Ubuntu-Regular": "ubuntu\\Ubuntu-Regular.ttf",
+  "rubik/Rubik-Regular": "rubik\\Rubik-Regular.ttf",
+  "oswald/Oswald-Regular": "oswald\\Oswald-Regular.ttf",
+  "bebas-neue/BebasNeue-Regular": "bebas-neue\\BebasNeue-Regular.ttf",
+  "playfair-display/PlayfairDisplay-Regular": "playfair-display\\PlayfairDisplay-Regular.ttf",
+  "noto-sans/NotoSans-Regular": "noto-sans\\NotoSans-Regular.ttf",
+  "noto-sans-jp/NotoSansJP-Regular": "noto-sans-jp\\NotoSansJP-Regular.ttf",
+  "pacifico/Pacifico-Regular": "pacifico\\Pacifico-Regular.ttf",
+  "jetbrains-mono/JetBrainsMono-Regular": "jetbrains-mono\\JetBrainsMono-Regular.ttf"
+}

@@ -1,9 +1,22 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { TimelineManifest, TimelineClip, TimelineTrack } from "../../lib/api";
+import {
+  TimelineManifest,
+  TimelineClip,
+  TimelineTrack,
+  TimelineTransitionOut,
+} from "../../lib/api";
+import { ClipTransitionMenu } from "./ClipTransitionMenu";
 import { TrackLabelTag } from "./TrackLabelTag";
-import { clamp, clipEnd, clipTrackLabel, timelineDuration } from "./timelineUtil";
+import { transitionBadge } from "./transitionEffects";
+import {
+  clamp,
+  clipEnd,
+  clipTrackLabel,
+  connectedClipPairs,
+  timelineDuration,
+} from "./timelineUtil";
 
 const LABEL_W = 120;
 const ROW_H = 56;
@@ -44,6 +57,13 @@ export function TimelineTracks(props: {
     clientX: number,
     clientY: number
   ) => void;
+  onTransitionChange?: (
+    trackId: string,
+    outgoingClipId: string,
+    transition: TimelineTransitionOut | undefined
+  ) => void;
+  onTransitionCommit?: () => void;
+  onPruneTransitions?: () => void;
 }) {
   const {
     manifest,
@@ -58,9 +78,19 @@ export function TimelineTracks(props: {
     onClipContextMenu,
     onTrackContextMenu,
     onSurfaceContextMenu,
+    onTransitionChange,
+    onTransitionCommit,
+    onPruneTransitions,
   } = props;
 
   const dragRef = useRef<DragState | null>(null);
+  const [hoveredJunction, setHoveredJunction] = useState<string | null>(null);
+  const [transitionMenu, setTransitionMenu] = useState<{
+    x: number;
+    y: number;
+    trackId: string;
+    outgoingClipId: string;
+  } | null>(null);
   const laneAreaRef = useRef<HTMLDivElement | null>(null);
   const gestureCommittedRef = useRef(false);
 
@@ -350,10 +380,33 @@ export function TimelineTracks(props: {
     }
     if (dragRef.current) {
       (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+      const hadGesture = gestureCommittedRef.current;
       dragRef.current = null;
       gestureCommittedRef.current = false;
+      if (hadGesture) onPruneTransitions?.();
     }
   }
+
+  function openTransitionMenu(
+    e: React.PointerEvent,
+    trackId: string,
+    outgoingClipId: string
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    setTransitionMenu({
+      x: e.clientX,
+      y: e.clientY,
+      trackId,
+      outgoingClipId,
+    });
+  }
+
+  const menuOutgoingClip = transitionMenu
+    ? manifest.tracks
+        .find((t) => t.id === transitionMenu.trackId)
+        ?.clips.find((c) => c.id === transitionMenu.outgoingClipId)
+    : undefined;
 
   function seekFromClientX(clientX: number) {
     const el = laneAreaRef.current;
@@ -492,6 +545,10 @@ export function TimelineTracks(props: {
                     ? "#274b73"
                     : clip.type === "image"
                     ? "#4a3a6b"
+                    : clip.type === "geometry"
+                    ? "#6b4a2a"
+                    : clip.type === "text"
+                    ? "#4a5b6b"
                     : "#2f5b3a";
                 return (
                   <div
@@ -539,6 +596,14 @@ export function TimelineTracks(props: {
                         ≋
                       </span>
                     )}
+                    {clip.transitionOut?.type ? (
+                      <span
+                        style={{ marginLeft: 4, fontSize: 8, opacity: 0.75 }}
+                        title={`${clip.transitionOut.type} transition`}
+                      >
+                        {transitionBadge(clip.transitionOut.type)}
+                      </span>
+                    ) : null}
                     {/* Trim handles */}
                     <div
                       onPointerDown={(e) => onClipPointerDown(e, track, clip, "trimL")}
@@ -551,6 +616,60 @@ export function TimelineTracks(props: {
                   </div>
                 );
               })}
+              {track.kind === "video"
+                ? connectedClipPairs(track).map((pair) => {
+                    const key = `${pair.outgoing.id}_${pair.incoming.id}`;
+                    const junctionLeft = pair.junctionTime * pxPerSec;
+                    const hovered = hoveredJunction === key;
+                    const hasTransition = Boolean(pair.outgoing.transitionOut?.type);
+                    return (
+                      <div
+                        key={key}
+                        onMouseEnter={() => setHoveredJunction(key)}
+                        onMouseLeave={() =>
+                          setHoveredJunction((h) => (h === key ? null : h))
+                        }
+                        onPointerDown={(e) =>
+                          openTransitionMenu(e, track.id, pair.outgoing.id)
+                        }
+                        style={{
+                          position: "absolute",
+                          left: junctionLeft - 10,
+                          top: 6,
+                          width: 20,
+                          height: ROW_H - 14,
+                          zIndex: 4,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {hovered || hasTransition ? (
+                          <div
+                            style={{
+                              width: 18,
+                              height: 18,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: "#1a1a1a",
+                              border: hasTransition
+                                ? "1px solid #ffd166"
+                                : "1px solid rgba(255,255,255,0.35)",
+                              color: hasTransition ? "#ffd166" : "#eee",
+                              fontSize: 14,
+                              lineHeight: 1,
+                              userSelect: "none",
+                            }}
+                          >
+                            +
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })
+                : null}
             </div>
             </div>  {/* close row div */}
           </React.Fragment>
@@ -574,6 +693,23 @@ export function TimelineTracks(props: {
           }}
         />
       </div>
+
+      <ClipTransitionMenu
+        open={!!transitionMenu}
+        x={transitionMenu?.x ?? 0}
+        y={transitionMenu?.y ?? 0}
+        transition={menuOutgoingClip?.transitionOut}
+        onChange={(tr) => {
+          if (!transitionMenu) return;
+          onTransitionChange?.(
+            transitionMenu.trackId,
+            transitionMenu.outgoingClipId,
+            tr
+          );
+        }}
+        onCommit={() => onTransitionCommit?.()}
+        onClose={() => setTransitionMenu(null)}
+      />
     </div>
   );
 }

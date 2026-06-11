@@ -417,7 +417,47 @@ export type HubTimeline = {
   coverRelPath: string;
 };
 
-export type TimelineClipType = "video" | "image" | "audio";
+export type TimelineClipType = "video" | "image" | "audio" | "geometry" | "text";
+
+export type GeometryTemplate = "rect" | "ellipse" | "line" | "polygon";
+
+export type GeometryPoint = {
+  x: number;
+  y: number;
+  handleIn?: { x: number; y: number };
+  handleOut?: { x: number; y: number };
+};
+
+export type TimelineGeometry = {
+  template: GeometryTemplate;
+  closed: boolean;
+  points: GeometryPoint[];
+  fill?: string;
+  stroke?: { color: string; width: number };
+  cornerRadius?: number;
+};
+
+export type TimelineText = {
+  content: string;
+  fontFamilyId: string;
+  fontWeight: number;
+  fontStyle: "normal";
+  fontSize: number;
+  color: string;
+  align: "left" | "center" | "right";
+};
+
+export type TimelineTransitionType = "fade" | "dissolve" | "wipe" | "slide";
+
+export type TransitionDirection = "left" | "right" | "up" | "down";
+
+export type TimelineTransitionOut = {
+  type: TimelineTransitionType;
+  /** Crossfade length in seconds (0.1–2.0). */
+  duration: number;
+  /** Wipe/slide only; default left. Ignored for fade/dissolve. */
+  direction?: TransitionDirection;
+};
 
 /** Procedural motion layered on top of trajectory waypoints (preview playback). */
 export type TrajectoryMotionId =
@@ -479,6 +519,12 @@ export type TimelineClip = {
     locationKey?: string;
     combined?: boolean;
   };
+  /** Vector shape clip (no srcRelPath required). */
+  geometry?: TimelineGeometry;
+  /** Text overlay clip (no srcRelPath required). */
+  text?: TimelineText;
+  /** Outgoing crossfade to the next connected clip on the same track. */
+  transitionOut?: TimelineTransitionOut;
 };
 
 export type TimelineTrack = {

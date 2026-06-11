@@ -24,8 +24,12 @@ import {
   runShotRemoveBgWsJob,
   apiTimelineHubRename,
   assetDownloadUrlFromRelPath,
+  GeometryTemplate,
   TimelineClip,
+  TimelineGeometry,
   TimelineManifest,
+  TimelineText,
+  TimelineTransitionOut,
   ShotLayerMeta,
   TrajectoryMotionId,
 } from "../../../lib/api";
@@ -43,6 +47,7 @@ import { ConnectedJobRunModal } from "../../../components/ConnectedJobRunModal";
 import { useJobRunSession } from "../../../hooks/useJobRunSession";
 import { useAppError } from "../../../components/ErrorProvider";
 import { TimelinePreviewPlayer } from "../../../components/timeline/TimelinePreviewPlayer";
+import { GeometryShapePicker } from "../../../components/timeline/GeometryShapePicker";
 import { TimelineTracks } from "../../../components/timeline/TimelineTracks";
 import {
   SequenceVideoPicker,
@@ -55,7 +60,9 @@ import type { TrajectoryWaypoint } from "../../../components/timeline/Trajectory
 import {
   appendClipToTrack,
   buildAudioClip,
+  buildGeometryClip,
   buildImageClip,
+  buildTextClip,
   buildTimelineCompositePngBase64,
   clipEnd,
   formatTime,
@@ -63,6 +70,7 @@ import {
   newAudioTrack,
   newVideoTrack,
   overlayShotLayerPlacement,
+  pruneBrokenTransitions,
   resolveImportDimensions,
   timelineDuration,
 } from "../../../components/timeline/timelineUtil";
@@ -92,6 +100,11 @@ export default function TimelineEditorPage() {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [trajectoryClipId, setTrajectoryClipId] = useState<string | null>(null);
+  const [geometryEditClipId, setGeometryEditClipId] = useState<string | null>(null);
+  const [textEditClipId, setTextEditClipId] = useState<string | null>(null);
+  const [geomPickerOpen, setGeomPickerOpen] = useState(false);
+  const [selectedGeomTemplate, setSelectedGeomTemplate] = useState<GeometryTemplate | null>(null);
+  const geomBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // AI Edit modal (image clips).
   const [aiEditOpen, setAiEditOpen] = useState(false);
@@ -250,6 +263,96 @@ export default function TimelineEditorPage() {
       };
     });
     targetTrackRef.current = null;
+  }
+
+  function addVectorClipAtPlayhead(clip: TimelineClip) {
+    historyUpdate((m) => {
+      const { m: m2, trackId } = resolveTarget(m, "video");
+      const placed = { ...clip, start: playhead };
+      return {
+        ...m2,
+        tracks: m2.tracks.map((t) =>
+          t.id === trackId ? { ...t, clips: [...t.clips, placed] } : t
+        ),
+      };
+    });
+    targetTrackRef.current = null;
+    setTrajectoryClipId(null);
+    setGeometryEditClipId(null);
+    selectClip(clip.id, false);
+  }
+
+  function addGeometryClip(template: GeometryTemplate) {
+    const clip = buildGeometryClip({ template });
+    addVectorClipAtPlayhead(clip);
+    setGeomPickerOpen(false);
+    setSelectedGeomTemplate(null);
+  }
+
+  function addTextClip() {
+    const clip = buildTextClip({});
+    addVectorClipAtPlayhead(clip);
+    setTextEditClipId(clip.id);
+  }
+
+  function updateClipGeometry(clipId: string, geometry: TimelineGeometry) {
+    updateManifest((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => (c.id === clipId ? { ...c, geometry } : c)),
+      })),
+    }));
+  }
+
+  function updateClipText(clipId: string, patch: Partial<TimelineText>) {
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          c.id === clipId && c.text ? { ...c, text: { ...c.text, ...patch } } : c
+        ),
+      })),
+    }));
+  }
+
+  function updateClipTextContent(clipId: string, content: string) {
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          c.id === clipId && c.text ? { ...c, text: { ...c.text, content } } : c
+        ),
+      })),
+    }));
+  }
+
+  function updateClipTransition(
+    trackId: string,
+    outgoingClipId: string,
+    transition: TimelineTransitionOut | undefined
+  ) {
+    updateManifest((m) =>
+      pruneBrokenTransitions({
+        ...m,
+        tracks: m.tracks.map((t) =>
+          t.id !== trackId
+            ? t
+            : {
+                ...t,
+                clips: t.clips.map((c) =>
+                  c.id === outgoingClipId ? { ...c, transitionOut: transition } : c
+                ),
+              }
+        ),
+      })
+    );
+  }
+
+  function pruneTransitionsAfterEdit() {
+    setManifest((prev) => (prev ? pruneBrokenTransitions(prev) : prev));
   }
 
   // ---- Toolbar actions -----------------------------------------------------
@@ -646,6 +749,12 @@ export default function TimelineEditorPage() {
           if (trajectoryClipId && ids.includes(trajectoryClipId)) {
             setTrajectoryClipId(null);
           }
+          if (geometryEditClipId && ids.includes(geometryEditClipId)) {
+            setGeometryEditClipId(null);
+          }
+          if (textEditClipId && ids.includes(textEditClipId)) {
+            setTextEditClipId(null);
+          }
         }
         return;
       }
@@ -667,6 +776,8 @@ export default function TimelineEditorPage() {
     redo,
     selectedClipIds,
     trajectoryClipId,
+    geometryEditClipId,
+    textEditClipId,
     aiEditOpen,
     segmentOpen,
     cameraAngleOpen,
@@ -1203,6 +1314,8 @@ export default function TimelineEditorPage() {
     const twoImagesSelected = selectedImageClips().length === 2;
     const pair = getOverlappingCharBgPair();
     const isVideo = rc?.clip.type === "video";
+    const isGeometry = rc?.clip.type === "geometry";
+    const isText = rc?.clip.type === "text";
 
     const items: ContextMenuItem[] = [
       {
@@ -1255,6 +1368,22 @@ export default function TimelineEditorPage() {
       }
     }
 
+    if (isGeometry) {
+      items.push({
+        key: "editShape",
+        label: geometryEditClipId === clipMenu.clipId ? "Exit Shape Edit" : "Edit Shape",
+        onSelect: () => {
+          if (geometryEditClipId === clipMenu.clipId) {
+            setGeometryEditClipId(null);
+          } else {
+            setTrajectoryClipId(null);
+            setGeometryEditClipId(clipMenu.clipId);
+          }
+          setClipMenu((s) => ({ ...s, open: false }));
+        },
+      });
+    }
+
     if (isImage || isVideo) {
       items.push({
         key: "segment",
@@ -1289,7 +1418,7 @@ export default function TimelineEditorPage() {
       });
     }
 
-    if (isImage || isVideo) {
+    if (isImage || isVideo || isGeometry || isText) {
       items.push({
         key: "trajectory",
         label: rc?.clip.trajectory ? "Edit Trajectory" : "Add Trajectory",
@@ -1306,6 +1435,7 @@ export default function TimelineEditorPage() {
               ],
             });
           }
+          setGeometryEditClipId(null);
           setTrajectoryClipId(clip.id);
         },
       });
@@ -1514,9 +1644,21 @@ export default function TimelineEditorPage() {
             setClipMenu({ open: true, x, y, trackId: rc?.trackId ?? "", clipId });
           }}
           trajectoryClipId={trajectoryClipId}
+          geometryEditClipId={geometryEditClipId}
+          textEditClipId={textEditClipId}
           onWaypointChange={onWaypointChange}
           onMotionChange={onMotionChange}
           onDeleteTrajectory={(clipId) => { updateClipTrajectory(clipId, undefined); setTrajectoryClipId(null); }}
+          onGeometryChange={updateClipGeometry}
+          onGeometryCommit={commit}
+          onExitGeometryEdit={() => setGeometryEditClipId(null)}
+          onTextChange={updateClipText}
+          onTextContentChange={updateClipTextContent}
+          onTextEditEnd={() => setTextEditClipId(null)}
+          onRequestTextEdit={(clipId) => {
+            selectClip(clipId, false);
+            setTextEditClipId(clipId);
+          }}
           height={previewHeight}
         />
 
@@ -1621,6 +1763,17 @@ export default function TimelineEditorPage() {
         <button onClick={() => openAudioPicker()} style={toolBtn} disabled={busy}>
           Add Audio
         </button>
+        <button
+          ref={geomBtnRef}
+          onClick={() => setGeomPickerOpen((o) => !o)}
+          style={toolBtn}
+          disabled={busy}
+        >
+          Geometry
+        </button>
+        <button onClick={() => addTextClip()} style={toolBtn} disabled={busy}>
+          Text
+        </button>
         <button onClick={() => void runExportMp4()} style={toolBtn} disabled={busy} title="Compile all clips into a single MP4">
           Export MP4
         </button>
@@ -1633,7 +1786,27 @@ export default function TimelineEditorPage() {
             Exit Path Mode
           </button>
         )}
+        {geometryEditClipId && (
+          <button
+            onClick={() => setGeometryEditClipId(null)}
+            style={{ ...toolBtn, borderColor: "#ffd166", color: "#ffd166" }}
+            title="Exit shape edit mode"
+          >
+            Exit Shape Edit
+          </button>
+        )}
       </div>
+
+      <GeometryShapePicker
+        open={geomPickerOpen}
+        anchorRef={geomBtnRef}
+        selected={selectedGeomTemplate}
+        onSelect={setSelectedGeomTemplate}
+        onAdd={() => {
+          if (selectedGeomTemplate) addGeometryClip(selectedGeomTemplate);
+        }}
+        onClose={() => setGeomPickerOpen(false)}
+      />
 
       {/* Tracks */}
       <div style={{ padding: "0 20px 24px" }}>
@@ -1668,6 +1841,9 @@ export default function TimelineEditorPage() {
               setTrackMenu({ open: true, x, y, trackId })
             }
             onSurfaceContextMenu={openSurfaceContextMenu}
+            onTransitionChange={updateClipTransition}
+            onTransitionCommit={commit}
+            onPruneTransitions={pruneTransitionsAfterEdit}
           />
         )}
       </div>

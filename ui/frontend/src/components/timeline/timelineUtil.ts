@@ -1,10 +1,16 @@
 import { assetUrlFromRelPath } from "../../lib/api";
 import type {
+  GeometryTemplate,
   TimelineClip,
   TimelineManifest,
   TimelineTrack,
 } from "../../lib/api";
+import { createGeometryData, VECTOR_ARTBOARD_SIZE } from "./geometryTemplates";
 import { resolveTrajectoryTransformAt } from "./trajectoryMotion";
+import { layersForTransition } from "./transitionEffects";
+import type { TransitionActiveLayer } from "./transitionEffects";
+
+export type { TransitionActiveLayer as ActiveLayer } from "./transitionEffects";
 
 export type ClipTransform = {
   x: number;
@@ -174,6 +180,13 @@ export function defaultImageClipTransform(): ClipTransform {
   return { x: 0, y: 0, scale: 1 };
 }
 
+/** Initial transform for vector clips (geometry/text): centered, moderate scale. */
+export function defaultVectorClipTransform(): ClipTransform {
+  return { x: 0, y: 0, scale: 0.35 };
+}
+
+export { VECTOR_ARTBOARD_SIZE };
+
 /** Build a standard image clip object for addClip(). */
 export function buildAudioClip(params: {
   srcRelPath: string;
@@ -219,8 +232,65 @@ export function buildImageClip(params: {
   };
 }
 
+export function buildGeometryClip(params: {
+  template: GeometryTemplate;
+  start?: number;
+  durationSec?: number;
+}): TimelineClip {
+  const dur = params.durationSec ?? IMAGE_CLIP_DEFAULT_SEC;
+  return {
+    id: genId("clip"),
+    type: "geometry",
+    srcRelPath: "",
+    start: params.start ?? 0,
+    inPoint: 0,
+    outPoint: dur,
+    speed: 1,
+    duration: dur,
+    naturalW: VECTOR_ARTBOARD_SIZE,
+    naturalH: VECTOR_ARTBOARD_SIZE,
+    transform: defaultVectorClipTransform(),
+    geometry: createGeometryData(params.template),
+  };
+}
+
+export function buildTextClip(params: {
+  content?: string;
+  start?: number;
+  durationSec?: number;
+  fontFamilyId?: string;
+}): TimelineClip {
+  const dur = params.durationSec ?? IMAGE_CLIP_DEFAULT_SEC;
+  return {
+    id: genId("clip"),
+    type: "text",
+    srcRelPath: "",
+    start: params.start ?? 0,
+    inPoint: 0,
+    outPoint: dur,
+    speed: 1,
+    duration: dur,
+    naturalW: VECTOR_ARTBOARD_SIZE,
+    naturalH: VECTOR_ARTBOARD_SIZE,
+    transform: defaultVectorClipTransform(),
+    text: {
+      content: params.content ?? "Text",
+      fontFamilyId: params.fontFamilyId ?? "inter",
+      fontWeight: 400,
+      fontStyle: "normal",
+      fontSize: 48,
+      color: "#ffffff",
+      align: "center",
+    },
+  };
+}
+
 export function clipTrackLabel(clip: TimelineClip): string {
   if (clip.type === "image" && clip.source?.combined) return "combined";
+  if (clip.type === "text" && clip.text?.content) {
+    const t = clip.text.content.trim();
+    return t.length > 18 ? `${t.slice(0, 18)}…` : t || "text";
+  }
   return clip.type;
 }
 
@@ -280,13 +350,166 @@ export function timelineDuration(manifest: TimelineManifest): number {
   return max;
 }
 
+export const CONNECT_EPS = 0.05;
+export const TRANSITION_DURATION_MIN = 0.1;
+export const TRANSITION_DURATION_MAX = 2.0;
+export const DEFAULT_TRANSITION_DURATION = 0.5;
+
+export type ConnectedClipPair = {
+  outgoing: TimelineClip;
+  incoming: TimelineClip;
+  junctionTime: number;
+};
+
+export function sortedTrackClips(track: TimelineTrack): TimelineClip[] {
+  return [...track.clips].sort((a, b) => a.start - b.start);
+}
+
+export function isConnectedPair(outgoing: TimelineClip, incoming: TimelineClip): boolean {
+  return Math.abs(clipEnd(outgoing) - incoming.start) <= CONNECT_EPS;
+}
+
+export function pruneBrokenTransitions(manifest: TimelineManifest): TimelineManifest {
+  return {
+    ...manifest,
+    tracks: manifest.tracks.map((t) => {
+      const pairs = connectedClipPairs(t);
+      const outgoingIds = new Set(pairs.map((p) => p.outgoing.id));
+      return {
+        ...t,
+        clips: t.clips.map((c) =>
+          c.transitionOut && !outgoingIds.has(c.id)
+            ? { ...c, transitionOut: undefined }
+            : c
+        ),
+      };
+    }),
+  };
+}
+
+export function connectedClipPairs(track: TimelineTrack): ConnectedClipPair[] {
+  const sorted = sortedTrackClips(track);
+  const pairs: ConnectedClipPair[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const outgoing = sorted[i];
+    const incoming = sorted[i + 1];
+    if (isConnectedPair(outgoing, incoming)) {
+      pairs.push({
+        outgoing,
+        incoming,
+        junctionTime: incoming.start,
+      });
+    }
+  }
+  return pairs;
+}
+
+/** Effective crossfade duration clamped to clip lengths and UI bounds. */
+export function effectiveTransitionDuration(
+  outgoing: TimelineClip,
+  incoming: TimelineClip
+): number {
+  const raw = outgoing.transitionOut?.duration ?? DEFAULT_TRANSITION_DURATION;
+  const capped = clamp(raw, TRANSITION_DURATION_MIN, TRANSITION_DURATION_MAX);
+  const maxByClips = Math.min(outgoing.duration, incoming.duration) * 0.5;
+  return Math.min(capped, Math.max(TRANSITION_DURATION_MIN, maxByClips));
+}
+
+export type TransitionWindow = {
+  outgoing: TimelineClip;
+  incoming: TimelineClip;
+  progress: number;
+  duration: number;
+};
+
+export function findTransitionWindow(
+  track: TimelineTrack,
+  t: number
+): TransitionWindow | null {
+  if (track.kind !== "video") return null;
+  const sorted = sortedTrackClips(track);
+  for (let i = 1; i < sorted.length; i++) {
+    const outgoing = sorted[i - 1];
+    const incoming = sorted[i];
+    const tr = outgoing.transitionOut;
+    if (!tr || !isConnectedPair(outgoing, incoming)) continue;
+    const d = effectiveTransitionDuration(outgoing, incoming);
+    const fadeStart = incoming.start - d;
+    if (t >= fadeStart && t < incoming.start) {
+      const progress = d > 0 ? (t - fadeStart) / d : 1;
+      return { outgoing, incoming, progress, duration: d };
+    }
+  }
+  return null;
+}
+
+function soloLayer(clip: TimelineClip): TransitionActiveLayer {
+  return { clip, opacity: 1, role: "solo", progress: 0 };
+}
+
+/** Video-track layers at time t (fade / dissolve / wipe / slide). */
+export function activeLayersAt(track: TimelineTrack, t: number): TransitionActiveLayer[] {
+  if (track.kind !== "video") {
+    for (const c of track.clips) {
+      if (t >= c.start && t < clipEnd(c)) {
+        return [soloLayer(c)];
+      }
+    }
+    return [];
+  }
+
+  const win = findTransitionWindow(track, t);
+  if (win && win.outgoing.transitionOut) {
+    return layersForTransition(
+      win.outgoing,
+      win.incoming,
+      win.progress,
+      win.outgoing.transitionOut
+    );
+  }
+
+  const sorted = sortedTrackClips(track);
+  for (const c of sorted) {
+    if (t >= c.start && t < clipEnd(c)) {
+      return [soloLayer(c)];
+    }
+  }
+
+  return [];
+}
+
 /** The clip active at time ``t`` on a track (last one wins on overlap). */
 export function activeClipAt(track: TimelineTrack, t: number): TimelineClip | null {
-  let found: TimelineClip | null = null;
-  for (const c of track.clips) {
-    if (t >= c.start && t < clipEnd(c)) found = c;
+  const layers = activeLayersAt(track, t);
+  if (layers.length === 0) return null;
+  return layers[layers.length - 1].clip;
+}
+
+/** Timeline time for video seek when clip is in fade-in region before its start. */
+export function sourceTimeAtWithTransition(
+  clip: TimelineClip,
+  t: number,
+  track: TimelineTrack
+): number {
+  if (clip.type !== "video") {
+    return sourceTimeAt(clip, t);
   }
-  return found;
+  const sorted = sortedTrackClips(track);
+  const idx = sorted.findIndex((c) => c.id === clip.id);
+  if (idx <= 0) return sourceTimeAt(clip, t);
+
+  const outgoing = sorted[idx - 1];
+  if (!isConnectedPair(outgoing, clip) || !outgoing.transitionOut) {
+    return sourceTimeAt(clip, t);
+  }
+
+  const d = effectiveTransitionDuration(outgoing, clip);
+  const fadeStart = clip.start - d;
+  if (t >= fadeStart && t < clip.start) {
+    const local = Math.max(0, t - fadeStart);
+    return clip.inPoint + local * clip.speed;
+  }
+  return sourceTimeAt(clip, t);
 }
 
 /** Source-media time (seconds) for a video/audio clip at timeline time ``t``. */

@@ -147,12 +147,183 @@ def _timeline_duration(manifest: dict[str, Any]) -> float:
     return max_end
 
 
+_CONNECT_EPS = 0.05
+_TRANSITION_DURATION_MIN = 0.1
+_TRANSITION_DURATION_MAX = 2.0
+_DEFAULT_TRANSITION_DURATION = 0.5
+
+
+def _sorted_track_clips(track: dict[str, Any]) -> list[dict[str, Any]]:
+    return sorted(track.get("clips", []), key=lambda c: float(c.get("start", 0)))
+
+
+def _is_connected_pair(outgoing: dict[str, Any], incoming: dict[str, Any]) -> bool:
+    return abs(_clip_end(outgoing) - float(incoming.get("start", 0))) <= _CONNECT_EPS
+
+
+def _effective_transition_duration(
+    outgoing: dict[str, Any], incoming: dict[str, Any]
+) -> float:
+    tr = outgoing.get("transitionOut") or {}
+    raw = float(tr.get("duration") or _DEFAULT_TRANSITION_DURATION)
+    capped = _clamp(raw, _TRANSITION_DURATION_MIN, _TRANSITION_DURATION_MAX)
+    max_by_clips = min(
+        float(outgoing.get("duration", 0)), float(incoming.get("duration", 0))
+    ) * 0.5
+    return min(capped, max(_TRANSITION_DURATION_MIN, max_by_clips))
+
+
+def _smoothstep(p: float) -> float:
+    t = max(0.0, min(1.0, p))
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _resolve_transition_direction(tr: dict[str, Any]) -> str:
+    return str(tr.get("direction") or "left")
+
+
+def _compute_slide_offsets(
+    direction: str, progress: float, role: str
+) -> tuple[float, float]:
+    p = max(0.0, min(1.0, progress))
+    slide_x = 0.0
+    slide_y = 0.0
+    if direction == "left":
+        slide_x = -(1.0 - p) if role == "incoming" else -p
+    elif direction == "right":
+        slide_x = (1.0 - p) if role == "incoming" else p
+    elif direction == "up":
+        slide_y = -(1.0 - p) if role == "incoming" else -p
+    elif direction == "down":
+        slide_y = (1.0 - p) if role == "incoming" else p
+    return slide_x, slide_y
+
+
+def _layers_for_transition(
+    outgoing: dict[str, Any],
+    incoming: dict[str, Any],
+    progress: float,
+    transition: dict[str, Any],
+) -> list[dict[str, Any]]:
+    type_ = str(transition.get("type") or "fade")
+    direction = _resolve_transition_direction(transition)
+    p = max(0.0, min(1.0, progress))
+    base: dict[str, Any] = {
+        "progress": p,
+        "transitionType": type_,
+        "direction": direction,
+    }
+
+    if type_ == "fade":
+        return [
+            {"clip": outgoing, "opacity": 1.0 - p, "role": "outgoing", **base},
+            {"clip": incoming, "opacity": p, "role": "incoming", **base},
+        ]
+    if type_ == "dissolve":
+        sp = _smoothstep(p)
+        return [
+            {"clip": outgoing, "opacity": 1.0 - sp, "role": "outgoing", **base},
+            {"clip": incoming, "opacity": sp, "role": "incoming", **base},
+        ]
+    if type_ == "wipe":
+        return [
+            {"clip": outgoing, "opacity": 1.0, "role": "outgoing", **base},
+            {"clip": incoming, "opacity": 1.0, "role": "incoming", **base},
+        ]
+    out_x, out_y = _compute_slide_offsets(direction, p, "outgoing")
+    in_x, in_y = _compute_slide_offsets(direction, p, "incoming")
+    return [
+        {
+            "clip": outgoing,
+            "opacity": 1.0,
+            "role": "outgoing",
+            "slideOffsetX": out_x,
+            "slideOffsetY": out_y,
+            **base,
+        },
+        {
+            "clip": incoming,
+            "opacity": 1.0,
+            "role": "incoming",
+            "slideOffsetX": in_x,
+            "slideOffsetY": in_y,
+            **base,
+        },
+    ]
+
+
+def _find_transition_window(
+    track: dict[str, Any], t: float
+) -> tuple[dict[str, Any], dict[str, Any], float, float] | None:
+    if track.get("kind") != "video":
+        return None
+    sorted_clips = _sorted_track_clips(track)
+    for i in range(1, len(sorted_clips)):
+        outgoing = sorted_clips[i - 1]
+        incoming = sorted_clips[i]
+        tr = outgoing.get("transitionOut") or {}
+        if not tr or not _is_connected_pair(outgoing, incoming):
+            continue
+        d = _effective_transition_duration(outgoing, incoming)
+        fade_start = float(incoming.get("start", 0)) - d
+        if t >= fade_start and t < float(incoming.get("start", 0)):
+            progress = (t - fade_start) / d if d > 0 else 1.0
+            return outgoing, incoming, progress, d
+    return None
+
+
+def _solo_layer(clip: dict[str, Any]) -> dict[str, Any]:
+    return {"clip": clip, "opacity": 1.0, "role": "solo", "progress": 0.0}
+
+
+def _active_layers_at(track: dict[str, Any], t: float) -> list[dict[str, Any]]:
+    """Return layer dicts for compositing (mirrors timelineUtil.activeLayersAt)."""
+    if track.get("kind") != "video":
+        for c in track.get("clips", []):
+            if t >= float(c.get("start", 0)) and t < _clip_end(c):
+                return [_solo_layer(c)]
+        return []
+
+    win = _find_transition_window(track, t)
+    if win:
+        outgoing, incoming, progress, _d = win
+        tr = outgoing.get("transitionOut") or {}
+        return _layers_for_transition(outgoing, incoming, progress, tr)
+
+    sorted_clips = _sorted_track_clips(track)
+    for c in sorted_clips:
+        if t >= float(c.get("start", 0)) and t < _clip_end(c):
+            return [_solo_layer(c)]
+    return []
+
+
 def _active_clip_at(track: dict[str, Any], t: float) -> dict[str, Any] | None:
-    found: dict[str, Any] | None = None
-    for clip in track.get("clips", []):
-        if t >= float(clip.get("start", 0)) and t < _clip_end(clip):
-            found = clip
-    return found
+    layers = _active_layers_at(track, t)
+    if not layers:
+        return None
+    return layers[-1]["clip"]
+
+
+def _source_time_at_with_transition(
+    clip: dict[str, Any], t: float, track: dict[str, Any]
+) -> float:
+    if str(clip.get("type")) != "video":
+        return _source_time_at(clip, t)
+    sorted_clips = _sorted_track_clips(track)
+    idx = next((i for i, c in enumerate(sorted_clips) if c is clip), -1)
+    if idx <= 0:
+        return _source_time_at(clip, t)
+    outgoing = sorted_clips[idx - 1]
+    if not _is_connected_pair(outgoing, clip):
+        return _source_time_at(clip, t)
+    if not outgoing.get("transitionOut"):
+        return _source_time_at(clip, t)
+    d = _effective_transition_duration(outgoing, clip)
+    fade_start = float(clip.get("start", 0)) - d
+    if t >= fade_start and t < float(clip.get("start", 0)):
+        local = max(0.0, t - fade_start)
+        return float(clip.get("inPoint", 0)) + local * float(clip.get("speed", 1))
+    return _source_time_at(clip, t)
 
 
 def _source_time_at(clip: dict[str, Any], t: float) -> float:
@@ -479,20 +650,259 @@ class _CompositorState:
         return out
 
 
+_ARTBOARD = 1000.0
+
+
+def _point_on_segment(a: dict[str, Any], b: dict[str, Any], t: float) -> tuple[float, float]:
+    h_out = a.get("handleOut")
+    h_in = b.get("handleIn")
+    if h_out and h_in:
+        u = 1.0 - t
+        ax, ay = float(a.get("x", 0)), float(a.get("y", 0))
+        bx, by = float(b.get("x", 0)), float(b.get("y", 0))
+        cox, coy = float(h_out.get("x", 0)), float(h_out.get("y", 0))
+        cix, ciy = float(h_in.get("x", 0)), float(h_in.get("y", 0))
+        x = u * u * u * ax + 3 * u * u * t * cox + 3 * u * t * t * cix + t * t * t * bx
+        y = u * u * u * ay + 3 * u * u * t * coy + 3 * u * t * t * ciy + t * t * t * by
+        return x, y
+    ax, ay = float(a.get("x", 0)), float(a.get("y", 0))
+    bx, by = float(b.get("x", 0)), float(b.get("y", 0))
+    return ax + (bx - ax) * t, ay + (by - ay) * t
+
+
+def _sample_geometry_points(geometry: dict[str, Any], samples: int = 32) -> list[tuple[float, float]]:
+    pts = geometry.get("points") or []
+    if len(pts) < 2:
+        return [(float(p.get("x", 0)), float(p.get("y", 0))) for p in pts]
+    closed = bool(geometry.get("closed"))
+    seg_count = len(pts) if closed else len(pts) - 1
+    out: list[tuple[float, float]] = []
+    for i in range(seg_count):
+        a = pts[i]
+        b = pts[(i + 1) % len(pts)]
+        for s in range(samples + 1):
+            t = s / float(samples)
+            out.append(_point_on_segment(a, b, t))
+    return out
+
+
+def _layer_wipe_mask(rect: dict[str, float], layer: dict[str, Any]) -> Any | None:
+    if layer.get("transitionType") != "wipe" or layer.get("role") != "incoming":
+        return None
+    w = max(1, int(round(rect["width"])))
+    h = max(1, int(round(rect["height"])))
+    return _wipe_reveal_mask(
+        w,
+        h,
+        str(layer.get("direction") or "left"),
+        float(layer.get("progress") or 0),
+    )
+
+
+def _draw_geometry_on_canvas(
+    canvas: Any,
+    clip: dict[str, Any],
+    rect: dict[str, float],
+    rotation_deg: float,
+    opacity: float,
+    *,
+    wipe_mask: Any | None = None,
+    offset_x: float = 0.0,
+    offset_y: float = 0.0,
+) -> None:
+    from PIL import Image, ImageDraw
+
+    rect = _rect_with_slide(rect, offset_x, offset_y)
+    geometry = clip.get("geometry") or {}
+    pts_local = _sample_geometry_points(geometry, 32)
+    if not pts_local:
+        return
+
+    w = max(1, int(round(rect["width"])))
+    h = max(1, int(round(rect["height"])))
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+
+    poly = [(p[0] * w, p[1] * h) for p in pts_local]
+    fill = geometry.get("fill") or "none"
+    stroke_info = geometry.get("stroke") or {}
+    stroke = stroke_info.get("color") or "#000000"
+    stroke_w = max(1, int(round(float(stroke_info.get("width", 2)) * (w / _ARTBOARD))))
+
+    if geometry.get("closed") and fill and fill != "none":
+        draw.polygon(poly, fill=fill, outline=stroke, width=stroke_w)
+    else:
+        if len(poly) >= 2:
+            draw.line(poly, fill=stroke, width=stroke_w, joint="curve")
+
+    if wipe_mask is not None:
+        layer = _apply_wipe_mask_to_layer(layer, wipe_mask)
+    if opacity < 1.0:
+        r, g, b, a = layer.split()
+        a = a.point(lambda p: int(p * opacity))
+        layer = Image.merge("RGBA", (r, g, b, a))
+
+    if rotation_deg:
+        layer = layer.rotate(
+            -rotation_deg,
+            resample=Image.Resampling.BILINEAR,
+            expand=True,
+        )
+
+    cx = rect["left"] + rect["width"] / 2
+    cy = rect["top"] + rect["height"] / 2
+    paste_x = int(round(cx - layer.width / 2))
+    paste_y = int(round(cy - layer.height / 2))
+    canvas.alpha_composite(layer, (paste_x, paste_y))
+
+
+def _parse_hex_color(color: str) -> tuple[int, int, int, int]:
+    c = str(color or "#ffffff").strip()
+    if c.startswith("#") and len(c) >= 7:
+        return (
+            int(c[1:3], 16),
+            int(c[3:5], 16),
+            int(c[5:7], 16),
+            255,
+        )
+    return (255, 255, 255, 255)
+
+
+def _draw_text_on_canvas(
+    canvas: Any,
+    clip: dict[str, Any],
+    rect: dict[str, float],
+    rotation_deg: float,
+    opacity: float,
+    *,
+    wipe_mask: Any | None = None,
+    offset_x: float = 0.0,
+    offset_y: float = 0.0,
+) -> None:
+    from PIL import Image, ImageDraw, ImageFont
+
+    from services.timeline_fonts import resolve_timeline_font_path
+
+    rect = _rect_with_slide(rect, offset_x, offset_y)
+    text = clip.get("text") or {}
+    content = str(text.get("content") or "")
+    if not content:
+        return
+
+    w = max(1, int(round(rect["width"])))
+    h = max(1, int(round(rect["height"])))
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+
+    font_size = max(8, int(round(float(text.get("fontSize", 48)) * (h / _ARTBOARD))))
+    family_id = str(text.get("fontFamilyId") or "inter")
+    weight = int(text.get("fontWeight") or 400)
+    try:
+        font_path = resolve_timeline_font_path(family_id, weight)
+        font = ImageFont.truetype(str(font_path), font_size)
+    except (OSError, FileNotFoundError):
+        font = ImageFont.load_default()
+
+    color = _parse_hex_color(str(text.get("color") or "#ffffff"))
+    if opacity < 1.0:
+        color = (color[0], color[1], color[2], int(color[3] * opacity))
+
+    align = str(text.get("align") or "center")
+    bbox = draw.multiline_textbbox((0, 0), content, font=font, align=align)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    if align == "left":
+        x = 4
+    elif align == "right":
+        x = max(4, w - tw - 4)
+    else:
+        x = max(0, (w - tw) // 2)
+    y = max(0, (h - th) // 2)
+    draw.multiline_text((x, y), content, font=font, fill=color, align=align)
+
+    if wipe_mask is not None:
+        layer = _apply_wipe_mask_to_layer(layer, wipe_mask)
+
+    if rotation_deg:
+        layer = layer.rotate(
+            -rotation_deg,
+            resample=Image.Resampling.BILINEAR,
+            expand=True,
+        )
+
+    cx = rect["left"] + rect["width"] / 2
+    cy = rect["top"] + rect["height"] / 2
+    paste_x = int(round(cx - layer.width / 2))
+    paste_y = int(round(cy - layer.height / 2))
+    canvas.alpha_composite(layer, (paste_x, paste_y))
+
+
+def _wipe_reveal_mask(
+    width: int, height: int, direction: str, progress: float
+) -> Any:
+    from PIL import Image, ImageDraw
+
+    w = max(1, width)
+    h = max(1, height)
+    p = max(0.0, min(1.0, progress))
+    mask = Image.new("L", (w, h), 0)
+    draw = ImageDraw.Draw(mask)
+    if direction == "left":
+        draw.rectangle([0, 0, int(w * p), h], fill=255)
+    elif direction == "right":
+        draw.rectangle([int(w * (1.0 - p)), 0, w, h], fill=255)
+    elif direction == "up":
+        draw.rectangle([0, 0, w, int(h * p)], fill=255)
+    else:
+        draw.rectangle([0, int(h * (1.0 - p)), w, h], fill=255)
+    return mask
+
+
+def _rect_with_slide(
+    rect: dict[str, float], offset_x: float, offset_y: float
+) -> dict[str, float]:
+    if not offset_x and not offset_y:
+        return rect
+    return {
+        **rect,
+        "left": rect["left"] + offset_x * rect["width"],
+        "top": rect["top"] + offset_y * rect["height"],
+    }
+
+
+def _apply_wipe_mask_to_layer(layer: Any, wipe_mask: Any | None) -> Any:
+    from PIL import Image
+
+    if wipe_mask is None:
+        return layer
+    if layer.size != wipe_mask.size:
+        wipe_mask = wipe_mask.resize(layer.size, Image.Resampling.NEAREST)
+    r, g, b, a = layer.split()
+    a = Image.composite(a, Image.new("L", layer.size, 0), wipe_mask)
+    return Image.merge("RGBA", (r, g, b, a))
+
+
 def _draw_clip_on_canvas(
     canvas: Any,
     pil_image: Any,
     rect: dict[str, float],
     rotation_deg: float,
     opacity: float,
+    *,
+    wipe_mask: Any | None = None,
+    offset_x: float = 0.0,
+    offset_y: float = 0.0,
 ) -> None:
     from PIL import Image
 
+    rect = _rect_with_slide(rect, offset_x, offset_y)
     w = int(round(rect["width"]))
     h = int(round(rect["height"]))
     if w < 1 or h < 1:
         return
     layer = pil_image.resize((w, h), Image.Resampling.LANCZOS).convert("RGBA")
+    if wipe_mask is not None:
+        layer = _apply_wipe_mask_to_layer(layer, wipe_mask)
     if opacity < 1.0:
         r, g, b, a = layer.split()
         a = a.point(lambda p: int(p * opacity))
@@ -550,6 +960,9 @@ def _collect_audio_clips(manifest: dict[str, Any]) -> list[dict[str, Any]]:
 def _has_exportable_video(manifest: dict[str, Any]) -> bool:
     for track in _visible_video_tracks(manifest):
         for clip in track.get("clips", []):
+            clip_type = str(clip.get("type") or "")
+            if clip_type in ("geometry", "text"):
+                return True
             if str(clip.get("srcRelPath") or "").strip():
                 return True
     return False
@@ -675,29 +1088,80 @@ def _render_video_track(
                 canvas = Image.new("RGBA", (frame_w, frame_h), (0, 0, 0, 255))
 
                 for track in reversed(video_tracks):
-                    clip = _active_clip_at(track, t)
-                    if not clip:
-                        continue
-                    rel = str(clip.get("srcRelPath") or "").strip()
-                    if not rel:
-                        continue
-                    try:
-                        abs_p = _resolve_storage_rel_file(rel)
-                    except ValueError:
-                        continue
+                    for layer in _active_layers_at(track, t):
+                        clip = layer["clip"]
+                        layer_op = float(layer.get("opacity", 1))
+                        slide_x = float(layer.get("slideOffsetX") or 0)
+                        slide_y = float(layer.get("slideOffsetY") or 0)
+                        if (
+                            layer_op <= 0.001
+                            and not slide_x
+                            and not slide_y
+                            and layer.get("transitionType") != "wipe"
+                        ):
+                            continue
+                        clip_type = str(clip.get("type") or "")
+                        clip_dim = dict(clip)
+                        n_w = float(clip.get("naturalW") or 0)
+                        n_h = float(clip.get("naturalH") or 0)
+                        if n_w > 0 and n_h > 0:
+                            clip_dim["naturalW"] = n_w
+                            clip_dim["naturalH"] = n_h
+                        tf = clip_transform_at_playhead(clip_dim, t)
+                        rect = _clip_image_rect(clip_dim, tf, frame_w, frame_h)
+                        rot = float(tf.get("rotation", 0))
+                        op = float(tf.get("opacity", 1)) * layer_op
+                        wipe_mask = _layer_wipe_mask(rect, layer)
 
-                    clip_dim = state.clip_with_dims(clip, abs_p)
-                    tf = clip_transform_at_playhead(clip_dim, t)
-                    rect = _clip_image_rect(clip_dim, tf, frame_w, frame_h)
-                    source_t = _source_time_at(clip, t)
-                    rgba = state.get_rgba_frame(clip_dim, abs_p, source_t)
-                    _draw_clip_on_canvas(
-                        canvas,
-                        rgba,
-                        rect,
-                        float(tf.get("rotation", 0)),
-                        float(tf.get("opacity", 1)),
-                    )
+                        if clip_type == "geometry":
+                            _draw_geometry_on_canvas(
+                                canvas,
+                                clip,
+                                rect,
+                                rot,
+                                op,
+                                wipe_mask=wipe_mask,
+                                offset_x=slide_x,
+                                offset_y=slide_y,
+                            )
+                            continue
+                        if clip_type == "text":
+                            _draw_text_on_canvas(
+                                canvas,
+                                clip,
+                                rect,
+                                rot,
+                                op,
+                                wipe_mask=wipe_mask,
+                                offset_x=slide_x,
+                                offset_y=slide_y,
+                            )
+                            continue
+
+                        rel = str(clip.get("srcRelPath") or "").strip()
+                        if not rel:
+                            continue
+                        try:
+                            abs_p = _resolve_storage_rel_file(rel)
+                        except ValueError:
+                            continue
+
+                        clip_dim = state.clip_with_dims(clip_dim, abs_p)
+                        tf = clip_transform_at_playhead(clip_dim, t)
+                        rect = _clip_image_rect(clip_dim, tf, frame_w, frame_h)
+                        wipe_mask = _layer_wipe_mask(rect, layer)
+                        source_t = _source_time_at_with_transition(clip, t, track)
+                        rgba = state.get_rgba_frame(clip_dim, abs_p, source_t)
+                        _draw_clip_on_canvas(
+                            canvas,
+                            rgba,
+                            rect,
+                            rot,
+                            op,
+                            wipe_mask=wipe_mask,
+                            offset_x=slide_x,
+                            offset_y=slide_y,
+                        )
 
                 rgb = _flatten_rgba_to_rgb(canvas)
                 arr = np.asarray(rgb, dtype=np.uint8)
