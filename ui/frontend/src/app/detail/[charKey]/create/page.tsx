@@ -38,6 +38,7 @@ import {
   apiSequenceGet,
   apiSequencePut,
   apiSequenceFolderDelete,
+  apiSequenceFolderDuplicate,
   apiSequenceFolderRename,
   type SequenceManifest,
 } from "../../../../lib/api";
@@ -960,7 +961,7 @@ export default function CreatePage() {
       } else {
         items.push({
           key: "addAngle",
-          label: "Add angle",
+          label: "New Angle",
           onSelect: () => {
             setAngleItem({ item, type: menuType });
             setAngleDialogImageUrl(
@@ -1276,6 +1277,22 @@ export default function CreatePage() {
       await loadSequences();
     } catch (e) {
       showError({ message: "Rename failed.", error: e });
+    }
+  }
+
+  async function duplicateSequence(name: string) {
+    const label = await askText({
+      title: "Duplicate sequence",
+      message: `Name for the copy of "${name}":`,
+      defaultValue: `${name}_copy`,
+      confirmText: "Duplicate",
+    });
+    if (!label?.trim()) return;
+    try {
+      await apiSequenceFolderDuplicate(charKey, name, label.trim());
+      await loadSequences();
+    } catch (e) {
+      showError({ message: "Duplicate sequence failed.", error: e });
     }
   }
 
@@ -2123,6 +2140,7 @@ export default function CreatePage() {
                       y: e.clientY,
                       items: [
                         { key: "rename", label: "Rename", onSelect: () => void renameSequence(seq.name) },
+                        { key: "duplicate", label: "Duplicate Sequence", onSelect: () => void duplicateSequence(seq.name) },
                         { key: "delete", label: "Delete", onSelect: () => void deleteSequence(seq.name) },
                       ],
                     });

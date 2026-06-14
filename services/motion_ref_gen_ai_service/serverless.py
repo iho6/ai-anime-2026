@@ -235,6 +235,7 @@ def generate_motion(
         {motion_key, fps, frame_count, joint_count, joints_gz_path, npz_path, segments}
     """
     import numpy as np
+    from services.motion_ref_gen_ai_service.smplx_skinning import bones_from_skeleton
 
     def _log(msg: str) -> None:
         logger.info(msg)
@@ -313,13 +314,20 @@ def generate_motion(
     has_mesh = False
     vertex_count = 0
     face_count = 0
+    bones = bones_from_skeleton(model.skeleton)
     try:
         has_mesh, vertex_count, face_count = _write_mesh_stream(
-            dest, output, center_xz=(float(mean_xz[0]), float(mean_xz[1])), log=_log
+            dest,
+            output,
+            skeleton=model.skeleton,
+            center_xz=(float(mean_xz[0]), float(mean_xz[1])),
+            log=_log,
         )
     except Exception as exc:  # best-effort — generation still succeeds without the mesh
         logger.exception("SMPL-X skinning failed")
         _log(f"Warning: could not skin SMPL-X mesh: {exc}")
+
+    display_mode = "mesh" if has_mesh else "skeleton"
 
     # ── Write manifest ───────────────────────────────────────────────────────
     manifest = {
@@ -329,6 +337,8 @@ def generate_motion(
         "has_mesh": has_mesh,
         "vertex_count": vertex_count,
         "face_count": face_count,
+        "bones": bones,
+        "display_mode": display_mode,
         "segments": [{"text": t, "duration": d} for t, d in zip(texts, durations)],
         "model": model_name,
     }
@@ -342,6 +352,8 @@ def generate_motion(
         "has_mesh": has_mesh,
         "vertex_count": vertex_count,
         "face_count": face_count,
+        "bones": bones,
+        "display_mode": display_mode,
         "npz_path": str(npz_path),
         "joints_gz_path": str(joints_gz_path),
         "segments": manifest["segments"],
@@ -352,6 +364,7 @@ def _write_mesh_stream(
     dest: Path,
     output: dict,
     *,
+    skeleton: Any,
     center_xz: tuple[float, float],
     log: Callable[[str], None],
 ) -> tuple[bool, int, int]:
@@ -364,7 +377,7 @@ def _write_mesh_stream(
     import numpy as np
     from services.motion_ref_gen_ai_service.smplx_skinning import skin_sequence
 
-    vertices, faces = skin_sequence(output, center_xz=center_xz)
+    vertices, faces = skin_sequence(output, center_xz=center_xz, skeleton=skeleton)
     vertices = np.ascontiguousarray(vertices, dtype=np.float16)  # [T, V, 3]
     T, V, _ = vertices.shape
     F = int(faces.shape[0])
@@ -450,7 +463,13 @@ def _make_request_handler(model_name: str) -> type:
 
                 self._send_json(200, {"ok": True, "smplx_ready": smplx_body_model_ready()})
             elif self.path == "/bones":
-                self._send_json(200, {"bones": SOMA_BONES, "joint_names": SOMA_JOINT_NAMES})
+                from services.motion_ref_gen_ai_service.smplx_skinning import bones_from_skeleton
+
+                model = _load_kimodo_model(model_name)
+                skel = model.skeleton
+                bones = bones_from_skeleton(skel)
+                joint_names = list(skel.bone_order_names)
+                self._send_json(200, {"bones": bones, "joint_names": joint_names})
             else:
                 self.send_error(404)
 
@@ -744,10 +763,12 @@ def _inspect_smplx(model_name: str, prompt: str) -> None:
         print(f"  {k}: {_describe(out[k])}")
 
     print("\n=== SKIN ATTEMPT ===")
+    skel = getattr(model, "skeleton", None)
     try:
         from services.motion_ref_gen_ai_service.smplx_skinning import skin_sequence
-        verts, faces = skin_sequence(out)
-        print("OK vertices:", _describe(np.asarray(verts)), "faces:", _describe(np.asarray(faces)))
+
+        verts, faces = skin_sequence(out, skeleton=skel)
+        print("OK (native/legacy) vertices:", _describe(np.asarray(verts)), "faces:", _describe(np.asarray(faces)))
     except Exception as exc:
         print("skin_sequence error:", exc)
 

@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 export function TrackLabelTag(props: {
   name: string;
-  kind: "video" | "audio";
+  kind: "video" | "audio" | "neutral";
   width: number;
   hidden: boolean;
   onToggleHidden: () => void;

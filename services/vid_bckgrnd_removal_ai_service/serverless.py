@@ -140,7 +140,11 @@ def remove_video_background(
     # ── Input ─────────────────────────────────────────────────────────────
     in_container = av.open(str(inp))
     in_stream = in_container.streams.video[0]
-    fps = float(in_stream.average_rate or in_stream.base_rate or 24)
+    from services.utils import av_output_framerate
+
+    stream_rate = in_stream.average_rate or in_stream.base_rate
+    out_rate = av_output_framerate(stream_rate)
+    fps = float(out_rate)
     src_w = in_stream.width
     src_h = in_stream.height
     total = in_stream.frames or 0
@@ -151,7 +155,7 @@ def remove_video_background(
 
     # ── Output (WebM / VP9 + alpha) ────────────────────────────────────────
     out_container = av.open(str(out), mode="w", format="webm")
-    out_stream = out_container.add_stream("libvpx-vp9", rate=fps)
+    out_stream = out_container.add_stream("libvpx-vp9", rate=out_rate)
     out_stream.width = src_w
     out_stream.height = src_h
     out_stream.pix_fmt = "yuva420p"

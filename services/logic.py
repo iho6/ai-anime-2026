@@ -682,6 +682,8 @@ def _pip_check_ok(log_cb: Callable[[str], None] | None = None) -> bool:
 
 
 def _quick_env_check(log_cb: Callable[[str], None] | None = None) -> bool:
+    from services.pytorch_setup import torch_version_ok
+
     try:
         _run_command_logged(
             [
@@ -689,12 +691,27 @@ def _quick_env_check(log_cb: Callable[[str], None] | None = None) -> bool:
                 "-c",
                 (
                     "import cv2, skimage; "
+                    "import torch, torchvision, torchaudio; "
                     "print('import check ok')"
                 ),
             ],
             cwd=_REPO_ROOT,
             log_cb=log_cb,
         )
+        if not torch_version_ok():
+            if log_cb:
+                log_cb("PyTorch version check failed (need 2.8+ cu128 wheels).")
+            return False
+        try:
+            import torch
+
+            if not torch.cuda.is_available() and log_cb:
+                log_cb(
+                    "Warning: torch.cuda.is_available() is False; "
+                    "GPU jobs will fail until CUDA is available."
+                )
+        except ImportError:
+            return False
         if not _pip_check_ok(log_cb=log_cb):
             return False
         return True
@@ -859,6 +876,11 @@ def run_startup_setup_and_launch(
     # Git LFS assets (images/datasets/etc.) are required for a usable UI.
     _git_lfs_pull_with_github_pat(pat, log_cb=log_cb)
 
+    from services.pytorch_setup import ensure_pytorch_stack
+    from services.utils import gpu_preflight
+
+    ensure_pytorch_stack(log_cb=log_cb)
+
     if log_cb:
         log_cb("Running quick dependency check...")
     env_ok = _quick_env_check(log_cb=log_cb)
@@ -870,32 +892,7 @@ def run_startup_setup_and_launch(
             cwd=_REPO_ROOT,
             log_cb=log_cb,
         )
-        try:
-            _run_command_logged(
-                [
-                    sys.executable,
-                    "-c",
-                    "import torch, torchvision, torchaudio; print('torch ok')",
-                ],
-                cwd=_REPO_ROOT,
-                log_cb=log_cb,
-            )
-        except Exception:
-            _run_command_logged(
-                [
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    "torch==2.6.0+cu124",
-                    "torchvision==0.21.0+cu124",
-                    "torchaudio==2.6.0+cu124",
-                    "--index-url",
-                    "https://download.pytorch.org/whl/cu124",
-                ],
-                cwd=_REPO_ROOT,
-                log_cb=log_cb,
-            )
+        ensure_pytorch_stack(log_cb=log_cb)
         _run_command_logged(
             [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
             cwd=_REPO_ROOT,
@@ -922,6 +919,14 @@ def run_startup_setup_and_launch(
             cwd=_REPO_ROOT,
             log_cb=log_cb,
         )
+
+    if log_cb:
+        log_cb("Running GPU preflight…")
+    gpu_err, gpu_detail = gpu_preflight(log_cb=log_cb)
+    if gpu_err:
+        raise RuntimeError(gpu_err)
+    if log_cb and gpu_detail:
+        log_cb(f"GPU preflight OK: {gpu_detail}")
 
     # Build deps for kimodo's MotionCorrection C extension (CMake + Python dev headers).
     py_tag = f"{sys.version_info.major}.{sys.version_info.minor}"
@@ -967,7 +972,8 @@ def run_startup_setup_and_launch(
             log_cb=log_cb,
         )
 
-    # SMPL-X body model (Git LFS): motion-ref mesh skinning needs the licensed npz on disk.
+    # SMPL-X body model: mesh skinning uses KiMoD's native SMPLXSkin (smplx22 assets)
+    # or the legacy storage/body_models path (auto-symlinked). Joints always work without it.
     try:
         from services.motion_ref_gen_ai_service.smplx_skinning import smplx_body_model_ready
 
@@ -975,9 +981,10 @@ def run_startup_setup_and_launch(
             if log_cb:
                 log_cb(
                     "Warning: SMPL-X body model missing or not pulled (Git LFS). "
-                    "KiMoD motion will generate joints but no mesh until you run: "
-                    "git lfs install && git lfs pull "
-                    "(storage/body_models/smplx/SMPLX_NEUTRAL.npz, ~104 MB)."
+                    "KiMoD motion will generate joints (skeleton preview) but no mesh until you "
+                    "stage SMPLX_NEUTRAL.npz at kimodo/.../smplx22/ or "
+                    "storage/body_models/smplx/ (~104 MB). "
+                    "Try: git lfs install && git lfs pull"
                 )
             if sys.platform.startswith("linux") and shutil.which("git") and not shutil.which("git-lfs"):
                 if log_cb:
@@ -8511,15 +8518,8 @@ def _migrate_sequence_crop_inplace(crop: dict[str, Any], manifest_aspect: Any) -
     return changed
 
 
-def _sequence_timeline_export_dimensions_even(manifest: dict[str, Any]) -> tuple[int, int]:
-    """Even ``(width, height)`` for libx264 yuv420p, matching lightbox aspect inside max ref box."""
-    rw, rh = _normalize_sequence_preview_aspect_for_export(manifest.get("previewAspect"))
-    wf, hf = _fit_aspect_box(
-        float(_SEQUENCE_TIMELINE_EXPORT_MAX_W),
-        float(_SEQUENCE_TIMELINE_EXPORT_MAX_H),
-        float(rw),
-        float(rh),
-    )
+def _sequence_export_even_dimensions(wf: float, hf: float) -> tuple[int, int]:
+    """Round fitted size to even ``(width, height)`` for libx264 yuv420p."""
     w = int(round(wf))
     h = int(round(hf))
     w = max(2, w)
@@ -8533,6 +8533,37 @@ def _sequence_timeline_export_dimensions_even(manifest: dict[str, Any]) -> tuple
     if w < 2 or h < 2:
         return (1280, 720)
     return (w, h)
+
+
+def _sequence_export_dimensions_from_images(image_paths: list[Path]) -> tuple[int, int]:
+    """Even export size from largest source frame, capped at the reference max box."""
+    from PIL import Image
+
+    best_iw = 0
+    best_ih = 0
+    best_area = 0
+    for p in image_paths:
+        try:
+            with Image.open(p) as im:
+                iw, ih = im.size
+        except OSError:
+            continue
+        if iw < 1 or ih < 1:
+            continue
+        area = iw * ih
+        if area > best_area:
+            best_area = area
+            best_iw = iw
+            best_ih = ih
+    if best_area <= 0:
+        return (1280, 720)
+    wf, hf = _fit_aspect_box(
+        float(_SEQUENCE_TIMELINE_EXPORT_MAX_W),
+        float(_SEQUENCE_TIMELINE_EXPORT_MAX_H),
+        float(best_iw),
+        float(best_ih),
+    )
+    return _sequence_export_even_dimensions(wf, hf)
 
 
 def _normalized_timeline_export_crop(crop: dict[str, Any] | None) -> tuple[float, float, float]:
@@ -8636,9 +8667,10 @@ def write_sequence_timeline_slideshow_mp4(
     seconds. Consecutive visible keys are held for their ``index`` gap; after the last key,
     that image is held for the same duration the preview uses before wrapping to the first key.
     Skips hidden cells and cells with no ``relPath``. Each frame is rasterized like the sequence
-    lightbox viewport: ``previewAspect`` + ``fitAspectBox`` (see ``sequenceAspect.ts``) inside a
-    fixed ``1920×1080`` reference max, then contain-fit and manifest ``crop``; source files are
-    not modified. Video is even-sized RGB (``#ffffff`` letterbox for transparent areas).
+    lightbox viewport: contain-fit and manifest ``crop`` inside a cell sized from the
+    largest source frame's natural aspect (capped at ``1920×1080``); ``previewAspect`` is
+    UI-only and does not force export letterboxing. Source files are not modified. Video is
+    even-sized RGB (``#ffffff`` letterbox for transparent areas).
     """
     manifest = read_sequence_manifest(char_key, sequence_name)
     fps = _sequence_timeline_export_fps(manifest)
@@ -8655,7 +8687,8 @@ def write_sequence_timeline_slideshow_mp4(
     indices = [fe[0] for fe in export_frames]
     segment_counts = _timeline_export_segment_counts(indices, span)
 
-    w, h = _sequence_timeline_export_dimensions_even(manifest)
+    export_paths = [p for _idx, p, _crop in export_frames]
+    w, h = _sequence_export_dimensions_from_images(export_paths)
     # Opaque letterbox for transparent pixels (H.264 yuv420p has no alpha).
     export_bg = (255, 255, 255)
 
@@ -8665,12 +8698,15 @@ def write_sequence_timeline_slideshow_mp4(
         return np.asarray(rgb, dtype=np.uint8)
 
     rate = max(1, min(120, int(round(fps))))
+    from services.utils import av_output_framerate
+
+    out_rate = av_output_framerate(rate)
     out_p = Path(output_path)
     out_p.parent.mkdir(parents=True, exist_ok=True)
 
     try:
         with av.open(str(out_p), mode="w") as container:
-            stream = container.add_stream("libx264", rate=rate)
+            stream = container.add_stream("libx264", rate=out_rate)
             stream.width = w
             stream.height = h
             stream.pix_fmt = "yuv420p"
@@ -8716,6 +8752,7 @@ def write_gallery_frame_sequence_set_mp4(
     last visible image, or white before any visible). A **hidden image** (``kind: image`` and
     ``hidden: true``) emits no output frame (same idea as skipped hidden timeline cells).
     Visible image slots update the current display then emit.
+    Export cell size follows the largest strip image's natural aspect (not ``previewAspect``).
     """
     manifest = read_sequence_manifest(char_key, sequence_name)
     gallery = manifest.get("gallery") or []
@@ -8739,11 +8776,25 @@ def write_gallery_frame_sequence_set_mp4(
         raise ValueError("frameSequence.strip is missing or empty.")
     strip: list[dict[str, Any]] = [s for s in strip_raw if isinstance(s, dict)]
 
+    export_paths: list[Path] = []
+    for k, slot in enumerate(strip):
+        if not _frame_sequence_strip_slot_visible_for_export(slot):
+            continue
+        rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+        _ensure_rel_under_sequence_folder(char_key, sequence_name, rel)
+        pth = (DEFAULT_STORAGE_ROOT / rel).resolve()
+        root = DEFAULT_STORAGE_ROOT.resolve()
+        if root != pth and root not in pth.parents:
+            raise ValueError(f"Strip slot {k}: invalid resolved path.")
+        if not pth.is_file():
+            raise ValueError(f"Strip slot {k}: missing file {rel!r}.")
+        export_paths.append(pth)
+
     import av
     import numpy as np
     from PIL import Image
 
-    w, h = _sequence_timeline_export_dimensions_even(manifest)
+    w, h = _sequence_export_dimensions_from_images(export_paths)
     export_bg = (255, 255, 255)
     rate = 24
 
@@ -8762,10 +8813,13 @@ def write_gallery_frame_sequence_set_mp4(
     out_p.parent.mkdir(parents=True, exist_ok=True)
     L = len(strip)
     frames_written = 0
+    from services.utils import av_output_framerate
+
+    out_rate = av_output_framerate(rate)
 
     try:
         with av.open(str(out_p), mode="w") as container:
-            stream = container.add_stream("libx264", rate=rate)
+            stream = container.add_stream("libx264", rate=out_rate)
             stream.width = w
             stream.height = h
             stream.pix_fmt = "yuv420p"
@@ -9370,10 +9424,13 @@ def encode_frames_to_mp4(
     w = max(2, w - (w % 2))
     h = max(2, h - (h % 2))
     rate = max(1, min(120, int(round(fps))))
+    from services.utils import av_output_framerate
+
+    out_rate = av_output_framerate(rate)
 
     try:
         with av.open(str(out_p), mode="w") as container:
-            stream = container.add_stream("libx264", rate=rate)
+            stream = container.add_stream("libx264", rate=out_rate)
             stream.width = w
             stream.height = h
             stream.pix_fmt = "yuv420p"
@@ -9744,13 +9801,17 @@ def composite_video_with_masks(
 
     in_container = av.open(str(src))
     in_stream = in_container.streams.video[0]
-    fps = float(in_stream.average_rate or in_stream.base_rate or 24)
+    from services.utils import av_output_framerate
+
+    stream_rate = in_stream.average_rate or in_stream.base_rate
+    out_rate = av_output_framerate(stream_rate)
+    fps = float(out_rate)
     src_w = in_stream.width
     src_h = in_stream.height
     _log(f"Compositing segment video {src_w}x{src_h} @ {fps:.2f} fps")
 
     out_container = av.open(str(out), mode="w", format="webm")
-    out_stream = out_container.add_stream("libvpx-vp9", rate=fps)
+    out_stream = out_container.add_stream("libvpx-vp9", rate=out_rate)
     out_stream.width = src_w
     out_stream.height = src_h
     out_stream.pix_fmt = "yuva420p"

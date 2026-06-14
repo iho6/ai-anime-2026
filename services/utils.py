@@ -17,7 +17,7 @@ import urllib.request
 import uuid
 from functools import wraps
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 try:
     import boto3  # type: ignore
@@ -64,24 +64,76 @@ def _s3_client():
     )
 
 
-def gpu_preflight() -> tuple[str | None, str | None]:
+def gpu_preflight(
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> tuple[str | None, str | None]:
     """
-    Returns (error_message, ok_detail). Exactly one side is set.
-    ok_detail is logged on success (e.g. device name).
-    """
+    Returns (error_message, ok_detail). Exactly one side is set on hard failure.
+    Warnings are emitted via log_cb when provided.
+  """
+    from services.pytorch_setup import MIN_TORCH_VERSION, parse_torch_version
+
+    warnings: list[str] = []
+
+    def _warn(msg: str) -> None:
+        warnings.append(msg)
+        if log_cb:
+            log_cb(f"GPU preflight warning: {msg}")
+
     try:
         import torch
     except Exception as e:
         return (f"GPU preflight failed: {type(e).__name__}: {e}", None)
 
+    torch_ver = torch.__version__
+    cuda_ver = getattr(torch.version, "cuda", None)
+    if log_cb:
+        log_cb(f"PyTorch {torch_ver} (CUDA {cuda_ver})")
+
+    parsed = parse_torch_version(torch_ver)
+    if parsed is None or parsed < MIN_TORCH_VERSION:
+        _warn(
+            f"PyTorch {torch_ver} is below {'.'.join(map(str, MIN_TORCH_VERSION))}; "
+            "ComfyUI DynamicVRAM and Blackwell GPUs need 2.8+ cu128 wheels"
+        )
+
+    arch_list: list[str] = []
+    get_arch = getattr(torch.cuda, "get_arch_list", None)
+    if callable(get_arch):
+        try:
+            arch_list = list(get_arch())
+            if log_cb and arch_list:
+                log_cb(f"torch CUDA arch list: {', '.join(arch_list)}")
+        except Exception:
+            pass
+
     cuda_available = bool(torch.cuda.is_available())
     device_count = int(torch.cuda.device_count() or 0) if cuda_available else 0
     device_name: str | None = None
+    compute_cap: tuple[int, int] | None = None
     if device_count > 0:
         try:
             device_name = str(torch.cuda.get_device_name(0))
+            compute_cap = torch.cuda.get_device_capability(0)
         except Exception:
             device_name = None
+
+    if compute_cap is not None and compute_cap[0] >= 12:
+        arch_str = " ".join(arch_list)
+        if "sm_120" not in arch_str and "12.0" not in arch_str:
+            _warn(
+                "Blackwell GPU detected but PyTorch build may lack sm_120 kernels; "
+                "reinstall with services.pytorch_setup.ensure_pytorch_stack()"
+            )
+
+    if cuda_available and device_count > 0:
+        try:
+            t = torch.randn(1, device="cuda")
+            _ = t + 1
+            torch.cuda.synchronize()
+        except Exception as e:
+            _warn(f"CUDA smoke test failed: {type(e).__name__}: {e}")
 
     if (not cuda_available) or device_count < 1:
         reason = (
@@ -93,6 +145,8 @@ def gpu_preflight() -> tuple[str | None, str | None]:
         return (reason, None)
 
     detail = f"device_count={device_count}, device_name={device_name}"
+    if warnings:
+        detail += "; warnings: " + "; ".join(warnings)
     return (None, detail)
 
 
@@ -1064,6 +1118,38 @@ def find_first_node_id(workflow: dict[str, Any], class_type: str) -> str | None:
         if isinstance(node, dict) and node.get("class_type") == class_type:
             return str(nid)
     return None
+
+
+def av_output_framerate(
+    rate: Any,
+    *,
+    default: Any = None,
+) -> Any:
+    """
+    Normalize a framerate for PyAV ``OutputContainer.add_stream(..., rate=...)``.
+
+    PyAV 14+ expects a rational (``fractions.Fraction`` or stream ``average_rate``),
+    not a bare Python ``float``.
+    """
+    from fractions import Fraction
+
+    if default is None:
+        default = Fraction(24, 1)
+
+    if rate is None:
+        return default
+
+    if isinstance(rate, Fraction):
+        return rate
+
+    num = getattr(rate, "numerator", None)
+    den = getattr(rate, "denominator", None)
+    if num is not None and den is not None:
+        den_i = int(den)
+        if den_i != 0:
+            return Fraction(int(num), den_i)
+
+    return Fraction(round(float(rate) * 1000), 1000)
 
 
 def extract_video_frames_to_pngs(video_path: str, dest_dir: str) -> list[str]:

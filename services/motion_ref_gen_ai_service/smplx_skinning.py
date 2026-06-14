@@ -61,10 +61,80 @@ def _is_git_lfs_pointer(path: Path) -> bool:
         return False
 
 
-def smplx_body_model_ready(gender: str = "neutral") -> bool:
-    """Return True when the on-disk body-model npz exists and is not an unpulled LFS pointer."""
-    path = _gender_npz_path(gender)
+_KIMODO_SMPLX_SKIN_CACHE: dict[str, Any] = {}
+
+
+def _kimodo_smplx_npz_path() -> Path:
+    try:
+        from kimodo.assets import skeleton_asset_path
+
+        return skeleton_asset_path("smplx22", "SMPLX_NEUTRAL.npz")
+    except Exception:
+        return _REPO_ROOT / "kimodo" / "kimodo" / "assets" / "skeletons" / "smplx22" / "SMPLX_NEUTRAL.npz"
+
+
+def _npz_is_valid(path: Path) -> bool:
     return path.is_file() and not _is_git_lfs_pointer(path)
+
+
+def kimodo_smplx_asset_ready() -> bool:
+    """True when SMPLX_NEUTRAL.npz exists at KiMoD smplx22/ or legacy storage/body_models/smplx/."""
+    return _npz_is_valid(_kimodo_smplx_npz_path()) or _npz_is_valid(_gender_npz_path("neutral"))
+
+
+def smplx_body_model_ready(gender: str = "neutral") -> bool:
+    """Return True when a skinnable SMPL-X body-model npz is available (KiMoD or legacy path)."""
+    if kimodo_smplx_asset_ready():
+        return True
+    path = _gender_npz_path(gender)
+    return _npz_is_valid(path)
+
+
+def ensure_kimodo_smplx_npz(skeleton: Any) -> Path:
+    """
+    Ensure ``SMPLX_NEUTRAL.npz`` is present under ``skeleton.folder`` for KiMoD's SMPLXSkin.
+
+    If only the legacy ``storage/body_models/smplx/`` copy exists, symlink it into the
+    KiMoD skeleton assets folder (one-time).
+    """
+    skel_dir = Path(skeleton.folder)
+    target = skel_dir / "SMPLX_NEUTRAL.npz"
+    if _npz_is_valid(target):
+        return target
+
+    legacy = _gender_npz_path("neutral")
+    if _npz_is_valid(legacy):
+        skel_dir.mkdir(parents=True, exist_ok=True)
+        if target.is_symlink() or target.exists():
+            target.unlink()
+        target.symlink_to(legacy.resolve())
+        return target
+
+    kimodo_default = _kimodo_smplx_npz_path()
+    if _npz_is_valid(kimodo_default) and kimodo_default != target:
+        skel_dir.mkdir(parents=True, exist_ok=True)
+        if target.is_symlink() or target.exists():
+            target.unlink()
+        target.symlink_to(kimodo_default.resolve())
+        return target
+
+    raise RuntimeError(
+        f"SMPL-X body model not found for KiMoD skinning. Place SMPLX_NEUTRAL.npz at "
+        f"{kimodo_default} or {legacy}."
+    )
+
+
+def bones_from_skeleton(skeleton: Any) -> list[list[int]]:
+    """Return ``[[child_idx, parent_idx], ...]`` bone pairs for browser skeleton preview."""
+    bones: list[list[int]] = []
+    for child_name, parent_name in skeleton.bone_order_names_with_parents:
+        if parent_name is None:
+            continue
+        bones.append([
+            int(skeleton.bone_index[child_name]),
+            int(skeleton.bone_index[parent_name]),
+        ])
+    return bones
 
 
 def _require_body_model_npz(gender: str) -> Path:
@@ -150,11 +220,84 @@ def _get(output: dict, *names: str):
     return None
 
 
+def _load_kimodo_smplx_skin_class():
+    """
+    Load KiMoD ``SMPLXSkin`` without importing ``kimodo.viz`` package init (which pulls viser).
+    """
+    import importlib.util
+
+    path = _REPO_ROOT / "kimodo" / "kimodo" / "viz" / "smplx_skin.py"
+    if not path.is_file():
+        raise RuntimeError(f"KiMoD SMPLXSkin module not found at {path}")
+    spec = importlib.util.spec_from_file_location("_kimodo_smplx_skin_headless", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load KiMoD SMPLXSkin from {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.SMPLXSkin
+
+
+def skin_sequence_kimodo_native(
+    output: dict,
+    skeleton: Any,
+    *,
+    center_xz: tuple[float, float] | None = None,
+) -> tuple[Any, Any]:
+    """
+    Skin kimodo-smplx-rp output (22 joints) via KiMoD's built-in ``SMPLXSkin``.
+    """
+    import numpy as np
+    import torch
+    from kimodo.skeleton import SMPLXSkeleton22
+
+    SMPLXSkin = _load_kimodo_smplx_skin_class()
+
+    if not isinstance(skeleton, SMPLXSkeleton22):
+        raise RuntimeError(
+            f"skin_sequence_kimodo_native requires SMPLXSkeleton22, got {type(skeleton).__name__}"
+        )
+
+    rotmats = _get(output, "global_rot_mats", "poses_rotmat", "rotmats")
+    posed = _get(output, "posed_joints", "joints")
+    if rotmats is None or posed is None:
+        raise RuntimeError(
+            "skin_sequence_kimodo_native: output must include global_rot_mats and posed_joints."
+        )
+
+    r = np.asarray(rotmats, dtype=np.float32)
+    p = np.asarray(posed, dtype=np.float32)
+    if r.ndim == 5:
+        r = r[0]
+    if p.ndim == 4:
+        p = p[0]
+    if r.shape[1] != 22 or p.shape[1] != 22:
+        raise RuntimeError(
+            f"skin_sequence_kimodo_native: expected 22 joints, got rot={r.shape[1]} pos={p.shape[1]}"
+        )
+
+    ensure_kimodo_smplx_npz(skeleton)
+    cache_key = str(Path(skeleton.folder).resolve())
+    skin = _KIMODO_SMPLX_SKIN_CACHE.get(cache_key)
+    if skin is None:
+        skin = SMPLXSkin(skeleton)
+        _KIMODO_SMPLX_SKIN_CACHE[cache_key] = skin
+
+    device = skeleton.neutral_joints.device
+    rot_t = torch.tensor(r, dtype=torch.float32, device=device)
+    pos_t = torch.tensor(p, dtype=torch.float32, device=device)
+    with torch.no_grad():
+        verts = skin.skin(rot_t, pos_t, rot_is_global=True)
+    v = verts.detach().cpu().numpy().astype(np.float32)
+    faces = skin.faces.detach().cpu().numpy().astype(np.int32)
+    return _finalize(v, faces, center_xz)
+
+
 def skin_sequence(
     output: dict,
     *,
     gender: str = "neutral",
     center_xz: tuple[float, float] | None = None,
+    skeleton: Any | None = None,
 ) -> tuple[Any, Any]:
     """
     Skin a kimodo SMPL-X output dict into per-frame vertices + a static face array.
@@ -162,10 +305,11 @@ def skin_sequence(
     Returns ``(vertices, faces)`` where ``vertices`` is float32 ``[T, V, 3]`` and
     ``faces`` is int32 ``[F, 3]``.
 
-    Handles three forms, in priority order:
+    Handles four forms, in priority order:
       1. The output already carries vertices (``vertices`` / ``verts`` / ``smplx_vertices``).
-      2. AMASS-style axis-angle ``poses`` ``[T, 165]`` (+ ``betas`` / ``trans``).
-      3. Per-joint rotation matrices (``global_rot_mats`` / ``poses_rotmat``) → ``pose2rot=False``.
+      2. KiMoD native ``SMPLXSkin`` when ``skeleton`` is SMPLXSkeleton22 with 22-joint rotmats.
+      3. AMASS-style axis-angle ``poses`` ``[T, 165]`` (+ ``betas`` / ``trans``).
+      4. Per-joint rotation matrices (≥55 joints) → ``pose2rot=False`` via the smplx package.
 
     If none match, raises with the available keys so the adapter can be confirmed via
     ``--inspect-smplx``.
@@ -188,6 +332,15 @@ def skin_sequence(
 
     poses = _get(output, "poses", "pose", "smplx_poses")
     rotmats = _get(output, "global_rot_mats", "poses_rotmat", "rotmats")
+
+    # ── 2. KiMoD native SMPLXSkin (22-joint kimodo-smplx-rp) ─────────────────
+    if skeleton is not None and rotmats is not None:
+        r = np.asarray(rotmats, dtype=np.float32)
+        if r.ndim == 5:
+            r = r[0]
+        if r.shape[1] == 22:
+            return skin_sequence_kimodo_native(output, skeleton, center_xz=center_xz)
+
     if poses is None and rotmats is None:
         raise RuntimeError(
             "skin_sequence: could not find vertices, AMASS 'poses', or rotation matrices "
@@ -199,7 +352,7 @@ def skin_sequence(
     betas = _get(output, "betas")
     trans = _get(output, "trans", "transl", "root_positions")
 
-    # ── 2. AMASS axis-angle poses [T, 165] ───────────────────────────────────
+    # ── 3. AMASS axis-angle poses [T, 165] ───────────────────────────────────
     if poses is not None:
         p = np.asarray(poses, dtype=np.float32)
         if p.ndim == 3:  # [B, T, 165] → first sample
@@ -220,7 +373,7 @@ def skin_sequence(
         v = out.vertices.detach().cpu().numpy().astype(np.float32)
         return _finalize(v, np.asarray(model.faces, dtype=np.int32), center_xz)
 
-    # ── 3. Rotation matrices, pose2rot=False ─────────────────────────────────
+    # ── 4. Rotation matrices, pose2rot=False (full SMPL-X, ≥55 joints) ───────
     r = np.asarray(rotmats, dtype=np.float32)
     if r.ndim == 5:  # [B, T, J, 3, 3]
         r = r[0]

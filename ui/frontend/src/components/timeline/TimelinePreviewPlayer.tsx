@@ -17,6 +17,7 @@ import {
   clipImageRect,
   clipTransformFromRectCenter,
   snapClipRectToFrame,
+  snapClipScaleToFrame,
   sourceTimeAt,
   sourceTimeAtWithTransition,
   timelineDuration,
@@ -188,7 +189,7 @@ export function TimelinePreviewPlayer(props: {
               .map((l) => l.clip)
           : (() => {
               const c = activeClipAt(track, playhead);
-              return c?.type === "video" ? [c] : [];
+              return c?.type === "audio" ? [c] : [];
             })();
       for (const clip of clipsToSync) {
       seen.add(clip.id);
@@ -291,8 +292,21 @@ export function TimelinePreviewPlayer(props: {
         });
       }
     } else {
-      const scale = clamp(d.orig.scale + ((e.clientX - d.startX) / d.w) * 2, 0.1, 6);
-      onClipTransformChange(d.clipId, { ...d.orig, scale });
+      const clip = videoTracks.flatMap((t) => t.clips).find((c) => c.id === d.clipId);
+      const tentative = clamp(d.orig.scale + ((e.clientX - d.startX) / d.w) * 2, 0.1, 6);
+      if (clip && d.w > 0 && d.h > 0) {
+        const { scale, guides } = snapClipScaleToFrame(
+          clip,
+          { ...d.orig, scale: tentative },
+          d.w,
+          d.h
+        );
+        setAlignGuides(guides);
+        onClipTransformChange(d.clipId, { ...d.orig, scale });
+      } else {
+        setAlignGuides([]);
+        onClipTransformChange(d.clipId, { ...d.orig, scale: tentative });
+      }
     }
   }
 
@@ -627,6 +641,7 @@ export function TimelinePreviewPlayer(props: {
           return (
             <audio
               key={clip.id}
+              preload="auto"
               ref={(el) => {
                 if (el) mediaRefs.current.set(clip.id, el);
                 else mediaRefs.current.delete(clip.id);

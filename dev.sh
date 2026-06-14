@@ -296,9 +296,8 @@ if [[ "${BOOTSTRAP_MODE}" == "minimal" ]]; then
 elif [[ "${SKIP_PYTHON_INSTALL}" != "1" ]]; then
   meta_log "Upgrading pip tooling in venv..."
   "${VENV_PYTHON}" -m pip install --upgrade pip "setuptools<82" wheel
-  meta_log "Installing PyTorch (cu121) from PyTorch index..."
-  "${VENV_PYTHON}" -m pip install torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cu121
+  meta_log "Installing PyTorch (cu128, 2.8+) via services.pytorch_setup..."
+  "${VENV_PYTHON}" -c "from services.pytorch_setup import ensure_pytorch_stack; ensure_pytorch_stack()"
   meta_log "Installing Python requirements into venv..."
   "${VENV_PYTHON}" -m pip install -r "${REQUIREMENTS_PY}"
   meta_log "Python requirements installation completed"

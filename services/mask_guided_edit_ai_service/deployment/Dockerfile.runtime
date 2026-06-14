@@ -1,6 +1,6 @@
 ARG BUILDER_IMAGE
 FROM ${BUILDER_IMAGE} AS builder
-FROM nvidia/cuda:12.4.0-devel-ubuntu22.04
+FROM nvidia/cuda:12.8.0-devel-ubuntu22.04
 WORKDIR /anime2026/
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -17,16 +17,12 @@ RUN apt update && apt install -y software-properties-common \
     && curl -sS https://bootstrap.pypa.io/get-pip.py | python3 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-ENV FORCE_CUDA="1"
-ENV TORCH_CUDA_ARCH_LIST="8.0;8.9;9.0"
-ENV CUDA_HOME=/usr/local/cuda
 RUN python3 -m pip install --upgrade pip setuptools wheel
 
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu124 -r /tmp/requirements.txt
-
-ENV FORCE_CUDA=""
-ENV TORCH_CUDA_ARCH_LIST=""
+RUN pip install --no-cache-dir torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu128 \
+ && pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY --from=builder /anime2026/ ./
 RUN chmod +x services/mask_guided_edit_ai_service/entrypoint.sh

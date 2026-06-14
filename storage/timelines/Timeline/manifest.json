@@ -1,0 +1,95 @@
+{
+  "version": 2,
+  "fps": 24,
+  "previewAspect": "1:1",
+  "tracks": [
+    {
+      "id": "trk_mqduevs8_2",
+      "name": "Video 1",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mqduf4v0_3",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_9f89fa1f975040c79916f973f7bcea26.mp4",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 1.958,
+          "speed": 0.5,
+          "duration": 3.916,
+          "srcDuration": 1.958,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "Sequence_1"
+          },
+          "transform": {
+            "x": 0,
+            "y": -0.01591140602173119,
+            "scale": 1.6825684425980034,
+            "rotation": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "clip_mqduocu0_7",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_a55ed0da067f4929bca86d3a8fb007fc.png",
+          "start": 4.6111904749766826,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "luka"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        }
+      ],
+      "hidden": false
+    },
+    {
+      "id": "trk_mqdult9w_6",
+      "name": "Music 1",
+      "kind": "audio",
+      "clips": [
+        {
+          "id": "clip_mqdult9v_4",
+          "type": "audio",
+          "srcRelPath": "timelines/Timeline/clips/clip_98b9292c0fb94c70a23909cc4b2cbc9a.mp3",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 30.0002,
+          "speed": 1,
+          "duration": 30.0002,
+          "srcDuration": 30.0002
+        },
+        {
+          "id": "clip_mqdvy19g_1",
+          "type": "audio",
+          "srcRelPath": "timelines/Timeline/clips/clip_f5541c5b64d641d59280fd9a2cb6cb47.mp3",
+          "start": 31.983675494384766,
+          "inPoint": 0,
+          "outPoint": 30.0002,
+          "speed": 1,
+          "duration": 30.0002,
+          "srcDuration": 30.0002
+        }
+      ]
+    },
+    {
+      "id": "trk_mqdvzr4q_3",
+      "name": "Video 2",
+      "kind": "video",
+      "clips": [],
+      "hidden": false
+    }
+  ]
+}

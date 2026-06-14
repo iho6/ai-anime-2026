@@ -6,9 +6,11 @@ import {
   apiPoseGallerySplit,
   apiExpressionGallerySplit,
   apiSequenceFolderNames,
+  apiSequenceFolderDuplicate,
   apiSequenceGet,
   assetUrlFromRelPath,
   runDetailWsJob,
+  runShotMakeAngleWsJob,
   type PoseReference,
   type SequenceManifest,
 } from "../lib/api";
@@ -17,9 +19,11 @@ import { SquareButton } from "./SquareButton";
 import { SquareIconButton, TriangleIcon } from "./IconPrimitives";
 import { ReferencePicker } from "./ReferencePicker";
 import { MotionRefGenModal } from "./MotionRefGenModal";
+import { CameraAngleModal } from "./CameraAngleModal";
 import type { SharedLogStreamHandle } from "./SharedLogStream";
 import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 import { useJobRunSession } from "../hooks/useJobRunSession";
+import { useAppError } from "./ErrorProvider";
 
 type CharIcon = { key: string; label: string; coverRelPath: string };
 type SectionData = {
@@ -48,12 +52,22 @@ export function TimelineCharacterPicker(props: {
   const [loading, setLoading] = useState(false);
   const [seqOpen, setSeqOpen] = useState(true);
 
-  // Image right-click context menu (shows "New Pose" option)
+  // Image right-click context menu (New Angle / New Pose)
   const [imgCtxMenu, setImgCtxMenu] = useState<{
     relPath: string;
     x: number;
     y: number;
   } | null>(null);
+
+  // Sequence folder right-click context menu
+  const [seqCtxMenu, setSeqCtxMenu] = useState<{
+    name: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const [angleModalOpen, setAngleModalOpen] = useState(false);
+  const [angleSourceRelPath, setAngleSourceRelPath] = useState("");
 
   // New Pose panel state
   const [newPosePanel, setNewPosePanel] = useState<{ charKey: string; baseRelPath: string } | null>(null);
@@ -71,6 +85,7 @@ export function TimelineCharacterPicker(props: {
     pushLog,
     modalProps: poseJobModalProps,
   } = useJobRunSession(logRef);
+  const { askText, showError } = useAppError();
 
   // Reset on open
   useEffect(() => {
@@ -81,6 +96,9 @@ export function TimelineCharacterPicker(props: {
     setNewPosePrompt("");
     setNewPoseRef(null);
     setImgCtxMenu(null);
+    setSeqCtxMenu(null);
+    setAngleModalOpen(false);
+    setAngleSourceRelPath("");
     setSelectedKey(initialKey ?? null);
 
     if (!initialKey) {
@@ -170,6 +188,47 @@ export function TimelineCharacterPicker(props: {
     }
   }
 
+  async function duplicateSequence(name: string) {
+    if (!selectedKey) return;
+    const label = await askText({
+      title: "Duplicate sequence",
+      message: `Name for the copy of "${name}":`,
+      defaultValue: `${name}_copy`,
+      confirmText: "Duplicate",
+    });
+    if (!label?.trim()) return;
+    try {
+      await apiSequenceFolderDuplicate(selectedKey, name, label.trim());
+      await loadSections(selectedKey);
+    } catch (e) {
+      showError({ message: "Duplicate sequence failed.", error: e });
+    }
+  }
+
+  async function applyNewAngle(angleId: number) {
+    setAngleModalOpen(false);
+    const relPath = angleSourceRelPath;
+    setAngleSourceRelPath("");
+    if (!selectedKey || !relPath) return;
+    beginSession({ title: "Generating new angle", clearLog: true });
+    await Promise.resolve();
+    pushLog("Generating a new camera angle…");
+    try {
+      const done = await runShotMakeAngleWsJob({
+        imageRelPath: relPath,
+        angleId,
+        onLogLine: (line) => pushLog(line),
+      });
+      const newRel = done.result?.relPath;
+      if (!done.ok || !newRel) throw new Error(done.error || "Angle generation returned no image.");
+      pushLog("Done.");
+      endSession();
+      onPickImage(selectedKey, newRel);
+    } catch (e) {
+      failSession(e, "Angle generation failed.");
+    }
+  }
+
   if (!open) return null;
 
   const showBackButton = Boolean(selectedKey) && !initialKey;
@@ -188,8 +247,8 @@ export function TimelineCharacterPicker(props: {
           padding: 16,
         }}
         onMouseDown={(e) => { e.preventDefault(); onCancel(); }}
-        // Close image context menu on click outside
-        onClick={() => setImgCtxMenu(null)}
+        // Close context menus on click outside
+        onClick={() => { setImgCtxMenu(null); setSeqCtxMenu(null); }}
       >
         <div
           style={{
@@ -204,7 +263,7 @@ export function TimelineCharacterPicker(props: {
             border: "1px solid rgba(255,255,255,0.25)",
           }}
           onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); setImgCtxMenu(null); }}
+          onClick={(e) => { e.stopPropagation(); setImgCtxMenu(null); setSeqCtxMenu(null); }}
         >
           {/* Title bar */}
           <div style={{
@@ -283,6 +342,12 @@ export function TimelineCharacterPicker(props: {
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8, paddingTop: 6 }}>
                             {sectionData.sequences.map((seq) => (
                               <button key={seq.name} type="button" onClick={() => onPickSequence(selectedKey, seq.name)}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setImgCtxMenu(null);
+                                  setSeqCtxMenu({ name: seq.name, x: e.clientX, y: e.clientY });
+                                }}
                                 title={seq.name}
                                 style={{ width: "100%", aspectRatio: "1/1", padding: 4, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", cursor: "pointer" }}>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -444,6 +509,30 @@ export function TimelineCharacterPicker(props: {
             onClick={() => {
               const { relPath } = imgCtxMenu;
               setImgCtxMenu(null);
+              setAngleSourceRelPath(relPath);
+              setAngleModalOpen(true);
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "8px 14px",
+              background: "transparent",
+              color: "#eee",
+              border: "none",
+              textAlign: "left",
+              cursor: "pointer",
+              font: "inherit",
+              fontSize: 13,
+            }}
+          >
+            New Angle
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              const { relPath } = imgCtxMenu;
+              setImgCtxMenu(null);
               setNewPosePanel({ charKey: selectedKey!, baseRelPath: relPath });
               setNewPosePrompt("");
               setNewPoseRef(null);
@@ -465,6 +554,58 @@ export function TimelineCharacterPicker(props: {
           </button>
         </div>
       )}
+
+      {/* Sequence folder right-click context menu */}
+      {seqCtxMenu && (
+        <div
+          style={{
+            position: "fixed",
+            top: seqCtxMenu.y,
+            left: seqCtxMenu.x,
+            background: "#1e1e1e",
+            border: "1px solid rgba(255,255,255,0.2)",
+            zIndex: 10100,
+            minWidth: 160,
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              const { name } = seqCtxMenu;
+              setSeqCtxMenu(null);
+              void duplicateSequence(name);
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "8px 14px",
+              background: "transparent",
+              color: "#eee",
+              border: "none",
+              textAlign: "left",
+              cursor: "pointer",
+              font: "inherit",
+              fontSize: 13,
+            }}
+          >
+            Duplicate Sequence
+          </button>
+        </div>
+      )}
+
+      <CameraAngleModal
+        open={angleModalOpen}
+        title="New Angle"
+        imageUrl={angleSourceRelPath ? assetUrlFromRelPath(angleSourceRelPath) : null}
+        onCancel={() => {
+          setAngleModalOpen(false);
+          setAngleSourceRelPath("");
+        }}
+        onConfirm={(angleId) => void applyNewAngle(angleId)}
+      />
 
       {/* Reference picker — includes Motion Ref Gen (KiMoD) option */}
       <ReferencePicker

@@ -13,16 +13,24 @@ export type CameraState = {
   distance: number;  // world units (metres)
 };
 
+export type ViewerMode = "mesh" | "bones";
+
 export type SkeletonViewer3DHandle = {
+  /** Switch between skinned mesh and joint skeleton preview. */
+  setMode(mode: ViewerMode): void;
+  /** Set bone parent/child index pairs for skeleton mode. */
+  setBonePairs(pairs: [number, number][]): void;
   /** Set the static SMPL-X face index buffer (flat triples). Call once per mesh. */
   setFaces(indices: Uint32Array): void;
   /** Update the mesh to a frame's vertex positions (flat Float32Array, length V*3). */
   setFrame(positions: Float32Array): void;
+  /** Update skeleton bones from joint positions (flat Float32Array, length J*3). */
+  setJointFrame(positions: Float32Array): void;
   /** Fix the ground plane + camera target for the whole motion (call once after load). */
   setFraming(groundY: number, centerY: number): void;
   /** Get current camera orbit state. */
   getCameraState(): CameraState;
-  /** Reset the camera to defaults (mesh geometry is unchanged). */
+  /** Reset the camera to defaults and hide geometry. */
   resetAll(): void;
   /** Capture the current canvas as a PNG data URL. */
   captureFrame(): string | null;
@@ -52,11 +60,15 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       grid: import("three").GridHelper;
       mesh: import("three").Mesh;
       geometry: import("three").BufferGeometry;
+      boneLines: import("three").LineSegments;
+      boneGeometry: import("three").BufferGeometry;
       animFrameId: number;
     } | null>(null);
 
+    const modeRef = useRef<ViewerMode>("mesh");
+    const bonePairsRef = useRef<[number, number][]>([]);
+
     const orbitRef = useRef({ ...DEFAULT_ORBIT });
-    // Vertical center of the current mesh (camera target / framing).
     const centerYRef = useRef(0.9);
     const sizeRef = useRef({
       w: typeof width === "number" ? width : FALLBACK_W,
@@ -64,12 +76,18 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
     });
     const resizeObsRef = useRef<ResizeObserver | null>(null);
 
-    // Latest onCameraChange (read by the native wheel listener without re-binding).
     const onCameraChangeRef = useRef(onCameraChange);
     onCameraChangeRef.current = onCameraChange;
 
-    // Pointer orbit state.
     const pointerRef = useRef({ down: false, lastX: 0, lastY: 0 });
+
+    function _applyVisibility() {
+      const t = threeRef.current;
+      if (!t) return;
+      const mode = modeRef.current;
+      t.mesh.visible = mode === "mesh";
+      t.boneLines.visible = mode === "bones";
+    }
 
     function _applyCameraToThree() {
       const t = threeRef.current;
@@ -86,13 +104,41 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       t.camera.lookAt(0, cy, 0);
     }
 
-    // ── Three.js init ────────────────────────────────────────────────────────
+    function _updateBoneLines(positions: Float32Array) {
+      const t = threeRef.current;
+      if (!t || bonePairsRef.current.length === 0) return;
+      const pairs = bonePairsRef.current;
+      const verts = new Float32Array(pairs.length * 6);
+      for (let i = 0; i < pairs.length; i++) {
+        const [child, parent] = pairs[i];
+        const ci = child * 3;
+        const pi = parent * 3;
+        const o = i * 6;
+        verts[o] = positions[pi];
+        verts[o + 1] = positions[pi + 1];
+        verts[o + 2] = positions[pi + 2];
+        verts[o + 3] = positions[ci];
+        verts[o + 4] = positions[ci + 1];
+        verts[o + 5] = positions[ci + 2];
+      }
+      const geo = t.boneGeometry;
+      const existing = geo.getAttribute("position") as
+        | import("three").BufferAttribute
+        | undefined;
+      if (!existing || existing.array.length !== verts.length) {
+        geo.setAttribute("position", new t.THREE.BufferAttribute(verts, 3));
+      } else {
+        (existing.array as Float32Array).set(verts);
+        existing.needsUpdate = true;
+      }
+      t.boneLines.visible = modeRef.current === "bones";
+    }
+
     useEffect(() => {
       const container = containerRef.current;
       if (!container) return;
       let cancelled = false;
 
-      // Non-passive wheel listener so zoom doesn't also scroll the modal/page.
       const onWheelNative = (e: WheelEvent) => {
         e.preventDefault();
         orbitRef.current.distance = Math.max(
@@ -129,7 +175,6 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         const grid = new THREE.GridHelper(4, 20, 0x444444, 0x333333);
         scene.add(grid);
 
-        // White body mesh (geometry filled in by setFaces/setFrame).
         const geometry = new THREE.BufferGeometry();
         const material = new THREE.MeshStandardMaterial({
           color: 0xf2f2f2,
@@ -142,9 +187,26 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         mesh.visible = false;
         scene.add(mesh);
 
+        const boneGeometry = new THREE.BufferGeometry();
+        const boneMaterial = new THREE.LineBasicMaterial({ color: 0x88ccff, linewidth: 2 });
+        const boneLines = new THREE.LineSegments(boneGeometry, boneMaterial);
+        boneLines.visible = false;
+        scene.add(boneLines);
+
         const camera = new THREE.PerspectiveCamera(45, w0 / h0, 0.01, 50);
 
-        threeRef.current = { THREE, renderer, scene, camera, grid, mesh, geometry, animFrameId: 0 };
+        threeRef.current = {
+          THREE,
+          renderer,
+          scene,
+          camera,
+          grid,
+          mesh,
+          geometry,
+          boneLines,
+          boneGeometry,
+          animFrameId: 0,
+        };
         _applyCameraToThree();
 
         const ro = new ResizeObserver(() => {
@@ -180,7 +242,9 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         if (t) {
           cancelAnimationFrame(t.animFrameId);
           t.geometry.dispose();
+          t.boneGeometry.dispose();
           (t.mesh.material as import("three").Material).dispose();
+          (t.boneLines.material as import("three").Material).dispose();
           t.renderer.dispose();
           if (container.contains(t.renderer.domElement)) {
             container.removeChild(t.renderer.domElement);
@@ -190,8 +254,14 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       };
     }, []);
 
-    // ── Imperative handle ────────────────────────────────────────────────────
     useImperativeHandle(ref, () => ({
+      setMode(mode: ViewerMode) {
+        modeRef.current = mode;
+        _applyVisibility();
+      },
+      setBonePairs(pairs: [number, number][]) {
+        bonePairsRef.current = pairs;
+      },
       setFaces(indices: Uint32Array) {
         const t = threeRef.current;
         if (!t) return;
@@ -211,12 +281,16 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           existing.needsUpdate = true;
         }
         geo.computeVertexNormals();
-        t.mesh.visible = true;
+        if (modeRef.current === "mesh") {
+          t.mesh.visible = true;
+        }
+      },
+      setJointFrame(positions: Float32Array) {
+        _updateBoneLines(positions);
       },
       setFraming(groundY: number, centerY: number) {
         const t = threeRef.current;
         if (!t) return;
-        // Stable ground for the whole motion (no per-frame bobbing).
         t.grid.position.y = groundY;
         centerYRef.current = centerY;
         _applyCameraToThree();
@@ -226,6 +300,21 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       },
       resetAll() {
         orbitRef.current = { ...DEFAULT_ORBIT };
+        modeRef.current = "mesh";
+        bonePairsRef.current = [];
+        const t = threeRef.current;
+        if (t) {
+          t.mesh.visible = false;
+          t.boneLines.visible = false;
+          t.geometry.setAttribute(
+            "position",
+            new t.THREE.BufferAttribute(new Float32Array(0), 3)
+          );
+          t.boneGeometry.setAttribute(
+            "position",
+            new t.THREE.BufferAttribute(new Float32Array(0), 3)
+          );
+        }
         _applyCameraToThree();
         onCameraChange?.({ ...DEFAULT_ORBIT });
       },
@@ -233,7 +322,6 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         const t = threeRef.current;
         if (!t) return null;
         try {
-          // Force a render so the buffer is current before reading it back.
           t.renderer.render(t.scene, t.camera);
           return t.renderer.domElement.toDataURL("image/png");
         } catch {
@@ -242,7 +330,6 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       },
     }));
 
-    // ── Pointer events (orbit + zoom only) ────────────────────────────────────
     function onPointerDown(e: React.PointerEvent) {
       (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
       pointerRef.current = { down: true, lastX: e.clientX, lastY: e.clientY };

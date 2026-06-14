@@ -10,6 +10,7 @@ import {
   apiMotionRefSaveShotImage,
   apiMotionRefMesh,
   apiMotionRefMeshFaces,
+  apiMotionRefJoints,
   apiMotionRefList,
   apiMotionRefDelete,
   apiUploadStaging,
@@ -25,8 +26,9 @@ import { useJobRunSession } from "../hooks/useJobRunSession";
 import type { SharedLogStreamHandle } from "./SharedLogStream";
 import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 import { useAppError } from "./ErrorProvider";
-import { SkeletonViewer3D, SkeletonViewer3DHandle, CameraState } from "./motionRef/SkeletonViewer3D";
+import { SkeletonViewer3D, SkeletonViewer3DHandle, CameraState, ViewerMode } from "./motionRef/SkeletonViewer3D";
 import { MotionTimeline } from "./motionRef/MotionTimeline";
+import { SMPLX22_BONES } from "./motionRef/smplx22Bones";
 
 const DEFAULT_SEGMENTS: MotionRefSegment[] = [
   { text: "", duration: 3.0 },
@@ -66,6 +68,13 @@ export function MotionRefGenModal(props: {
     vertexCount: number;
     frameCount: number;
   } | null>(null);
+  const [jointsData, setJointsData] = useState<{
+    frames: number[][][];
+    jointCount: number;
+    frameCount: number;
+    bones: [number, number][];
+  } | null>(null);
+  const [displayMode, setDisplayMode] = useState<ViewerMode>("mesh");
 
   // ── Motion gallery (persisted motions) ────────────────────────────────────
   const [motions, setMotions] = useState<MotionRefListItem[]>([]);
@@ -88,7 +97,8 @@ export function MotionRefGenModal(props: {
     distance: 3,
   });
 
-  const totalFrames = meshData?.frameCount ?? 0;
+  const totalFrames =
+    meshData?.frameCount ?? jointsData?.frameCount ?? manifest?.frameCount ?? 0;
 
   // ── Load saved motions on open ─────────────────────────────────────────────
   useEffect(() => {
@@ -98,7 +108,7 @@ export function MotionRefGenModal(props: {
 
   // ── Playback engine ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!playing || !meshData || meshData.frameCount === 0) {
+    if (!playing || totalFrames === 0) {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
       anchorRef.current = null;
@@ -111,7 +121,7 @@ export function MotionRefGenModal(props: {
       if (!a) return;
       const elapsed = (performance.now() - a.wall) / 1000;
       const nextHead = a.head + elapsed * a.fps;
-      const clamped = Math.floor(nextHead) % meshData.frameCount;
+      const clamped = Math.floor(nextHead) % totalFrames;
       setFrameIndex(clamped);
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -120,16 +130,29 @@ export function MotionRefGenModal(props: {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing]);
+  }, [playing, totalFrames]);
 
-  // Push the current frame's vertices into the mesh viewer.
+  // Push the current frame into the viewer (mesh or skeleton).
   useEffect(() => {
-    if (!meshData) return;
-    const stride = meshData.vertexCount * 3;
-    const start = frameIndex * stride;
-    if (start + stride > meshData.frames.length) return;
-    skeletonRef.current?.setFrame(meshData.frames.subarray(start, start + stride));
-  }, [frameIndex, meshData]);
+    if (displayMode === "mesh" && meshData) {
+      const stride = meshData.vertexCount * 3;
+      const start = frameIndex * stride;
+      if (start + stride > meshData.frames.length) return;
+      skeletonRef.current?.setFrame(meshData.frames.subarray(start, start + stride));
+      return;
+    }
+    if (displayMode === "bones" && jointsData) {
+      const frame = jointsData.frames[frameIndex];
+      if (!frame) return;
+      const flat = new Float32Array(jointsData.jointCount * 3);
+      for (let j = 0; j < jointsData.jointCount; j++) {
+        flat[j * 3] = frame[j][0];
+        flat[j * 3 + 1] = frame[j][1];
+        flat[j * 3 + 2] = frame[j][2];
+      }
+      skeletonRef.current?.setJointFrame(flat);
+    }
+  }, [frameIndex, meshData, jointsData, displayMode]);
 
   useEffect(() => {
     if (!open) {
@@ -184,6 +207,72 @@ export function MotionRefGenModal(props: {
     return { frames, vertexCount, frameCount };
   }
 
+  function resolveBones(
+    bones: number[][] | undefined,
+    jointCount: number,
+  ): [number, number][] {
+    if (bones && bones.length > 0) {
+      return bones.map((b) => [b[0], b[1]] as [number, number]);
+    }
+    if (jointCount === 22) return SMPLX22_BONES;
+    return SMPLX22_BONES;
+  }
+
+  async function loadJointsForMotion(
+    motionKey: string,
+    mf: Pick<MotionRefManifest, "jointCount" | "frameCount" | "bones">,
+  ): Promise<{
+    frames: number[][][];
+    jointCount: number;
+    frameCount: number;
+    bones: [number, number][];
+  }> {
+    const jointsBuf = await apiMotionRefJoints(motionKey);
+    const jointsText = await decompressGzipToText(jointsBuf);
+    const frames = JSON.parse(jointsText) as number[][][];
+    const jointCount = mf.jointCount || (frames[0]?.length ?? 0);
+    const bones = resolveBones(mf.bones, jointCount);
+    skeletonRef.current?.setBonePairs(bones);
+    skeletonRef.current?.setMode("bones");
+
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const frame of frames) {
+      for (const joint of frame) {
+        const y = joint[1];
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+    if (Number.isFinite(minY) && Number.isFinite(maxY)) {
+      skeletonRef.current?.setFraming(minY, (minY + maxY) / 2);
+    }
+
+    const frameCount = frames.length || mf.frameCount;
+    return { frames, jointCount, frameCount, bones };
+  }
+
+  async function loadMotionDisplay(
+    mf: MotionRefManifest,
+    logPrefix: string,
+  ): Promise<{ frameCount: number; mode: ViewerMode }> {
+    if (mf.hasMesh && (mf.vertexCount ?? 0) > 0) {
+      pushLog(`${logPrefix} mesh…`);
+      const md = await loadMeshForMotion(mf.motionKey, mf.vertexCount ?? 0);
+      setMeshData(md);
+      setJointsData(null);
+      setDisplayMode("mesh");
+      skeletonRef.current?.setMode("mesh");
+      return { frameCount: md.frameCount, mode: "mesh" };
+    }
+    pushLog(`${logPrefix} skeleton (no mesh)…`);
+    const jd = await loadJointsForMotion(mf.motionKey, mf);
+    setJointsData(jd);
+    setMeshData(null);
+    setDisplayMode("bones");
+    return { frameCount: jd.frameCount, mode: "bones" };
+  }
+
   // ── Generation (fresh — no starting pose conditioning) ────────────────────
   async function runGenerate() {
     if (!segments.some((s) => s.text.trim())) {
@@ -193,6 +282,8 @@ export function MotionRefGenModal(props: {
     setPlaying(false);
     setManifest(null);
     setMeshData(null);
+    setJointsData(null);
+    setDisplayMode("mesh");
     setFrameIndex(0);
     skeletonRef.current?.resetAll();
 
@@ -213,26 +304,26 @@ export function MotionRefGenModal(props: {
 
       const mf = done.result;
       setManifest(mf);
-      if (!mf.hasMesh) {
-        throw new Error("Generation produced no SMPL-X mesh (check the worker's smplx setup / assets).");
-      }
 
-      pushLog("Loading mesh…");
-      const md = await loadMeshForMotion(mf.motionKey, mf.vertexCount ?? 0);
-      setMeshData(md);
+      const { frameCount, mode } = await loadMotionDisplay(mf, "Loading");
       setFrameIndex(0);
-      pushLog(`Ready — ${md.frameCount} frames @ ${mf.fps} fps.`);
+      pushLog(
+        mode === "mesh"
+          ? `Ready — ${frameCount} frames @ ${mf.fps} fps (mesh).`
+          : `Ready — ${frameCount} frames @ ${mf.fps} fps (skeleton preview).`,
+      );
       endSession();
 
-      // Add to motion gallery list (prepend).
       const newEntry: MotionRefListItem = {
         motionKey: mf.motionKey,
         fps: mf.fps,
-        frameCount: md.frameCount,
+        frameCount,
         jointCount: mf.jointCount,
-        hasMesh: true,
+        hasMesh: mf.hasMesh ?? false,
         vertexCount: mf.vertexCount,
         faceCount: mf.faceCount,
+        bones: mf.bones,
+        displayMode: mf.displayMode ?? (mode === "mesh" ? "mesh" : "skeleton"),
         thumbnailRelPath: "",
         segments: mf.segments ?? segments.filter((s) => s.text.trim()),
       };
@@ -245,10 +336,6 @@ export function MotionRefGenModal(props: {
   // ── Load a saved motion into the viewer ───────────────────────────────────
   async function loadMotion(item: MotionRefListItem) {
     if (busy) return;
-    if (!item.hasMesh) {
-      showError({ message: "This motion has no SMPL-X mesh — regenerate it." });
-      return;
-    }
     setPlaying(false);
     setManifest({
       motionKey: item.motionKey,
@@ -258,15 +345,34 @@ export function MotionRefGenModal(props: {
       hasMesh: item.hasMesh,
       vertexCount: item.vertexCount,
       faceCount: item.faceCount,
+      bones: item.bones,
+      displayMode: item.displayMode,
       segments: item.segments ?? [],
     });
     beginSession({ title: "Loading motion…", clearLog: false });
     await Promise.resolve();
     try {
-      const md = await loadMeshForMotion(item.motionKey, item.vertexCount ?? 0);
-      setMeshData(md);
+      const { frameCount, mode } = await loadMotionDisplay(
+        {
+          motionKey: item.motionKey,
+          fps: item.fps,
+          frameCount: item.frameCount,
+          jointCount: item.jointCount,
+          hasMesh: item.hasMesh,
+          vertexCount: item.vertexCount,
+          faceCount: item.faceCount,
+          bones: item.bones,
+          displayMode: item.displayMode,
+          segments: item.segments ?? [],
+        },
+        "Loading",
+      );
       setFrameIndex(0);
-      pushLog(`Loaded — ${md.frameCount} frames @ ${item.fps} fps.`);
+      pushLog(
+        mode === "mesh"
+          ? `Loaded — ${frameCount} frames @ ${item.fps} fps (mesh).`
+          : `Loaded — ${frameCount} frames @ ${item.fps} fps (skeleton preview).`,
+      );
       endSession();
     } catch (e) {
       failSession(e, "Could not load motion.");
@@ -282,6 +388,8 @@ export function MotionRefGenModal(props: {
       if (manifest?.motionKey === motionKey) {
         setManifest(null);
         setMeshData(null);
+        setJointsData(null);
+        setDisplayMode("mesh");
         setFrameIndex(0);
         skeletonRef.current?.resetAll();
       }
@@ -431,7 +539,8 @@ export function MotionRefGenModal(props: {
             onCameraChange={(s) => setCameraState(s)}
           />
           <div style={{ fontSize: 10, color: "#555", marginTop: 4 }}>
-            Drag to orbit · Scroll to zoom · Drag corner to resize
+            {displayMode === "mesh" ? "Mesh preview" : "Skeleton preview"}
+            {" · "}Drag to orbit · Scroll to zoom · Drag corner to resize
           </div>
         </div>
 

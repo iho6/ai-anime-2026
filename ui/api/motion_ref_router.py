@@ -61,6 +61,8 @@ def motion_ref_list() -> list[dict[str, Any]]:
                 "hasMesh": bool(manifest.get("has_mesh", False)),
                 "vertexCount": manifest.get("vertex_count", 0),
                 "faceCount": manifest.get("face_count", 0),
+                "bones": manifest.get("bones", []),
+                "displayMode": manifest.get("display_mode", "mesh"),
                 "thumbnailRelPath": thumbnail or "",
                 "segments": manifest.get("segments", []),
             }
@@ -216,6 +218,8 @@ async def motion_ref_generate_ws(ws: WebSocket) -> None:
                 "has_mesh": result.get("has_mesh", False),
                 "vertex_count": result.get("vertex_count", 0),
                 "face_count": result.get("face_count", 0),
+                "bones": result.get("bones", []),
+                "display_mode": result.get("display_mode", "mesh"),
                 "segments": result["segments"],
                 "model": model_name,
             })
@@ -227,6 +231,8 @@ async def motion_ref_generate_ws(ws: WebSocket) -> None:
                 "hasMesh": result.get("has_mesh", False),
                 "vertexCount": result.get("vertex_count", 0),
                 "faceCount": result.get("face_count", 0),
+                "bones": result.get("bones", []),
+                "displayMode": result.get("display_mode", "mesh"),
                 "jointsRelPath": storage_rel_from_abs(result["joints_gz_path"]),
                 "segments": result["segments"],
             }

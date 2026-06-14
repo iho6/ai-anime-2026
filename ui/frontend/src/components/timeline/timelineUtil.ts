@@ -168,6 +168,67 @@ export function snapClipRectToFrame(
   return { rect: { left, top, width, height }, guides };
 }
 
+const MIN_CLIP_SCALE = 0.1;
+const MAX_CLIP_SCALE = 6;
+
+type ScaleSnapCandidate = { scale: number; delta: number; guide: AlignGuide };
+
+/**
+ * Snap uniform scale so a clip edge sticks to the frame border while the
+ * transform center stays fixed (bottom-right scale handle in preview).
+ */
+export function snapClipScaleToFrame(
+  clip: TimelineClip,
+  tf: ClipTransform,
+  frameW: number,
+  frameH: number,
+  thresholdPx = PREVIEW_ALIGN_SNAP_PX
+): { scale: number; guides: AlignGuide[] } {
+  const clampedTentative = clamp(tf.scale, MIN_CLIP_SCALE, MAX_CLIP_SCALE);
+  const nW = clip.naturalW ?? 0;
+  const nH = clip.naturalH ?? 0;
+  const { w: baseW, h: baseH } = containedBoxSize(nW, nH, frameW, frameH);
+  if (baseW <= 0 || baseH <= 0 || frameW <= 0 || frameH <= 0) {
+    return { scale: clampedTentative, guides: [] };
+  }
+
+  const cx = frameW / 2 + tf.x * frameW;
+  const cy = frameH / 2 + tf.y * frameH;
+  const rect = clipImageRect(clip, { ...tf, scale: clampedTentative }, frameW, frameH);
+  const right = rect.left + rect.width;
+  const bottom = rect.top + rect.height;
+
+  const candidates: ScaleSnapCandidate[] = [];
+
+  const tryEdge = (edgeDelta: number, scale: number, guide: AlignGuide) => {
+    if (Math.abs(edgeDelta) >= thresholdPx) return;
+    const snapped = clamp(scale, MIN_CLIP_SCALE, MAX_CLIP_SCALE);
+    if (!Number.isFinite(snapped)) return;
+    candidates.push({ scale: snapped, delta: Math.abs(edgeDelta), guide });
+  };
+
+  tryEdge(-rect.left, (2 * cx) / baseW, { axis: "x", pos: 0, kind: "border" });
+  tryEdge(frameW - right, (2 * (frameW - cx)) / baseW, {
+    axis: "x",
+    pos: frameW,
+    kind: "border",
+  });
+  tryEdge(-rect.top, (2 * cy) / baseH, { axis: "y", pos: 0, kind: "border" });
+  tryEdge(frameH - bottom, (2 * (frameH - cy)) / baseH, {
+    axis: "y",
+    pos: frameH,
+    kind: "border",
+  });
+
+  if (candidates.length === 0) {
+    return { scale: clampedTentative, guides: [] };
+  }
+
+  candidates.sort((a, b) => a.delta - b.delta);
+  const best = candidates[0]!;
+  return { scale: best.scale, guides: [best.guide] };
+}
+
 /** Effective transform at playhead (trajectory + motion when present). */
 export function clipTransformAtPlayhead(clip: TimelineClip, playhead: number): ClipTransform {
   const traj = resolveTrajectoryTransformAt(clip, playhead, { applyMotion: true });
@@ -531,6 +592,38 @@ export function newVideoTrack(name: string): TimelineTrack {
 
 export function newAudioTrack(name: string): TimelineTrack {
   return { id: genId("trk"), name, kind: "audio", clips: [] };
+}
+
+export function newNeutralTrack(name: string): TimelineTrack {
+  return { id: genId("trk"), name, kind: "neutral", clips: [] };
+}
+
+export function trackKindForClip(clip: TimelineClip): "video" | "audio" {
+  return clip.type === "audio" ? "audio" : "video";
+}
+
+export function defaultTrackNameForKind(
+  kind: "video" | "audio",
+  tracks: TimelineTrack[]
+): string {
+  if (kind === "audio") {
+    return `Music ${tracks.filter((t) => t.kind === "audio").length + 1}`;
+  }
+  return `Video ${tracks.filter((t) => t.kind === "video").length + 1}`;
+}
+
+/** Promote a neutral track to video or audio (renames using standard Video/Music labels). */
+export function promoteTrackKind(
+  track: TimelineTrack,
+  kind: "video" | "audio",
+  allTracks: TimelineTrack[]
+): TimelineTrack {
+  if (track.kind !== "neutral") return track;
+  return {
+    ...track,
+    kind,
+    name: defaultTrackNameForKind(kind, allTracks),
+  };
 }
 
 /** Append a clip to a track, placed at the end of its existing clips. */

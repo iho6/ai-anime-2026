@@ -1,4 +1,5 @@
-# (install torch/torchvision/torchaudio via dev.sh using PyTorch cu121 index first)
+# PyTorch/torchvision/torchaudio: install via services/pytorch_setup.py (cu128, 2.8+)
+# or UI Launch / dev.sh --full-bootstrap before pip install -r requirements.txt
 # torch
 torchsde
 # torchvision

@@ -1074,10 +1074,13 @@ def _render_video_track(
 
     state = _CompositorState()
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    from services.utils import av_output_framerate
+
+    out_rate = av_output_framerate(fps)
 
     try:
         with av.open(str(output_path), mode="w") as container:
-            stream = container.add_stream("libx264", rate=fps)
+            stream = container.add_stream("libx264", rate=out_rate)
             stream.width = frame_w
             stream.height = frame_h
             stream.pix_fmt = "yuv420p"

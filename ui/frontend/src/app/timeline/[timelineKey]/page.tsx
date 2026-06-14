@@ -48,7 +48,7 @@ import { useJobRunSession } from "../../../hooks/useJobRunSession";
 import { useAppError } from "../../../components/ErrorProvider";
 import { TimelinePreviewPlayer } from "../../../components/timeline/TimelinePreviewPlayer";
 import { GeometryShapePicker } from "../../../components/timeline/GeometryShapePicker";
-import { TimelineTracks } from "../../../components/timeline/TimelineTracks";
+import { TimelineTracks, TIMELINE_LABEL_W, TIMELINE_ROW_H } from "../../../components/timeline/TimelineTracks";
 import {
   SequenceVideoPicker,
   SequenceVideoChoice,
@@ -68,7 +68,10 @@ import {
   formatTime,
   genId,
   newAudioTrack,
+  newNeutralTrack,
   newVideoTrack,
+  promoteTrackKind,
+  defaultTrackNameForKind,
   overlayShotLayerPlacement,
   pruneBrokenTransitions,
   resolveImportDimensions,
@@ -242,13 +245,23 @@ export default function TimelineEditorPage() {
     const wantId = targetTrackRef.current;
     const want = wantId ? m.tracks.find((t) => t.id === wantId) : null;
     if (want && want.kind === kind) return { m, trackId: want.id };
+    if (want && want.kind === "neutral" && want.clips.length === 0) {
+      const promoted = promoteTrackKind(want, kind, m.tracks);
+      return {
+        m: {
+          ...m,
+          tracks: m.tracks.map((t) => (t.id === want.id ? promoted : t)),
+        },
+        trackId: want.id,
+      };
+    }
     // Last matching track, else create one.
     const existing = [...m.tracks].reverse().find((t) => t.kind === kind);
     if (existing) return { m, trackId: existing.id };
     const track =
       kind === "video"
-        ? newVideoTrack(`Video ${m.tracks.filter((t) => t.kind === "video").length + 1}`)
-        : newAudioTrack(`Music ${m.tracks.filter((t) => t.kind === "audio").length + 1}`);
+        ? newVideoTrack(defaultTrackNameForKind("video", m.tracks))
+        : newAudioTrack(defaultTrackNameForKind("audio", m.tracks));
     return { m: { ...m, tracks: [...m.tracks, track] }, trackId: track.id };
   }
 
@@ -356,12 +369,12 @@ export default function TimelineEditorPage() {
   }
 
   // ---- Toolbar actions -----------------------------------------------------
-  function addVideoTrack() {
+  function addNeutralTrack() {
     historyUpdate((m) => ({
       ...m,
       tracks: [
         ...m.tracks,
-        newVideoTrack(`Video ${m.tracks.filter((t) => t.kind === "video").length + 1}`),
+        newNeutralTrack(`Track ${m.tracks.length + 1}`),
       ],
     }));
   }
@@ -519,9 +532,11 @@ export default function TimelineEditorPage() {
 
   // ---- Character picker (pose / expression / sequence) ---------------------
 
-  /** Change Pose: import a timeline copy of the new pose, then swap the existing clip in-place. */
-  async function swapClipImage(swapId: string, relPath: string, charKey: string) {
-    beginSession({ title: "Swapping image", clearLog: true });
+  /** Change Pose: import a timeline copy and add a new clip (source clip unchanged). */
+  async function addPoseClipFromSource(sourceClipId: string, relPath: string, charKey: string) {
+    const found = findClip(sourceClipId);
+    if (!found) return;
+    beginSession({ title: "Adding pose clip", clearLog: true });
     await Promise.resolve();
     pushLog("Importing new pose…");
     try {
@@ -531,37 +546,30 @@ export default function TimelineEditorPage() {
         r.width || 0,
         r.height || 0
       );
-      historyUpdate((m) => ({
-        ...m,
-        tracks: m.tracks.map((t) => ({
-          ...t,
-          clips: t.clips.map((c) =>
-            c.id === swapId
-              ? {
-                  ...c,
-                  srcRelPath: r.srcRelPath,
-                  source: { ...c.source, charKey },
-                  naturalW: width || c.naturalW,
-                  naturalH: height || c.naturalH,
-                }
-              : c
-          ),
-        })),
-      }));
+      insertClipOnSameTrack(
+        buildImageClip({
+          srcRelPath: r.srcRelPath,
+          width,
+          height,
+          source: { ...found.clip.source, charKey },
+          durationSec: found.clip.duration,
+        }),
+        found.trackId,
+        found.clip.start
+      );
       endSession();
     } catch (e) {
-      failSession(e, "Could not swap image.");
+      failSession(e, "Could not add pose clip.");
     }
   }
 
   function onPickCharImage(charKey: string, relPath: string) {
     setCharPickerOpen(false);
-    const swapId = changePoseClipId;
+    const sourceClipId = changePoseClipId;
     setChangePoseClipId(null);
     setCharPickerInitialKey(null);
-    if (swapId) {
-      // Change Pose: import a timeline copy first so srcRelPath is always self-contained.
-      void swapClipImage(swapId, relPath, charKey);
+    if (sourceClipId) {
+      void addPoseClipFromSource(sourceClipId, relPath, charKey);
     } else {
       void importImageClip(relPath, { charKey });
     }
@@ -601,29 +609,23 @@ export default function TimelineEditorPage() {
       });
       const newRel = done.result?.relPath;
       if (!done.ok || !newRel) throw new Error(done.error || "Angle generation returned no image.");
-      // Re-import the new image and replace clip in-place.
       const r = await apiTimelineImportImage({ timelineKey, sourceRelPath: newRel });
       const { width, height } = await resolveImportDimensions(
         r.srcRelPath,
         r.width || 0,
         r.height || 0
       );
-      historyUpdate((m) => ({
-        ...m,
-        tracks: m.tracks.map((t) => ({
-          ...t,
-          clips: t.clips.map((c) =>
-            c.id === clipId
-              ? {
-                  ...c,
-                  srcRelPath: r.srcRelPath,
-                  naturalW: width || c.naturalW,
-                  naturalH: height || c.naturalH,
-                }
-              : c
-          ),
-        })),
-      }));
+      insertClipOnSameTrack(
+        buildImageClip({
+          srcRelPath: r.srcRelPath,
+          width,
+          height,
+          source: found.clip.source,
+          durationSec: found.clip.duration,
+        }),
+        found.trackId,
+        found.clip.start
+      );
       endSession();
     } catch (e) {
       failSession(e, "Could not generate a new angle.");
@@ -845,22 +847,17 @@ export default function TimelineEditorPage() {
         r.width || 0,
         r.height || 0
       );
-      historyUpdate((m) => ({
-        ...m,
-        tracks: m.tracks.map((t) => ({
-          ...t,
-          clips: t.clips.map((c) =>
-            c.id === clipId
-              ? {
-                  ...c,
-                  srcRelPath: r.srcRelPath,
-                  naturalW: width || c.naturalW,
-                  naturalH: height || c.naturalH,
-                }
-              : c
-          ),
-        })),
-      }));
+      insertClipOnNewTrack(
+        buildImageClip({
+          srcRelPath: r.srcRelPath,
+          width,
+          height,
+          source: found.clip.source,
+          durationSec: found.clip.duration,
+        }),
+        found.clip.start,
+        "Remove Background"
+      );
       endSession();
     } catch (e) {
       failSession(e, "Background removal failed.");
@@ -882,22 +879,26 @@ export default function TimelineEditorPage() {
       if (!done.ok || !done.result?.srcRelPath) {
         throw new Error(done.error || "Video BG removal returned no output.");
       }
-      historyUpdate((m) => ({
-        ...m,
-        tracks: m.tracks.map((t) => ({
-          ...t,
-          clips: t.clips.map((c) =>
-            c.id === clipId
-              ? {
-                  ...c,
-                  srcRelPath: done.result!.srcRelPath,
-                  naturalW: done.result!.width || c.naturalW,
-                  naturalH: done.result!.height || c.naturalH,
-                }
-              : c
-          ),
-        })),
-      }));
+      const r = done.result;
+      const dur = r.durationSec || found.clip.duration || 5;
+      insertClipOnNewTrack(
+        {
+          id: genId("clip"),
+          type: "video",
+          srcRelPath: r.srcRelPath,
+          start: 0,
+          inPoint: 0,
+          outPoint: dur,
+          speed: 1,
+          duration: dur,
+          srcDuration: dur,
+          naturalW: r.width || found.clip.naturalW,
+          naturalH: r.height || found.clip.naturalH,
+          source: found.clip.source,
+        },
+        found.clip.start,
+        "Remove Background"
+      );
       endSession();
     } catch (e) {
       failSession(e, "Video background removal failed.");
@@ -1053,6 +1054,16 @@ export default function TimelineEditorPage() {
       const track = { ...newVideoTrack(name), clips: [{ ...clip, start: startSec }] };
       return { ...m, tracks: [track, ...m.tracks] };
     });
+  }
+
+  /** Append a generated clip on an existing track at the given timeline start. */
+  function insertClipOnSameTrack(clip: TimelineClip, trackId: string, startSec: number) {
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) =>
+        t.id === trackId ? { ...t, clips: [...t.clips, { ...clip, start: startSec }] } : t
+      ),
+    }));
   }
 
   function openAiEdit(clipId: string) {
@@ -1519,7 +1530,7 @@ export default function TimelineEditorPage() {
         label: "+ Track",
         onSelect: () => {
           close();
-          addVideoTrack();
+          addNeutralTrack();
         },
       },
       {
@@ -1745,7 +1756,7 @@ export default function TimelineEditorPage() {
         >
           ↷ Redo
         </button>
-        <button onClick={addVideoTrack} style={toolBtn} disabled={busy}>
+        <button onClick={addNeutralTrack} style={toolBtn} disabled={busy}>
           + Track
         </button>
         <button
@@ -1822,13 +1833,37 @@ export default function TimelineEditorPage() {
       <div style={{ padding: "0 20px 24px" }}>
         {manifest.tracks.length === 0 ? (
           <div
-            style={{ color: "#888", padding: 20, border: "1px dashed rgba(255,255,255,0.2)" }}
+            style={{ border: "1px dashed rgba(255,255,255,0.2)", overflow: "hidden" }}
             onContextMenu={(e) => {
               e.preventDefault();
               openSurfaceContextMenu(null, e.clientX, e.clientY);
             }}
           >
-            No tracks yet. Use “+ Track”, then add a character video, location, or audio.
+            <button
+              type="button"
+              onClick={addNeutralTrack}
+              disabled={busy}
+              style={{
+                display: "flex",
+                width: "100%",
+                height: TIMELINE_ROW_H,
+                alignItems: "center",
+                background: "#1a1a1a",
+                border: "none",
+                color: "#aaa",
+                cursor: busy ? "not-allowed" : "pointer",
+                font: "inherit",
+                fontSize: 13,
+                padding: 0,
+              }}
+            >
+              <span style={{ width: TIMELINE_LABEL_W, flexShrink: 0, paddingLeft: 8 }}>
+                + Track
+              </span>
+              <span style={{ flex: 1, textAlign: "left", opacity: 0.6 }}>
+                Click to add your first track
+              </span>
+            </button>
           </div>
         ) : (
           <TimelineTracks
@@ -1844,6 +1879,7 @@ export default function TimelineEditorPage() {
             onChange={(next) => setManifest(next)}
             onCommit={commit}
             setPxPerSec={setPxPerSec}
+            onAddTrack={addNeutralTrack}
             onClipContextMenu={(trackId, clipId, x, y) =>
               setClipMenu({ open: true, x, y, trackId, clipId })
             }

@@ -15,6 +15,7 @@ import {
 } from "./DesktopContextMenu";
 import { useAppError } from "./ErrorProvider";
 import { AudioRefGrid } from "./AudioRefGrid";
+import { StylizedAudioPlayer } from "./StylizedAudioPlayer";
 
 const MUSIC_STYLE_PLACEHOLDER =
   "Describe music style, instruments, mood, tempo, etc.\n\ne.g. Rock: high-energy modern rock with distorted guitars, punchy drums, and a strong bassline.";
@@ -62,7 +63,7 @@ function TimelineAudioPickerOpen(props: {
   onUseSelected: (items: AudioReference[]) => void;
 }) {
   const { busy, onCancel, onGenerateAudio, onGenerateMusic, onUseSelected } = props;
-  const { confirmAction, askText } = useAppError();
+  const { confirmAction, askText, showError } = useAppError();
 
   const [tab, setTab] = useState<TimelineAudioPickerTab>("audio");
   const [audioPrompt, setAudioPrompt] = useState("");
@@ -182,15 +183,15 @@ function TimelineAudioPickerOpen(props: {
                     return n;
                   });
                   await loadLayout();
-                } catch {
-                  /* ignore */
+                } catch (e) {
+                  showError({ message: "Delete audio failed.", error: e });
                 }
               })(),
           },
         ],
       });
     },
-    [confirmAction, loadLayout]
+    [confirmAction, loadLayout, showError]
   );
 
   const tabBtn = (id: TimelineAudioPickerTab, label: string) => (
@@ -215,37 +216,39 @@ function TimelineAudioPickerOpen(props: {
   );
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.55)",
-        zIndex: 10000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
-      onMouseDown={(e) => {
-        e.preventDefault();
-        onCancel();
-      }}
-    >
+    <>
       <div
         style={{
-          width: 600,
-          maxWidth: "100%",
-          maxHeight: "88vh",
-          overflow: "hidden",
-          background: "#111",
-          color: "#eee",
-          border: "1px solid rgba(255,255,255,0.2)",
-          padding: 14,
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.55)",
+          zIndex: 10000,
           display: "flex",
-          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16,
         }}
-        onMouseDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          e.preventDefault();
+          onCancel();
+        }}
       >
+        <div
+          style={{
+            width: 600,
+            maxWidth: "100%",
+            maxHeight: "88vh",
+            overflow: "hidden",
+            background: "#111",
+            color: "#eee",
+            border: "1px solid rgba(255,255,255,0.2)",
+            padding: 14,
+            display: "flex",
+            flexDirection: "column",
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
         <div style={{ fontWeight: 400, marginBottom: 10 }}>Add Audio</div>
 
         <div style={{ display: "flex", gap: 0, marginBottom: 10 }}>
@@ -518,6 +521,7 @@ function TimelineAudioPickerOpen(props: {
           </button>
         </div>
       </div>
+      </div>
 
       <DesktopContextMenu
         open={menu.open}
@@ -538,29 +542,21 @@ function TimelineAudioPickerOpen(props: {
             alignItems: "center",
             justifyContent: "center",
           }}
-          onMouseDown={() => setPreviewItem(null)}
+          onMouseDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            setPreviewItem(null);
+          }}
         >
-          <div
-            style={{
-              background: "#111",
-              border: "1px solid rgba(255,255,255,0.2)",
-              padding: 16,
-              minWidth: 320,
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <audio
-              controls
-              autoPlay
+          <div onMouseDown={(e) => e.stopPropagation()}>
+            <StylizedAudioPlayer
               src={assetUrlFromRelPath(previewItem.relPath)}
-              style={{ width: "100%" }}
+              autoPlay
+              label={previewItem.label || previewItem.tags || previewItem.id}
+              tone="light"
             />
-            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-              {previewItem.label || previewItem.tags || previewItem.id}
-            </div>
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }

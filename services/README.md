@@ -14,6 +14,26 @@ Shared configuration lives in [`constant.py`](constant.py). Override with enviro
 | `SERVICES_DOWNLOAD_CACHE_FILE` | Path to the newline-delimited download cache JSON. |
 | `CONVERT_LOCAL_IMAGE_TO_URL` | If `1` / `true` / `yes`, serverless workers upload **local file paths** in `image_url` / `image_urls` to S3 so `download_input` can fetch them, then **delete** those staging objects after each job (same as `--convert-local-to-url` on the CLI). Does **not** remove final result uploads. |
 
+## GPU / PyTorch (RTX 4090 and 5090)
+
+Use **PyTorch 2.8+** with **CUDA 12.8 wheels** (`cu128`). Official wheels cover Ada (`sm_89`, RTX 4090) and Blackwell (`sm_120`, RTX 5090).
+
+| Install path | When |
+|--------------|------|
+| UI **Launch** (startup WebSocket) | Primary: [`services.logic.run_startup_setup_and_launch`](logic.py) calls [`ensure_pytorch_stack`](pytorch_setup.py) |
+| `dev.sh --full-bootstrap` | Optional pre-install into `.venv` before opening the UI |
+| `dev.sh` default (`--minimal-ui`) | API only; PyTorch is installed on Launch |
+
+Verify from repo root:
+
+```bash
+.venv/bin/python scripts/gpu_check.py
+```
+
+RTX 5090: use an NVIDIA driver that supports CUDA 12.8 (e.g. 570+). Startup logs include extended [`gpu_preflight`](utils.py) (torch version, arch list, smoke test).
+
+Install logic lives in [`pytorch_setup.py`](pytorch_setup.py) (single source of truth; do not pin `torch==2.6` cu124).
+
 In local `--test-mode`, image-input services now upload local filesystem paths directly to ComfyUI via `POST /upload/image` and pass the returned input reference into `LoadImage`. This avoids temporary S3 staging for local test runs.
 
 Subpackages: `multi_angle_ai_service`, `image_edit_ai_service`, `anime_img_gen_ai_service`, `pose_keypoint_ai_service`, `background_removal_ai_service`, `flf2video_ai_service`, `img2video_ai_service` — each has its own `README.md` and `serverless.py` entrypoint where applicable. Local-only utilities: `noise_generator_service` (Gaussian noise PNGs; see its `README.md`, no serverless).
@@ -53,6 +73,10 @@ KiMoD motion generation (`motion_ref_gen_ai_service`) downloads its **checkpoint
 ```text
 storage/body_models/smplx/SMPLX_NEUTRAL.npz   (~104 MB, Git LFS)
 ```
+
+KiMoD's built-in skinner (`SMPLXSkin`) expects the same file under `kimodo/kimodo/assets/skeletons/smplx22/`. The worker **symlinks** automatically from `storage/body_models/smplx/` when only that copy exists, so one download is enough.
+
+Joints-only skeleton preview works without the npz; mesh skinning requires it at either location.
 
 After `git pull` on SSH / RunPod, fetch LFS objects once per machine (and after pulls that touch this file):
 

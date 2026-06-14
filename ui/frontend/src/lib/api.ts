@@ -530,7 +530,7 @@ export type TimelineClip = {
 export type TimelineTrack = {
   id: string;
   name: string;
-  kind: "video" | "audio";
+  kind: "video" | "audio" | "neutral";
   clips: TimelineClip[];
   /** When true, the track is excluded from preview playback. */
   hidden?: boolean;
@@ -925,6 +925,9 @@ export type MotionRefManifest = {
   hasMesh?: boolean;
   vertexCount?: number;
   faceCount?: number;
+  /** Bone parent/child index pairs for skeleton preview when mesh is unavailable. */
+  bones?: number[][];
+  displayMode?: "mesh" | "skeleton";
   /** Storage-relative path to joints.json.gz (served by /assets/storage/). */
   jointsRelPath?: string;
   segments: MotionRefSegment[];
@@ -949,6 +952,8 @@ export type MotionRefListItem = {
   hasMesh?: boolean;
   vertexCount?: number;
   faceCount?: number;
+  bones?: number[][];
+  displayMode?: "mesh" | "skeleton";
   thumbnailRelPath: string;
   segments: MotionRefSegment[];
 };

@@ -15,7 +15,9 @@ import {
   clipEnd,
   clipTrackLabel,
   connectedClipPairs,
+  promoteTrackKind,
   timelineDuration,
+  trackKindForClip,
 } from "./timelineUtil";
 
 const LABEL_W = 120;
@@ -64,6 +66,7 @@ export function TimelineTracks(props: {
   ) => void;
   onTransitionCommit?: () => void;
   onPruneTransitions?: () => void;
+  onAddTrack?: () => void;
 }) {
   const {
     manifest,
@@ -81,6 +84,7 @@ export function TimelineTracks(props: {
     onTransitionChange,
     onTransitionCommit,
     onPruneTransitions,
+    onAddTrack,
   } = props;
 
   const dragRef = useRef<DragState | null>(null);
@@ -186,7 +190,11 @@ export function TimelineTracks(props: {
           return { ...t, clips: t.clips.filter((c) => c.id !== clip.id) };
         }
         if (t.id === toTrackId) {
-          return { ...t, clips: [...t.clips, { ...clip, start: newStart }] };
+          const base =
+            t.kind === "neutral" && t.clips.length === 0
+              ? promoteTrackKind(t, trackKindForClip(clip), manifest.tracks)
+              : t;
+          return { ...base, clips: [...base.clips, { ...clip, start: newStart }] };
         }
         return t;
       }),
@@ -314,7 +322,12 @@ export function TimelineTracks(props: {
         ? manifest.tracks.find((t) => t.id === targetId)
         : null;
       const dragKind = o.type === "audio" ? "audio" : "video";
-      if (target && target.kind === dragKind && target.id !== d.trackId) {
+      const canDropOnTarget =
+        target &&
+        target.id !== d.trackId &&
+        (target.kind === dragKind ||
+          (target.kind === "neutral" && target.clips.length === 0));
+      if (canDropOnTarget) {
         moveClipToTrack(d.trackId, target.id, { ...o, start: newStart }, newStart);
         d.trackId = target.id;
       } else {
@@ -520,7 +533,12 @@ export function TimelineTracks(props: {
                 position: "relative",
                 width: laneWidth,
                 borderBottom: "1px solid rgba(255,255,255,0.08)",
-                background: track.kind === "audio" ? "#16201a" : "#171b22",
+                background:
+                  track.kind === "audio"
+                    ? "#16201a"
+                    : track.kind === "neutral"
+                    ? "#1a1a1a"
+                    : "#171b22",
                 opacity: track.hidden ? 0.4 : 1,
               }}
               onPointerDown={(e) => {
@@ -679,6 +697,40 @@ export function TimelineTracks(props: {
           <div style={{ height: 3, background: "#ffd166", marginLeft: LABEL_W, width: laneWidth }} />
         )}
 
+        {onAddTrack ? (
+          <div style={{ display: "flex", height: ROW_H }}>
+            <div
+              style={{
+                width: LABEL_W,
+                minWidth: LABEL_W,
+                boxSizing: "border-box",
+                background: "#1b1b1b",
+                borderRight: "1px solid rgba(255,255,255,0.15)",
+              }}
+            />
+            <button
+              type="button"
+              onClick={onAddTrack}
+              style={{
+                flex: 1,
+                width: laneWidth,
+                height: ROW_H,
+                border: "none",
+                borderBottom: "1px solid rgba(255,255,255,0.08)",
+                background: "#141414",
+                color: "#888",
+                cursor: "pointer",
+                font: "inherit",
+                fontSize: 13,
+                textAlign: "left",
+                paddingLeft: 12,
+              }}
+            >
+              + Track
+            </button>
+          </div>
+        ) : null}
+
         {/* Playhead overlay (spans ruler + rows, offset past the label column). */}
         <div
           style={{
@@ -727,3 +779,4 @@ function handleStyle(side: "left" | "right"): React.CSSProperties {
 }
 
 export const TIMELINE_LABEL_W = LABEL_W;
+export const TIMELINE_ROW_H = ROW_H;
