@@ -510,6 +510,15 @@ export type TimelineClip = {
       cpy?: number;
     }>;
   };
+  /** Clip volume envelope (audio clips): 0–100 level, 50 = unity gain. */
+  volumeAutomation?: {
+    points: Array<{
+      t: number;
+      level: number;
+      cpt?: number;
+      cpl?: number;
+    }>;
+  };
   /** Where this clip was imported from (for provenance / re-import). */
   source?: {
     charKey?: string;

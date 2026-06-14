@@ -9801,10 +9801,11 @@ def composite_video_with_masks(
 
     in_container = av.open(str(src))
     in_stream = in_container.streams.video[0]
-    from services.utils import av_output_framerate
+    from services.utils import av_output_framerate, av_stream_time_base
 
     stream_rate = in_stream.average_rate or in_stream.base_rate
     out_rate = av_output_framerate(stream_rate)
+    tb = av_stream_time_base(out_rate)
     fps = float(out_rate)
     src_w = in_stream.width
     src_h = in_stream.height
@@ -9812,6 +9813,7 @@ def composite_video_with_masks(
 
     out_container = av.open(str(out), mode="w", format="webm")
     out_stream = out_container.add_stream("libvpx-vp9", rate=out_rate)
+    out_stream.time_base = tb
     out_stream.width = src_w
     out_stream.height = src_h
     out_stream.pix_fmt = "yuva420p"
@@ -9837,7 +9839,7 @@ def composite_video_with_masks(
                 out_frame = av.VideoFrame.from_ndarray(rgba, format="rgba")
                 out_frame = out_frame.reformat(format="yuva420p")
                 out_frame.pts = frame_idx
-                out_frame.time_base = out_stream.codec_context.time_base
+                out_frame.time_base = tb
                 for pkt in out_stream.encode(out_frame):
                     out_container.mux(pkt)
                 frame_idx += 1

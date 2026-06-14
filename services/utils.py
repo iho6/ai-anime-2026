@@ -1152,6 +1152,19 @@ def av_output_framerate(
     return Fraction(round(float(rate) * 1000), 1000)
 
 
+def av_stream_time_base(rate: Any) -> Any:
+    """
+    Time base for PyAV output streams (``1 / fps``).
+
+    PyAV 14+ leaves ``codec_context.time_base`` as ``None`` until after the first
+    encode; set this explicitly on the stream and each frame before encoding.
+    """
+    from fractions import Fraction
+
+    fps = float(av_output_framerate(rate))
+    return Fraction(1, max(1, int(round(fps))))
+
+
 def extract_video_frames_to_pngs(video_path: str, dest_dir: str) -> list[str]:
     """Decode every video frame to PNGs (frame_000001.png, …). Returns ordered absolute paths."""
     import av  # type: ignore

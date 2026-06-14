@@ -2,6 +2,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { Sam3Point } from "../lib/api";
+import { JobQuadSpinner } from "./JobQuadSpinner";
+
+const MASK_LUM_THRESHOLD = 64;
+const POINT_HIT_RADIUS = 12;
+const INSIDE_RGBA = [72, 210, 120, 140] as const;
+const OUTSIDE_RGBA = [28, 32, 48, 178] as const;
 
 function clientToNatural(
   clientX: number,
@@ -18,6 +24,37 @@ function clientToNatural(
     x: Math.max(0, Math.min(naturalW - 1, Math.round(x))),
     y: Math.max(0, Math.min(naturalH - 1, Math.round(y))),
   };
+}
+
+function buildMaskTintOverlay(maskB64: string, w: number, h: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("canvas unavailable"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, w, h);
+      const src = ctx.getImageData(0, 0, w, h);
+      const out = ctx.createImageData(w, h);
+      for (let i = 0; i < src.data.length; i += 4) {
+        const lum = src.data[i];
+        const rgba = lum > MASK_LUM_THRESHOLD ? INSIDE_RGBA : OUTSIDE_RGBA;
+        out.data[i] = rgba[0];
+        out.data[i + 1] = rgba[1];
+        out.data[i + 2] = rgba[2];
+        out.data[i + 3] = rgba[3];
+      }
+      ctx.putImageData(out, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("mask decode failed"));
+    img.src = `data:image/png;base64,${maskB64}`;
+  });
 }
 
 export function SegmentModal(props: {
@@ -52,8 +89,10 @@ export function SegmentModal(props: {
 
   const [positive, setPositive] = useState<Sam3Point[]>([]);
   const [negative, setNegative] = useState<Sam3Point[]>([]);
-  const [textPrompt, setTextPrompt] = useState("");
+  const [textDraft, setTextDraft] = useState("");
+  const [appliedTextPrompt, setAppliedTextPrompt] = useState("");
   const [maskB64, setMaskB64] = useState<string | null>(null);
+  const [overlayDataUrl, setOverlayDataUrl] = useState<string | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
 
@@ -62,15 +101,23 @@ export function SegmentModal(props: {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const previewGenRef = useRef(0);
 
+  const invalidateMask = useCallback(() => {
+    setMaskB64(null);
+    setOverlayDataUrl(null);
+  }, []);
+
   const resetState = useCallback(() => {
     setPositive([]);
     setNegative([]);
-    setTextPrompt("");
+    setTextDraft("");
+    setAppliedTextPrompt("");
     setMaskB64(null);
+    setOverlayDataUrl(null);
     setNaturalSize(null);
   }, []);
 
-  const hasPrompt = positive.length > 0 || textPrompt.trim().length > 0;
+  const hasPrompt =
+    positive.length > 0 || appliedTextPrompt.trim().length > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -96,6 +143,7 @@ export function SegmentModal(props: {
     async (pos: Sam3Point[], neg: Sam3Point[], text: string) => {
       if (!pos.length && !text.trim()) {
         setMaskB64(null);
+        setOverlayDataUrl(null);
         return;
       }
       const gen = ++previewGenRef.current;
@@ -108,6 +156,7 @@ export function SegmentModal(props: {
       } catch {
         if (gen === previewGenRef.current) {
           setMaskB64(null);
+          setOverlayDataUrl(null);
         }
       } finally {
         if (gen === previewGenRef.current) {
@@ -119,15 +168,22 @@ export function SegmentModal(props: {
   );
 
   useEffect(() => {
-    if (!open || !hasPrompt) {
-      setMaskB64(null);
+    if (!maskB64 || !naturalSize) {
+      setOverlayDataUrl(null);
       return;
     }
-    const t = window.setTimeout(() => {
-      void refreshPreview(positive, negative, textPrompt);
-    }, 400);
-    return () => window.clearTimeout(t);
-  }, [open, positive, negative, textPrompt, hasPrompt, refreshPreview]);
+    let cancelled = false;
+    void buildMaskTintOverlay(maskB64, naturalSize.w, naturalSize.h)
+      .then((url) => {
+        if (!cancelled) setOverlayDataUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setOverlayDataUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [maskB64, naturalSize]);
 
   const onMediaLoad = useCallback(() => {
     if (clipType === "image" && imgRef.current) {
@@ -143,8 +199,38 @@ export function SegmentModal(props: {
     }
   }, [clipType]);
 
+  function findPointHit(
+    clientX: number,
+    clientY: number
+  ): { kind: "pos" | "neg"; index: number } | null {
+    const wrap = mediaWrapRef.current;
+    if (!wrap || !naturalSize) return null;
+    const target = clipType === "image" ? imgRef.current : videoRef.current;
+    if (!target) return null;
+    const wrapRect = wrap.getBoundingClientRect();
+    const sx = clientX - wrapRect.left;
+    const sy = clientY - wrapRect.top;
+    const rect = target.getBoundingClientRect();
+
+    const hitInList = (pts: Sam3Point[], kind: "pos" | "neg") => {
+      for (let i = 0; i < pts.length; i++) {
+        const pt = pts[i];
+        const left =
+          rect.left - wrapRect.left + (pt.x / naturalSize.w) * rect.width;
+        const top =
+          rect.top - wrapRect.top + (pt.y / naturalSize.h) * rect.height;
+        if (Math.hypot(sx - left, sy - top) <= POINT_HIT_RADIUS) {
+          return { kind, index: i };
+        }
+      }
+      return null;
+    };
+
+    return hitInList(negative, "neg") ?? hitInList(positive, "pos");
+  }
+
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (busy || previewBusy) return;
+    if (e.button !== 0 || busy || previewBusy) return;
     const wrap = mediaWrapRef.current;
     if (!wrap || !naturalSize) return;
     const target = clipType === "image" ? imgRef.current : videoRef.current;
@@ -158,6 +244,7 @@ export function SegmentModal(props: {
       naturalSize.h
     );
     if (!pt) return;
+    invalidateMask();
     if (e.shiftKey) {
       setNegative((prev) => [...prev, pt]);
     } else {
@@ -165,16 +252,50 @@ export function SegmentModal(props: {
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (busy || previewBusy) return;
+    const hit = findPointHit(e.clientX, e.clientY);
+    if (!hit) return;
+    invalidateMask();
+    if (hit.kind === "neg") {
+      setNegative((prev) => prev.filter((_, i) => i !== hit.index));
+    } else {
+      setPositive((prev) => prev.filter((_, i) => i !== hit.index));
+    }
+  };
+
+  const addPrompt = () => {
+    const trimmed = textDraft.trim();
+    if (!trimmed || previewBusy) return;
+    setAppliedTextPrompt(trimmed);
+    invalidateMask();
+  };
+
+  const runSegment = () => {
+    if (previewBusy || busy) return;
+    if (!positive.length && !appliedTextPrompt.trim()) return;
+    void refreshPreview(positive, negative, appliedTextPrompt);
+  };
+
   const clearPrompt = () => {
     setPositive([]);
     setNegative([]);
-    setTextPrompt("");
+    setTextDraft("");
+    setAppliedTextPrompt("");
     setMaskB64(null);
+    setOverlayDataUrl(null);
   };
 
   if (!open) return null;
 
   const canSave = !busy && !previewBusy && hasPrompt && Boolean(maskB64);
+  const canAddPrompt = Boolean(textDraft.trim()) && !busy && !previewBusy;
+  const canSegment =
+    (positive.length > 0 || Boolean(appliedTextPrompt.trim())) &&
+    !busy &&
+    !previewBusy;
 
   const pointStyle = (kind: "pos" | "neg"): React.CSSProperties => ({
     position: "absolute",
@@ -206,6 +327,16 @@ export function SegmentModal(props: {
         style={{ ...pointStyle(kind), left, top }}
       />
     );
+  };
+
+  const mediaOverlayStyle: React.CSSProperties = {
+    position: "absolute",
+    inset: 0,
+    margin: "auto",
+    maxWidth: "100%",
+    maxHeight: "100%",
+    objectFit: "contain",
+    pointerEvents: "none",
   };
 
   return (
@@ -265,28 +396,68 @@ export function SegmentModal(props: {
               color: "rgba(255,255,255,0.85)",
             }}
           >
-            Click to include a region. Shift+click to exclude. Optional text
-            prompt (e.g. person, red car). Text and points are combined.{" "}
+            Click to include, Shift+click to exclude, right-click a point to
+            remove. Add Prompt then click Segment to preview. Text and points
+            are combined.{" "}
             {clipType === "video"
               ? "Preview uses the frame at the playhead."
               : null}
           </div>
-          <input
-            type="text"
-            value={textPrompt}
-            disabled={busy || previewBusy}
-            placeholder="Text prompt (optional), e.g. person or cat:2, dog"
-            onChange={(e) => setTextPrompt(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "8px 10px",
-              fontSize: 13,
-              background: "#1a1a1a",
-              border: "1px solid rgba(255,255,255,0.2)",
-              color: "#eee",
-              borderRadius: 4,
-            }}
-          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              type="text"
+              value={textDraft}
+              disabled={busy || previewBusy}
+              placeholder="Text prompt (optional), e.g. person or cat:2, dog"
+              onChange={(e) => setTextDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addPrompt();
+                }
+              }}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                padding: "8px 10px",
+                fontSize: 13,
+                background: "#1a1a1a",
+                border: "1px solid rgba(255,255,255,0.2)",
+                color: "#eee",
+                borderRadius: 4,
+              }}
+            />
+            <button
+              type="button"
+              className="ui-btn-black"
+              disabled={!canAddPrompt}
+              style={{
+                flexShrink: 0,
+                cursor: canAddPrompt ? "pointer" : "not-allowed",
+                opacity: canAddPrompt ? 1 : 0.6,
+              }}
+              onClick={(e) => {
+                e.preventDefault();
+                addPrompt();
+              }}
+            >
+              Add Prompt
+            </button>
+          </div>
+          {appliedTextPrompt ? (
+            <div
+              style={{
+                fontSize: 12,
+                color: "rgba(255,255,255,0.75)",
+                padding: "4px 8px",
+                background: "rgba(72, 210, 120, 0.12)",
+                border: "1px solid rgba(72, 210, 120, 0.35)",
+                borderRadius: 4,
+              }}
+            >
+              Prompt: {appliedTextPrompt}
+            </div>
+          ) : null}
           <div
             ref={mediaWrapRef}
             style={{
@@ -301,6 +472,7 @@ export function SegmentModal(props: {
               background: "#111",
             }}
             onPointerDown={handlePointerDown}
+            onContextMenu={handleContextMenu}
           >
             {clipType === "image" ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -335,27 +507,38 @@ export function SegmentModal(props: {
                 }}
               />
             )}
-            {maskB64 && naturalSize ? (
+            {overlayDataUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={`data:image/png;base64,${maskB64}`}
+                src={overlayDataUrl}
                 alt=""
                 draggable={false}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  margin: "auto",
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  objectFit: "contain",
-                  opacity: 0.45,
-                  mixBlendMode: "screen",
-                  pointerEvents: "none",
-                }}
+                style={{ ...mediaOverlayStyle, zIndex: 2 }}
               />
             ) : null}
             {positive.map((pt, i) => renderPoint(pt, "pos", `p-${i}`))}
             {negative.map((pt, i) => renderPoint(pt, "neg", `n-${i}`))}
+            {previewBusy ? (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  zIndex: 10,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 12,
+                  background: "rgba(0,0,0,0.55)",
+                  pointerEvents: "all",
+                }}
+              >
+                <JobQuadSpinner size={28} />
+                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.9)" }}>
+                  Running SAM 3.1 segmentation…
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -365,14 +548,37 @@ export function SegmentModal(props: {
             padding: 12,
             borderTop: "1px solid rgba(255,255,255,0.12)",
             display: "flex",
-            justifyContent: "flex-end",
+            justifyContent: "space-between",
+            alignItems: "center",
             gap: 8,
           }}
         >
           <button
             type="button"
             className="ui-btn-black"
-            disabled={busy || (!positive.length && !negative.length && !textPrompt.trim())}
+            disabled={!canSegment}
+            style={{
+              cursor: canSegment ? "pointer" : "not-allowed",
+              opacity: canSegment ? 1 : 0.6,
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              runSegment();
+            }}
+          >
+            Segment
+          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            className="ui-btn-black"
+            disabled={
+              busy ||
+              (!positive.length &&
+                !negative.length &&
+                !textDraft.trim() &&
+                !appliedTextPrompt.trim())
+            }
             onClick={(e) => {
               e.preventDefault();
               clearPrompt();
@@ -390,7 +596,11 @@ export function SegmentModal(props: {
             }}
             onClick={(e) => {
               e.preventDefault();
-              void onSave(positive, negative, textPrompt.trim() || undefined);
+              void onSave(
+                positive,
+                negative,
+                appliedTextPrompt.trim() || undefined
+              );
             }}
           >
             Save segment
@@ -405,6 +615,7 @@ export function SegmentModal(props: {
           >
             Cancel
           </button>
+          </div>
         </div>
       </div>
     </div>

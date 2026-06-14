@@ -4,6 +4,122 @@
   "previewAspect": "1:1",
   "tracks": [
     {
+      "id": "trk_mqdyb46d_12",
+      "name": "Segment",
+      "kind": "video",
+      "clips": []
+    },
+    {
+      "id": "trk_mqdxyp88_9",
+      "name": "Remove Background",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mqdxyp87_7",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_9f89fa1f975040c79916f973f7bcea26_nobg_1781451051.webm",
+          "start": 19.777284675167746,
+          "inPoint": 0,
+          "outPoint": 3.916,
+          "speed": 1,
+          "duration": 3.916,
+          "srcDuration": 3.916,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "Sequence_1"
+          }
+        }
+      ]
+    },
+    {
+      "id": "trk_mqdxx4qs_6",
+      "name": "Segment",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mqdxx4qr_4",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_2f09f81713144ca88eb0345d5637f24d_seg.webm",
+          "start": 15.168989967709042,
+          "inPoint": 0,
+          "outPoint": 1.9583333333333333,
+          "speed": 1,
+          "duration": 1.9583333333333333,
+          "srcDuration": 1.9583333333333333,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "clip_mqdyjevi_16",
+          "type": "text",
+          "srcRelPath": "",
+          "start": 6.34762201309204,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1000,
+          "naturalH": 1000,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 0.35
+          },
+          "text": {
+            "content": "Text",
+            "fontFamilyId": "inter",
+            "fontWeight": 400,
+            "fontStyle": "normal",
+            "fontSize": 48,
+            "color": "#ffffff",
+            "align": "center"
+          }
+        }
+      ]
+    },
+    {
+      "id": "trk_mqdxvgow_3",
+      "name": "Remove Background",
+      "kind": "video",
+      "clips": []
+    },
+    {
+      "id": "trk_mqdxe5tz_3",
+      "name": "Remove Background",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mqdxe5tz_1",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_1daf3e6be6ed4e61bd334ad926c2014c.png",
+          "start": 10.552062589953191,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "luka"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        }
+      ]
+    },
+    {
       "id": "trk_mqduevs8_2",
       "name": "Video 1",
       "kind": "video",
@@ -26,8 +142,8 @@
           },
           "transform": {
             "x": 0,
-            "y": -0.01591140602173119,
-            "scale": 1.6825684425980034,
+            "y": 0,
+            "scale": 1.7777777777777777,
             "rotation": 0,
             "opacity": 1
           }
@@ -40,16 +156,18 @@
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
-          "duration": 3,
+          "duration": 5.940872114976509,
           "naturalW": 1024,
           "naturalH": 1024,
           "source": {
             "charKey": "luka"
           },
           "transform": {
-            "x": 0,
-            "y": 0,
-            "scale": 1
+            "x": 0.10813669355419259,
+            "y": 0.6579585063295468,
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
           }
         }
       ],
@@ -69,7 +187,23 @@
           "outPoint": 30.0002,
           "speed": 1,
           "duration": 30.0002,
-          "srcDuration": 30.0002
+          "srcDuration": 30.0002,
+          "volumeAutomation": {
+            "points": [
+              {
+                "t": 0,
+                "level": 50
+              },
+              {
+                "t": 0.9682986489968314,
+                "level": 50
+              },
+              {
+                "t": 1,
+                "level": 50
+              }
+            ]
+          }
         },
         {
           "id": "clip_mqdvy19g_1",
@@ -82,7 +216,8 @@
           "duration": 30.0002,
           "srcDuration": 30.0002
         }
-      ]
+      ],
+      "hidden": true
     },
     {
       "id": "trk_mqdvzr4q_3",

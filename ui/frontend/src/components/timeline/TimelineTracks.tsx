@@ -9,7 +9,10 @@ import {
 } from "../../lib/api";
 import { ClipTransitionMenu } from "./ClipTransitionMenu";
 import { TrackLabelTag } from "./TrackLabelTag";
+import { VolumeAutomationEditor } from "./VolumeAutomationEditor";
 import { transitionBadge } from "./transitionEffects";
+import { isFlatVolumeAutomation } from "./volumeAutomation";
+import type { VolumeAutomationPoint } from "./volumeAutomation";
 import {
   clamp,
   clipEnd,
@@ -23,6 +26,38 @@ import {
 const LABEL_W = 120;
 const ROW_H = 56;
 const RULER_H = 22;
+
+export function AddTrackStrip(props: {
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const { onClick, disabled = false } = props;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "100%",
+        height: ROW_H,
+        flexShrink: 0,
+        border: "none",
+        borderTop: "1px solid rgba(255,255,255,0.08)",
+        background: "#141414",
+        color: "#888",
+        cursor: disabled ? "not-allowed" : "pointer",
+        font: "inherit",
+        fontSize: 13,
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      + Track
+    </button>
+  );
+}
 const MIN_DUR = 0.05;
 const MIN_PXPS = 20;
 const MAX_PXPS = 400;
@@ -67,6 +102,10 @@ export function TimelineTracks(props: {
   onTransitionCommit?: () => void;
   onPruneTransitions?: () => void;
   onAddTrack?: () => void;
+  volumeEditClipId?: string | null;
+  onVolumePointsChange?: (clipId: string, points: VolumeAutomationPoint[]) => void;
+  onVolumeSeek?: (t: number) => void;
+  onVolumeClear?: (clipId: string) => void;
 }) {
   const {
     manifest,
@@ -85,6 +124,10 @@ export function TimelineTracks(props: {
     onTransitionCommit,
     onPruneTransitions,
     onAddTrack,
+    volumeEditClipId,
+    onVolumePointsChange,
+    onVolumeSeek,
+    onVolumeClear,
   } = props;
 
   const dragRef = useRef<DragState | null>(null);
@@ -433,17 +476,23 @@ export function TimelineTracks(props: {
 
   return (
     <div
-      ref={laneAreaRef}
       style={{
-        position: "relative",
-        overflowX: "auto",
-        overflowY: "hidden",
+        display: "flex",
+        flexDirection: "column",
         background: "#141414",
         border: "1px solid rgba(255,255,255,0.12)",
       }}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
     >
+      <div
+        ref={laneAreaRef}
+        style={{
+          position: "relative",
+          overflowX: "auto",
+          overflowY: "hidden",
+        }}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      >
       <div style={{ position: "relative", width: LABEL_W + laneWidth }}>
         {/* Ruler */}
         <div
@@ -557,6 +606,7 @@ export function TimelineTracks(props: {
               {track.clips.map((clip) => {
                 const left = clip.start * pxPerSec;
                 const width = Math.max(6, clip.duration * pxPerSec);
+                const clipHeight = ROW_H - 14;
                 const selected = selectedClipIds.includes(clip.id);
                 const bg =
                   clip.type === "video"
@@ -571,7 +621,13 @@ export function TimelineTracks(props: {
                 return (
                   <div
                     key={clip.id}
-                    onPointerDown={(e) => onClipPointerDown(e, track, clip, "move")}
+                    onPointerDown={(e) => {
+                      if (volumeEditClipId === clip.id) {
+                        e.stopPropagation();
+                        return;
+                      }
+                      onClipPointerDown(e, track, clip, "move");
+                    }}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -584,7 +640,7 @@ export function TimelineTracks(props: {
                       left,
                       top: 6,
                       width,
-                      height: ROW_H - 14,
+                      height: clipHeight,
                       background: bg,
                       border: selected
                         ? "2px solid #ffd166"
@@ -621,6 +677,42 @@ export function TimelineTracks(props: {
                       >
                         {transitionBadge(clip.transitionOut.type)}
                       </span>
+                    ) : null}
+                    {clip.type === "audio" &&
+                    clip.volumeAutomation &&
+                    !isFlatVolumeAutomation(clip.volumeAutomation.points) ? (
+                      <span
+                        style={{ marginLeft: 4, fontSize: 8, opacity: 0.75 }}
+                        title="Volume automation"
+                      >
+                        ⌇
+                      </span>
+                    ) : null}
+                    {volumeEditClipId === clip.id && clip.type === "audio" ? (
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          zIndex: 3,
+                          pointerEvents: "all",
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        <VolumeAutomationEditor
+                          clip={clip}
+                          clipWidthPx={width}
+                          clipHeightPx={clipHeight}
+                          points={
+                            clip.volumeAutomation?.points ?? [
+                              { t: 0, level: 50 },
+                              { t: 1, level: 50 },
+                            ]
+                          }
+                          onPointsChange={(pts) => onVolumePointsChange?.(clip.id, pts)}
+                          onSeek={onVolumeSeek}
+                          onClear={() => onVolumeClear?.(clip.id)}
+                        />
+                      </div>
                     ) : null}
                     {/* Trim handles */}
                     <div
@@ -697,40 +789,6 @@ export function TimelineTracks(props: {
           <div style={{ height: 3, background: "#ffd166", marginLeft: LABEL_W, width: laneWidth }} />
         )}
 
-        {onAddTrack ? (
-          <div style={{ display: "flex", height: ROW_H }}>
-            <div
-              style={{
-                width: LABEL_W,
-                minWidth: LABEL_W,
-                boxSizing: "border-box",
-                background: "#1b1b1b",
-                borderRight: "1px solid rgba(255,255,255,0.15)",
-              }}
-            />
-            <button
-              type="button"
-              onClick={onAddTrack}
-              style={{
-                flex: 1,
-                width: laneWidth,
-                height: ROW_H,
-                border: "none",
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-                background: "#141414",
-                color: "#888",
-                cursor: "pointer",
-                font: "inherit",
-                fontSize: 13,
-                textAlign: "left",
-                paddingLeft: 12,
-              }}
-            >
-              + Track
-            </button>
-          </div>
-        ) : null}
-
         {/* Playhead overlay (spans ruler + rows, offset past the label column). */}
         <div
           style={{
@@ -745,6 +803,9 @@ export function TimelineTracks(props: {
           }}
         />
       </div>
+      </div>
+
+      {onAddTrack ? <AddTrackStrip onClick={onAddTrack} /> : null}
 
       <ClipTransitionMenu
         open={!!transitionMenu}

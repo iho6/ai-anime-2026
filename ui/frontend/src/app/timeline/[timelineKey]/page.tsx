@@ -48,7 +48,7 @@ import { useJobRunSession } from "../../../hooks/useJobRunSession";
 import { useAppError } from "../../../components/ErrorProvider";
 import { TimelinePreviewPlayer } from "../../../components/timeline/TimelinePreviewPlayer";
 import { GeometryShapePicker } from "../../../components/timeline/GeometryShapePicker";
-import { TimelineTracks, TIMELINE_LABEL_W, TIMELINE_ROW_H } from "../../../components/timeline/TimelineTracks";
+import { TimelineTracks, AddTrackStrip } from "../../../components/timeline/TimelineTracks";
 import {
   SequenceVideoPicker,
   SequenceVideoChoice,
@@ -57,6 +57,10 @@ import { TimelineCharacterPicker } from "../../../components/TimelineCharacterPi
 import { TimelineLocationPicker } from "../../../components/TimelineLocationPicker";
 import { TimelineAudioPicker } from "../../../components/TimelineAudioPicker";
 import type { TrajectoryWaypoint } from "../../../components/timeline/TrajectoryEditor";
+import {
+  defaultVolumeAutomationPoints,
+  type VolumeAutomationPoint,
+} from "../../../components/timeline/volumeAutomation";
 import {
   appendClipToTrack,
   buildAudioClip,
@@ -103,6 +107,7 @@ export default function TimelineEditorPage() {
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [trajectoryClipId, setTrajectoryClipId] = useState<string | null>(null);
+  const [volumeEditClipId, setVolumeEditClipId] = useState<string | null>(null);
   const [geometryEditClipId, setGeometryEditClipId] = useState<string | null>(null);
   const [textEditClipId, setTextEditClipId] = useState<string | null>(null);
   const [geomPickerOpen, setGeomPickerOpen] = useState(false);
@@ -757,6 +762,9 @@ export default function TimelineEditorPage() {
           if (textEditClipId && ids.includes(textEditClipId)) {
             setTextEditClipId(null);
           }
+          if (volumeEditClipId && ids.includes(volumeEditClipId)) {
+            setVolumeEditClipId(null);
+          }
         }
         return;
       }
@@ -780,6 +788,7 @@ export default function TimelineEditorPage() {
     trajectoryClipId,
     geometryEditClipId,
     textEditClipId,
+    volumeEditClipId,
     aiEditOpen,
     segmentOpen,
     cameraAngleOpen,
@@ -796,6 +805,35 @@ export default function TimelineEditorPage() {
       tracks: m.tracks.map((t) => ({
         ...t,
         clips: t.clips.map((c) => (c.id === clipId ? { ...c, trajectory } : c)),
+      })),
+    }));
+  }
+
+  function updateClipVolumeAutomation(
+    clipId: string,
+    volumeAutomation: TimelineClip["volumeAutomation"]
+  ) {
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          c.id === clipId ? { ...c, volumeAutomation } : c
+        ),
+      })),
+    }));
+  }
+
+  function onVolumePointsChange(clipId: string, points: VolumeAutomationPoint[]) {
+    updateManifest((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          c.id === clipId
+            ? { ...c, volumeAutomation: { points } }
+            : c
+        ),
       })),
     }));
   }
@@ -1337,6 +1375,7 @@ export default function TimelineEditorPage() {
     const isVideo = rc?.clip.type === "video";
     const isGeometry = rc?.clip.type === "geometry";
     const isText = rc?.clip.type === "text";
+    const isAudio = rc?.clip.type === "audio";
 
     const items: ContextMenuItem[] = [
       {
@@ -1398,6 +1437,7 @@ export default function TimelineEditorPage() {
             setGeometryEditClipId(null);
           } else {
             setTrajectoryClipId(null);
+            setVolumeEditClipId(null);
             setGeometryEditClipId(clipMenu.clipId);
           }
           setClipMenu((s) => ({ ...s, open: false }));
@@ -1456,8 +1496,30 @@ export default function TimelineEditorPage() {
               ],
             });
           }
+          setVolumeEditClipId(null);
           setGeometryEditClipId(null);
           setTrajectoryClipId(clip.id);
+        },
+      });
+    }
+
+    if (isAudio) {
+      items.push({
+        key: "adjustVolume",
+        label: volumeEditClipId === clipMenu.clipId ? "Exit Volume Edit" : "Adjust Volume",
+        onSelect: () => {
+          const clip = rc!.clip;
+          if (!clip.volumeAutomation) {
+            updateClipVolumeAutomation(clip.id, {
+              points: defaultVolumeAutomationPoints(),
+            });
+          }
+          setTrajectoryClipId(null);
+          setGeometryEditClipId(null);
+          setVolumeEditClipId(
+            volumeEditClipId === clip.id ? null : clip.id
+          );
+          setClipMenu((s) => ({ ...s, open: false }));
         },
       });
     }
@@ -1807,6 +1869,15 @@ export default function TimelineEditorPage() {
             Exit Path Mode
           </button>
         )}
+        {volumeEditClipId && (
+          <button
+            onClick={() => setVolumeEditClipId(null)}
+            style={{ ...toolBtn, borderColor: "#ffd166", color: "#ffd166" }}
+            title="Exit volume edit mode"
+          >
+            Exit Volume Mode
+          </button>
+        )}
         {geometryEditClipId && (
           <button
             onClick={() => setGeometryEditClipId(null)}
@@ -1839,31 +1910,7 @@ export default function TimelineEditorPage() {
               openSurfaceContextMenu(null, e.clientX, e.clientY);
             }}
           >
-            <button
-              type="button"
-              onClick={addNeutralTrack}
-              disabled={busy}
-              style={{
-                display: "flex",
-                width: "100%",
-                height: TIMELINE_ROW_H,
-                alignItems: "center",
-                background: "#1a1a1a",
-                border: "none",
-                color: "#aaa",
-                cursor: busy ? "not-allowed" : "pointer",
-                font: "inherit",
-                fontSize: 13,
-                padding: 0,
-              }}
-            >
-              <span style={{ width: TIMELINE_LABEL_W, flexShrink: 0, paddingLeft: 8 }}>
-                + Track
-              </span>
-              <span style={{ flex: 1, textAlign: "left", opacity: 0.6 }}>
-                Click to add your first track
-              </span>
-            </button>
+            <AddTrackStrip onClick={addNeutralTrack} disabled={busy} />
           </div>
         ) : (
           <TimelineTracks
@@ -1890,6 +1937,17 @@ export default function TimelineEditorPage() {
             onTransitionChange={updateClipTransition}
             onTransitionCommit={commit}
             onPruneTransitions={pruneTransitionsAfterEdit}
+            volumeEditClipId={volumeEditClipId}
+            onVolumePointsChange={onVolumePointsChange}
+            onVolumeSeek={(t) => {
+              setPlaying(false);
+              setPlayhead(t);
+            }}
+            onVolumeClear={(clipId) => {
+              updateClipVolumeAutomation(clipId, {
+                points: defaultVolumeAutomationPoints(),
+              });
+            }}
           />
         )}
       </div>

@@ -447,6 +447,7 @@ function ReferencePickerOpen(props: {
         padding: 16,
       }}
       onMouseDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         e.preventDefault();
         onCancel();
       }}

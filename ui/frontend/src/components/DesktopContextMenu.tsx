@@ -136,6 +136,7 @@ export function DesktopContextMenu(props: {
   return (
     <div
       ref={rootRef}
+      onMouseDown={(e) => e.stopPropagation()}
       style={{
         position: "fixed",
         left,
@@ -162,6 +163,7 @@ export function DesktopContextMenu(props: {
           <button
             key={it.key}
             disabled={it.disabled}
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -189,6 +191,7 @@ export function DesktopContextMenu(props: {
               <button
                 key={it.key}
                 disabled={it.disabled}
+                onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();

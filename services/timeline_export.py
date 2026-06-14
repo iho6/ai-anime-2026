@@ -380,6 +380,95 @@ def _trajectory_transform_at(
     }
 
 
+# ── Volume automation (keep in sync with volumeAutomation.ts) ────────────────
+
+UNITY_VOLUME_LEVEL = 50.0
+
+
+def _default_volume_points() -> list[dict[str, Any]]:
+    return [{"t": 0.0, "level": UNITY_VOLUME_LEVEL}, {"t": 1.0, "level": UNITY_VOLUME_LEVEL}]
+
+
+def _volume_level_at(clip: dict[str, Any], playhead: float) -> float:
+    vol = clip.get("volumeAutomation") or {}
+    wps = sorted(
+        vol.get("points") or _default_volume_points(),
+        key=lambda p: float(p.get("t", 0)),
+    )
+    if len(wps) < 2:
+        wps = _default_volume_points()
+
+    dur = float(clip.get("duration", 0))
+    if dur <= 0:
+        return UNITY_VOLUME_LEVEL
+    t = _clamp((playhead - float(clip.get("start", 0))) / dur, 0, 1)
+
+    seg_i = len(wps) - 2
+    for j in range(len(wps) - 1):
+        if t <= float(wps[j + 1].get("t", 0)):
+            seg_i = j
+            break
+
+    a = wps[seg_i]
+    b = wps[seg_i + 1]
+    span = float(b.get("t", 0)) - float(a.get("t", 0))
+    s = 0.0 if span < 1e-9 else _clamp((t - float(a.get("t", 0))) / span, 0, 1)
+
+    cpt = a.get("cpt")
+    cpl = a.get("cpl")
+    if cpt is not None and cpl is not None:
+        cp_l = float(cpl)
+        return (
+            (1 - s) ** 2 * float(a.get("level", UNITY_VOLUME_LEVEL))
+            + 2 * (1 - s) * s * cp_l
+            + s**2 * float(b.get("level", UNITY_VOLUME_LEVEL))
+        )
+    return _lerp(float(a.get("level", UNITY_VOLUME_LEVEL)), float(b.get("level", UNITY_VOLUME_LEVEL)), s)
+
+
+def _volume_gain_at(clip: dict[str, Any], playhead: float) -> float:
+    return _clamp(_volume_level_at(clip, playhead) / UNITY_VOLUME_LEVEL, 0, 2)
+
+
+def _volume_envelope_needs_apply(clip: dict[str, Any]) -> bool:
+    vol = clip.get("volumeAutomation")
+    if not vol:
+        return False
+    for p in vol.get("points") or []:
+        if p.get("cpt") is not None or p.get("cpl") is not None:
+            return True
+        if abs(float(p.get("level", UNITY_VOLUME_LEVEL)) - UNITY_VOLUME_LEVEL) > 0.01:
+            return True
+    return False
+
+
+def _volume_envelope_filter_parts(clip: dict[str, Any], in_label: str, out_label: str) -> list[str]:
+    in_pt = float(clip.get("inPoint", 0))
+    out_pt = float(clip.get("outPoint", 0))
+    speed = max(0.01, float(clip.get("speed", 1)))
+    post_dur = max(1e-6, (out_pt - in_pt) / speed)
+    step = 0.02
+    parts: list[str] = []
+    cur = in_label
+    idx = 0
+    t = 0.0
+    while t < post_dur - 1e-9:
+        t1 = min(post_dur, t + step)
+        frac0 = t / post_dur
+        frac1 = t1 / post_dur
+        ph0 = float(clip.get("start", 0)) + frac0 * float(clip.get("duration", 0))
+        ph1 = float(clip.get("start", 0)) + frac1 * float(clip.get("duration", 0))
+        g = (_volume_gain_at(clip, ph0) + _volume_gain_at(clip, ph1)) / 2.0
+        nxt = out_label if t1 >= post_dur - 1e-9 else f"{out_label}v{idx}"
+        parts.append(
+            f"[{cur}]volume=volume={g:.6f}:enable='between(t,{t:.6f},{t1:.6f})'[{nxt}]"
+        )
+        cur = nxt
+        idx += 1
+        t = t1
+    return parts
+
+
 def _sin_wave(t: float, hz: float) -> float:
     return math.sin(TAU * hz * t)
 
@@ -1020,8 +1109,15 @@ def _mix_timeline_audio(
         start_ms = int(round(float(clip.get("start", 0)) * 1000))
         trim = f"atrim=start={in_pt:.6f}:end={out_pt:.6f},asetpts=PTS-STARTPTS"
         tempo = _atempo_filters(speed)
-        chain = f"[{i}:a]{trim},{tempo},adelay={start_ms}|{start_ms}[a{i}]"
-        filter_parts.append(chain)
+        if _volume_envelope_needs_apply(clip):
+            pre = f"a{i}pre"
+            vol_out = f"a{i}vol"
+            filter_parts.append(f"[{i}:a]{trim},{tempo}[{pre}]")
+            filter_parts.extend(_volume_envelope_filter_parts(clip, pre, vol_out))
+            filter_parts.append(f"[{vol_out}]adelay={start_ms}|{start_ms}[a{i}]")
+        else:
+            chain = f"[{i}:a]{trim},{tempo},adelay={start_ms}|{start_ms}[a{i}]"
+            filter_parts.append(chain)
 
     mix_inputs = "".join(f"[a{i}]" for i in range(len(resolved)))
     filter_parts.append(

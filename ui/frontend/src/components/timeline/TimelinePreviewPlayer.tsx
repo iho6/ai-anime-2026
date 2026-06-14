@@ -27,6 +27,7 @@ import {
 import type { TimelineTrack } from "../../lib/api";
 import { TrajectoryEditor, TrajectoryWaypoint } from "./TrajectoryEditor";
 import { resolveTrajectoryTransformAt } from "./trajectoryMotion";
+import { volumeGainAt } from "./volumeAutomation";
 import type { TrajectoryMotionId } from "../../lib/api";
 import { GeometryClipLayer } from "./GeometryClipLayer";
 import { GeometryEditor } from "./GeometryEditor";
@@ -200,6 +201,9 @@ export function TimelinePreviewPlayer(props: {
           ? sourceTimeAtWithTransition(clip, playhead, track)
           : sourceTimeAt(clip, playhead);
       el.playbackRate = clip.speed || 1;
+      if (track.kind === "audio") {
+        el.volume = clamp(volumeGainAt(clip, playhead), 0, 1);
+      }
       if (!playing) {
         if (!el.paused) el.pause();
         if (Math.abs(el.currentTime - want) > 0.05) {
