@@ -1,0 +1,14 @@
+[
+  {
+    "id": "f1b23d4d",
+    "referenceRelPath": ".pose_references/ref_f1b23d4d.png",
+    "keypointRelPath": ".pose_references/kp_f1b23d4d.png",
+    "createdAt": 1776826056.4571497
+  },
+  {
+    "id": "738523b4",
+    "referenceRelPath": ".pose_references/ref_738523b4.png",
+    "keypointRelPath": ".pose_references/kp_738523b4.png",
+    "createdAt": 1776825938.7943902
+  }
+]

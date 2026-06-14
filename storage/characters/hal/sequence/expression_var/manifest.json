@@ -1,0 +1,1680 @@
+{
+  "version": 1,
+  "fps": 24,
+  "gallery": [
+    {
+      "id": "6ba4f9fe8f4d",
+      "relPath": "sequence/expression_var/gallery/gal_6ba4f9fe8f4d.png"
+    },
+    {
+      "id": "77903c2bed19",
+      "relPath": "sequence/expression_var/gallery/gal_77903c2bed19.png"
+    },
+    {
+      "id": "ffa65b61bcd8",
+      "relPath": "sequence/expression_var/gallery/gal_ffa65b61bcd8.png"
+    },
+    {
+      "id": "bb64fcfe85f4",
+      "relPath": "sequence/expression_var/gallery/gal_bb64fcfe85f4.png"
+    },
+    {
+      "id": "15f7701d7fb6",
+      "relPath": "sequence/expression_var/gallery/gal_15f7701d7fb6.png"
+    },
+    {
+      "id": "3e083545040d",
+      "relPath": "sequence/expression_var/gallery/gal_3e083545040d.png"
+    },
+    {
+      "id": "563e5f3f3917",
+      "relPath": "sequence/expression_var/gallery/gal_563e5f3f3917.png"
+    },
+    {
+      "id": "c5ee0d0fdd62",
+      "relPath": "sequence/expression_var/gallery/gal_c5ee0d0fdd62.png"
+    },
+    {
+      "id": "642008cd1c44",
+      "relPath": "sequence/expression_var/gallery/gal_642008cd1c44.png"
+    },
+    {
+      "id": "g_1776998570101_60b4c39115a26",
+      "relPath": "sequence/expression_var/gallery/gal_33ac88272cd8.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      },
+      "frameSequence": {
+        "sequenceGroupId": "sg_1776998569248_86f7b2884ca428",
+        "strip": [
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_33ac88272cd8.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_2159e22f32ef.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_5c95ae126df2.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_754b5e1defb5.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_a25de1fb79a7.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_669a4fed8025.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_05b280799091.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_a87ae0081745.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_e96e550df82c.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_0beecb67d4b8.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_2d1ebd2e7447.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_6a2bfee5bc74.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_26b38684a3f5.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_51fe9510f094.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_058d05670f17.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_f45a8f4840a5.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_0ed9bb085c87.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_142525ff09d9.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_db09e6a0eb2d.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_621c22528f1e.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_bd55387850a4.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_5dd8605969df.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_c850427ea227.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_6c33e3442284.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_1c752691ff4e.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_b48f9b5dea2b.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_ab35aba63edc.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_531864e7b130.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_cfdab382515c.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_69ccc70419d0.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_b245b2d55f8d.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_e2612c37de2a.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          }
+        ],
+        "hidden": []
+      }
+    },
+    {
+      "id": "g_1776997129630_6fcdacec580a08",
+      "relPath": "sequence/expression_var/gallery/gal_e56f5506586a.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      },
+      "frameSequence": {
+        "sequenceGroupId": "sg_1776997128541_a5381edbc509b8",
+        "strip": [
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_e56f5506586a.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_8a5184a7d103.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_0b0d32fea8ad.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_9045cc374a0b.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_d4892e012d6d.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_705952355c3d.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_599a61e9d082.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_79b290134f25.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_36c7be32cdc5.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_80d4a80eaa0c.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_14a3e8b46930.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_27c39808f9dd.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_7560db06457f.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_00b71baa9112.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_1dfac0d81ea9.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_2579848b4aac.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_f660f2460781.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_47d5d9ab1461.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_3cae9caa555b.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_05b833680534.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_65e9a5022db8.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_92724f5c6301.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_c377ac6126b9.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_23d377f5ab15.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_d6d4f7add320.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_eac73bb85cea.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_7b6352fb12ec.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_508a5ba7f3d8.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_5c65f36df803.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_c76d5fe38ffc.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_eac8fc87e23f.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_5efab861430e.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          }
+        ],
+        "hidden": []
+      }
+    },
+    {
+      "id": "55473a782b57",
+      "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000019.png",
+      "frameSequence": {
+        "sequenceGroupId": "a496e351a8a8",
+        "strip": [
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000001.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000002.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000003.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000004.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000005.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000006.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000007.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000008.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000009.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000010.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000011.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000012.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000013.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000014.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000015.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000016.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000017.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000018.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000019.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000020.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000021.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000022.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000023.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000024.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000025.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000026.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000027.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000028.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000029.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000030.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000031.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000032.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_9845c0b2dcd3/frame_000033.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          }
+        ],
+        "hidden": []
+      }
+    },
+    {
+      "id": "g_1776861098600_a8f2985bb66d8",
+      "relPath": "sequence/expression_var/gallery/gal_e7ad4f32c7c7.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      },
+      "frameSequence": {
+        "sequenceGroupId": "sg_1776861097123_2af019a031aa5",
+        "strip": [
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_e7ad4f32c7c7.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_471dc33ee6dc.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_f429b0e0be9a.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_8fac9308f5a5.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_653610902579.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_886113acea85.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_dacdb3f03eac.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_c4c05eb7571f.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_e14095d3d9ad.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_9e3deb404f53.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_e5cc06e41faa.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_336bc330ab3e.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_4a8b4e291a8b.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_382a8f0d7c3d.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_cb3302829e2d.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_aa16a038ebc5.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_d5ef935f08cd.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_cbecc474f823.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_5113a8cc8151.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_0afab9d450de.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_bca2b7fefbf2.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "empty"
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_3b16f668f2da.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_e0d672e7e0ab.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_e984664c8c08.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_02dc86b6e77b.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_1bf474c22d09.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_2816687eb128.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_5b8c60d82890.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_d0dd279e36fc.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_39c209fa8bcd.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_72d0853fabc4.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/gal_ebb01d44074c.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          }
+        ],
+        "hidden": []
+      }
+    },
+    {
+      "id": "9c758009aed4",
+      "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000001.png",
+      "frameSequence": {
+        "sequenceGroupId": "4af5ca9c052d",
+        "strip": [
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000001.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000002.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000003.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000004.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000005.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000006.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000007.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000008.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000009.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000010.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000011.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000012.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000013.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000014.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000015.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000016.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000017.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000018.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000019.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000020.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000021.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000022.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000023.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000024.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/expression_var/gallery/flf_e6855a30ce9a/frame_000025.png",
+            "crop": {
+              "translateXFrac": 0,
+              "translateYFrac": 0,
+              "scale": 1
+            },
+            "hidden": true
+          }
+        ],
+        "hidden": []
+      }
+    },
+    {
+      "id": "g_1780977262753_ef1344b290e2f",
+      "relPath": "sequence/expression_var/gallery/gal_50ecf7ad91f3.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    }
+  ],
+  "frames": [
+    {
+      "index": 0,
+      "cellId": "cell_1776999030341_76b243088ffaf",
+      "relPath": "sequence/expression_var/cells/cell_174501e2b009.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      },
+      "sequenceGroupId": "sg_1776861097123_2af019a031aa5"
+    },
+    {
+      "index": 1,
+      "cellId": "cell_1776999030386_6a4edbf125c49",
+      "relPath": "sequence/expression_var/cells/cell_b9cbd41c368b.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      },
+      "sequenceGroupId": "sg_1776861097123_2af019a031aa5"
+    },
+    {
+      "index": 2,
+      "cellId": "cell_1776999030462_fb1a12af577cc8",
+      "relPath": "sequence/expression_var/cells/cell_9a5c05b47473.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      },
+      "sequenceGroupId": "sg_1776861097123_2af019a031aa5"
+    },
+    {
+      "index": 3,
+      "cellId": "cell_1776999030436_50d6e3cde9b9d8",
+      "relPath": "sequence/expression_var/cells/cell_aa5c7be5b13a.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      },
+      "sequenceGroupId": "sg_1776861097123_2af019a031aa5"
+    },
+    {
+      "index": 4,
+      "cellId": "cell_1776999030413_e128c85d2aafd",
+      "relPath": "sequence/expression_var/cells/cell_d5fc0f72e579.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      },
+      "sequenceGroupId": "sg_1776861097123_2af019a031aa5"
+    }
+  ],
+  "previewAspect": "16:9",
+  "timelineViewStep": 1
+}

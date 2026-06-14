@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "index": 0,
+      "source_kind": "pose",
+      "folder_key": "flat",
+      "filename": "pose__flat_0000_preview_29e098af.png"
+    },
+    {
+      "index": 1,
+      "source_kind": "pose",
+      "folder_key": "flat",
+      "filename": "pose__flat_0001_preview_e599b8a8.png"
+    },
+    {
+      "index": 2,
+      "source_kind": "pose",
+      "folder_key": "flat",
+      "filename": "pose__flat_0002_preview_a5cb99b8.png"
+    },
+    {
+      "index": 3,
+      "source_kind": "pose",
+      "folder_key": "flat",
+      "filename": "pose__flat_0003_pose_002_angle_054.png"
+    },
+    {
+      "index": 4,
+      "source_kind": "pose",
+      "folder_key": "flat",
+      "filename": "pose__flat_0004_pose_003.png"
+    },
+    {
+      "index": 5,
+      "source_kind": "pose",
+      "folder_key": "flat",
+      "filename": "pose__flat_0005_pose_004.png"
+    },
+    {
+      "index": 6,
+      "source_kind": "pose",
+      "folder_key": "flat",
+      "filename": "pose__flat_0006_pose_005.png"
+    },
+    {
+      "index": 7,
+      "source_kind": "pose",
+      "folder_key": "flat",
+      "filename": "pose__flat_0007_pose_005_edit_001.png"
+    },
+    {
+      "index": 8,
+      "source_kind": "expr",
+      "folder_key": "flat",
+      "filename": "expr__flat_0008_expr_000.png"
+    },
+    {
+      "index": 9,
+      "source_kind": "expr",
+      "folder_key": "flat",
+      "filename": "expr__flat_0009_expr_000_edit_000.png"
+    },
+    {
+      "index": 10,
+      "source_kind": "expr",
+      "folder_key": "flat",
+      "filename": "expr__flat_0010_expr_000_edit_000_edit_000.png"
+    },
+    {
+      "index": 11,
+      "source_kind": "expr",
+      "folder_key": "flat",
+      "filename": "expr__flat_0011_expr_000_edit_000_edit_000_edit_001.png"
+    },
+    {
+      "index": 12,
+      "source_kind": "expr",
+      "folder_key": "flat",
+      "filename": "expr__flat_0012_expr_001.png"
+    },
+    {
+      "index": 13,
+      "source_kind": "expr",
+      "folder_key": "flat",
+      "filename": "expr__flat_0013_expr_002.png"
+    },
+    {
+      "index": 14,
+      "source_kind": "expr",
+      "folder_key": "flat",
+      "filename": "expr__flat_0014_expr_003.png"
+    },
+    {
+      "index": 15,
+      "source_kind": "expr",
+      "folder_key": "flat",
+      "filename": "expr__flat_0015_expr_000_edit_000_edit_000_edit_000.png"
+    }
+  ]
+}

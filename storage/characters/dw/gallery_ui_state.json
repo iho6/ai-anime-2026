@@ -1,0 +1,31 @@
+{
+  "hidden_pose_keys": [],
+  "hidden_expression_keys": [],
+  "pose_key_order": [
+    "flat"
+  ],
+  "expression_key_order": [],
+  "pose_image_order": [
+    "pimg:flat:dw/poses/pose_000.png",
+    "pimg:flat:dw/poses/starting_image.png",
+    "pimg:flat:dw/poses/pose_001.png",
+    "pimg:flat:dw/poses/pose_002.png",
+    "pimg:flat:dw/poses/pose_006.png",
+    "pimg:flat:dw/poses/pose_009.png",
+    "pimg:flat:dw/poses/pose_010.png"
+  ],
+  "hidden_pose_images": [],
+  "expression_image_order": [
+    "eimg:flat:dw/expressions/expr_000.png",
+    "eimg:flat:dw/expressions/expr_001.png",
+    "eimg:flat:dw/expressions/expr_002.png",
+    "eimg:flat:dw/expressions/expr_003.png"
+  ],
+  "hidden_expression_images": [],
+  "gallery_flat_migrated_v1": true,
+  "gallery_layout_v2": true,
+  "gallery_filename_v3": true,
+  "dataset_builder_order": [],
+  "dataset_builder_pose_strip_ids": [],
+  "dataset_builder_expr_strip_ids": []
+}

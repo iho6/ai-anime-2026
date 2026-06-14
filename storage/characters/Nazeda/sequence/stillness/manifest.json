@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "fps": 24,
+  "gallery": [
+    {
+      "id": "5b4fc607a479",
+      "relPath": "sequence/stillness/gallery/gal_5b4fc607a479.png"
+    },
+    {
+      "id": "1820bfa9ed37",
+      "relPath": "sequence/stillness/gallery/gal_1820bfa9ed37.png"
+    }
+  ],
+  "frames": [
+    {
+      "index": 0,
+      "cellId": "cell_1775737791539_f21a780767699",
+      "relPath": "sequence/stillness/cells/cell_39daa68595ac.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 4,
+      "cellId": "cell_1775737793902_d75de0945440a",
+      "relPath": "sequence/stillness/cells/cell_378b5ed798a3.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    }
+  ],
+  "previewAspect": "16:9"
+}

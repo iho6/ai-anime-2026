@@ -1,0 +1,34 @@
+{
+  "hidden_pose_keys": [],
+  "hidden_expression_keys": [],
+  "pose_key_order": [],
+  "expression_key_order": [
+    "flat"
+  ],
+  "pose_image_order": [
+    "pimg:flat:be/poses/pose_001.png",
+    "pimg:flat:be/poses/pose_001_edit_000.png",
+    "pimg:flat:be/poses/pose_001_edit_000_angle_046.png",
+    "pimg:flat:be/poses/pose_001_edit_000_angle_072.png",
+    "pimg:flat:be/poses/pose_001_edit_000_angle_080.png",
+    "pimg:flat:be/poses/pose_001_edit_000_angle_072_edit_000.png",
+    "pimg:flat:be/poses/pose_001_edit_000_angle_072_edit_000_edit_000.png",
+    "pimg:flat:be/poses/pose_001_angle_008.png"
+  ],
+  "hidden_pose_images": [],
+  "expression_image_order": [
+    "eimg:flat:be/expressions/expr_000.png",
+    "eimg:flat:be/expressions/expr_001.png",
+    "eimg:flat:be/expressions/expr_002.png",
+    "eimg:flat:be/expressions/expr_003.png",
+    "eimg:flat:be/expressions/expr_004.png",
+    "eimg:flat:be/expressions/expr_005.png"
+  ],
+  "hidden_expression_images": [],
+  "gallery_flat_migrated_v1": true,
+  "gallery_layout_v2": true,
+  "gallery_filename_v3": true,
+  "dataset_builder_order": [],
+  "dataset_builder_pose_strip_ids": [],
+  "dataset_builder_expr_strip_ids": []
+}

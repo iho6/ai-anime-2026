@@ -1,0 +1,278 @@
+{
+  "version": 1,
+  "fps": 24,
+  "gallery": [
+    {
+      "id": "100bdfdd5966",
+      "relPath": "sequence/mouth_bua/gallery/gal_100bdfdd5966.png"
+    },
+    {
+      "id": "3e52b91d9a9a",
+      "relPath": "sequence/mouth_bua/gallery/gal_3e52b91d9a9a.png"
+    },
+    {
+      "id": "fbe0f607dfba",
+      "relPath": "sequence/mouth_bua/gallery/gal_fbe0f607dfba.png"
+    },
+    {
+      "id": "963e15a46be2",
+      "relPath": "sequence/mouth_bua/gallery/gal_963e15a46be2.png"
+    },
+    {
+      "id": "e0ba191d468f",
+      "relPath": "sequence/mouth_bua/gallery/gal_e0ba191d468f.png"
+    },
+    {
+      "id": "bfb14248a712",
+      "relPath": "sequence/mouth_bua/gallery/gal_bfb14248a712.png"
+    },
+    {
+      "id": "51ac6842e705",
+      "relPath": "sequence/mouth_bua/gallery/gal_51ac6842e705.png"
+    }
+  ],
+  "frames": [
+    {
+      "index": 0,
+      "cellId": "cell_1775271579861_ca514ac516ab58",
+      "relPath": "sequence/mouth_bua/cells/cell_212d66bd1a18.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 1,
+      "cellId": "cell_1775271580710_dce6274280d9d8",
+      "relPath": "sequence/mouth_bua/cells/cell_46a97b5e5409.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 2,
+      "cellId": "cell_1775271582588_728dfabfed51e8",
+      "relPath": "sequence/mouth_bua/cells/cell_f8126aa3ee1d.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 3,
+      "cellId": "cell_1775271584560_339f2f5ec9d3c",
+      "relPath": "sequence/mouth_bua/cells/cell_ee40be951489.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 4,
+      "cellId": "cell_1775271587337_8573f287b64748",
+      "relPath": "sequence/mouth_bua/cells/cell_a1c7919601aa.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0.015873015873015872,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 5,
+      "cellId": "cell_1775271640400_0554299cf59ef",
+      "relPath": "sequence/mouth_bua/cells/cell_c316b6169193.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0.015873015873015872,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 6,
+      "cellId": "cell_1775271589629_f5273f9d739038",
+      "relPath": "sequence/mouth_bua/cells/cell_1b0c462b68a9.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0.011904761904761904,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 7,
+      "cellId": "cell_1775271679564_a92f1dd381f328",
+      "relPath": "sequence/mouth_bua/cells/cell_47b48af64b62.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0.011904761904761904,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 8,
+      "cellId": "cell_1775271591994_f206e99b5e12b8",
+      "relPath": "sequence/mouth_bua/cells/cell_af46f8f12ba3.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0.007936507936507936,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 9,
+      "cellId": "cell_1775271743891_aad52015f44068",
+      "relPath": "sequence/mouth_bua/cells/cell_ddc9f8a318c6.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0.007936507936507936,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 10,
+      "cellId": "cell_1775271594972_e57f6ce12cc43",
+      "relPath": "sequence/mouth_bua/cells/cell_504527af673d.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0.003968253968253968,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 11,
+      "cellId": "cell_1775271769516_fd1d143665f558",
+      "relPath": "sequence/mouth_bua/cells/cell_70b69adc97f0.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0.003968253968253968,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 12,
+      "cellId": "cell_1776868178903_6e3f074c6521b8",
+      "relPath": "sequence/mouth_bua/cells/cell_af375c2624c5.png",
+      "crop": {
+        "translateXFrac": 0.003968253968253968,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 13,
+      "cellId": "cell_1776868180489_358658761de5a",
+      "relPath": "sequence/mouth_bua/cells/cell_3b92153daf4b.png",
+      "crop": {
+        "translateXFrac": 0.003968253968253968,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 14,
+      "cellId": "cell_1776868182108_f6bb6a5ed7fa3",
+      "relPath": "sequence/mouth_bua/cells/cell_e8255d00a863.png",
+      "crop": {
+        "translateXFrac": 0.007936507936507936,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 15,
+      "cellId": "cell_1776868183988_667f14d24bc36",
+      "relPath": "sequence/mouth_bua/cells/cell_0c271e1afaa5.png",
+      "crop": {
+        "translateXFrac": 0.007936507936507936,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 16,
+      "cellId": "cell_1776868187763_b33aeb96f0ea98",
+      "relPath": "sequence/mouth_bua/cells/cell_7ef573da403f.png",
+      "crop": {
+        "translateXFrac": 0.011904761904761904,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 17,
+      "cellId": "cell_1776868192440_b2e1ced4bc3b6",
+      "relPath": "sequence/mouth_bua/cells/cell_23e8488e1d9e.png",
+      "crop": {
+        "translateXFrac": 0.011904761904761904,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 18,
+      "cellId": "cell_1776868196712_b0a44f620559b8",
+      "relPath": "sequence/mouth_bua/cells/cell_aa40190eda63.png",
+      "crop": {
+        "translateXFrac": 0.015873015873015872,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 19,
+      "cellId": "cell_1776868200982_63f896b0842008",
+      "relPath": "sequence/mouth_bua/cells/cell_a6f11c647cb1.png",
+      "crop": {
+        "translateXFrac": 0.015873015873015872,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 20,
+      "cellId": "cell_1776868205520_8cfa684cb409b8",
+      "relPath": "sequence/mouth_bua/cells/cell_e12ff693fe56.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 21,
+      "cellId": "cell_1776868209474_0e4b1e414c905",
+      "relPath": "sequence/mouth_bua/cells/cell_389962ff7f24.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 22,
+      "cellId": "cell_1776868213701_08ccf111076ac8",
+      "relPath": "sequence/mouth_bua/cells/cell_526a6581d569.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 23,
+      "cellId": "cell_1776868217975_b1c7629e84db7",
+      "relPath": "sequence/mouth_bua/cells/cell_3ad044f8c895.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    }
+  ],
+  "previewAspect": "1:1",
+  "timelineViewStep": 1
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "b77cbcab",
+    "referenceRelPath": "yel/.pose_references/ref_b77cbcab.png",
+    "keypointRelPath": "yel/.pose_references/kp_b77cbcab.png",
+    "createdAt": 1776767191.8785534
+  },
+  {
+    "id": "5d52862d",
+    "referenceRelPath": "yel/.pose_references/ref_5d52862d.png",
+    "keypointRelPath": "yel/.pose_references/kp_5d52862d.png",
+    "createdAt": 1776766949.629241
+  }
+]

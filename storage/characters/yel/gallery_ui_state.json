@@ -1,0 +1,36 @@
+{
+  "hidden_pose_keys": [],
+  "hidden_expression_keys": [],
+  "pose_key_order": [
+    "flat"
+  ],
+  "expression_key_order": [],
+  "pose_image_order": [
+    "pimg:flat:yel/poses/pose_000.png",
+    "pimg:flat:yel/poses/starting_image.png",
+    "pimg:flat:yel/poses/pose_001.png",
+    "pimg:flat:yel/poses/pose_002.png",
+    "pimg:flat:yel/poses/pose_003.png",
+    "pimg:flat:yel/poses/pose_003_edit_000.png",
+    "pimg:flat:yel/poses/pose_003_edit_001.png",
+    "pimg:flat:yel/poses/pose_004.png"
+  ],
+  "hidden_pose_images": [
+    "pimg:flat:yel/poses/pose_001.png",
+    "pimg:flat:yel/poses/pose_003.png",
+    "pimg:flat:yel/poses/pose_003_edit_000.png"
+  ],
+  "expression_image_order": [
+    "eimg:flat:yel/expressions/expr_000.png",
+    "eimg:flat:yel/expressions/expr_001.png",
+    "eimg:flat:yel/expressions/expr_002.png",
+    "eimg:flat:yel/expressions/expr_003.png"
+  ],
+  "hidden_expression_images": [],
+  "gallery_flat_migrated_v1": true,
+  "gallery_layout_v2": true,
+  "gallery_filename_v3": true,
+  "dataset_builder_order": [],
+  "dataset_builder_pose_strip_ids": [],
+  "dataset_builder_expr_strip_ids": []
+}

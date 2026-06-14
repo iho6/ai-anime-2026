@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "fps": 24,
+  "gallery": [
+    {
+      "id": "e6d31701c315",
+      "relPath": "sequence/camera_full_body/gallery/gal_e6d31701c315.png"
+    },
+    {
+      "id": "1bb3f382551a",
+      "relPath": "sequence/camera_full_body/gallery/gal_1bb3f382551a.png"
+    },
+    {
+      "id": "5a8274de9a47",
+      "relPath": "sequence/camera_full_body/gallery/gal_5a8274de9a47.png"
+    },
+    {
+      "id": "395beefcd898",
+      "relPath": "sequence/camera_full_body/gallery/gal_395beefcd898.png"
+    },
+    {
+      "id": "c23b80e41197",
+      "relPath": "sequence/camera_full_body/gallery/gal_c23b80e41197.png"
+    },
+    {
+      "id": "8a8971c7f1ab",
+      "relPath": "sequence/camera_full_body/gallery/gal_8a8971c7f1ab.png"
+    },
+    {
+      "id": "d8a9a165458a",
+      "relPath": "sequence/camera_full_body/gallery/gal_d8a9a165458a.png"
+    },
+    {
+      "id": "27754b3bb0d1",
+      "relPath": "sequence/camera_full_body/gallery/gal_27754b3bb0d1.png"
+    },
+    {
+      "id": "a782f66e7841",
+      "relPath": "sequence/camera_full_body/gallery/gal_a782f66e7841.png"
+    },
+    {
+      "id": "ed5f9e062e62",
+      "relPath": "sequence/camera_full_body/gallery/gal_ed5f9e062e62.png"
+    }
+  ],
+  "frames": [
+    {
+      "index": 0,
+      "cellId": "cell_1775400918314_eedb9d4c144c18",
+      "relPath": "sequence/camera_full_body/cells/cell_894d15a38d31.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 4,
+      "cellId": "cell_1775400844640_a03dc830d2243",
+      "relPath": "sequence/camera_full_body/cells/cell_65cf428f272a.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 8,
+      "cellId": "cell_1775400842870_0b6b7377811e2",
+      "relPath": "sequence/camera_full_body/cells/cell_69d61eb59ea7.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 12,
+      "cellId": "cell_1775400766554_ef0bb5524a0dd",
+      "relPath": "sequence/camera_full_body/cells/cell_953b4a124516.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 16,
+      "cellId": "cell_1775400833966_3b9b03ac64e5",
+      "relPath": "sequence/camera_full_body/cells/cell_69741ccf9013.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 20,
+      "cellId": "cell_1775400763835_247b8dd836737",
+      "relPath": "sequence/camera_full_body/cells/cell_efd8e13d0163.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 24,
+      "cellId": "cell_1775400749796_df54b4afb1d31",
+      "relPath": "sequence/camera_full_body/cells/cell_594c62debd2e.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    },
+    {
+      "index": 28,
+      "cellId": "cell_1775400742204_8e260112980cc",
+      "relPath": "sequence/camera_full_body/cells/cell_653ddaf2f618.png",
+      "crop": {
+        "scale": 1,
+        "translateXFrac": 0,
+        "translateYFrac": 0
+      }
+    }
+  ],
+  "previewAspect": "1:1",
+  "timelineViewStep": 1
+}

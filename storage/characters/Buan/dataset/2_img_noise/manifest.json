@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "index": 0,
+      "filename": "pose__base_00.png"
+    },
+    {
+      "index": 1,
+      "filename": "pose__running.png"
+    },
+    {
+      "index": 2,
+      "filename": "pose__squatting.png"
+    },
+    {
+      "index": 3,
+      "filename": "expr__neutral.png"
+    }
+  ]
+}
