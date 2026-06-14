@@ -238,6 +238,11 @@ def reference_keypoints_reorder(body: dict[str, Any]) -> dict[str, bool]:
 class KeypointFolderBody(BaseModel):
     name: str
     itemIds: list[str]
+    parentFolderId: str | None = None
+
+
+class KeypointFolderRenameBody(BaseModel):
+    name: str
 
 
 class KeypointFolderAssignBody(BaseModel):
@@ -248,10 +253,54 @@ class KeypointFolderAssignBody(BaseModel):
 @router.post("/reference/keypoints/folders")
 def reference_keypoints_create_folder(body: KeypointFolderBody) -> dict[str, Any]:
     try:
-        folder = reference_storage.create_keypoint_folder(body.name, body.itemIds)
+        folder = reference_storage.create_keypoint_folder(
+            body.name, body.itemIds, body.parentFolderId
+        )
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     return {"folder": folder}
+
+
+@router.patch("/reference/keypoints/folders/{folder_id}")
+def reference_keypoints_rename_folder(
+    folder_id: str, body: KeypointFolderRenameBody
+) -> dict[str, Any]:
+    try:
+        folder = reference_storage.rename_keypoint_folder(folder_id, body.name)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"folder": folder}
+
+
+@router.post("/reference/keypoints/{keypoint_id}/copy")
+def reference_keypoint_copy(keypoint_id: str) -> dict[str, Any]:
+    try:
+        entry = reference_storage.duplicate_keypoint(keypoint_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {
+        "item": {
+            "id": entry["id"],
+            "referenceRelPath": entry["referenceRelPath"],
+            "keypointRelPath": entry["keypointRelPath"],
+        }
+    }
+
+
+@router.post("/reference/keypoints/video/{video_id}/copy")
+def reference_keypoint_video_copy(video_id: str) -> dict[str, Any]:
+    try:
+        entry = reference_storage.duplicate_keypoint_video(video_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {
+        "item": {
+            "id": entry["id"],
+            "videoRelPath": entry["videoRelPath"],
+            "fps": entry.get("fps", 24),
+            "frameSequence": entry.get("frameSequence") or {},
+        }
+    }
 
 
 @router.post("/reference/keypoints/folders/assign")

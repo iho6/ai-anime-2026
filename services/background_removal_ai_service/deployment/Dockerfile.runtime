@@ -29,6 +29,7 @@ ENV FORCE_CUDA=""
 ENV TORCH_CUDA_ARCH_LIST=""
 
 COPY --from=builder /anime2026/ ./
+RUN python -c "from services.logic import install_required_custom_nodes; install_required_custom_nodes()"
 RUN chmod +x services/background_removal_ai_service/entrypoint.sh
 ENTRYPOINT ["services/background_removal_ai_service/entrypoint.sh"]
 CMD ["--enable-comfy", "--serverless"]

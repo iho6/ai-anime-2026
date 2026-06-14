@@ -1,6 +1,6 @@
 # Background removal AI service (RMBG-2.0)
 
-Serverless worker that runs a minimal ComfyUI graph: **LoadImage → RMBG → SaveImage**, using the custom node pack [ComfyUI-RMBG](https://github.com/1038lab/ComfyUI-RMBG) (install under `custom_nodes/ComfyUI-RMBG/`). Default model in the workflow is **RMBG-2.0** from [briaai/RMBG-2.0](https://huggingface.co/briaai/RMBG-2.0).
+Serverless worker that runs a minimal ComfyUI graph: **LoadImage → RMBG → SaveImage**, using the custom node pack [ComfyUI-RMBG](https://github.com/1038lab/ComfyUI-RMBG) (install under `comfyui/custom_nodes/ComfyUI-RMBG/`). Default model in the workflow is **RMBG-2.0** from [briaai/RMBG-2.0](https://huggingface.co/briaai/RMBG-2.0).
 
 ## Layout
 
@@ -14,9 +14,13 @@ Serverless worker that runs a minimal ComfyUI graph: **LoadImage → RMBG → Sa
 
 ## Custom node install (local Comfy)
 
-Clone or install via ComfyUI-Manager:
+ComfyUI loads custom nodes from `comfyui/custom_nodes/` only. The app installs required nodes automatically before each Comfy launch; you can also run:
 
-`custom_nodes/ComfyUI-RMBG/`
+```bash
+bash utils/install_custom_nodes.sh
+```
+
+Target path: `comfyui/custom_nodes/ComfyUI-RMBG/`
 
 Install that folder’s `requirements.txt` with the same Python ComfyUI uses (see upstream README). The repository root `requirements.txt` still pins shared deps (e.g. `transparent-background`) where useful for Docker; ComfyUI-RMBG’s own requirements cover node-specific packages.
 
@@ -75,7 +79,7 @@ From repository root:
 bash services/background_removal_ai_service/deployment/buildspec.sh
 ```
 
-Set `IMAGE_REPO_URL` / `IMAGE_TAG` as needed. The builder stage copies the full tree (including `custom_nodes/` and `services/`).
+Set `IMAGE_REPO_URL` / `IMAGE_TAG` as needed. The runtime image bakes ComfyUI-RMBG into `comfyui/custom_nodes/` at build time via `install_required_custom_nodes`.
 
 ## Shared config
 

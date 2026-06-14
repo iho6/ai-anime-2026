@@ -2,12 +2,17 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  apiReferenceKeypointCopy,
   apiReferenceKeypointDelete,
   apiReferenceKeypointFolderCreate,
+  apiReferenceKeypointFolderDelete,
+  apiReferenceKeypointFolderRename,
+  apiReferenceKeypointVideoCopy,
   apiReferenceKeypointVideoDelete,
   apiReferenceKeypointVideoUpdateStrip,
   apiReferenceKeypointsLayout,
   assetDownloadUrlFromRelPath,
+  assetUrlFromRelPath,
   type FrameSequencePayload,
   type KeypointsLayout,
   type KeypointVideoReference,
@@ -18,7 +23,8 @@ import {
   type ContextMenuItem,
 } from "./DesktopContextMenu";
 import { useAppError } from "./ErrorProvider";
-import { KeypointRefGrid } from "./KeypointRefGrid";
+import { GalleryImageLightbox } from "./GalleryImageLightbox";
+import { KeypointRefGrid, parseFolderToken } from "./KeypointRefGrid";
 import { KeypointVideoSequenceModal } from "./KeypointVideoSequenceModal";
 import { SquareButton } from "./SquareButton";
 
@@ -82,6 +88,11 @@ function ReferencePickerOpen(props: {
     y: number;
     items: ContextMenuItem[];
   }>({ open: false, x: 0, y: 0, items: [] });
+  const [lightbox, setLightbox] = useState<{
+    paths: string[];
+    index: number;
+    title: string;
+  } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const canGenerate = !busy && genPrompt.trim().length > 0;
 
@@ -99,6 +110,23 @@ function ReferencePickerOpen(props: {
 
   const itemById = new Map(layout.items.map((x) => [x.id, x]));
   const videoById = new Map((layout.videoItems ?? []).map((x) => [x.id, x]));
+
+  const gridIdsInView = viewFolderId
+    ? layout.folderOrder[viewFolderId] ?? []
+    : layout.rootOrder;
+
+  const selectedKeypointImageIds = (): string[] =>
+    [...selectedIds].filter(
+      (id) => !id.startsWith("video:") && !id.startsWith("folder:")
+    );
+
+  const canMakeCopy =
+    !busy &&
+    [...selectedIds].some(
+      (id) =>
+        id.startsWith("video:") ||
+        (!id.startsWith("folder:") && itemById.has(id))
+    );
 
   const orderedSelection = (): ReferencePickerSelection => {
     const order = viewFolderId
@@ -151,8 +179,164 @@ function ReferencePickerOpen(props: {
     [onPickNew]
   );
 
+  const openKeypointLightbox = useCallback(
+    (item: PoseReference) => {
+      const itemsInView = gridIdsInView
+        .filter((id) => !parseFolderToken(id) && !id.startsWith("video:"))
+        .map((id) => itemById.get(id))
+        .filter((x): x is PoseReference => Boolean(x));
+      const idx = itemsInView.findIndex((x) => x.id === item.id);
+      if (idx < 0) return;
+      setLightbox({
+        paths: itemsInView.map((x) => assetUrlFromRelPath(x.keypointRelPath)),
+        index: idx,
+        title: "Keypoint preview",
+      });
+    },
+    [gridIdsInView, itemById]
+  );
+
+  const renameFolder = useCallback(
+    async (folderId: string, currentName: string) => {
+      const name = await askText({
+        title: "Rename folder",
+        message: "Folder name:",
+        defaultValue: currentName,
+        confirmText: "Rename",
+      });
+      if (!name?.trim()) return;
+      try {
+        await apiReferenceKeypointFolderRename(folderId, name.trim());
+        await loadLayout();
+      } catch {
+        /* ignore */
+      }
+    },
+    [askText, loadLayout]
+  );
+
+  const handleCreateFolder = useCallback(
+    async (parentFolderId: string | null) => {
+      const ids = selectedKeypointImageIds();
+      if (!ids.length) return;
+      const name = await askText({
+        title: "New folder",
+        message: "Name for this keypoint folder:",
+        defaultValue: "Folder",
+        confirmText: "Create",
+      });
+      if (!name?.trim()) return;
+      try {
+        await apiReferenceKeypointFolderCreate(
+          name.trim(),
+          ids,
+          parentFolderId
+        );
+        setSelectedIds(new Set());
+        setAnchorId(null);
+        await loadLayout();
+      } catch {
+        /* ignore */
+      }
+    },
+    [askText, loadLayout, selectedIds]
+  );
+
+  const handleMakeCopy = useCallback(async () => {
+    const tokens = [...selectedIds];
+    if (!tokens.length) return;
+    try {
+      for (const tok of tokens) {
+        if (tok.startsWith("video:")) {
+          await apiReferenceKeypointVideoCopy(tok.slice("video:".length));
+        } else if (!tok.startsWith("folder:") && itemById.has(tok)) {
+          await apiReferenceKeypointCopy(tok);
+        }
+      }
+      await loadLayout();
+    } catch {
+      /* ignore */
+    }
+  }, [itemById, loadLayout, selectedIds]);
+
   const openKeypointMenu = useCallback(
     (e: React.MouseEvent, item: PoseReference) => {
+      e.preventDefault();
+      const groupIds = selectedKeypointImageIds();
+      const items: ContextMenuItem[] = [
+        {
+          key: "download",
+          label: "Download",
+          onSelect: () => {
+            const a = document.createElement("a");
+            a.href = assetDownloadUrlFromRelPath(item.keypointRelPath);
+            a.download = item.keypointRelPath.split("/").pop() ?? "keypoint.png";
+            a.click();
+          },
+        },
+        {
+          key: "makeCopy",
+          label: "Make Copy",
+          onSelect: () =>
+            void (async () => {
+              try {
+                await apiReferenceKeypointCopy(item.id);
+                await loadLayout();
+              } catch {
+                /* ignore */
+              }
+            })(),
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          onSelect: () =>
+            void (async () => {
+              const ok = await confirmAction({
+                title: "Delete keypoint pose",
+                message: "Delete this keypoint pose pair?",
+                confirmText: "Delete",
+              });
+              if (!ok) return;
+              try {
+                await apiReferenceKeypointDelete(item.id);
+                setSelectedIds((prev) => {
+                  const n = new Set(prev);
+                  n.delete(item.id);
+                  return n;
+                });
+                await loadLayout();
+              } catch {
+                /* ignore */
+              }
+            })(),
+        },
+      ];
+      if (groupIds.length >= 1) {
+        items.splice(2, 0, {
+          key: "group",
+          label: "Group into folder",
+          onSelect: () => void handleCreateFolder(viewFolderId),
+        });
+      }
+      setMenu({
+        open: true,
+        x: e.clientX,
+        y: e.clientY,
+        items,
+      });
+    },
+    [
+      confirmAction,
+      handleCreateFolder,
+      loadLayout,
+      selectedIds,
+      viewFolderId,
+    ]
+  );
+
+  const openFolderMenu = useCallback(
+    (e: React.MouseEvent, folderId: string, folderName: string) => {
       e.preventDefault();
       setMenu({
         open: true,
@@ -160,33 +344,27 @@ function ReferencePickerOpen(props: {
         y: e.clientY,
         items: [
           {
-            key: "download",
-            label: "Download",
-            onSelect: () => {
-              const a = document.createElement("a");
-              a.href = assetDownloadUrlFromRelPath(item.keypointRelPath);
-              a.download = item.keypointRelPath.split("/").pop() ?? "keypoint.png";
-              a.click();
-            },
+            key: "rename",
+            label: "Rename",
+            onSelect: () => void renameFolder(folderId, folderName),
           },
           {
-            key: "delete",
-            label: "Delete",
+            key: "ungroup",
+            label: "Ungroup",
             onSelect: () =>
               void (async () => {
                 const ok = await confirmAction({
-                  title: "Delete keypoint pose",
-                  message: "Delete this keypoint pose pair?",
-                  confirmText: "Delete",
+                  title: "Ungroup folder",
+                  message:
+                    "Dissolve this folder and move its contents to the parent level?",
+                  confirmText: "Ungroup",
                 });
                 if (!ok) return;
                 try {
-                  await apiReferenceKeypointDelete(item.id);
-                  setSelectedIds((prev) => {
-                    const n = new Set(prev);
-                    n.delete(item.id);
-                    return n;
-                  });
+                  await apiReferenceKeypointFolderDelete(folderId);
+                  if (viewFolderId === folderId) {
+                    setViewFolderId(null);
+                  }
                   await loadLayout();
                 } catch {
                   /* ignore */
@@ -196,7 +374,7 @@ function ReferencePickerOpen(props: {
         ],
       });
     },
-    [confirmAction, loadLayout]
+    [confirmAction, loadLayout, renameFolder, viewFolderId]
   );
 
   const openVideoMenu = useCallback(
@@ -207,6 +385,19 @@ function ReferencePickerOpen(props: {
         x: e.clientX,
         y: e.clientY,
         items: [
+          {
+            key: "makeCopy",
+            label: "Make Copy",
+            onSelect: () =>
+              void (async () => {
+                try {
+                  await apiReferenceKeypointVideoCopy(item.id);
+                  await loadLayout();
+                } catch {
+                  /* ignore */
+                }
+              })(),
+          },
           {
             key: "delete",
             label: "Delete",
@@ -242,28 +433,6 @@ function ReferencePickerOpen(props: {
     if (!sel.singles.length && !sel.videos.length) return;
     onUseSelected(sel);
   };
-
-  const handleCreateFolder = useCallback(async () => {
-    const ids = [...selectedIds].filter(
-      (id) => !id.startsWith("video:") && !id.startsWith("folder:")
-    );
-    if (!ids.length) return;
-    const name = await askText({
-      title: "New folder",
-      message: "Name for this keypoint folder:",
-      defaultValue: "Folder",
-      confirmText: "Create",
-    });
-    if (!name?.trim()) return;
-    try {
-      await apiReferenceKeypointFolderCreate(name.trim(), ids);
-      setSelectedIds(new Set());
-      setAnchorId(null);
-      await loadLayout();
-    } catch {
-      /* ignore */
-    }
-  }, [askText, loadLayout, selectedIds]);
 
   return (
     <div
@@ -402,48 +571,35 @@ function ReferencePickerOpen(props: {
           style={{
             display: "flex",
             alignItems: "center",
+            justifyContent: "space-between",
             gap: 8,
             marginBottom: 8,
             flexWrap: "wrap",
           }}
         >
-          <button
-            type="button"
-            disabled={busy || selectedIds.size === 0}
-            onClick={handleUseSelected}
-            style={{
-              borderRadius: 0,
-              border: "1px solid rgba(255,255,255,0.3)",
-              background: "transparent",
-              color: "#eee",
-              padding: "6px 12px",
-              cursor: busy || selectedIds.size === 0 ? "not-allowed" : "pointer",
-              opacity: busy || selectedIds.size === 0 ? 0.5 : 1,
-            }}
-          >
-            Use Selected
-          </button>
-          <button
-            type="button"
-            disabled={busy || selectedIds.size === 0}
-            onClick={() => void handleCreateFolder()}
-            style={{
-              borderRadius: 0,
-              border: "1px solid rgba(255,255,255,0.3)",
-              background: "transparent",
-              color: "#eee",
-              padding: "6px 12px",
-              cursor: busy || selectedIds.size === 0 ? "not-allowed" : "pointer",
-              opacity: busy || selectedIds.size === 0 ? 0.5 : 1,
-            }}
-          >
-            Folder
-          </button>
           {selectedIds.size > 0 ? (
             <span style={{ fontSize: 13, opacity: 0.7 }}>
               {selectedIds.size} selected
             </span>
-          ) : null}
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            disabled={!canMakeCopy}
+            onClick={() => void handleMakeCopy()}
+            style={{
+              borderRadius: 0,
+              border: "1px solid rgba(255,255,255,0.3)",
+              background: "transparent",
+              color: "#eee",
+              padding: "6px 12px",
+              cursor: canMakeCopy ? "pointer" : "not-allowed",
+              opacity: canMakeCopy ? 1 : 0.5,
+            }}
+          >
+            Make Copy
+          </button>
         </div>
 
         <div
@@ -464,12 +620,22 @@ function ReferencePickerOpen(props: {
             viewFolderId={viewFolderId}
             onViewFolderIdChange={setViewFolderId}
             onContextMenu={openKeypointMenu}
+            onKeypointPreview={openKeypointLightbox}
             onOpenVideo={setVideoModalItem}
             onVideoContextMenu={openVideoMenu}
+            onFolderContextMenu={openFolderMenu}
+            onFolderNameClick={renameFolder}
           />
         </div>
 
-        <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+        <div
+          style={{
+            marginTop: 12,
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 8,
+          }}
+        >
           <button
             type="button"
             onClick={onCancel}
@@ -483,6 +649,22 @@ function ReferencePickerOpen(props: {
             }}
           >
             Cancel
+          </button>
+          <button
+            type="button"
+            disabled={busy || selectedIds.size === 0}
+            onClick={handleUseSelected}
+            style={{
+              borderRadius: 0,
+              border: "1px solid rgba(255,255,255,0.3)",
+              background: "transparent",
+              color: "#eee",
+              padding: "6px 16px",
+              cursor: busy || selectedIds.size === 0 ? "not-allowed" : "pointer",
+              opacity: busy || selectedIds.size === 0 ? 0.5 : 1,
+            }}
+          >
+            Use Selected
           </button>
         </div>
       </div>
@@ -514,6 +696,16 @@ function ReferencePickerOpen(props: {
           }
         }}
       />
+
+      {lightbox ? (
+        <GalleryImageLightbox
+          key={`${lightbox.paths.join("|")}-${lightbox.index}-${lightbox.title}`}
+          paths={lightbox.paths}
+          index={lightbox.index}
+          title={lightbox.title}
+          onClose={() => setLightbox(null)}
+        />
+      ) : null}
     </div>
   );
 }

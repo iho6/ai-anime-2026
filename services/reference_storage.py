@@ -193,6 +193,86 @@ def _parse_video_token(token: str) -> str | None:
     return None
 
 
+def _parent_id_for_folder(folder: dict[str, Any]) -> str | None:
+    pid = folder.get("parentId")
+    if pid is None:
+        return None
+    s = str(pid).strip()
+    return s if s else None
+
+
+def _folder_parent_map(folders: list[dict[str, Any]]) -> dict[str, str | None]:
+    return {
+        str(f.get("id")): _parent_id_for_folder(f)
+        for f in folders
+        if f.get("id")
+    }
+
+
+def _is_root_folder(folder: dict[str, Any]) -> bool:
+    return _parent_id_for_folder(folder) is None
+
+
+def _keypoint_ids_in_folders(layout: dict[str, Any]) -> set[str]:
+    ids: set[str] = set()
+    for order in (layout.get("folderOrder") or {}).values():
+        for tok in order:
+            if not _parse_folder_token(tok):
+                ids.add(str(tok))
+    return ids
+
+
+def _remove_item_from_all_containers(layout: dict[str, Any], item_id: str) -> None:
+    iid = str(item_id)
+    layout["rootOrder"] = [t for t in layout["rootOrder"] if t != iid]
+    for fk in list(layout["folderOrder"].keys()):
+        layout["folderOrder"][fk] = [
+            x for x in layout["folderOrder"].get(fk, []) if x != iid
+        ]
+
+
+def _insert_after_in_list(lst: list[str], after_id: str, new_token: str) -> list[str]:
+    if after_id not in lst:
+        if new_token not in lst:
+            lst.append(new_token)
+        return lst
+    out = [t for t in lst if t != new_token]
+    idx = out.index(after_id)
+    return out[: idx + 1] + [new_token] + out[idx + 1 :]
+
+
+def _find_item_container(
+    layout: dict[str, Any], item_id: str
+) -> tuple[str | None, list[str]]:
+    iid = str(item_id)
+    for fid, order in layout.get("folderOrder", {}).items():
+        if iid in order:
+            return fid, order
+    return None, layout.get("rootOrder", [])
+
+
+def _find_token_container(
+    layout: dict[str, Any], token: str
+) -> tuple[str | None, list[str]]:
+    for fid, order in layout.get("folderOrder", {}).items():
+        if token in order:
+            return fid, order
+    if token in layout.get("rootOrder", []):
+        return None, layout["rootOrder"]
+    return None, layout.get("rootOrder", [])
+
+
+def _folder_dict_for_api(folder: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "id": str(folder.get("id")),
+        "name": str(folder.get("name") or folder.get("id")),
+    }
+    parent = _parent_id_for_folder(folder)
+    if parent:
+        out["parentId"] = parent
+    return out
+
+
 def _sync_ui_layout_with_keypoints(
     entries: list[dict[str, Any]],
     *,
@@ -204,19 +284,35 @@ def _sync_ui_layout_with_keypoints(
     videos = video_entries if video_entries is not None else list_keypoint_videos()
     valid_video_ids = {str(e.get("id")) for e in videos if e.get("id")}
     folder_by_id = {
-        str(f.get("id")): f
+        str(f.get("id")): dict(f)
         for f in layout.get("folders", [])
         if f.get("id")
     }
+    folder_parents = _folder_parent_map(list(folder_by_id.values()))
+    root_folder_ids = {fid for fid, f in folder_by_id.items() if _is_root_folder(f)}
 
     folder_order: dict[str, list[str]] = {}
     in_folder: set[str] = set()
     for fid, ids in (layout.get("folderOrder") or {}).items():
         if fid not in folder_by_id:
             continue
-        cleaned = [i for i in ids if i in valid_ids]
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for tok in ids:
+            s = str(tok).strip()
+            if not s or s in seen:
+                continue
+            child_fid = _parse_folder_token(s)
+            if child_fid is not None:
+                if child_fid in folder_by_id and folder_parents.get(child_fid) == fid:
+                    cleaned.append(_folder_token(child_fid))
+                    seen.add(s)
+                continue
+            if s in valid_ids:
+                cleaned.append(s)
+                seen.add(s)
+                in_folder.add(s)
         folder_order[fid] = cleaned
-        in_folder.update(cleaned)
 
     root_order: list[str] = []
     seen_root: set[str] = set()
@@ -226,7 +322,7 @@ def _sync_ui_layout_with_keypoints(
             continue
         fid = _parse_folder_token(s)
         if fid is not None:
-            if fid in folder_by_id:
+            if fid in folder_by_id and fid in root_folder_ids:
                 root_order.append(_folder_token(fid))
                 seen_root.add(s)
             continue
@@ -240,11 +336,27 @@ def _sync_ui_layout_with_keypoints(
             root_order.append(s)
             seen_root.add(s)
 
-    for fid in folder_by_id:
+    for fid in root_folder_ids:
         tok = _folder_token(fid)
         if tok not in seen_root:
             root_order.append(tok)
             seen_root.add(tok)
+
+    for fid, f in folder_by_id.items():
+        parent = _parent_id_for_folder(f)
+        if parent and parent in folder_by_id:
+            tok = _folder_token(fid)
+            parent_order = folder_order.setdefault(parent, [])
+            if tok not in parent_order:
+                parent_order.append(tok)
+
+    root_order = [
+        t
+        for t in root_order
+        if _parse_folder_token(t) is None
+        or _parse_folder_token(t) in root_folder_ids
+    ]
+    seen_root = set(root_order)
 
     for e in entries:
         iid = str(e.get("id"))
@@ -261,14 +373,10 @@ def _sync_ui_layout_with_keypoints(
             root_order.insert(0, tok)
             seen_root.add(tok)
 
-    folders = [
-        {"id": fid, "name": str(folder_by_id[fid].get("name") or fid)}
-        for fid in folder_order
-    ]
-    for fid, f in folder_by_id.items():
-        if fid not in folder_order:
-            folders.append({"id": fid, "name": str(f.get("name") or fid)})
-            folder_order.setdefault(fid, [])
+    for fid in folder_by_id:
+        folder_order.setdefault(fid, [])
+
+    folders = [_folder_dict_for_api(f) for f in folder_by_id.values()]
 
     out = {"rootOrder": root_order, "folders": folders, "folderOrder": folder_order}
     _write_ui_layout(out)
@@ -326,10 +434,12 @@ def set_keypoints_root_order(order: list[str]) -> None:
     layout = _sync_ui_layout_with_keypoints(entries, video_entries=video_entries)
     valid_ids = {str(e.get("id")) for e in entries if e.get("id")}
     valid_video_ids = {str(e.get("id")) for e in video_entries if e.get("id")}
-    folder_ids = {str(f.get("id")) for f in layout["folders"] if f.get("id")}
-    in_folder: set[str] = set()
-    for ids in layout["folderOrder"].values():
-        in_folder.update(ids)
+    root_folder_ids = {
+        str(f.get("id"))
+        for f in layout["folders"]
+        if f.get("id") and _is_root_folder(f)
+    }
+    in_folder = _keypoint_ids_in_folders(layout)
 
     next_root: list[str] = []
     seen: set[str] = set()
@@ -339,7 +449,7 @@ def set_keypoints_root_order(order: list[str]) -> None:
             continue
         fid = _parse_folder_token(s)
         if fid is not None:
-            if fid in folder_ids:
+            if fid in root_folder_ids:
                 next_root.append(_folder_token(fid))
                 seen.add(s)
             continue
@@ -356,7 +466,7 @@ def set_keypoints_root_order(order: list[str]) -> None:
     for tok in layout["rootOrder"]:
         if tok not in seen:
             fid = _parse_folder_token(tok)
-            if fid is not None and _folder_token(fid) not in seen:
+            if fid is not None and fid in root_folder_ids and _folder_token(fid) not in seen:
                 next_root.append(_folder_token(fid))
                 seen.add(tok)
             elif _parse_video_token(tok) and _parse_video_token(tok) in valid_video_ids:
@@ -379,30 +489,53 @@ def set_keypoint_folder_order(folder_id: str, order: list[str]) -> None:
     entries = list_keypoints()
     layout = _sync_ui_layout_with_keypoints(entries)
     valid_ids = {str(e.get("id")) for e in entries if e.get("id")}
-    if not any(str(f.get("id")) == fid for f in layout["folders"]):
+    folder_by_id = {str(f.get("id")): f for f in layout["folders"] if f.get("id")}
+    folder_parents = _folder_parent_map(layout["folders"])
+    if fid not in folder_by_id:
         raise ValueError("Folder not found.")
 
     cleaned: list[str] = []
     seen: set[str] = set()
     for iid in order or []:
         s = str(iid).strip()
-        if s in valid_ids and s not in seen:
+        if not s or s in seen:
+            continue
+        child_fid = _parse_folder_token(s)
+        if child_fid is not None:
+            if child_fid in folder_by_id and folder_parents.get(child_fid) == fid:
+                cleaned.append(_folder_token(child_fid))
+                seen.add(s)
+            continue
+        if s in valid_ids:
             cleaned.append(s)
             seen.add(s)
     for iid in layout["folderOrder"].get(fid, []):
-        if iid in valid_ids and iid not in seen:
-            cleaned.append(iid)
-            seen.add(iid)
+        s = str(iid).strip()
+        if not s or s in seen:
+            continue
+        child_fid = _parse_folder_token(s)
+        if child_fid is not None:
+            if child_fid in folder_by_id and folder_parents.get(child_fid) == fid:
+                cleaned.append(_folder_token(child_fid))
+                seen.add(s)
+            continue
+        if s in valid_ids:
+            cleaned.append(s)
+            seen.add(s)
 
     layout["folderOrder"][fid] = cleaned
-    in_folder = {i for ids in layout["folderOrder"].values() for i in ids}
+    in_folder = _keypoint_ids_in_folders(layout)
     layout["rootOrder"] = [
         t for t in layout["rootOrder"] if _parse_folder_token(t) or t not in in_folder
     ]
     _write_ui_layout(layout)
 
 
-def create_keypoint_folder(name: str, item_ids: list[str]) -> dict[str, Any]:
+def create_keypoint_folder(
+    name: str,
+    item_ids: list[str],
+    parent_folder_id: str | None = None,
+) -> dict[str, Any]:
     label = (name or "").strip() or "Folder"
     entries = list_keypoints()
     layout = _sync_ui_layout_with_keypoints(entries)
@@ -411,20 +544,27 @@ def create_keypoint_folder(name: str, item_ids: list[str]) -> dict[str, Any]:
     if not ids:
         raise ValueError("Select at least one keypoint to folder.")
 
+    parent = str(parent_folder_id).strip() if parent_folder_id else None
+    if parent and not any(str(f.get("id")) == parent for f in layout["folders"]):
+        raise ValueError("Parent folder not found.")
+
     fid = _new_id()
-    folder = {"id": fid, "name": label}
+    folder: dict[str, Any] = {"id": fid, "name": label}
+    if parent:
+        folder["parentId"] = parent
     layout["folders"].append(folder)
     for iid in ids:
-        layout["rootOrder"] = [t for t in layout["rootOrder"] if t != iid]
-        for fk in list(layout["folderOrder"].keys()):
-            layout["folderOrder"][fk] = [
-                x for x in layout["folderOrder"].get(fk, []) if x != iid
-            ]
+        _remove_item_from_all_containers(layout, iid)
     layout["folderOrder"][fid] = ids
-    if _folder_token(fid) not in layout["rootOrder"]:
-        layout["rootOrder"].append(_folder_token(fid))
+    tok = _folder_token(fid)
+    if parent:
+        parent_order = layout["folderOrder"].setdefault(parent, [])
+        if tok not in parent_order:
+            parent_order.append(tok)
+    elif tok not in layout["rootOrder"]:
+        layout["rootOrder"].append(tok)
     _write_ui_layout(layout)
-    return folder
+    return _folder_dict_for_api(folder)
 
 
 def assign_keypoints_to_folder(folder_id: str | None, item_ids: list[str]) -> None:
@@ -467,18 +607,148 @@ def delete_keypoint_folder(folder_id: str) -> bool:
         return False
     entries = list_keypoints()
     layout = _sync_ui_layout_with_keypoints(entries)
-    before = len(layout["folders"])
-    layout["folders"] = [f for f in layout["folders"] if str(f.get("id")) != fid]
-    if len(layout["folders"]) == before:
+    folder_obj = next(
+        (f for f in layout["folders"] if str(f.get("id")) == fid),
+        None,
+    )
+    if not folder_obj:
         return False
+    parent = _parent_id_for_folder(folder_obj)
+    layout["folders"] = [f for f in layout["folders"] if str(f.get("id")) != fid]
     released = list(layout["folderOrder"].pop(fid, []))
     tok = _folder_token(fid)
     layout["rootOrder"] = [t for t in layout["rootOrder"] if t != tok]
-    for iid in released:
-        if iid not in layout["rootOrder"]:
-            layout["rootOrder"].append(iid)
+
+    dest: list[str]
+    if parent:
+        dest = layout["folderOrder"].setdefault(parent, [])
+    else:
+        dest = layout["rootOrder"]
+
+    for item in released:
+        child_fid = _parse_folder_token(item)
+        if child_fid:
+            child = next(
+                (f for f in layout["folders"] if str(f.get("id")) == child_fid),
+                None,
+            )
+            if child:
+                if parent:
+                    child["parentId"] = parent
+                else:
+                    child.pop("parentId", None)
+        if item not in dest:
+            dest.append(item)
     _write_ui_layout(layout)
     return True
+
+
+def rename_keypoint_folder(folder_id: str, name: str) -> dict[str, Any]:
+    fid = str(folder_id).strip()
+    label = (name or "").strip() or "Folder"
+    entries = list_keypoints()
+    layout = _sync_ui_layout_with_keypoints(entries)
+    for f in layout["folders"]:
+        if str(f.get("id")) == fid:
+            f["name"] = label
+            _write_ui_layout(layout)
+            return _folder_dict_for_api(f)
+    raise ValueError("Folder not found.")
+
+
+def duplicate_keypoint(keypoint_id: str) -> dict[str, Any]:
+    kid = str(keypoint_id).strip()
+    entries = list_keypoints()
+    src_entry = next((e for e in entries if str(e.get("id")) == kid), None)
+    if not src_entry:
+        raise ValueError("Keypoint not found.")
+    _ensure_dirs()
+    ref_abs = _resolve_rel(src_entry["referenceRelPath"])
+    kp_abs = _resolve_rel(src_entry["keypointRelPath"])
+    rid = _new_id()
+    ref_dest = keypoints_dir() / f"ref_{rid}{ref_abs.suffix.lower() or '.png'}"
+    kp_dest = keypoints_dir() / f"kp_{rid}{kp_abs.suffix.lower() or '.png'}"
+    shutil.copy2(ref_abs, ref_dest)
+    shutil.copy2(kp_abs, kp_dest)
+    new_entry = {
+        "id": rid,
+        "referenceRelPath": _abs_to_storage_rel(ref_dest),
+        "keypointRelPath": _abs_to_storage_rel(kp_dest),
+        "createdAt": time.time(),
+    }
+    idx = next(i for i, e in enumerate(entries) if str(e.get("id")) == kid)
+    entries.insert(idx + 1, new_entry)
+    _write_manifest(_keypoints_manifest_path(), entries)
+
+    layout = _sync_ui_layout_with_keypoints(entries)
+    container_key, _ = _find_item_container(layout, kid)
+    if container_key is None:
+        layout["rootOrder"] = _insert_after_in_list(layout["rootOrder"], kid, rid)
+    else:
+        layout["folderOrder"][container_key] = _insert_after_in_list(
+            layout["folderOrder"][container_key], kid, rid
+        )
+    _write_ui_layout(layout)
+    return new_entry
+
+
+def duplicate_keypoint_video(video_id: str) -> dict[str, Any]:
+    vid = str(video_id).strip()
+    entries = _read_manifest(_keypoints_video_manifest_path())
+    src_entry = next((e for e in entries if str(e.get("id")) == vid), None)
+    if not src_entry:
+        raise ValueError("Video reference not found.")
+    old_base = _resolve_rel(src_entry["videoRelPath"]).parent
+    if not old_base.is_dir():
+        raise ValueError("Video reference files not found.")
+    rid = f"kv_{_new_id()}"
+    new_base = keypoints_video_dir() / rid
+    shutil.copytree(old_base, new_base)
+
+    def _remap_path(rel: str) -> str:
+        return str(rel).replace(vid, rid)
+
+    fs = src_entry.get("frameSequence") or {}
+    strip = fs.get("strip") if isinstance(fs.get("strip"), list) else []
+    new_strip: list[dict[str, Any]] = []
+    for slot in strip:
+        if not isinstance(slot, dict):
+            continue
+        ns = dict(slot)
+        if ns.get("relPath"):
+            ns["relPath"] = _remap_path(str(ns["relPath"]))
+        if ns.get("referenceRelPath"):
+            ns["referenceRelPath"] = _remap_path(str(ns["referenceRelPath"]))
+        new_strip.append(ns)
+
+    new_entry: dict[str, Any] = {
+        "id": rid,
+        "videoRelPath": _remap_path(str(src_entry["videoRelPath"])),
+        "fps": int(src_entry.get("fps") or 24),
+        "frameSequence": {
+            "sequenceGroupId": _new_id(),
+            "strip": new_strip,
+            "hidden": [],
+        },
+        "createdAt": time.time(),
+    }
+    idx = next(i for i, e in enumerate(entries) if str(e.get("id")) == vid)
+    entries.insert(idx + 1, new_entry)
+    _write_manifest(_keypoints_video_manifest_path(), entries)
+
+    kp_entries = list_keypoints()
+    layout = _sync_ui_layout_with_keypoints(kp_entries, video_entries=entries)
+    src_tok = _video_token(vid)
+    new_tok = _video_token(rid)
+    container_key, _ = _find_token_container(layout, src_tok)
+    if container_key is None:
+        layout["rootOrder"] = _insert_after_in_list(layout["rootOrder"], src_tok, new_tok)
+    else:
+        layout["folderOrder"][container_key] = _insert_after_in_list(
+            layout["folderOrder"][container_key], src_tok, new_tok
+        )
+    _write_ui_layout(layout)
+    return new_entry
 
 
 def _new_id() -> str:

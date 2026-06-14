@@ -30,6 +30,7 @@ from services.constant import (
     CACHE_MAX_AGE,
     DOWNLOAD_CACHE_FILE,
     LOCAL_INPUT_DIR,
+    LOCAL_OUTPUT_DIR,
     MIME_TO_EXT,
     S3_INPUT_BUCKET,
     S3_INPUT_PREFIX,

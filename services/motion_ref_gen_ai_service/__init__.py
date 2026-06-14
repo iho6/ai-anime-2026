@@ -9,6 +9,6 @@ sequences from text prompts. The service exposes:
 Shots are captured as a WebGL screenshot of the live client viewer, so the
 worker no longer renders frames server-side.
 
-Install: SKIP_MOTION_CORRECTION_IN_SETUP=1 pip install -e /path/to/kimodo
+Install: pip install -e /path/to/kimodo  (requires cmake, build-essential, python{X.Y}-dev)
 Runtime: TEXT_ENCODER_DEVICE=cpu  (cuts GPU VRAM from ~17 GB → <3 GB)
 """

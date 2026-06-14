@@ -2497,7 +2497,7 @@ export async function apiReferenceImagesReorder(order: string[]): Promise<void> 
   if (!res.ok) await readJson(res);
 }
 
-export type KeypointFolder = { id: string; name: string };
+export type KeypointFolder = { id: string; name: string; parentId?: string | null };
 
 export type AudioReference = {
   id: string;
@@ -2569,14 +2569,36 @@ export async function apiReferenceKeypointsReorderFolder(
 
 export async function apiReferenceKeypointFolderCreate(
   name: string,
-  itemIds: string[]
+  itemIds: string[],
+  parentFolderId?: string | null
 ): Promise<KeypointFolder> {
   const res = await fetch(`${API_BASE_URL}/reference/keypoints/folders`, {
     method: "POST",
     credentials: "omit",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, itemIds }),
+    body: JSON.stringify({
+      name,
+      itemIds,
+      parentFolderId: parentFolderId ?? null,
+    }),
   });
+  const data = await readJson<{ folder: KeypointFolder }>(res);
+  return data.folder;
+}
+
+export async function apiReferenceKeypointFolderRename(
+  folderId: string,
+  name: string
+): Promise<KeypointFolder> {
+  const res = await fetch(
+    `${API_BASE_URL}/reference/keypoints/folders/${encodeURIComponent(folderId)}`,
+    {
+      method: "PATCH",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }
+  );
   const data = await readJson<{ folder: KeypointFolder }>(res);
   return data.folder;
 }
@@ -2605,6 +2627,26 @@ export async function apiReferenceKeypointDelete(id: string): Promise<void> {
     { method: "DELETE", credentials: "omit" }
   );
   if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceKeypointCopy(id: string): Promise<PoseReference> {
+  const res = await fetch(
+    `${API_BASE_URL}/reference/keypoints/${encodeURIComponent(id)}/copy`,
+    { method: "POST", credentials: "omit" }
+  );
+  const data = await readJson<{ item: PoseReference }>(res);
+  return data.item;
+}
+
+export async function apiReferenceKeypointVideoCopy(
+  videoId: string
+): Promise<KeypointVideoReference> {
+  const res = await fetch(
+    `${API_BASE_URL}/reference/keypoints/video/${encodeURIComponent(videoId)}/copy`,
+    { method: "POST", credentials: "omit" }
+  );
+  const data = await readJson<{ item: KeypointVideoReference }>(res);
+  return data.item;
 }
 
 export async function apiReferenceAudioLayout(): Promise<AudioLayout> {

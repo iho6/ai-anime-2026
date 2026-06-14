@@ -9,6 +9,7 @@ __pycache__/
 /comfyui/temp/
 /comfyui/custom_nodes/
 !comfyui/custom_nodes/example_node.py.example
+/custom_nodes/
 /comfyui/extra_model_paths.yaml
 /comfyui/web/extensions/*
 !/comfyui/web/extensions/logging.js.example
@@ -40,5 +41,5 @@ uv.lock
 # Local env secrets (do not commit)
 set-env.local.ps1
 
-# Per-machine character data (poses, datasets, previews). Override path with ANIME_STORAGE_ROOT.
-/storage/characters/
+# Local API secrets (HF token, GitHub PAT, etc.)
+/storage/api_settings.json

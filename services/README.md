@@ -52,7 +52,7 @@ The Next.js frontend and FastAPI API live under [`services/ui/`](ui/): `frontend
 
 Character files are stored under:
 
-- `services/storage/characters/<character_name>/` (gitignored by default). Set **`ANIME_STORAGE_ROOT`** to an absolute path to keep data outside the repo. If you previously used `services/STORAGE/`, rename that folder to `services/storage` or point `ANIME_STORAGE_ROOT` at the old location.
+- `storage/characters/<character_name>/` (tracked in git by default). Set **`ANIME_STORAGE_ROOT`** to an absolute path to keep data outside the repo. If you previously used `services/STORAGE/`, rename that folder to `storage` or point `ANIME_STORAGE_ROOT` at the old location.
 
 Layout (written by `services.logic` when the UI runs jobs):
 

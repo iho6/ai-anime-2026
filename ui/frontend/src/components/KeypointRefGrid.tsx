@@ -44,8 +44,15 @@ export function KeypointRefGrid(props: {
   viewFolderId: string | null;
   onViewFolderIdChange: (id: string | null) => void;
   onContextMenu: (e: React.MouseEvent, item: PoseReference) => void;
+  onKeypointPreview: (item: PoseReference) => void;
   onOpenVideo: (item: KeypointVideoReference) => void;
   onVideoContextMenu?: (e: React.MouseEvent, item: KeypointVideoReference) => void;
+  onFolderContextMenu?: (
+    e: React.MouseEvent,
+    folderId: string,
+    folderName: string
+  ) => void;
+  onFolderNameClick?: (folderId: string, folderName: string) => void;
 }) {
   const {
     tile = 80,
@@ -59,8 +66,11 @@ export function KeypointRefGrid(props: {
     viewFolderId,
     onViewFolderIdChange,
     onContextMenu,
+    onKeypointPreview,
     onOpenVideo,
     onVideoContextMenu,
+    onFolderContextMenu,
+    onFolderNameClick,
   } = props;
 
   const itemById = useMemo(
@@ -216,7 +226,23 @@ export function KeypointRefGrid(props: {
           >
             Back
           </button>
-          <span style={{ fontWeight: 400 }}>{viewFolder.name}</span>
+          <button
+            type="button"
+            disabled={busy || !onFolderNameClick}
+            onClick={() => onFolderNameClick?.(viewFolder.id, viewFolder.name)}
+            style={{
+              fontWeight: 400,
+              border: "none",
+              background: "transparent",
+              color: "#eee",
+              padding: 0,
+              cursor: busy || !onFolderNameClick ? "default" : "pointer",
+              textDecoration: onFolderNameClick ? "underline" : "none",
+            }}
+            title={onFolderNameClick ? "Rename folder" : undefined}
+          >
+            {viewFolder.name}
+          </button>
         </div>
       ) : null}
 
@@ -260,13 +286,21 @@ export function KeypointRefGrid(props: {
             const count = (layout.folderOrder[fid] ?? []).length;
             return (
               <SortableItem id={id} style={{ width: tile }}>
-                <KeypointFolderTile
-                  tile={tile}
-                  name={folder.name}
-                  count={count}
-                  disabled={busy}
-                  onOpen={() => onViewFolderIdChange(fid)}
-                />
+                <div
+                  onContextMenu={
+                    onFolderContextMenu
+                      ? (e) => onFolderContextMenu(e, fid, folder.name)
+                      : undefined
+                  }
+                >
+                  <KeypointFolderTile
+                    tile={tile}
+                    name={folder.name}
+                    count={count}
+                    disabled={busy}
+                    onOpen={() => onViewFolderIdChange(fid)}
+                  />
+                </div>
               </SortableItem>
             );
           }
@@ -280,7 +314,7 @@ export function KeypointRefGrid(props: {
                 checked={selectedIds.has(id)}
                 disabled={busy}
                 onToggle={(on, e) => onCheckboxChange(id, on, e)}
-                onPrimary={() => {}}
+                onPrimary={() => onKeypointPreview(it)}
                 onContextMenu={(e) => onContextMenu(e, it)}
               />
             </SortableItem>

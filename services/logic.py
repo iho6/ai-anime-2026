@@ -2,6 +2,7 @@
 Character UI orchestration: subprocess calls to Comfy services and disk layout.
 
 No Qt or Gradio. ComfyUI port from COMFY_PORT env only.
+Required custom nodes install to ``comfyui/custom_nodes/`` before each Comfy launch.
 """
 
 from __future__ import annotations
@@ -109,10 +110,13 @@ _REQUIRED_CUSTOM_NODES: list[dict[str, str]] = [
     {
         "name": "ComfyUI-RMBG",
         "repo": "https://github.com/1038lab/ComfyUI-RMBG",
-        "dest_rel": "custom_nodes/ComfyUI-RMBG",
-        "requirements_rel": "custom_nodes/ComfyUI-RMBG/requirements.txt",
+        "dest_rel": "comfyui/custom_nodes/ComfyUI-RMBG",
+        "requirements_rel": "comfyui/custom_nodes/ComfyUI-RMBG/requirements.txt",
+        "marker_rel": "__init__.py",
     }
 ]
+
+COMFY_CUSTOM_NODES_DIR = (_REPO_ROOT / "comfyui" / "custom_nodes").resolve()
 
 # Prompt catalogs now live in services/prompts/ (re-exported here for back-compat).
 POSE_PROMPTS_PATH = prompts.POSE_PROMPTS_PATH
@@ -698,27 +702,46 @@ def _quick_env_check(log_cb: Callable[[str], None] | None = None) -> bool:
         return False
 
 
+def _custom_node_installed(dest: Path, marker: str) -> bool:
+    """True when ``dest`` contains ``marker`` (non-empty install, not a bare directory)."""
+    marker_path = dest / marker
+    return marker_path.is_file()
+
+
 def install_required_custom_nodes(
     *, log_cb: Callable[[str], None] | None = None
 ) -> None:
     """
-    Ensure required ComfyUI custom nodes are installed under `<repo_root>/custom_nodes/`.
+    Ensure required ComfyUI custom nodes are installed under ``comfyui/custom_nodes/``.
 
-    `custom_nodes/` is gitignored in this repo, so we install nodes at runtime.
+    ``comfyui/custom_nodes/`` is gitignored; nodes are cloned at runtime (or image build).
     """
-    custom_nodes_dir = (_REPO_ROOT / "custom_nodes").resolve()
-    custom_nodes_dir.mkdir(parents=True, exist_ok=True)
+    COMFY_CUSTOM_NODES_DIR.mkdir(parents=True, exist_ok=True)
+    legacy_root = (_REPO_ROOT / "custom_nodes").resolve()
 
     for node in _REQUIRED_CUSTOM_NODES:
         name = node["name"]
         repo = node["repo"]
         dest = (_REPO_ROOT / node["dest_rel"]).resolve()
         req = (_REPO_ROOT / node["requirements_rel"]).resolve()
+        marker = (node.get("marker_rel") or "__init__.py").strip()
 
-        if dest.exists():
+        legacy_dest = legacy_root / dest.name
+        if legacy_dest.exists() and not _custom_node_installed(dest, marker):
+            if log_cb:
+                log_cb(f"Removing legacy custom node path: {legacy_dest}")
+            shutil.rmtree(legacy_dest, ignore_errors=True)
+
+        if dest.exists() and not _custom_node_installed(dest, marker):
+            if log_cb:
+                log_cb(f"Repairing broken custom node install: {name}")
+            shutil.rmtree(dest, ignore_errors=True)
+
+        if _custom_node_installed(dest, marker):
             if log_cb:
                 log_cb(f"Custom node already present: {name}")
         else:
+            dest.parent.mkdir(parents=True, exist_ok=True)
             if log_cb:
                 log_cb(f"Installing Comfy custom node: {name}")
             _run_command_logged(
@@ -742,6 +765,7 @@ def _launch_main_background(
     log_cb: Callable[[str], None] | None = None,
 ) -> tuple[subprocess.Popen, threading.Event, deque[str], threading.Lock]:
     """Start Comfy ``main.py`` in the background; stream stdout/stderr via pipe while ``forward_logs`` is set."""
+    install_required_custom_nodes(log_cb=log_cb)
     (_REPO_ROOT / "comfyui" / "custom_nodes").mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable,
@@ -899,9 +923,10 @@ def run_startup_setup_and_launch(
             log_cb=log_cb,
         )
 
-    # Install cmake (required to build kimodo's MotionCorrection C extension).
+    # Build deps for kimodo's MotionCorrection C extension (CMake + Python dev headers).
+    py_tag = f"{sys.version_info.major}.{sys.version_info.minor}"
     _run_command_logged(
-        ["apt-get", "install", "-y", "cmake"],
+        ["apt-get", "install", "-y", "cmake", "build-essential", f"python{py_tag}-dev"],
         cwd=_REPO_ROOT,
         log_cb=log_cb,
     )
@@ -942,8 +967,7 @@ def run_startup_setup_and_launch(
             log_cb=log_cb,
         )
 
-    # Install required Comfy custom nodes after deps are ready, before model downloads.
-    install_required_custom_nodes(log_cb=log_cb)
+    # Custom nodes are installed in _launch_main_background before Comfy starts.
 
     env = os.environ.copy()
     env["HF_TOKEN"] = token

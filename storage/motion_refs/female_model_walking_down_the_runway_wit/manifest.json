@@ -1,0 +1,15 @@
+{
+  "fps": 30,
+  "frame_count": 90,
+  "joint_count": 22,
+  "has_mesh": false,
+  "vertex_count": 0,
+  "face_count": 0,
+  "segments": [
+    {
+      "text": "female model walking down the runway with high heels",
+      "duration": 3.0
+    }
+  ],
+  "model": "kimodo-smplx-rp"
+}
