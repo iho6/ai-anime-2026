@@ -967,6 +967,34 @@ def run_startup_setup_and_launch(
             log_cb=log_cb,
         )
 
+    # SMPL-X body model (Git LFS): motion-ref mesh skinning needs the licensed npz on disk.
+    try:
+        from services.motion_ref_gen_ai_service.smplx_skinning import smplx_body_model_ready
+
+        if not smplx_body_model_ready():
+            if log_cb:
+                log_cb(
+                    "Warning: SMPL-X body model missing or not pulled (Git LFS). "
+                    "KiMoD motion will generate joints but no mesh until you run: "
+                    "git lfs install && git lfs pull "
+                    "(storage/body_models/smplx/SMPLX_NEUTRAL.npz, ~104 MB)."
+                )
+            if sys.platform.startswith("linux") and shutil.which("git") and not shutil.which("git-lfs"):
+                if log_cb:
+                    log_cb("Installing git-lfs (apt) so SMPL-X LFS assets can be pulled…")
+                _run_command_logged(
+                    ["apt-get", "install", "-y", "git-lfs"],
+                    cwd=_REPO_ROOT,
+                    log_cb=log_cb,
+                )
+                _run_command_logged(
+                    ["git", "lfs", "install"],
+                    cwd=_REPO_ROOT,
+                    log_cb=log_cb,
+                )
+    except Exception:
+        pass
+
     # Custom nodes are installed in _launch_main_background before Comfy starts.
 
     env = os.environ.copy()

@@ -37,6 +37,58 @@ SMPLX_MODEL_DIR = Path(
 
 _SMPLX_CACHE: dict[str, Any] = {}
 
+_LFS_POINTER_PREFIX = b"version https://git-lfs.github.com/spec/v1"
+
+_GENDER_NPZ = {
+    "neutral": "SMPLX_NEUTRAL.npz",
+    "male": "SMPLX_MALE.npz",
+    "female": "SMPLX_FEMALE.npz",
+}
+
+
+def _gender_npz_path(gender: str) -> Path:
+    name = _GENDER_NPZ.get(gender.lower(), f"SMPLX_{gender.upper()}.npz")
+    return SMPLX_MODEL_DIR / "smplx" / name
+
+
+def _is_git_lfs_pointer(path: Path) -> bool:
+    try:
+        if not path.is_file() or path.stat().st_size > 4096:
+            return False
+        with path.open("rb") as f:
+            return f.read(len(_LFS_POINTER_PREFIX)) == _LFS_POINTER_PREFIX
+    except OSError:
+        return False
+
+
+def smplx_body_model_ready(gender: str = "neutral") -> bool:
+    """Return True when the on-disk body-model npz exists and is not an unpulled LFS pointer."""
+    path = _gender_npz_path(gender)
+    return path.is_file() and not _is_git_lfs_pointer(path)
+
+
+def _require_body_model_npz(gender: str) -> Path:
+    model_folder = SMPLX_MODEL_DIR / "smplx"
+    npz_path = _gender_npz_path(gender)
+    if not model_folder.is_dir():
+        raise RuntimeError(
+            f"SMPL-X body model folder not found at {model_folder}. "
+            f"Stage {npz_path.name} there (set SMPLX_MODEL_DIR to override the parent dir)."
+        )
+    if not npz_path.is_file():
+        raise RuntimeError(
+            f"SMPL-X body model not found at {npz_path}. "
+            f"Stage {npz_path.name} under {model_folder} "
+            f"(set SMPLX_MODEL_DIR to override the parent dir)."
+        )
+    if _is_git_lfs_pointer(npz_path):
+        raise RuntimeError(
+            f"SMPL-X body model at {npz_path} is a Git LFS pointer (file not pulled). "
+            "Run: git lfs install && git lfs pull"
+        )
+    return npz_path
+
+
 # SMPL-X axis-angle ``poses`` (AMASS) layout: 55 joints × 3 = 165, split as
 #   root(3) body(63) jaw(3) leye(3) reye(3) lhand(45) rhand(45)
 _AMASS_SPLITS = {
@@ -75,12 +127,7 @@ def load_smplx_model(gender: str = "neutral", batch_size: int = 1) -> Any:
             "The 'smplx' package (and torch) are required to skin the SMPL-X mesh. "
             "Install with: pip install smplx"
         )
-    model_folder = SMPLX_MODEL_DIR / "smplx"
-    if not model_folder.is_dir():
-        raise RuntimeError(
-            f"SMPL-X body model not found at {model_folder}. Stage SMPLX_NEUTRAL.npz there "
-            f"(set SMPLX_MODEL_DIR to override the parent dir)."
-        )
+    _require_body_model_npz(gender)
 
     import smplx
 

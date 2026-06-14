@@ -46,6 +46,30 @@ python utils/download_models.py --all
 - `--music-gen` -> `music_gen_ai_service` (ACE-Step 1.5 turbo)
 - `--all` -> runs all model-based service downloads together (deduplicates repeated destination paths)
 
+### Motion reference / SMPL-X body model (KiMoD)
+
+KiMoD motion generation (`motion_ref_gen_ai_service`) downloads its **checkpoint** from Hugging Face at runtime. The **SMPL-X body template** used to skin the white mesh viewer is separate — it lives in git as a licensed asset:
+
+```text
+storage/body_models/smplx/SMPLX_NEUTRAL.npz   (~104 MB, Git LFS)
+```
+
+After `git pull` on SSH / RunPod, fetch LFS objects once per machine (and after pulls that touch this file):
+
+```bash
+git lfs install
+git lfs pull
+ls -lh storage/body_models/smplx/SMPLX_NEUTRAL.npz   # should be ~104 MB, not a tiny pointer
+```
+
+Smoke test (requires kimodo + GPU/CPU env as for normal generation):
+
+```bash
+python -m services.motion_ref_gen_ai_service.serverless --inspect-smplx --prompt "a person walks forward"
+```
+
+Worker health includes `smplx_ready` on `GET /health` (port 8766 by default). Override asset location with `SMPLX_MODEL_DIR` (parent of the `smplx/` folder).
+
 ## Character web UI (React + FastAPI)
 
 The Next.js frontend and FastAPI API live under [`services/ui/`](ui/): `frontend/` and `api/`. Shared disk and subprocess orchestration is in [`logic.py`](logic.py) at the `services` package root (`import services.logic`).

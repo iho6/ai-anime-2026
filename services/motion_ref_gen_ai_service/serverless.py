@@ -446,7 +446,9 @@ def _make_request_handler(model_name: str) -> type:
 
         def do_GET(self) -> None:
             if self.path == "/health":
-                self._send_json(200, {"ok": True})
+                from services.motion_ref_gen_ai_service.smplx_skinning import smplx_body_model_ready
+
+                self._send_json(200, {"ok": True, "smplx_ready": smplx_body_model_ready()})
             elif self.path == "/bones":
                 self._send_json(200, {"bones": SOMA_BONES, "joint_names": SOMA_JOINT_NAMES})
             else:

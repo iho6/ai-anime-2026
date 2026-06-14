@@ -3,3 +3,6 @@
 comfyui/comfy_api_nodes/apis/__init__.py linguist-generated
 
 # Character assets live under storage/characters/ (gitignored, optional ANIME_STORAGE_ROOT).
+
+# SMPL-X body model (licensed asset) for KiMoD mesh skinning — fetch with `git lfs pull`.
+storage/body_models/smplx/*.npz filter=lfs diff=lfs merge=lfs -text
