@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { TimelineText } from "../../lib/api";
 import { TIMELINE_FONTS, ensureTimelineFontLoaded, timelineFontCssFamily } from "../../lib/timelineFonts";
 import type { TextStyleModal } from "./TextStyleBar";
@@ -50,7 +51,7 @@ export function TextPickerModals(props: {
       f.category.toLowerCase().includes(query.toLowerCase())
   );
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed",
@@ -61,13 +62,15 @@ export function TextPickerModals(props: {
         alignItems: "center",
         justifyContent: "center",
       }}
-      onPointerDown={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         style={{
           background: "#1a1a1a",
           border: "1px solid rgba(255,255,255,0.25)",
-          borderRadius: 6,
+          borderRadius: 0,
           padding: 16,
           minWidth: 280,
           maxWidth: 420,
@@ -167,7 +170,7 @@ export function TextPickerModals(props: {
                     width: 32,
                     height: 32,
                     background: c,
-                    border: hex === c ? "2px solid #ffd166" : "1px solid #444",
+                    border: hex === c ? "2px solid rgba(255,255,255,0.9)" : "1px solid #444",
                     cursor: "pointer",
                   }}
                 />
@@ -186,7 +189,8 @@ export function TextPickerModals(props: {
           </>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -208,8 +212,8 @@ function FontRow(props: {
       style={{
         padding: "8px 10px",
         textAlign: "left",
-        background: props.selected ? "rgba(255,209,102,0.15)" : "transparent",
-        border: props.selected ? "1px solid #ffd166" : "1px solid rgba(255,255,255,0.1)",
+        background: props.selected ? "rgba(255,255,255,0.12)" : "transparent",
+        border: props.selected ? "1px solid rgba(255,255,255,0.9)" : "1px solid rgba(255,255,255,0.1)",
         color: "#eee",
         cursor: "pointer",
         fontFamily: fam || timelineFontCssFamily(props.familyId),
@@ -224,10 +228,11 @@ function FontRow(props: {
 function presetBtn(active: boolean): React.CSSProperties {
   return {
     padding: "6px 12px",
-    background: active ? "#ffd166" : "rgba(255,255,255,0.08)",
-    color: active ? "#111" : "#eee",
-    border: "1px solid rgba(255,255,255,0.2)",
+    background: active ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.08)",
+    color: active ? "#fff" : "#eee",
+    border: active ? "1px solid rgba(255,255,255,0.9)" : "1px solid rgba(255,255,255,0.2)",
     cursor: "pointer",
     fontSize: 12,
+    borderRadius: 0,
   };
 }

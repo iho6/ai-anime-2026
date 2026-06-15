@@ -3,6 +3,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   apiHubCharacters,
+  apiHubDelete,
+  apiNewCharacterDiscard,
   apiPoseGallerySplit,
   apiExpressionGallerySplit,
   apiSequenceFolderNames,
@@ -24,7 +26,13 @@ import type { SharedLogStreamHandle } from "./SharedLogStream";
 import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 import { useJobRunSession } from "../hooks/useJobRunSession";
 import { useAppError } from "./ErrorProvider";
+import { BaseCloseupWizardModal } from "./BaseCloseupWizardModal";
+import {
+  NewCharacterCreatePanel,
+  type NewCharacterCreatePanelHandle,
+} from "./create/NewCharacterCreatePanel";
 
+type PickerStage = "pick" | "create" | "gallery";
 type CharIcon = { key: string; label: string; coverRelPath: string };
 type SectionData = {
   poseImages: { relPath: string }[];
@@ -44,9 +52,13 @@ export function TimelineCharacterPicker(props: {
   const { open, onPickImage, onPickSequence, onCancel } = props;
   const initialKey = props.initialKey ?? props.charKey ?? null;
 
+  const [stage, setStage] = useState<PickerStage>("pick");
   const [icons, setIcons] = useState<CharIcon[]>([]);
   const [iconsError, setIconsError] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const createPanelRef = useRef<NewCharacterCreatePanelHandle | null>(null);
+  const [closeupWizardOpen, setCloseupWizardOpen] = useState(false);
+  const [closeupWizardCharKey, setCloseupWizardCharKey] = useState("");
   const [sectionData, setSectionData] = useState<SectionData | null>(null);
   const [sectionsError, setSectionsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,9 +99,29 @@ export function TimelineCharacterPicker(props: {
   } = useJobRunSession(logRef);
   const { askText, showError } = useAppError();
 
+  const loadIcons = useCallback(async () => {
+    setLoading(true);
+    setIconsError(null);
+    try {
+      const items = await apiHubCharacters();
+      setIcons(
+        items.map((it) => ({
+          key: it.charKey,
+          label: it.charKey,
+          coverRelPath: it.coverRelPath,
+        }))
+      );
+    } catch (e) {
+      setIconsError(String((e as Error)?.message ?? e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // Reset on open
   useEffect(() => {
     if (!open) return;
+    setStage(initialKey ? "gallery" : "pick");
     setSectionData(null);
     setSectionsError(null);
     setNewPosePanel(null);
@@ -99,20 +131,15 @@ export function TimelineCharacterPicker(props: {
     setSeqCtxMenu(null);
     setAngleModalOpen(false);
     setAngleSourceRelPath("");
+    setCloseupWizardOpen(false);
+    setCloseupWizardCharKey("");
     setSelectedKey(initialKey ?? null);
 
     if (!initialKey) {
-      setLoading(true);
       setIcons([]);
-      setIconsError(null);
-      apiHubCharacters()
-        .then((items) =>
-          setIcons(items.map((it) => ({ key: it.charKey, label: it.charKey, coverRelPath: it.coverRelPath })))
-        )
-        .catch((e) => setIconsError(String(e?.message ?? e)))
-        .finally(() => setLoading(false));
+      void loadIcons();
     }
-  }, [open, initialKey]);
+  }, [open, initialKey, loadIcons]);
 
   const loadSections = useCallback(async (charKey: string) => {
     setLoading(true);
@@ -155,9 +182,49 @@ export function TimelineCharacterPicker(props: {
   }, []);
 
   useEffect(() => {
-    if (!open || !selectedKey) return;
+    if (!open || !selectedKey || stage !== "gallery") return;
     void loadSections(selectedKey);
-  }, [open, selectedKey, loadSections]);
+  }, [open, selectedKey, stage, loadSections]);
+
+  async function handlePickerCancel() {
+    if (stage === "create") {
+      const ok = await createPanelRef.current?.discardDraftsWithConfirm();
+      if (ok === false) return;
+      onCancel();
+      return;
+    }
+    onCancel();
+  }
+
+  async function handleBack() {
+    if (stage === "create") {
+      await createPanelRef.current?.cancelWithConfirm();
+      return;
+    }
+    if (stage === "gallery" && !initialKey) {
+      setSelectedKey(null);
+      setStage("pick");
+      setSectionData(null);
+    }
+  }
+
+  async function onCharacterFinalized(charKey: string) {
+    setCloseupWizardCharKey(charKey);
+    setCloseupWizardOpen(true);
+    setStage("pick");
+  }
+
+  async function onWizardDone(charKey: string) {
+    setCloseupWizardOpen(false);
+    try {
+      await apiNewCharacterDiscard();
+    } catch {
+      /* drafts may already be empty */
+    }
+    setSelectedKey(charKey);
+    setStage("gallery");
+    void loadIcons();
+  }
 
   async function runNewPose() {
     if (!newPosePanel || !newPosePrompt.trim()) return;
@@ -231,7 +298,8 @@ export function TimelineCharacterPicker(props: {
 
   if (!open) return null;
 
-  const showBackButton = Boolean(selectedKey) && !initialKey;
+  const showBackButton =
+    (stage === "gallery" && Boolean(selectedKey) && !initialKey) || stage === "create";
 
   return (
     <>
@@ -246,7 +314,7 @@ export function TimelineCharacterPicker(props: {
           justifyContent: "center",
           padding: 16,
         }}
-        onMouseDown={(e) => { e.preventDefault(); onCancel(); }}
+        onMouseDown={(e) => { e.preventDefault(); void handlePickerCancel(); }}
         // Close context menus on click outside
         onClick={() => { setImgCtxMenu(null); setSeqCtxMenu(null); }}
       >
@@ -275,23 +343,48 @@ export function TimelineCharacterPicker(props: {
             padding: "10px 12px",
             borderBottom: "1px solid rgba(255,255,255,0.15)",
           }}>
-            {showBackButton && (
-              <SquareIconButton aria-label="Back" title="Back" icon={<TriangleIcon direction="left" />} onClick={() => setSelectedKey(null)} />
-            )}
+            {showBackButton ? (
+              <SquareIconButton
+                aria-label="Back"
+                title="Back"
+                icon={<TriangleIcon direction="left" />}
+                onClick={() => void handleBack()}
+              />
+            ) : null}
             <span>Add Character</span>
+            {stage === "gallery" && selectedKey ? (
+              <span style={{ opacity: 0.55, fontSize: 13 }}>{selectedKey}</span>
+            ) : null}
           </div>
 
           {/* Body */}
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12, position: "relative" }}>
             {/* Stage 1: character icons */}
-            {!selectedKey && (
+            {stage === "pick" && (
               <>
                 {iconsError && <div style={{ color: "#ff8080", fontSize: 13 }}>{iconsError}</div>}
                 {loading && icons.length === 0 && <div style={{ opacity: 0.6, fontSize: 13 }}>Loading…</div>}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <SquareButton
+                      variant="tile"
+                      tone="dark"
+                      style={{ width: "100%", aspectRatio: "1/1", fontWeight: 400, fontSize: 12 }}
+                      onClick={() => setStage("create")}
+                    >
+                      New Character
+                    </SquareButton>
+                  </div>
                   {icons.map((ic) => (
-                    <button key={ic.key} type="button" onClick={() => setSelectedKey(ic.key)}
-                      style={{ display: "flex", flexDirection: "column", gap: 4, padding: 6, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "inherit", cursor: "pointer" }}>
+                    <button
+                      key={ic.key}
+                      type="button"
+                      onClick={() => {
+                        setSelectedKey(ic.key);
+                        setStage("gallery");
+                      }}
+                      style={{ display: "flex", flexDirection: "column", gap: 4, padding: 6, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", color: "inherit", cursor: "pointer" }}
+                    >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={assetUrlFromRelPath(ic.coverRelPath)} alt="" style={{ width: "100%", aspectRatio: "1/1", objectFit: "contain", display: "block" }} />
                       <span style={{ fontSize: 12, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ic.label}</span>
@@ -301,8 +394,21 @@ export function TimelineCharacterPicker(props: {
               </>
             )}
 
+            {stage === "create" && (
+              <NewCharacterCreatePanel
+                ref={createPanelRef}
+                variant="embedded"
+                cancelConfirmMessage="Clear all draft images and return to the character list?"
+                onFinalized={(charKey) => void onCharacterFinalized(charKey)}
+                onCancelled={() => {
+                  setStage("pick");
+                  void loadIcons();
+                }}
+              />
+            )}
+
             {/* Stage 2: pose / expression / sequence sections */}
-            {selectedKey && (
+            {stage === "gallery" && selectedKey && (
               <>
                 {sectionsError && <div style={{ color: "#ff8080", fontSize: 13 }}>{sectionsError}</div>}
                 {loading && !sectionData && <div style={{ opacity: 0.6, fontSize: 13 }}>Loading…</div>}
@@ -483,7 +589,7 @@ export function TimelineCharacterPicker(props: {
 
           {/* Footer */}
           <div style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", padding: 12, borderTop: "1px solid rgba(255,255,255,0.15)" }}>
-            <button type="button" onClick={onCancel} className="ui-btn-black">Cancel</button>
+            <button type="button" onClick={() => void handlePickerCancel()} className="ui-btn-black">Cancel</button>
           </div>
         </div>
       </div>
@@ -638,6 +744,31 @@ export function TimelineCharacterPicker(props: {
       />
 
       <ConnectedJobRunModal modal={poseJobModalProps} logRef={logRef} />
+
+      <BaseCloseupWizardModal
+        open={closeupWizardOpen}
+        charKey={closeupWizardCharKey}
+        title="Generate Closeup Angles"
+        onClose={async () => {
+          const ck = closeupWizardCharKey.trim();
+          if (ck) {
+            try {
+              await apiHubDelete(ck);
+            } catch (e) {
+              showError({
+                message: "Could not remove the character after closing the wizard.",
+                error: e,
+              });
+            }
+          }
+          setCloseupWizardOpen(false);
+          setCloseupWizardCharKey("");
+        }}
+        onDone={async () => {
+          const ck = closeupWizardCharKey.trim();
+          if (ck) await onWizardDone(ck);
+        }}
+      />
     </>
   );
 }

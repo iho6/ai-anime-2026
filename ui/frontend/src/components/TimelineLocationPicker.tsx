@@ -9,6 +9,7 @@ import {
   apiLocationHide,
   apiLocationHubItems,
   apiLocationUnhide,
+  apiNewLocationDiscard,
   assetUrlFromRelPath,
   type LocationGalleryItem,
 } from "../lib/api";
@@ -20,10 +21,16 @@ import {
   type ContextMenuItem,
 } from "./DesktopContextMenu";
 import { SquareIconButton, TriangleIcon } from "./IconPrimitives";
+import { SquareButton } from "./SquareButton";
 import type { SharedLogStreamHandle } from "./SharedLogStream";
 import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 import { useJobRunSession } from "../hooks/useJobRunSession";
+import {
+  NewLocationCreatePanel,
+  type NewLocationCreatePanelHandle,
+} from "./create/NewLocationCreatePanel";
 
+type PickerStage = "pick" | "create" | "gallery";
 type LocIcon = { key: string; label: string; coverRelPath: string };
 
 type GallerySplit = {
@@ -52,9 +59,11 @@ export function TimelineLocationPicker(props: {
   const { open, onPickImage, onCancel } = props;
   const initialKey = props.initialKey ?? null;
 
+  const [stage, setStage] = useState<PickerStage>("pick");
   const [icons, setIcons] = useState<LocIcon[]>([]);
   const [iconsError, setIconsError] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const createPanelRef = useRef<NewLocationCreatePanelHandle | null>(null);
   const [split, setSplit] = useState<GallerySplit | null>(null);
   const [sectionsError, setSectionsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -98,8 +107,28 @@ export function TimelineLocationPicker(props: {
     [split]
   );
 
+  const loadIcons = useCallback(async () => {
+    setLoading(true);
+    setIconsError(null);
+    try {
+      const items = await apiLocationHubItems();
+      setIcons(
+        items.map((it) => ({
+          key: it.locationKey,
+          label: it.locationKey,
+          coverRelPath: it.coverRelPath,
+        }))
+      );
+    } catch (e) {
+      setIconsError(String((e as Error)?.message ?? e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!open) return;
+    setStage(initialKey ? "gallery" : "pick");
     setSplit(null);
     setSectionsError(null);
     setMenu((m) => ({ ...m, open: false }));
@@ -110,23 +139,10 @@ export function TimelineLocationPicker(props: {
     setSelectedKey(initialKey ?? null);
 
     if (!initialKey) {
-      setLoading(true);
       setIcons([]);
-      setIconsError(null);
-      apiLocationHubItems()
-        .then((items) =>
-          setIcons(
-            items.map((it) => ({
-              key: it.locationKey,
-              label: it.locationKey,
-              coverRelPath: it.coverRelPath,
-            }))
-          )
-        )
-        .catch((e) => setIconsError(String(e?.message ?? e)))
-        .finally(() => setLoading(false));
+      void loadIcons();
     }
-  }, [open, initialKey]);
+  }, [open, initialKey, loadIcons]);
 
   const loadSections = useCallback(async (locationKey: string) => {
     setLoading(true);
@@ -143,9 +159,42 @@ export function TimelineLocationPicker(props: {
   }, []);
 
   useEffect(() => {
-    if (!open || !selectedKey) return;
+    if (!open || !selectedKey || stage !== "gallery") return;
     void loadSections(selectedKey);
-  }, [open, selectedKey, loadSections]);
+  }, [open, selectedKey, stage, loadSections]);
+
+  async function handlePickerCancel() {
+    if (stage === "create") {
+      const ok = await createPanelRef.current?.discardDraftsWithConfirm();
+      if (ok === false) return;
+      onCancel();
+      return;
+    }
+    onCancel();
+  }
+
+  async function handleBack() {
+    if (stage === "create") {
+      await createPanelRef.current?.cancelWithConfirm();
+      return;
+    }
+    if (stage === "gallery" && !initialKey) {
+      setSelectedKey(null);
+      setStage("pick");
+      setSplit(null);
+    }
+  }
+
+  async function onLocationFinalized(locationKey: string) {
+    try {
+      await apiNewLocationDiscard();
+    } catch {
+      /* drafts may already be empty */
+    }
+    setSelectedKey(locationKey);
+    setStage("gallery");
+    void loadIcons();
+  }
 
   const openContextMenu = useCallback(
     (relPath: string, x: number, y: number) => {
@@ -255,7 +304,8 @@ export function TimelineLocationPicker(props: {
 
   if (!open) return null;
 
-  const showBackButton = Boolean(selectedKey) && !initialKey;
+  const showBackButton =
+    (stage === "gallery" && Boolean(selectedKey) && !initialKey) || stage === "create";
   const locationKey = selectedKey ?? "";
 
   const baseImages = split?.baseRelPath
@@ -280,7 +330,7 @@ export function TimelineLocationPicker(props: {
         }}
         onMouseDown={(e) => {
           e.preventDefault();
-          onCancel();
+          void handlePickerCancel();
         }}
       >
         <div
@@ -313,17 +363,17 @@ export function TimelineLocationPicker(props: {
                 aria-label="Back"
                 title="Back"
                 icon={<TriangleIcon direction="left" />}
-                onClick={() => setSelectedKey(null)}
+                onClick={() => void handleBack()}
               />
             ) : null}
             <span>Add Location</span>
-            {selectedKey ? (
+            {stage === "gallery" && selectedKey ? (
               <span style={{ opacity: 0.55, fontSize: 13 }}>{selectedKey}</span>
             ) : null}
           </div>
 
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12 }}>
-            {!selectedKey ? (
+            {stage === "pick" ? (
               <>
                 {iconsError ? (
                   <div style={{ color: "#ff8080", fontSize: 13 }}>{iconsError}</div>
@@ -338,11 +388,24 @@ export function TimelineLocationPicker(props: {
                     gap: 10,
                   }}
                 >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <SquareButton
+                      variant="tile"
+                      tone="dark"
+                      style={{ width: "100%", aspectRatio: "1/1", fontWeight: 400, fontSize: 12 }}
+                      onClick={() => setStage("create")}
+                    >
+                      New Location
+                    </SquareButton>
+                  </div>
                   {icons.map((ic) => (
                     <button
                       key={ic.key}
                       type="button"
-                      onClick={() => setSelectedKey(ic.key)}
+                      onClick={() => {
+                        setSelectedKey(ic.key);
+                        setStage("gallery");
+                      }}
                       style={{
                         display: "flex",
                         flexDirection: "column",
@@ -380,7 +443,22 @@ export function TimelineLocationPicker(props: {
                   ))}
                 </div>
               </>
-            ) : (
+            ) : null}
+
+            {stage === "create" ? (
+              <NewLocationCreatePanel
+                ref={createPanelRef}
+                variant="embedded"
+                cancelConfirmMessage="Clear all draft images and return to the location list?"
+                onFinalized={(locationKey) => void onLocationFinalized(locationKey)}
+                onCancelled={() => {
+                  setStage("pick");
+                  void loadIcons();
+                }}
+              />
+            ) : null}
+
+            {stage === "gallery" && selectedKey ? (
               <>
                 {sectionsError ? (
                   <div style={{ color: "#ff8080", fontSize: 13 }}>{sectionsError}</div>
@@ -426,7 +504,7 @@ export function TimelineLocationPicker(props: {
                   </>
                 ) : null}
               </>
-            )}
+            ) : null}
           </div>
 
           <div
@@ -438,7 +516,7 @@ export function TimelineLocationPicker(props: {
               borderTop: "1px solid rgba(255,255,255,0.15)",
             }}
           >
-            <button type="button" onClick={onCancel} className="ui-btn-black">
+            <button type="button" onClick={() => void handlePickerCancel()} className="ui-btn-black">
               Cancel
             </button>
           </div>

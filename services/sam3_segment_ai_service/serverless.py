@@ -97,7 +97,9 @@ def _patch_sam3_detect(
     *,
     positive_coords: str,
     negative_coords: str,
+    sam3_options: dict[str, Any] | None = None,
 ) -> None:
+    opts = sam3_options or {}
     for node in workflow.values():
         if not isinstance(node, dict):
             continue
@@ -106,6 +108,26 @@ def _patch_sam3_detect(
         inp = node.setdefault("inputs", {})
         inp["positive_coords"] = positive_coords
         inp["negative_coords"] = negative_coords
+        if "threshold" in opts:
+            inp["threshold"] = float(opts["threshold"])
+        if "refine_iterations" in opts:
+            inp["refine_iterations"] = int(opts["refine_iterations"])
+
+
+def _patch_sam3_video_track(
+    workflow: dict[str, Any],
+    *,
+    sam3_options: dict[str, Any] | None = None,
+) -> None:
+    opts = sam3_options or {}
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        if node.get("class_type") != "SAM3_VideoTrack":
+            continue
+        inp = node.setdefault("inputs", {})
+        if "detection_threshold" in opts:
+            inp["detection_threshold"] = float(opts["detection_threshold"])
 
 
 def _patch_image_workflow(
@@ -115,6 +137,7 @@ def _patch_image_workflow(
     positive_coords: str,
     negative_coords: str,
     text_prompt: str = "",
+    sam3_options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     w = deepcopy(workflow)
     for nid, node in w.items():
@@ -123,7 +146,10 @@ def _patch_image_workflow(
         if node.get("class_type") == "LoadImage":
             node.setdefault("inputs", {})["image"] = image_input_ref
     _patch_sam3_detect(
-        w, positive_coords=positive_coords, negative_coords=negative_coords
+        w,
+        positive_coords=positive_coords,
+        negative_coords=negative_coords,
+        sam3_options=sam3_options,
     )
     _patch_sam3_text(w, text_prompt)
     return w
@@ -137,6 +163,7 @@ def _patch_video_workflow(
     positive_coords: str,
     negative_coords: str,
     text_prompt: str = "",
+    sam3_options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     w = deepcopy(workflow)
     for node in w.values():
@@ -148,8 +175,12 @@ def _patch_video_workflow(
         elif ct == "ImageFromBatch":
             node.setdefault("inputs", {})["batch_index"] = max(0, int(ref_frame_index))
     _patch_sam3_detect(
-        w, positive_coords=positive_coords, negative_coords=negative_coords
+        w,
+        positive_coords=positive_coords,
+        negative_coords=negative_coords,
+        sam3_options=sam3_options,
     )
+    _patch_sam3_video_track(w, sam3_options=sam3_options)
     _patch_sam3_text(w, text_prompt)
     return w
 
@@ -245,6 +276,10 @@ def handler(job_input: dict) -> dict:
 
         job = (task.get("job") or "image_mask").strip().lower()
         pos_json, neg_json, text_prompt = _prompt_from_task(task)
+        sam3_raw = task.get("sam3_options") or task.get("sam3Options")
+        sam3_options: dict[str, Any] | None = None
+        if isinstance(sam3_raw, dict):
+            sam3_options = dict(sam3_raw)
 
         gpu_err, gpu_detail = gpu_preflight()
         if gpu_err:
@@ -280,6 +315,7 @@ def handler(job_input: dict) -> dict:
                 positive_coords=pos_json,
                 negative_coords=neg_json,
                 text_prompt=text_prompt,
+                sam3_options=sam3_options,
             )
             _pid, paths = _run_workflow(w, addr)
             urls: list[str] = []
@@ -316,6 +352,7 @@ def handler(job_input: dict) -> dict:
                 positive_coords=pos_json,
                 negative_coords=neg_json,
                 text_prompt=text_prompt,
+                sam3_options=sam3_options,
             )
             _pid, paths = _run_workflow(w, addr)
             urls = []
@@ -356,6 +393,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--text-prompt", type=str, default="")
     p.add_argument("--ref-frame-index", type=int, default=0)
     p.add_argument("--convert-local-to-url", action="store_true")
+    p.add_argument("--sam3-options-json", type=str, default=None)
     return p.parse_args()
 
 
@@ -383,6 +421,14 @@ def _run_test_mode(args: argparse.Namespace) -> None:
         "text_prompt": _normalize_text_prompt(args.text_prompt),
         "ref_frame_index": args.ref_frame_index,
     }
+    if args.sam3_options_json:
+        try:
+            raw = json.loads(args.sam3_options_json)
+        except json.JSONDecodeError as e:
+            print("ERROR: invalid --sam3-options-json:", e, file=sys.stderr)
+            sys.exit(1)
+        if isinstance(raw, dict):
+            inp["sam3_options"] = raw
     if job == "video_masks":
         if not args.video_url:
             print("ERROR: --video-url required for video_masks", file=sys.stderr)

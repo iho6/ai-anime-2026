@@ -15,7 +15,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
-from services import logic, timeline_storage
+from services import logic, timeline_asset_storage, timeline_storage
 from services.character_storage import sanitize_for_folder
 from .storage_paths import (
     TIMELINES_STORAGE_ROOT,
@@ -155,6 +155,65 @@ def timeline_import_image(timeline_key: str, body: dict[str, str]) -> dict[str, 
     }
 
 
+@router.get("/timeline/{timeline_key}/assets")
+def timeline_assets_layout(timeline_key: str) -> dict[str, Any]:
+    d = _timeline_dir(timeline_key)
+    if not d.is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    return timeline_asset_storage.get_layout(timeline_key)
+
+
+@router.delete("/timeline/{timeline_key}/assets/{asset_id}")
+def timeline_asset_delete(timeline_key: str, asset_id: str) -> dict[str, bool]:
+    d = _timeline_dir(timeline_key)
+    if not d.is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    ok = timeline_asset_storage.delete_asset(timeline_key, asset_id)
+    if not ok:
+        raise HTTPException(404, "Asset not found.")
+    return {"ok": True}
+
+
+@router.websocket("/timeline/{timeline_key}/t2i/ws")
+async def timeline_t2i_ws(ws: WebSocket, timeline_key: str) -> None:
+    """Text-to-image → timeline asset gallery entry."""
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+    try:
+        if not _timeline_dir(timeline_key).is_dir():
+            raise ValueError("Timeline not found.")
+        prompt = (msg.get("promptText") or "").strip()
+        if not prompt:
+            raise ValueError("promptText is required.")
+        model_mode = (msg.get("modelMode") or "general").strip().lower()
+        preview_aspect = (msg.get("previewAspect") or "16:9").strip()
+        width = msg.get("width")
+        height = msg.get("height")
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            item = logic.generate_t2i_timeline_asset(
+                timeline_key,
+                prompt,
+                model_mode,
+                preview_aspect=preview_aspect,
+                width=int(width) if width is not None else None,
+                height=int(height) if height is not None else None,
+                log_cb=log_cb,
+            )
+            return {"item": item}
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
 @router.websocket("/timeline/{timeline_key}/remove_video_bg/ws")
 async def timeline_remove_video_bg_ws(ws: WebSocket, timeline_key: str) -> None:
     """Remove background from a video clip via RobustVideoMatting.  Outputs WebM+alpha."""
@@ -173,6 +232,7 @@ async def timeline_remove_video_bg_ws(ws: WebSocket, timeline_key: str) -> None:
             raise ValueError("videoRelPath is required.")
         from .storage_paths import resolve_storage_rel_file
         abs_src = str(resolve_storage_rel_file(rel))
+        rvm_opts = logic._resolve_rvm_options(msg)
 
         def work(log_cb: Any) -> dict[str, Any]:
             from services.vid_bckgrnd_removal_ai_service.serverless import (
@@ -182,12 +242,84 @@ async def timeline_remove_video_bg_ws(ws: WebSocket, timeline_key: str) -> None:
             stem = Path(abs_src).stem
             out_path = str(Path(clips_dir) / f"{stem}_nobg_{int(time.time())}.webm")
             result = remove_video_background_persistent(
-                abs_src, out_path, log_cb=log_cb
+                abs_src,
+                out_path,
+                backbone=rvm_opts["backbone"],
+                downsample_ratio=rvm_opts["downsample_ratio"],
+                alpha_dilate_px=rvm_opts["alpha_dilate_px"],
+                use_source_rgb=rvm_opts["use_source_rgb"],
+                log_cb=log_cb,
             )
+            out_abs = result.get("url") or out_path
+            meta = logic.probe_video_meta(out_abs)
+            fps = float(result.get("fps") or meta.get("fps") or 0)
+            duration = float(meta.get("durationSec") or 0)
+            if duration <= 0 and result.get("frames") and fps > 0:
+                duration = float(result["frames"]) / fps
             return {
-                "srcRelPath": storage_rel_from_abs(result["url"]),
-                "width": result.get("width") or 0,
-                "height": result.get("height") or 0,
+                "srcRelPath": storage_rel_from_abs(out_abs),
+                "width": result.get("width") or meta.get("width") or 0,
+                "height": result.get("height") or meta.get("height") or 0,
+                "durationSec": duration,
+                "fps": fps,
+            }
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
+@router.websocket("/timeline/{timeline_key}/remove_video_bg_rmbg/ws")
+async def timeline_remove_video_bg_rmbg_ws(ws: WebSocket, timeline_key: str) -> None:
+    """Remove background from a video clip via per-frame RMBG-2.0.  Outputs WebM+alpha."""
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+
+    try:
+        d = _timeline_dir(timeline_key)
+        if not d.is_dir():
+            raise ValueError("Timeline not found.")
+        rel = (msg.get("videoRelPath") or "").strip()
+        if not rel:
+            raise ValueError("videoRelPath is required.")
+        from .storage_paths import resolve_storage_rel_file
+        abs_src = str(resolve_storage_rel_file(rel))
+        output_fps_24 = bool(msg.get("outputFps24") or msg.get("output_fps_24"))
+        recycle_mask = bool(msg.get("recycleMask") or msg.get("recycle_mask"))
+        if recycle_mask and not output_fps_24:
+            recycle_mask = False
+        raw_rmbg = msg.get("rmbg")
+        rmbg_overrides = raw_rmbg if isinstance(raw_rmbg, dict) else None
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            clips_dir = timeline_storage.timeline_clips_dir(timeline_key)
+            stem = Path(abs_src).stem
+            out_path = str(Path(clips_dir) / f"{stem}_rmbg_{int(time.time())}.webm")
+            result = logic.remove_video_background_rmbg(
+                abs_src,
+                out_path,
+                output_fps_24=output_fps_24,
+                recycle_mask=recycle_mask,
+                rmbg_overrides=rmbg_overrides,
+                log_cb=log_cb,
+            )
+            out_abs = result.get("absPath") or result.get("url") or out_path
+            meta = logic.probe_video_meta(out_abs)
+            return {
+                "srcRelPath": storage_rel_from_abs(out_abs),
+                "width": result.get("width") or meta.get("width") or 0,
+                "height": result.get("height") or meta.get("height") or 0,
+                "durationSec": float(
+                    result.get("durationSec") or meta.get("durationSec") or 0
+                ),
+                "fps": float(result.get("fps") or meta.get("fps") or 0),
             }
 
         result, err = await run_with_log_stream(ws, work)
@@ -385,6 +517,8 @@ async def timeline_segment_preview_ws(ws: WebSocket, timeline_key: str) -> None:
         fields = _segment_clip_fields(msg)
         pos, neg, text_prompt = _parse_segment_prompt(msg)
         src_abs = str(resolve_storage_rel_file(fields["rel"]))
+        sam3_raw = msg.get("sam3Options") or msg.get("sam3_options")
+        sam3_options = sam3_raw if isinstance(sam3_raw, dict) else None
 
         def work(log_cb: Any) -> dict[str, Any]:
             mask_b64 = logic.segment_preview_mask_png_base64(
@@ -393,6 +527,7 @@ async def timeline_segment_preview_ws(ws: WebSocket, timeline_key: str) -> None:
                 positive_coords=pos,
                 negative_coords=neg,
                 text_prompt=text_prompt,
+                sam3_options=sam3_options,
                 in_point_sec=fields["in_point_sec"],
                 local_time_sec=fields["local_time_sec"],
                 speed=fields["speed"],
@@ -423,6 +558,8 @@ async def timeline_segment_ws(ws: WebSocket, timeline_key: str) -> None:
         fields = _segment_clip_fields(msg)
         pos, neg, text_prompt = _parse_segment_prompt(msg)
         src_abs = str(resolve_storage_rel_file(fields["rel"]))
+        sam3_raw = msg.get("sam3Options") or msg.get("sam3_options")
+        sam3_options = sam3_raw if isinstance(sam3_raw, dict) else None
 
         def work(log_cb: Any) -> dict[str, Any]:
             info = logic.segment_to_timeline_clip(
@@ -432,6 +569,7 @@ async def timeline_segment_ws(ws: WebSocket, timeline_key: str) -> None:
                 positive_coords=pos,
                 negative_coords=neg,
                 text_prompt=text_prompt,
+                sam3_options=sam3_options,
                 in_point_sec=fields["in_point_sec"],
                 local_time_sec=fields["local_time_sec"],
                 speed=fields["speed"],

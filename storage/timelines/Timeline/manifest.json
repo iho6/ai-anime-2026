@@ -29,6 +29,13 @@
           "source": {
             "charKey": "luka",
             "sequenceName": "Sequence_1"
+          },
+          "transform": {
+            "x": 0.9594587461194303,
+            "y": -0.24469411741767105,
+            "scale": 0.7810626293523253,
+            "rotation": 0,
+            "opacity": 1
           }
         }
       ]
@@ -51,8 +58,8 @@
           "naturalW": 1920,
           "naturalH": 1080,
           "transform": {
-            "x": 0,
-            "y": 0,
+            "x": -1.0818053589907475,
+            "y": 0.09015036732255904,
             "scale": 1,
             "rotation": 0,
             "opacity": 1
@@ -72,7 +79,9 @@
           "transform": {
             "x": 0,
             "y": 0,
-            "scale": 0.35
+            "scale": 1.2515043865656197,
+            "rotation": 0,
+            "opacity": 1
           },
           "text": {
             "content": "Text",
@@ -163,11 +172,94 @@
             "charKey": "luka"
           },
           "transform": {
-            "x": 0.10813669355419259,
-            "y": 0.6579585063295468,
+            "x": 8.521054028883948e-17,
+            "y": 0,
             "scale": 1,
             "rotation": 0,
             "opacity": 1
+          }
+        }
+      ],
+      "hidden": false
+    },
+    {
+      "id": "trk_mqdvzr4q_3",
+      "name": "Video 2",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mqeytqs3_1",
+          "type": "geometry",
+          "srcRelPath": "",
+          "start": 14.945596372509003,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1000,
+          "naturalH": 1000,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 0.40503484269742734,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "geometry": {
+            "template": "rect",
+            "closed": true,
+            "points": [
+              {
+                "x": 0.2,
+                "y": 0.2
+              },
+              {
+                "x": 0.8,
+                "y": 0.2
+              },
+              {
+                "x": 0.8,
+                "y": 0.8
+              },
+              {
+                "x": 0.2,
+                "y": 0.8
+              }
+            ],
+            "cornerRadius": 0,
+            "fill": "#ffffff",
+            "stroke": {
+              "color": "#000000",
+              "width": 4
+            }
+          }
+        },
+        {
+          "id": "clip_mqez79co_2",
+          "type": "text",
+          "srcRelPath": "",
+          "start": 19.3438625496374,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 149,
+          "naturalH": 148,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 0.5367400550888726,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "text": {
+            "content": "Eons \nAway",
+            "fontFamilyId": "roboto",
+            "fontWeight": 400,
+            "fontStyle": "normal",
+            "fontSize": 48,
+            "color": "#ff88cc",
+            "align": "center"
           }
         }
       ],
@@ -218,13 +310,6 @@
         }
       ],
       "hidden": true
-    },
-    {
-      "id": "trk_mqdvzr4q_3",
-      "name": "Video 2",
-      "kind": "video",
-      "clips": [],
-      "hidden": false
     }
   ]
 }

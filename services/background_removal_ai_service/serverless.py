@@ -302,6 +302,12 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Upload local image_url paths to S3 for download_input.",
     )
+    p.add_argument(
+        "--rmbg-json",
+        type=str,
+        default=None,
+        help="JSON object of RMBG node input overrides (except image).",
+    )
     return p.parse_args()
 
 
@@ -324,6 +330,16 @@ def _run_test_mode(args: argparse.Namespace) -> None:
         print("ERROR: ComfyUI not reachable at", local_servers["default"], file=sys.stderr)
         sys.exit(1)
     inp: dict = {**img_frag}
+    if args.rmbg_json:
+        try:
+            raw = json.loads(args.rmbg_json)
+        except json.JSONDecodeError as e:
+            print("ERROR: invalid --rmbg-json:", e, file=sys.stderr)
+            sys.exit(1)
+        if not isinstance(raw, dict):
+            print("ERROR: --rmbg-json must be a JSON object", file=sys.stderr)
+            sys.exit(1)
+        inp["rmbg"] = raw
     apply_upload_local_paths_to_comfy_in_task(
         inp, local_servers["default"], subfolder="anime2026_rembg_test"
     )

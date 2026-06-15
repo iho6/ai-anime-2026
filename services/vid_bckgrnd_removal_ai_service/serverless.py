@@ -106,6 +106,8 @@ def remove_video_background(
     backbone: str = "mobilenetv3",
     device: str = "auto",
     downsample_ratio: float = 0.25,
+    alpha_dilate_px: int = 0,
+    use_source_rgb: bool = True,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """
@@ -175,6 +177,15 @@ def remove_video_background(
     frame_idx = 0
     t0 = time.monotonic()
 
+    def _dilate_alpha(pha_u8: Any) -> Any:
+        if alpha_dilate_px <= 0:
+            return pha_u8
+        from PIL import Image, ImageFilter
+
+        size = alpha_dilate_px * 2 + 1
+        im = Image.fromarray(pha_u8)
+        return np.asarray(im.filter(ImageFilter.MaxFilter(size=size)), dtype=np.uint8)
+
     with torch.no_grad():
         for packet in in_container.demux(in_stream):
             for av_frame in packet.decode():
@@ -188,14 +199,18 @@ def remove_video_background(
                 )
                 fgr, pha, *rec = model(t, *rec, downsample_ratio=downsample_ratio)
 
-                fgr_np = (
-                    fgr[0].permute(1, 2, 0).cpu().float().numpy() * 255
-                ).clip(0, 255).astype("uint8")
+                if use_source_rgb:
+                    rgb_np = rgb
+                else:
+                    rgb_np = (
+                        fgr[0].permute(1, 2, 0).cpu().float().numpy() * 255
+                    ).clip(0, 255).astype("uint8")
                 pha_np = (
                     pha[0, 0].cpu().float().numpy() * 255
                 ).clip(0, 255).astype("uint8")
+                pha_np = _dilate_alpha(pha_np)
 
-                rgba = np.dstack([fgr_np, pha_np])  # (H, W, 4)
+                rgba = np.dstack([rgb_np, pha_np])  # (H, W, 4)
                 out_frame = av.VideoFrame.from_ndarray(rgba, format="rgba")
                 out_frame = out_frame.reformat(format="yuva420p")
                 out_frame.pts = frame_idx
@@ -274,6 +289,12 @@ def _make_request_handler(
             video_url = (payload.get("video_url") or "").strip()
             output_path = (payload.get("output_path") or "").strip() or None
             ds_ratio = float(payload.get("downsample_ratio") or downsample_ratio)
+            alpha_dilate = int(payload.get("alpha_dilate_px") or 0)
+            use_src_rgb = payload.get("use_source_rgb")
+            if use_src_rgb is None:
+                use_src_rgb = True
+            else:
+                use_src_rgb = bool(use_src_rgb)
 
             if not output_path:
                 stem = Path(video_url).stem if video_url else "video"
@@ -290,6 +311,8 @@ def _make_request_handler(
                     backbone=backbone,
                     device=device,
                     downsample_ratio=ds_ratio,
+                    alpha_dilate_px=alpha_dilate,
+                    use_source_rgb=use_src_rgb,
                     log_cb=lambda msg: logs.append(msg),
                 )
                 self._send_json(200, {"results": [result], "error": None, "logs": logs})
@@ -465,6 +488,8 @@ def remove_video_background_persistent(
     backbone: str = _DEFAULT_BACKBONE,
     device: str = _DEFAULT_DEVICE,
     downsample_ratio: float = _DEFAULT_DS_RATIO,
+    alpha_dilate_px: int = 0,
+    use_source_rgb: bool = True,
     serve_port: int = _DEFAULT_PORT,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
@@ -492,6 +517,8 @@ def remove_video_background_persistent(
             "video_url": str(video_path),
             "output_path": str(output_path) if output_path else None,
             "downsample_ratio": downsample_ratio,
+            "alpha_dilate_px": alpha_dilate_px,
+            "use_source_rgb": use_source_rgb,
         }
     ).encode()
 

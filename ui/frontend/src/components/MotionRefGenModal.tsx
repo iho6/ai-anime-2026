@@ -438,9 +438,22 @@ export function MotionRefGenModal(props: {
 
       pushLog("Uploading capture…");
       const { relPath } = await apiUploadStaging({ charKey, file });
+      const screenBbox = skeletonRef.current?.getFigureScreenBbox();
       pushLog("Running SDpose keypoint detection…");
       const done = await runReferenceMakeKeypointWsJob({
         imageRelPath: relPath,
+        ...(screenBbox
+          ? {
+              cropBox: {
+                x: screenBbox.x,
+                y: screenBbox.y,
+                width: screenBbox.width,
+                height: screenBbox.height,
+              },
+              imageWidth: screenBbox.imageWidth,
+              imageHeight: screenBbox.imageHeight,
+            }
+          : {}),
         onLogLine: (line) => pushLog(line),
       });
       if (!done.ok || !done.result?.item) {

@@ -54,6 +54,7 @@ local_servers: dict[str, str] = {}
 WORKFLOW_STEM = "image_anima_preview"
 POSITIVE_NODE_ID = "11"
 NEGATIVE_NODE_ID = "12"
+LATENT_NODE_ID = "28"
 
 # Prompt text centralized in services/prompts; kept as a module alias for back-compat.
 DEFAULT_STYLE_PREFIX = prompts.ANIME_DEFAULT_STYLE_PREFIX
@@ -142,6 +143,8 @@ def run_one_generation(
     server_address: str,
     *,
     negative_text: str | None = None,
+    width: int | None = None,
+    height: int | None = None,
 ) -> str:
     w = deepcopy(api_workflow)
     pos = w.get(POSITIVE_NODE_ID)
@@ -150,6 +153,12 @@ def run_one_generation(
             f"Workflow missing CLIPTextEncode positive node {POSITIVE_NODE_ID}"
         )
     pos.setdefault("inputs", {})["text"] = full_positive
+
+    if width is not None and height is not None:
+        latent = w.get(LATENT_NODE_ID)
+        if isinstance(latent, dict) and latent.get("class_type") == "EmptyLatentImage":
+            latent.setdefault("inputs", {})["width"] = int(width)
+            latent["inputs"]["height"] = int(height)
 
     seed = secrets.randbelow(2**63)
     ks = w.get("19")
@@ -189,6 +198,11 @@ def run_anime_gen_job(
             task.get("skip_default_style_prefix"), default=False
         )
 
+        width = task.get("width")
+        height = task.get("height")
+        gen_width = int(width) if width is not None else None
+        gen_height = int(height) if height is not None else None
+
         api = workflows.get(WORKFLOW_STEM)
         if not api:
             raise RuntimeError(
@@ -207,6 +221,8 @@ def run_anime_gen_job(
                     full,
                     server_address,
                     negative_text=neg_override,
+                    width=gen_width,
+                    height=gen_height,
                 )
                 waiting_for_results(pid, server_address, timeout_seconds=TIMEOUT)
                 with urllib.request.urlopen(
@@ -355,6 +371,8 @@ def _parse_args() -> argparse.Namespace:
             "Used by new-character base draft."
         ),
     )
+    parser.add_argument("--width", type=int, default=None, help="Output image width")
+    parser.add_argument("--height", type=int, default=None, help="Output image height")
     return parser.parse_args()
 
 
@@ -378,6 +396,10 @@ def _run_test_mode(args: argparse.Namespace) -> None:
         inp = {"prompt": prompts.ANIME_TESTMODE_DEFAULT_PROMPT}
     if args.skip_default_style_prefix:
         inp["skip_default_style_prefix"] = True
+    if args.width is not None:
+        inp["width"] = int(args.width)
+    if args.height is not None:
+        inp["height"] = int(args.height)
     print(json.dumps(handler({"input": inp}), indent=2))
 
 

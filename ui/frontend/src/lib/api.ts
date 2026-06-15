@@ -657,6 +657,43 @@ export async function apiTimelineImportAudio(params: {
   return readJson<TimelineAudioClipResult>(res);
 }
 
+export type TimelineAsset = {
+  id: string;
+  relPath: string;
+  kind: "t2i";
+  prompt?: string;
+  modelMode?: "anime" | "general";
+  width: number;
+  height: number;
+  createdAt?: number;
+};
+
+export type TimelineAssetLayout = {
+  order: string[];
+  items: TimelineAsset[];
+};
+
+export async function apiTimelineAssetsLayout(
+  timelineKey: string
+): Promise<TimelineAssetLayout> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(timelineKey)}/assets`,
+    { method: "GET", credentials: "omit" }
+  );
+  return readJson<TimelineAssetLayout>(res);
+}
+
+export async function apiTimelineAssetDelete(
+  timelineKey: string,
+  assetId: string
+): Promise<{ ok: boolean }> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(timelineKey)}/assets/${encodeURIComponent(assetId)}`,
+    { method: "DELETE", credentials: "omit" }
+  );
+  return readJson<{ ok: boolean }>(res);
+}
+
 /** Materialize a character sequence (or one gallery video item) into an mp4 clip. */
 export function runTimelineImportSequenceWsJob(params: {
   timelineKey: string;
@@ -731,11 +768,12 @@ export function runTimelineImportSequenceWsJob(params: {
 }
 
 type TimelineVideoClipResult = {
-  type: "video";
+  type?: "video";
   srcRelPath: string;
   durationSec: number;
   width: number;
   height: number;
+  fps?: number;
 };
 type TimelineImageClipResult = {
   type: "image";
@@ -745,6 +783,30 @@ type TimelineImageClipResult = {
 };
 
 export type Sam3Point = { x: number; y: number };
+
+export type Sam3SegmentOptions = {
+  threshold?: number;
+  refineIterations?: number;
+  detectionThreshold?: number;
+  maskGrowPx?: number;
+  maskBlurPx?: number;
+};
+
+export type RvmBgOptions = {
+  preset?: "fast" | "quality";
+  downsampleRatio?: number;
+  backbone?: "mobilenetv3" | "resnet50";
+  alphaDilatePx?: number;
+  useSourceRgb?: boolean;
+};
+
+export type RmbgBgOptions = {
+  mask_offset?: number;
+  refine_foreground?: boolean;
+  mask_blur?: number;
+  sensitivity?: number;
+  process_res?: number;
+};
 
 type TimelineSegmentClipResult = {
   type: "image" | "video";
@@ -846,6 +908,26 @@ export function runTimelineAiEditWsJob(params: {
   );
 }
 
+type TimelineT2iResult = { item: TimelineAsset };
+
+/** T2I → timeline asset gallery entry. */
+export function runTimelineT2iWsJob(params: {
+  timelineKey: string;
+  promptText: string;
+  modelMode: "anime" | "general";
+  previewAspect?: TimelineManifest["previewAspect"];
+  width?: number;
+  height?: number;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<TimelineT2iResult>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<TimelineT2iResult>(
+    `/timeline/${encodeURIComponent(timelineKey)}/t2i/ws`,
+    payload,
+    onLogLine
+  );
+}
+
 /** SAM3 mask preview for timeline segment UI (image or video frame). */
 export function runTimelineSegmentPreviewWsJob(params: {
   timelineKey: string;
@@ -857,6 +939,7 @@ export function runTimelineSegmentPreviewWsJob(params: {
   inPointSec?: number;
   localTimeSec?: number;
   speed?: number;
+  sam3Options?: Sam3SegmentOptions;
   onLogLine: (line: string) => void;
 }): Promise<WsDoneMessage<TimelineSegmentPreviewResult>> {
   const { timelineKey, onLogLine, ...payload } = params;
@@ -878,6 +961,7 @@ export function runTimelineSegmentWsJob(params: {
   inPointSec?: number;
   localTimeSec?: number;
   speed?: number;
+  sam3Options?: Sam3SegmentOptions;
   onLogLine: (line: string) => void;
 }): Promise<WsDoneMessage<TimelineSegmentClipResult>> {
   const { timelineKey, onLogLine, ...payload } = params;
@@ -892,11 +976,33 @@ export function runTimelineSegmentWsJob(params: {
 export function runTimelineVideoRemoveBgWsJob(params: {
   timelineKey: string;
   videoRelPath: string;
+  preset?: "fast" | "quality";
+  downsampleRatio?: number;
+  backbone?: "mobilenetv3" | "resnet50";
+  alphaDilatePx?: number;
+  useSourceRgb?: boolean;
   onLogLine: (line: string) => void;
 }): Promise<WsDoneMessage<TimelineVideoClipResult>> {
   const { timelineKey, onLogLine, ...payload } = params;
   return runTimelineGenWsJob<TimelineVideoClipResult>(
     `/timeline/${encodeURIComponent(timelineKey)}/remove_video_bg/ws`,
+    payload,
+    onLogLine
+  );
+}
+
+/** Remove background from a video clip via per-frame RMBG-2.0 → WebM + alpha. */
+export function runTimelineVideoRemoveBgRmbgWsJob(params: {
+  timelineKey: string;
+  videoRelPath: string;
+  outputFps24?: boolean;
+  recycleMask?: boolean;
+  rmbg?: RmbgBgOptions;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<TimelineVideoClipResult>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<TimelineVideoClipResult>(
+    `/timeline/${encodeURIComponent(timelineKey)}/remove_video_bg_rmbg/ws`,
     payload,
     onLogLine
   );
@@ -2435,11 +2541,19 @@ export async function apiUploadStaging(params: {
 
 // --- Detail: pose references ---
 
+export type PlacedFigureMeta = {
+  canvas: { width: number; height: number };
+  placement: { x: number; y: number; width: number; height: number };
+  figureCropRgbaRelPath?: string;
+  figurePlateRelPath?: string;
+};
+
 export type PoseReference = {
   id: string;
   referenceRelPath: string;
   keypointRelPath: string;
   label?: string;
+  placedFigure?: PlacedFigureMeta;
 };
 
 export async function apiPoseReferences(
@@ -2904,6 +3018,9 @@ export function runReferenceGenerateWsJob(params: {
 /** Run the SD pose service on a saved reference image; resolves with the new pair. */
 export function runReferenceMakeKeypointWsJob(params: {
   imageRelPath: string;
+  cropBox?: { x: number; y: number; width: number; height: number };
+  imageWidth?: number;
+  imageHeight?: number;
   onLogLine: (line: string) => void;
 }): Promise<WsDoneMessage<{ item: PoseReference }>> {
   const url = wsUrlForPath("/reference/make_keypoint/ws");

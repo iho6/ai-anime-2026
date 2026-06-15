@@ -46,6 +46,7 @@ KEYPOINTS_MANIFEST = "keypoints.json"
 KEYPOINTS_UI_MANIFEST = "keypoints_ui.json"
 KEYPOINTS_VIDEO_DIRNAME = "keypoints_video"
 KEYPOINTS_VIDEO_MANIFEST = "keypoints_video.json"
+PLACED_DIRNAME = "placed"
 FOLDER_TOKEN_PREFIX = "folder:"
 VIDEO_TOKEN_PREFIX = "video:"
 MIGRATED_MARKER = ".migrated"
@@ -77,8 +78,12 @@ def preview_dir() -> Path:
     return REFERENCES_STORAGE_ROOT / PREVIEW_DIRNAME
 
 
+def placed_dir() -> Path:
+    return REFERENCES_STORAGE_ROOT / PLACED_DIRNAME
+
+
 def _ensure_dirs() -> None:
-    for d in (images_dir(), keypoints_dir(), keypoints_video_dir(), preview_dir()):
+    for d in (images_dir(), keypoints_dir(), keypoints_video_dir(), preview_dir(), placed_dir()):
         d.mkdir(parents=True, exist_ok=True)
 
 
@@ -402,14 +407,16 @@ def get_keypoints_layout() -> dict[str, Any]:
     entries = list_keypoints()
     video_entries = list_keypoint_videos()
     layout = _sync_ui_layout_with_keypoints(entries, video_entries=video_entries)
-    items = [
-        {
+    items = []
+    for e in entries:
+        item: dict[str, Any] = {
             "id": e["id"],
             "referenceRelPath": e["referenceRelPath"],
             "keypointRelPath": e["keypointRelPath"],
         }
-        for e in entries
-    ]
+        if isinstance(e.get("placedFigure"), dict):
+            item["placedFigure"] = e["placedFigure"]
+        items.append(item)
     video_items = [
         {
             "id": e["id"],
@@ -829,7 +836,12 @@ def set_images_order(order_ids: list[str]) -> None:
 # --- keypoints ----------------------------------------------------------------
 
 
-def add_keypoint_pair(source_abs: str, keypoint_abs: str) -> dict[str, Any]:
+def add_keypoint_pair(
+    source_abs: str,
+    keypoint_abs: str,
+    *,
+    placed_figure: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Copy an (original, skeleton) pair into ``keypoints/`` and prepend."""
     _ensure_dirs()
     src = Path(source_abs)
@@ -845,12 +857,14 @@ def add_keypoint_pair(source_abs: str, keypoint_abs: str) -> dict[str, Any]:
     kp_dest = keypoints_dir() / f"kp_{rid}{kp_ext}"
     shutil.copy2(src, ref_dest)
     shutil.copy2(kp, kp_dest)
-    entry = {
+    entry: dict[str, Any] = {
         "id": rid,
         "referenceRelPath": _abs_to_storage_rel(ref_dest),
         "keypointRelPath": _abs_to_storage_rel(kp_dest),
         "createdAt": time.time(),
     }
+    if placed_figure:
+        entry["placedFigure"] = placed_figure
     entries = _read_manifest(_keypoints_manifest_path())
     entries.insert(0, entry)
     _write_manifest(_keypoints_manifest_path(), entries)
@@ -859,6 +873,55 @@ def add_keypoint_pair(source_abs: str, keypoint_abs: str) -> dict[str, Any]:
         layout["rootOrder"].insert(0, rid)
     _write_ui_layout(layout)
     return entry
+
+
+def find_keypoint_by_keypoint_rel(keypoint_rel: str) -> dict[str, Any] | None:
+    """Return manifest entry whose ``keypointRelPath`` matches (normalized)."""
+    target = str(keypoint_rel).replace("\\", "/").lstrip("/")
+    for e in _read_manifest(_keypoints_manifest_path()):
+        rel = str(e.get("keypointRelPath") or "").replace("\\", "/").lstrip("/")
+        if rel == target:
+            return e
+    return None
+
+
+def find_keypoint_by_keypoint_abs(abs_path: str) -> dict[str, Any] | None:
+    """Return manifest entry whose keypoint file matches ``abs_path``."""
+    target = Path(abs_path).resolve()
+    for e in _read_manifest(_keypoints_manifest_path()):
+        try:
+            if _resolve_rel(e.get("keypointRelPath", "")).resolve() == target:
+                return e
+        except Exception:
+            continue
+    return None
+
+
+def update_placed_figure_outputs(
+    keypoint_id: str,
+    *,
+    figure_crop_rgba_abs: str | None = None,
+    figure_plate_abs: str | None = None,
+) -> dict[str, Any]:
+    """Attach generated RGBA crop + white plate paths to a keypoint entry."""
+    _ensure_dirs()
+    entries = _read_manifest(_keypoints_manifest_path())
+    for e in entries:
+        if e.get("id") != keypoint_id:
+            continue
+        pf = dict(e.get("placedFigure") or {})
+        if figure_crop_rgba_abs:
+            dest = placed_dir() / f"pf_{keypoint_id}_figure.png"
+            shutil.copy2(figure_crop_rgba_abs, dest)
+            pf["figureCropRgbaRelPath"] = _abs_to_storage_rel(dest)
+        if figure_plate_abs:
+            dest = placed_dir() / f"pf_{keypoint_id}_plate.png"
+            shutil.copy2(figure_plate_abs, dest)
+            pf["figurePlateRelPath"] = _abs_to_storage_rel(dest)
+        e["placedFigure"] = pf
+        _write_manifest(_keypoints_manifest_path(), entries)
+        return e
+    raise ValueError(f"Keypoint not found: {keypoint_id}")
 
 
 def list_keypoints() -> list[dict[str, Any]]:
@@ -887,6 +950,12 @@ def delete_keypoint(keypoint_id: str) -> bool:
             for key in ("referenceRelPath", "keypointRelPath"):
                 try:
                     _resolve_rel(e.get(key, "")).unlink(missing_ok=True)
+                except Exception:
+                    pass
+            pf = e.get("placedFigure") if isinstance(e.get("placedFigure"), dict) else {}
+            for key in ("figureCropRgbaRelPath", "figurePlateRelPath"):
+                try:
+                    _resolve_rel(pf.get(key, "")).unlink(missing_ok=True)
                 except Exception:
                     pass
         else:

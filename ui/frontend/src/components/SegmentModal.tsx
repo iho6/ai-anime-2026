@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import type { Sam3Point } from "../lib/api";
+import type { Sam3Point, Sam3SegmentOptions } from "../lib/api";
 import { JobQuadSpinner } from "./JobQuadSpinner";
 
 const MASK_LUM_THRESHOLD = 64;
@@ -68,12 +68,14 @@ export function SegmentModal(props: {
   onPreview: (
     positive: Sam3Point[],
     negative: Sam3Point[],
-    textPrompt?: string
+    textPrompt?: string,
+    sam3Options?: Sam3SegmentOptions
   ) => Promise<string | null>;
   onSave: (
     positive: Sam3Point[],
     negative: Sam3Point[],
-    textPrompt?: string
+    textPrompt?: string,
+    sam3Options?: Sam3SegmentOptions
   ) => void | Promise<void>;
 }) {
   const {
@@ -95,6 +97,12 @@ export function SegmentModal(props: {
   const [overlayDataUrl, setOverlayDataUrl] = useState<string | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [sam3Threshold, setSam3Threshold] = useState(0.5);
+  const [sam3Refine, setSam3Refine] = useState(2);
+  const [sam3DetectThresh, setSam3DetectThresh] = useState(0.5);
+  const [sam3MaskGrow, setSam3MaskGrow] = useState(0);
+  const [sam3MaskBlur, setSam3MaskBlur] = useState(0);
 
   const mediaWrapRef = useRef<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -114,7 +122,29 @@ export function SegmentModal(props: {
     setMaskB64(null);
     setOverlayDataUrl(null);
     setNaturalSize(null);
+    setAdvancedOpen(false);
+    setSam3Threshold(0.5);
+    setSam3Refine(2);
+    setSam3DetectThresh(0.5);
+    setSam3MaskGrow(0);
+    setSam3MaskBlur(0);
   }, []);
+
+  const sam3Options = (): Sam3SegmentOptions => ({
+    threshold: sam3Threshold,
+    refineIterations: sam3Refine,
+    detectionThreshold: sam3DetectThresh,
+    maskGrowPx: sam3MaskGrow,
+    maskBlurPx: sam3MaskBlur,
+  });
+
+  const applyRecoverEdgesPreset = () => {
+    setSam3Threshold(0.4);
+    setSam3Refine(3);
+    setSam3MaskGrow(3);
+    setAdvancedOpen(true);
+    invalidateMask();
+  };
 
   const hasPrompt =
     positive.length > 0 || appliedTextPrompt.trim().length > 0;
@@ -149,7 +179,12 @@ export function SegmentModal(props: {
       const gen = ++previewGenRef.current;
       setPreviewBusy(true);
       try {
-        const b64 = await onPreview(pos, neg, text.trim() || undefined);
+        const b64 = await onPreview(
+          pos,
+          neg,
+          text.trim() || undefined,
+          sam3Options()
+        );
         if (gen === previewGenRef.current) {
           setMaskB64(b64);
         }
@@ -164,7 +199,7 @@ export function SegmentModal(props: {
         }
       }
     },
-    [onPreview]
+    [onPreview, sam3Threshold, sam3Refine, sam3DetectThresh, sam3MaskGrow, sam3MaskBlur]
   );
 
   useEffect(() => {
@@ -458,6 +493,168 @@ export function SegmentModal(props: {
               Prompt: {appliedTextPrompt}
             </div>
           ) : null}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button
+              type="button"
+              className="ui-btn-black"
+              disabled={busy || previewBusy}
+              style={{ fontSize: 12 }}
+              onClick={(e) => {
+                e.preventDefault();
+                setAdvancedOpen((v) => !v);
+              }}
+            >
+              Advanced {advancedOpen ? "▾" : "▸"}
+            </button>
+            <button
+              type="button"
+              className="ui-btn-black"
+              disabled={busy || previewBusy}
+              style={{ fontSize: 12 }}
+              onClick={(e) => {
+                e.preventDefault();
+                applyRecoverEdgesPreset();
+              }}
+            >
+              Recover edges
+            </button>
+          </div>
+          {advancedOpen ? (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 8,
+                fontSize: 12,
+              }}
+            >
+              <label>
+                <div style={{ color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>
+                  Detect threshold
+                </div>
+                <input
+                  type="number"
+                  min={0.1}
+                  max={0.9}
+                  step={0.05}
+                  value={sam3Threshold}
+                  disabled={busy || previewBusy}
+                  style={{
+                    width: "100%",
+                    padding: "6px 8px",
+                    background: "#1a1a1a",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    color: "#eee",
+                    borderRadius: 4,
+                  }}
+                  onChange={(e) => {
+                    setSam3Threshold(Number(e.target.value));
+                    invalidateMask();
+                  }}
+                />
+              </label>
+              <label>
+                <div style={{ color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>
+                  Refine iterations
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  max={6}
+                  step={1}
+                  value={sam3Refine}
+                  disabled={busy || previewBusy}
+                  style={{
+                    width: "100%",
+                    padding: "6px 8px",
+                    background: "#1a1a1a",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    color: "#eee",
+                    borderRadius: 4,
+                  }}
+                  onChange={(e) => {
+                    setSam3Refine(Number(e.target.value));
+                    invalidateMask();
+                  }}
+                />
+              </label>
+              <label>
+                <div style={{ color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>
+                  Track detection threshold
+                </div>
+                <input
+                  type="number"
+                  min={0.1}
+                  max={0.9}
+                  step={0.05}
+                  value={sam3DetectThresh}
+                  disabled={busy || previewBusy}
+                  style={{
+                    width: "100%",
+                    padding: "6px 8px",
+                    background: "#1a1a1a",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    color: "#eee",
+                    borderRadius: 4,
+                  }}
+                  onChange={(e) => {
+                    setSam3DetectThresh(Number(e.target.value));
+                    invalidateMask();
+                  }}
+                />
+              </label>
+              <label>
+                <div style={{ color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>
+                  Mask grow (px)
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  max={20}
+                  step={1}
+                  value={sam3MaskGrow}
+                  disabled={busy || previewBusy}
+                  style={{
+                    width: "100%",
+                    padding: "6px 8px",
+                    background: "#1a1a1a",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    color: "#eee",
+                    borderRadius: 4,
+                  }}
+                  onChange={(e) => {
+                    setSam3MaskGrow(Number(e.target.value));
+                    invalidateMask();
+                  }}
+                />
+              </label>
+              <label style={{ gridColumn: "1 / -1" }}>
+                <div style={{ color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>
+                  Mask blur (px)
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  max={20}
+                  step={1}
+                  value={sam3MaskBlur}
+                  disabled={busy || previewBusy}
+                  style={{
+                    width: "100%",
+                    padding: "6px 8px",
+                    background: "#1a1a1a",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    color: "#eee",
+                    borderRadius: 4,
+                  }}
+                  onChange={(e) => {
+                    setSam3MaskBlur(Number(e.target.value));
+                    invalidateMask();
+                  }}
+                />
+              </label>
+            </div>
+          ) : null}
           <div
             ref={mediaWrapRef}
             style={{
@@ -599,7 +796,8 @@ export function SegmentModal(props: {
               void onSave(
                 positive,
                 negative,
-                appliedTextPrompt.trim() || undefined
+                appliedTextPrompt.trim() || undefined,
+                sam3Options()
               );
             }}
           >

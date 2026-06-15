@@ -31,23 +31,41 @@ export function TextStyleBar(props: {
         justifyContent: "center",
         pointerEvents: "auto",
       }}
+      data-text-style-bar
       onPointerDown={(e) => e.stopPropagation()}
     >
       <button
         type="button"
+        className="ui-btn-black"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onOpenModal("font")}
-        style={barBtn}
+        style={{ fontSize: 11, padding: "4px 10px" }}
         title="Font"
       >
         {fam?.label ?? text.fontFamilyId}
       </button>
-      <button type="button" onClick={() => onOpenModal("size")} style={barBtn} title="Size">
+      <button
+        type="button"
+        className="ui-btn-black"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => onOpenModal("size")}
+        style={{ fontSize: 11, padding: "4px 10px", minWidth: 36 }}
+        title="Size"
+      >
         {Math.round(text.fontSize)}
       </button>
       <button
         type="button"
+        className="ui-btn-black"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onOpenModal("color")}
-        style={{ ...barBtn, display: "flex", alignItems: "center", gap: 4 }}
+        style={{
+          fontSize: 11,
+          padding: "4px 10px",
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+        }}
         title="Color"
       >
         <span
@@ -55,7 +73,7 @@ export function TextStyleBar(props: {
             width: 12,
             height: 12,
             background: text.color,
-            border: "1px solid #000",
+            border: "1px solid rgba(255,255,255,0.5)",
             display: "inline-block",
           }}
         />
@@ -64,14 +82,3 @@ export function TextStyleBar(props: {
     </div>
   );
 }
-
-const barBtn: React.CSSProperties = {
-  padding: "4px 10px",
-  fontSize: 11,
-  background: "#1a1a1a",
-  color: "#eee",
-  border: "1px solid rgba(255,255,255,0.3)",
-  cursor: "pointer",
-  borderRadius: 3,
-  whiteSpace: "nowrap",
-};

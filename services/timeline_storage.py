@@ -13,6 +13,8 @@ Per-timeline layout::
         manifest.json     # tracks[] -> clips[] (see TimelineManifest in the UI)
         poster.png        # hub cover (first visible frame), optional
         clips/            # materialized clip assets (mp4s + copied images)
+        assets/           # generated gallery assets (T2I, etc.)
+        assets_index.json # gallery order + metadata
 """
 
 from __future__ import annotations
@@ -39,6 +41,10 @@ def timeline_dir(timeline_key: str) -> Path:
 
 def timeline_clips_dir(timeline_key: str) -> Path:
     return timeline_dir(timeline_key) / "clips"
+
+
+def timeline_assets_dir(timeline_key: str) -> Path:
+    return timeline_dir(timeline_key) / "assets"
 
 
 def list_timeline_keys() -> list[str]:
@@ -98,5 +104,6 @@ def create_timeline(base_name: str) -> str:
     key = unique_timeline_key(base_name)
     d = timeline_dir(key)
     (d / "clips").mkdir(parents=True, exist_ok=True)
+    (d / "assets").mkdir(parents=True, exist_ok=True)
     write_manifest(key, default_manifest())
     return key

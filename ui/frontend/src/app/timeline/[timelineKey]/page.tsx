@@ -16,9 +16,15 @@ import {
   runTimelineI2vWsJob,
   runTimelineImportSequenceWsJob,
   runTimelineVideoRemoveBgWsJob,
+  runTimelineVideoRemoveBgRmbgWsJob,
   runTimelineSegmentPreviewWsJob,
   runTimelineSegmentWsJob,
+  runTimelineT2iWsJob,
+  type TimelineAsset,
   type Sam3Point,
+  type Sam3SegmentOptions,
+  type RvmBgOptions,
+  type RmbgBgOptions,
   runShotCreateWsJob,
   runShotMakeAngleWsJob,
   runShotRemoveBgWsJob,
@@ -34,6 +40,7 @@ import {
   TrajectoryMotionId,
 } from "../../../lib/api";
 import { AiEditModal } from "../../../components/AiEditModal";
+import { RemoveBgVideoModal } from "../../../components/RemoveBgVideoModal";
 import { SegmentModal } from "../../../components/SegmentModal";
 import { CameraAngleModal } from "../../../components/CameraAngleModal";
 import {
@@ -56,6 +63,10 @@ import {
 import { TimelineCharacterPicker } from "../../../components/TimelineCharacterPicker";
 import { TimelineLocationPicker } from "../../../components/TimelineLocationPicker";
 import { TimelineAudioPicker } from "../../../components/TimelineAudioPicker";
+import {
+  TimelineOtherAssetPicker,
+  type T2iModelMode,
+} from "../../../components/TimelineOtherAssetPicker";
 import type { TrajectoryWaypoint } from "../../../components/timeline/TrajectoryEditor";
 import {
   defaultVolumeAutomationPoints,
@@ -81,6 +92,7 @@ import {
   resolveImportDimensions,
   timelineDuration,
 } from "../../../components/timeline/timelineUtil";
+import { measureTextClipNaturalSize } from "../../../components/timeline/textMeasure";
 
 export default function TimelineEditorPage() {
   const router = useRouter();
@@ -130,6 +142,20 @@ export default function TimelineEditorPage() {
     inPoint: number;
     speed: number;
     localTimeSec: number;
+    naturalW?: number;
+    naturalH?: number;
+    duration?: number;
+    source?: TimelineClip["source"];
+  } | null>(null);
+  const [removeBgVideoOpen, setRemoveBgVideoOpen] = useState(false);
+  const removeBgVideoTargetRef = useRef<{
+    clipId: string;
+    srcRelPath: string;
+    start: number;
+    naturalW?: number;
+    naturalH?: number;
+    duration?: number;
+    source?: TimelineClip["source"];
   } | null>(null);
   const previewResizeRef = useRef<{ startY: number; orig: number } | null>(null);
 
@@ -141,6 +167,7 @@ export default function TimelineEditorPage() {
   const [changePoseClipId, setChangePoseClipId] = useState<string | null>(null);
   const [locPickerOpen, setLocPickerOpen] = useState(false);
   const [audioPickerOpen, setAudioPickerOpen] = useState(false);
+  const [otherAssetPickerOpen, setOtherAssetPickerOpen] = useState(false);
 
   // New Angle modal (for character clips).
   const [cameraAngleOpen, setCameraAngleOpen] = useState(false);
@@ -311,6 +338,21 @@ export default function TimelineEditorPage() {
     const clip = buildTextClip({});
     addVectorClipAtPlayhead(clip);
     setTextEditClipId(clip.id);
+    if (clip.text) applyTextClipNaturalSize(clip.id, clip.text);
+  }
+
+  function applyTextClipNaturalSize(clipId: string, text: TimelineText) {
+    void measureTextClipNaturalSize(text).then(({ width, height }) => {
+      historyUpdate((m) => ({
+        ...m,
+        tracks: m.tracks.map((t) => ({
+          ...t,
+          clips: t.clips.map((c) =>
+            c.id === clipId ? { ...c, naturalW: width, naturalH: height } : c
+          ),
+        })),
+      }));
+    });
   }
 
   function updateClipGeometry(clipId: string, geometry: TimelineGeometry) {
@@ -324,27 +366,35 @@ export default function TimelineEditorPage() {
   }
 
   function updateClipText(clipId: string, patch: Partial<TimelineText>) {
+    const found = findClip(clipId);
+    if (!found?.clip.text) return;
+    const nextText = { ...found.clip.text, ...patch };
     historyUpdate((m) => ({
       ...m,
       tracks: m.tracks.map((t) => ({
         ...t,
         clips: t.clips.map((c) =>
-          c.id === clipId && c.text ? { ...c, text: { ...c.text, ...patch } } : c
+          c.id === clipId && c.text ? { ...c, text: nextText } : c
         ),
       })),
     }));
+    applyTextClipNaturalSize(clipId, nextText);
   }
 
   function updateClipTextContent(clipId: string, content: string) {
+    const found = findClip(clipId);
+    if (!found?.clip.text) return;
+    const nextText = { ...found.clip.text, content };
     historyUpdate((m) => ({
       ...m,
       tracks: m.tracks.map((t) => ({
         ...t,
         clips: t.clips.map((c) =>
-          c.id === clipId && c.text ? { ...c, text: { ...c.text, content } } : c
+          c.id === clipId && c.text ? { ...c, text: nextText } : c
         ),
       })),
     }));
+    applyTextClipNaturalSize(clipId, nextText);
   }
 
   function updateClipTransition(
@@ -387,6 +437,72 @@ export default function TimelineEditorPage() {
   function openAudioPicker(targetTrackId?: string) {
     targetTrackRef.current = targetTrackId ?? null;
     setAudioPickerOpen(true);
+  }
+
+  function openOtherAssetPicker(targetTrackId?: string) {
+    targetTrackRef.current = targetTrackId ?? null;
+    setOtherAssetPickerOpen(true);
+  }
+
+  async function onOtherAssetGenerate(
+    prompt: string,
+    modelMode: T2iModelMode
+  ): Promise<TimelineAsset | null> {
+    beginSession({ title: "Generating image (T2I)", clearLog: true });
+    await Promise.resolve();
+    pushLog(`T2I (${modelMode})…`);
+    try {
+      const done = await runTimelineT2iWsJob({
+        timelineKey,
+        promptText: prompt,
+        modelMode,
+        previewAspect: manifest?.previewAspect ?? "16:9",
+        onLogLine: pushLog,
+      });
+      if (!done.ok || !done.result?.item) {
+        throw new Error(done.error || "T2I generation failed.");
+      }
+      endSession();
+      return done.result.item;
+    } catch (e) {
+      failSession(e, "T2I generation failed.");
+      return null;
+    }
+  }
+
+  async function onOtherAssetUseSelected(items: TimelineAsset[]) {
+    if (!items.length) return;
+    setOtherAssetPickerOpen(false);
+    const tid = targetTrackRef.current;
+    beginSession({ title: "Adding assets", clearLog: true });
+    await Promise.resolve();
+    try {
+      for (const item of items) {
+        pushLog(`Importing ${item.prompt?.slice(0, 40) || item.id}…`);
+        const imported = await apiTimelineImportImage({
+          timelineKey,
+          sourceRelPath: item.relPath,
+        });
+        const { width, height } = await resolveImportDimensions(
+          imported.srcRelPath,
+          imported.width || item.width,
+          imported.height || item.height
+        );
+        const clip = buildImageClip({
+          srcRelPath: imported.srcRelPath,
+          width,
+          height,
+        });
+        if (tid) {
+          insertClipOnSameTrack(clip, tid, playhead);
+        } else {
+          insertClipOnNewTrack(clip, playhead, "T2I");
+        }
+      }
+      endSession();
+    } catch (e) {
+      failSession(e, "Could not add assets to timeline.");
+    }
   }
 
   async function importAudioClipToTimeline(sourceRelPath: string, durationSec: number) {
@@ -902,44 +1018,107 @@ export default function TimelineEditorPage() {
     }
   }
 
-  async function removeVideoClipBg(clipId: string) {
+  function openRemoveBgVideo(clipId: string) {
     const found = findClip(clipId);
     if (!found || found.clip.type !== "video") return;
+    const c = found.clip;
+    removeBgVideoTargetRef.current = {
+      clipId,
+      srcRelPath: c.srcRelPath,
+      start: found.clip.start,
+      naturalW: c.naturalW,
+      naturalH: c.naturalH,
+      duration: c.duration,
+      source: c.source,
+    };
+    setRemoveBgVideoOpen(true);
+    setClipMenu((s) => ({ ...s, open: false }));
+  }
+
+  function insertVideoBgClip(
+    r: { srcRelPath: string; width: number; height: number; durationSec?: number },
+    start: number,
+    fallback: { naturalW?: number; naturalH?: number; duration?: number; source?: TimelineClip["source"] },
+    label: string
+  ) {
+    const dur = r.durationSec || fallback.duration || 5;
+    insertClipOnNewTrack(
+      {
+        id: genId("clip"),
+        type: "video",
+        srcRelPath: r.srcRelPath,
+        start: 0,
+        inPoint: 0,
+        outPoint: dur,
+        speed: 1,
+        duration: dur,
+        srcDuration: dur,
+        naturalW: r.width || fallback.naturalW,
+        naturalH: r.height || fallback.naturalH,
+        source: fallback.source,
+      },
+      start,
+      label
+    );
+  }
+
+  async function runRemoveBgRvm(options: RvmBgOptions) {
+    const tgt = removeBgVideoTargetRef.current;
+    setRemoveBgVideoOpen(false);
+    removeBgVideoTargetRef.current = null;
+    if (!tgt || !timelineKey) return;
     beginSession({ title: "Removing video background (RVM)", clearLog: true });
     await Promise.resolve();
     pushLog("Starting RobustVideoMatting (model loads on first run ~15 s)…");
     try {
       const done = await runTimelineVideoRemoveBgWsJob({
         timelineKey,
-        videoRelPath: found.clip.srcRelPath,
+        videoRelPath: tgt.srcRelPath,
+        preset: options.preset,
+        downsampleRatio: options.downsampleRatio,
+        backbone: options.backbone,
+        alphaDilatePx: options.alphaDilatePx,
+        useSourceRgb: options.useSourceRgb,
         onLogLine: (line) => pushLog(line),
       });
       if (!done.ok || !done.result?.srcRelPath) {
         throw new Error(done.error || "Video BG removal returned no output.");
       }
-      const r = done.result;
-      const dur = r.durationSec || found.clip.duration || 5;
-      insertClipOnNewTrack(
-        {
-          id: genId("clip"),
-          type: "video",
-          srcRelPath: r.srcRelPath,
-          start: 0,
-          inPoint: 0,
-          outPoint: dur,
-          speed: 1,
-          duration: dur,
-          srcDuration: dur,
-          naturalW: r.width || found.clip.naturalW,
-          naturalH: r.height || found.clip.naturalH,
-          source: found.clip.source,
-        },
-        found.clip.start,
-        "Remove Background"
-      );
+      insertVideoBgClip(done.result, tgt.start, tgt, "Remove Background (RVM)");
       endSession();
     } catch (e) {
       failSession(e, "Video background removal failed.");
+    }
+  }
+
+  async function runRemoveBgRmbg(options: {
+    outputFps24: boolean;
+    recycleMask: boolean;
+    rmbg: RmbgBgOptions;
+  }) {
+    const tgt = removeBgVideoTargetRef.current;
+    setRemoveBgVideoOpen(false);
+    removeBgVideoTargetRef.current = null;
+    if (!tgt || !timelineKey) return;
+    beginSession({ title: "Removing video background (RMBG)", clearLog: true });
+    await Promise.resolve();
+    pushLog("Starting per-frame RMBG-2.0…");
+    try {
+      const done = await runTimelineVideoRemoveBgRmbgWsJob({
+        timelineKey,
+        videoRelPath: tgt.srcRelPath,
+        outputFps24: options.outputFps24,
+        recycleMask: options.recycleMask,
+        rmbg: options.rmbg,
+        onLogLine: (line) => pushLog(line),
+      });
+      if (!done.ok || !done.result?.srcRelPath) {
+        throw new Error(done.error || "RMBG video BG removal returned no output.");
+      }
+      insertVideoBgClip(done.result, tgt.start, tgt, "Remove Background (RMBG)");
+      endSession();
+    } catch (e) {
+      failSession(e, "RMBG video background removal failed.");
     }
   }
 
@@ -1042,10 +1221,23 @@ export default function TimelineEditorPage() {
   }
 
   // ---- Selection / transform / generation ---------------------------------
+  function exitClipEditModes() {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) active.blur();
+    setGeometryEditClipId(null);
+    setTextEditClipId(null);
+  }
+
   function selectClip(clipId: string | null, additive: boolean) {
     if (clipId == null) {
-      if (!additive) setSelectedClipIds([]);
+      if (!additive) {
+        setSelectedClipIds([]);
+        exitClipEditModes();
+      }
       return;
+    }
+    if (clipId !== textEditClipId && clipId !== geometryEditClipId) {
+      exitClipEditModes();
     }
     setSelectedClipIds((prev) => {
       if (additive) {
@@ -1144,7 +1336,8 @@ export default function TimelineEditorPage() {
     async (
       positive: Sam3Point[],
       negative: Sam3Point[],
-      textPrompt?: string
+      textPrompt?: string,
+      sam3Options?: Sam3SegmentOptions
     ): Promise<string | null> => {
       const tgt = segmentTargetRef.current;
       if (!tgt || !timelineKey) return null;
@@ -1155,6 +1348,7 @@ export default function TimelineEditorPage() {
         positiveCoords: positive,
         negativeCoords: negative,
         textPrompt,
+        sam3Options,
         inPointSec: tgt.inPoint,
         localTimeSec: tgt.localTimeSec,
         speed: tgt.speed,
@@ -1169,7 +1363,8 @@ export default function TimelineEditorPage() {
   async function runSegmentSave(
     positive: Sam3Point[],
     negative: Sam3Point[],
-    textPrompt?: string
+    textPrompt?: string,
+    sam3Options?: Sam3SegmentOptions
   ) {
     const tgt = segmentTargetRef.current;
     setSegmentOpen(false);
@@ -1186,6 +1381,7 @@ export default function TimelineEditorPage() {
         positiveCoords: positive,
         negativeCoords: negative,
         textPrompt,
+        sam3Options,
         inPointSec: tgt.inPoint,
         localTimeSec: tgt.localTimeSec,
         speed: tgt.speed,
@@ -1431,15 +1627,12 @@ export default function TimelineEditorPage() {
     if (isGeometry) {
       items.push({
         key: "editShape",
-        label: geometryEditClipId === clipMenu.clipId ? "Exit Shape Edit" : "Edit Shape",
+        label: "Edit Shape",
         onSelect: () => {
-          if (geometryEditClipId === clipMenu.clipId) {
-            setGeometryEditClipId(null);
-          } else {
-            setTrajectoryClipId(null);
-            setVolumeEditClipId(null);
-            setGeometryEditClipId(clipMenu.clipId);
-          }
+          setTrajectoryClipId(null);
+          setVolumeEditClipId(null);
+          setTextEditClipId(null);
+          setGeometryEditClipId(clipMenu.clipId);
           setClipMenu((s) => ({ ...s, open: false }));
         },
       });
@@ -1464,9 +1657,9 @@ export default function TimelineEditorPage() {
     } else if (isVideo) {
       items.push({
         key: "removeVideoBg",
-        label: "Remove Background (video)",
+        label: "Remove Background…",
         disabled: busy,
-        onSelect: () => void removeVideoClipBg(clipMenu.clipId),
+        onSelect: () => openRemoveBgVideo(clipMenu.clipId),
       });
     }
 
@@ -1561,7 +1754,13 @@ export default function TimelineEditorPage() {
     if (!isAudio) {
       items.push(
         { key: "addChar", label: "Add Character", onSelect: open(() => { setCharPickerInitialKey(null); setChangePoseClipId(null); setCharPickerOpen(true); }) },
-        { key: "addLoc", label: "Add Location", onSelect: open(() => setLocPickerOpen(true)) }
+        { key: "addLoc", label: "Add Location", onSelect: open(() => setLocPickerOpen(true)) },
+        {
+          key: "t2i",
+          label: "T2I",
+          disabled: busy,
+          onSelect: open(() => openOtherAssetPicker(tid)),
+        }
       );
     }
     items.push({ key: "addAudio", label: "Add Audio", onSelect: open(() => openAudioPicker(tid)) });
@@ -1610,6 +1809,12 @@ export default function TimelineEditorPage() {
         label: "Add Location",
         disabled: busy,
         onSelect: open(() => setLocPickerOpen(true)),
+      },
+      {
+        key: "t2i",
+        label: "T2I",
+        disabled: busy,
+        onSelect: open(() => openOtherAssetPicker(tid ?? undefined)),
       },
       {
         key: "addAudio",
@@ -1735,6 +1940,7 @@ export default function TimelineEditorPage() {
           onGeometryChange={updateClipGeometry}
           onGeometryCommit={commit}
           onExitGeometryEdit={() => setGeometryEditClipId(null)}
+          onExitClipEditModes={exitClipEditModes}
           onTextChange={updateClipText}
           onTextContentChange={updateClipTextContent}
           onTextEditEnd={() => setTextEditClipId(null)}
@@ -1846,6 +2052,9 @@ export default function TimelineEditorPage() {
         <button onClick={() => openAudioPicker()} style={toolBtn} disabled={busy}>
           Add Audio
         </button>
+        <button onClick={() => openOtherAssetPicker()} style={toolBtn} disabled={busy}>
+          Add Other Asset
+        </button>
         <button
           ref={geomBtnRef}
           onClick={() => setGeomPickerOpen((o) => !o)}
@@ -1876,15 +2085,6 @@ export default function TimelineEditorPage() {
             title="Exit volume edit mode"
           >
             Exit Volume Mode
-          </button>
-        )}
-        {geometryEditClipId && (
-          <button
-            onClick={() => setGeometryEditClipId(null)}
-            style={{ ...toolBtn, borderColor: "#ffd166", color: "#ffd166" }}
-            title="Exit shape edit mode"
-          >
-            Exit Shape Edit
           </button>
         )}
       </div>
@@ -1980,6 +2180,14 @@ export default function TimelineEditorPage() {
         }
         onUseSelected={(items) => void onAudioGalleryUseSelected(items)}
       />
+      <TimelineOtherAssetPicker
+        open={otherAssetPickerOpen}
+        timelineKey={timelineKey}
+        busy={busy}
+        onCancel={() => setOtherAssetPickerOpen(false)}
+        onGenerate={onOtherAssetGenerate}
+        onUseSelected={(items) => void onOtherAssetUseSelected(items)}
+      />
 
       {/* Context menus */}
       <DesktopContextMenu
@@ -2037,9 +2245,20 @@ export default function TimelineEditorPage() {
           segmentTargetRef.current = null;
         }}
         onPreview={onSegmentPreview}
-        onSave={(positive, negative, textPrompt) =>
-          void runSegmentSave(positive, negative, textPrompt)
+        onSave={(positive, negative, textPrompt, sam3Options) =>
+          void runSegmentSave(positive, negative, textPrompt, sam3Options)
         }
+      />
+
+      <RemoveBgVideoModal
+        open={removeBgVideoOpen}
+        busy={busy}
+        onCancel={() => {
+          setRemoveBgVideoOpen(false);
+          removeBgVideoTargetRef.current = null;
+        }}
+        onRunRvm={(options) => void runRemoveBgRvm(options)}
+        onRunRmbg={(options) => void runRemoveBgRmbg(options)}
       />
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />

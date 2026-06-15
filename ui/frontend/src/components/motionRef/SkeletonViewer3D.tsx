@@ -15,6 +15,15 @@ export type CameraState = {
 
 export type ViewerMode = "mesh" | "bones";
 
+export type FigureScreenBbox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  imageWidth: number;
+  imageHeight: number;
+};
+
 export type SkeletonViewer3DHandle = {
   /** Switch between skinned mesh and joint skeleton preview. */
   setMode(mode: ViewerMode): void;
@@ -34,6 +43,8 @@ export type SkeletonViewer3DHandle = {
   resetAll(): void;
   /** Capture the current canvas as a PNG data URL. */
   captureFrame(): string | null;
+  /** Screen-space figure AABB for crop placement (motion-ref keypoint pipeline). */
+  getFigureScreenBbox(): FigureScreenBbox | null;
 };
 
 type Props = {
@@ -45,6 +56,51 @@ type Props = {
 const DEFAULT_ORBIT = { azimuth: 20, elevation: 15, distance: 2.6 };
 const FALLBACK_W = 380;
 const FALLBACK_H = 320;
+const FIGURE_CROP_PAD_FRAC = 0.15;
+const MIN_CROP_SIZE = 64;
+
+function padClampFigureBbox(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  imgW: number,
+  imgH: number
+): { x: number; y: number; width: number; height: number } {
+  let minX = Math.min(x1, x2);
+  let minY = Math.min(y1, y2);
+  let maxX = Math.max(x1, x2);
+  let maxY = Math.max(y1, y2);
+  const bw = Math.max(maxX - minX, 1);
+  const bh = Math.max(maxY - minY, 1);
+  const padX = bw * FIGURE_CROP_PAD_FRAC;
+  const padY = bh * FIGURE_CROP_PAD_FRAC;
+  minX -= padX;
+  minY -= padY;
+  maxX += padX;
+  maxY += padY;
+  let ix1 = Math.max(0, Math.min(imgW - 1, Math.round(minX)));
+  let iy1 = Math.max(0, Math.min(imgH - 1, Math.round(minY)));
+  let ix2 = Math.max(ix1 + 1, Math.min(imgW, Math.round(maxX)));
+  let iy2 = Math.max(iy1 + 1, Math.min(imgH, Math.round(maxY)));
+  let w = ix2 - ix1;
+  let h = iy2 - iy1;
+  if (w < MIN_CROP_SIZE) {
+    const extra = MIN_CROP_SIZE - w;
+    ix1 = Math.max(0, ix1 - Math.floor(extra / 2));
+    ix2 = Math.min(imgW, ix1 + MIN_CROP_SIZE);
+    ix1 = Math.max(0, ix2 - MIN_CROP_SIZE);
+    w = ix2 - ix1;
+  }
+  if (h < MIN_CROP_SIZE) {
+    const extra = MIN_CROP_SIZE - h;
+    iy1 = Math.max(0, iy1 - Math.floor(extra / 2));
+    iy2 = Math.min(imgH, iy1 + MIN_CROP_SIZE);
+    iy1 = Math.max(0, iy2 - MIN_CROP_SIZE);
+    h = iy2 - iy1;
+  }
+  return { x: ix1, y: iy1, width: w, height: h };
+}
 
 type ThreeModule = typeof import("three");
 
@@ -67,6 +123,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
 
     const modeRef = useRef<ViewerMode>("mesh");
     const bonePairsRef = useRef<[number, number][]>([]);
+    const positionsRef = useRef<Float32Array | null>(null);
 
     const orbitRef = useRef({ ...DEFAULT_ORBIT });
     const centerYRef = useRef(0.9);
@@ -270,6 +327,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       setFrame(positions: Float32Array) {
         const t = threeRef.current;
         if (!t) return;
+        positionsRef.current = positions;
         const geo = t.geometry;
         const existing = geo.getAttribute("position") as
           | import("three").BufferAttribute
@@ -286,6 +344,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         }
       },
       setJointFrame(positions: Float32Array) {
+        positionsRef.current = positions;
         _updateBoneLines(positions);
       },
       setFraming(groundY: number, centerY: number) {
@@ -302,6 +361,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         orbitRef.current = { ...DEFAULT_ORBIT };
         modeRef.current = "mesh";
         bonePairsRef.current = [];
+        positionsRef.current = null;
         const t = threeRef.current;
         if (t) {
           t.mesh.visible = false;
@@ -327,6 +387,34 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         } catch {
           return null;
         }
+      },
+      getFigureScreenBbox(): FigureScreenBbox | null {
+        const t = threeRef.current;
+        const positions = positionsRef.current;
+        if (!t || !positions || positions.length < 3) return null;
+        const { THREE, camera, renderer } = t;
+        const imgW = renderer.domElement.width;
+        const imgH = renderer.domElement.height;
+        if (imgW < 1 || imgH < 1) return null;
+        const vec = new THREE.Vector3();
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        for (let i = 0; i < positions.length; i += 3) {
+          vec.set(positions[i], positions[i + 1], positions[i + 2]);
+          vec.project(camera);
+          if (vec.z < -1 || vec.z > 1) continue;
+          const px = (vec.x * 0.5 + 0.5) * imgW;
+          const py = (-vec.y * 0.5 + 0.5) * imgH;
+          minX = Math.min(minX, px);
+          minY = Math.min(minY, py);
+          maxX = Math.max(maxX, px);
+          maxY = Math.max(maxY, py);
+        }
+        if (!Number.isFinite(minX)) return null;
+        const box = padClampFigureBbox(minX, minY, maxX, maxY, imgW, imgH);
+        return { ...box, imageWidth: imgW, imageHeight: imgH };
       },
     }));
 

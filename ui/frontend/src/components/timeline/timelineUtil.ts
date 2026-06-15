@@ -6,6 +6,7 @@ import type {
   TimelineTrack,
 } from "../../lib/api";
 import { createGeometryData, VECTOR_ARTBOARD_SIZE } from "./geometryTemplates";
+import { estimateTextClipNaturalSize } from "./textMeasure";
 import { resolveTrajectoryTransformAt } from "./trajectoryMotion";
 import { layersForTransition } from "./transitionEffects";
 import type { TransitionActiveLayer } from "./transitionEffects";
@@ -322,6 +323,16 @@ export function buildTextClip(params: {
   fontFamilyId?: string;
 }): TimelineClip {
   const dur = params.durationSec ?? IMAGE_CLIP_DEFAULT_SEC;
+  const text = {
+    content: params.content ?? "Text",
+    fontFamilyId: params.fontFamilyId ?? "inter",
+    fontWeight: 400,
+    fontStyle: "normal" as const,
+    fontSize: 48,
+    color: "#ffffff",
+    align: "center" as const,
+  };
+  const { width, height } = estimateTextClipNaturalSize(text);
   return {
     id: genId("clip"),
     type: "text",
@@ -331,18 +342,10 @@ export function buildTextClip(params: {
     outPoint: dur,
     speed: 1,
     duration: dur,
-    naturalW: VECTOR_ARTBOARD_SIZE,
-    naturalH: VECTOR_ARTBOARD_SIZE,
+    naturalW: width,
+    naturalH: height,
     transform: defaultVectorClipTransform(),
-    text: {
-      content: params.content ?? "Text",
-      fontFamilyId: params.fontFamilyId ?? "inter",
-      fontWeight: 400,
-      fontStyle: "normal",
-      fontSize: 48,
-      color: "#ffffff",
-      align: "center",
-    },
+    text,
   };
 }
 

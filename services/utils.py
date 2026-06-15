@@ -1165,6 +1165,25 @@ def av_stream_time_base(rate: Any) -> Any:
     return Fraction(1, max(1, int(round(fps))))
 
 
+def video_stream_fps(video_path: str) -> float:
+    """Return average video stream frame rate (falls back to 24)."""
+    import av  # type: ignore
+
+    with av.open(video_path) as container:
+        stream = container.streams.video[0]
+        rate = stream.average_rate or stream.base_rate
+        if rate is not None:
+            return float(rate)
+    return 24.0
+
+
+def video_subsample_stride(source_fps: float, target_fps: float = 12.0) -> int:
+    """Frame stride to approximate *target_fps* from *source_fps*."""
+    if source_fps <= 0 or target_fps <= 0:
+        return 1
+    return max(1, int(round(source_fps / target_fps)))
+
+
 def extract_video_frames_to_pngs(video_path: str, dest_dir: str) -> list[str]:
     """Decode every video frame to PNGs (frame_000001.png, …). Returns ordered absolute paths."""
     import av  # type: ignore

@@ -1215,6 +1215,127 @@ def run_qwen_t2i(
     raise RuntimeError("Qwen t2i returned no image.")
 
 
+def _t2i_dims_for_preview_aspect(preview_aspect: str) -> tuple[int, int]:
+    """Map timeline preview aspect to generation size (1024 long edge, multiples of 64)."""
+    ratios: dict[str, float] = {
+        "16:9": 16 / 9,
+        "9:16": 9 / 16,
+        "1:1": 1.0,
+        "4:3": 4 / 3,
+    }
+    r = ratios.get(str(preview_aspect or "16:9"), 16 / 9)
+    if r >= 1.0:
+        w = 1024
+        h = max(64, round(1024 / r / 64) * 64)
+    else:
+        h = 1024
+        w = max(64, round(1024 * r / 64) * 64)
+    return int(w), int(h)
+
+
+def run_anima_t2i(
+    *,
+    prompt_text: str,
+    width: int = 1024,
+    height: int = 1024,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """Generate anime T2I via Anima preview service."""
+    effective = (prompt_text or "").strip()
+    if not effective:
+        raise ValueError("prompt_text is required.")
+
+    body = _run_service_testmode(
+        "services.anime_img_gen_ai_service.serverless",
+        [
+            "--test-mode",
+            "--enable-default",
+            "--default-port",
+            str(COMFY_PORT),
+            "--prompt",
+            effective,
+            "--width",
+            str(int(width)),
+            "--height",
+            str(int(height)),
+            "--convert-local-to-url",
+        ],
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise AnimeGenServiceError(
+            str(body["error"]),
+            prompt_id=body.get("prompt_id") if isinstance(body.get("prompt_id"), str) else None,
+            prompt_index=body.get("prompt_index") if isinstance(body.get("prompt_index"), int) else None,
+        )
+    return _extract_image_url_from_anime_results(body)
+
+
+def generate_t2i_timeline_asset(
+    timeline_key: str,
+    prompt_text: str,
+    model_mode: str,
+    *,
+    preview_aspect: str = "16:9",
+    width: int | None = None,
+    height: int | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Run T2I and register result in the timeline asset gallery."""
+    from PIL import Image
+
+    from services import timeline_asset_storage
+
+    effective = (prompt_text or "").strip()
+    if not effective:
+        raise ValueError("prompt_text is required.")
+
+    mode = (model_mode or "general").strip().lower()
+    if mode not in ("anime", "general"):
+        raise ValueError("model_mode must be 'anime' or 'general'.")
+
+    if width is None or height is None:
+        width, height = _t2i_dims_for_preview_aspect(preview_aspect)
+
+    if log_cb:
+        log_cb(f"T2I ({mode}): {width}x{height}")
+
+    if mode == "anime":
+        ref = run_anima_t2i(
+            prompt_text=effective,
+            width=int(width),
+            height=int(height),
+            log_cb=log_cb,
+        )
+    else:
+        ref = run_qwen_t2i(
+            prompt_text=effective,
+            width=int(width),
+            height=int(height),
+            log_cb=log_cb,
+        )
+
+    local = _reference_ref_to_local(ref, log_cb=log_cb)
+
+    img_w = int(width)
+    img_h = int(height)
+    try:
+        with Image.open(local) as im:
+            img_w, img_h = int(im.width), int(im.height)
+    except Exception:
+        pass
+
+    return timeline_asset_storage.add_asset(
+        timeline_key,
+        local,
+        kind="t2i",
+        prompt=effective,
+        model_mode=mode,
+        width=img_w,
+        height=img_h,
+    )
+
+
 def run_mask_guided_edit(
     *,
     input_image_abs_path: str,
@@ -3358,6 +3479,109 @@ def _image_edit_aux_keypoint_cli_args(
     return ["--auxiliary-image-urls-json", json.dumps(urls)]
 
 
+def _image_edit_aux_cropped_keypoint_cli_args(
+    character_name: str,
+    keypoint_crop_abs: str,
+) -> list[str]:
+    """Aux args when keypoint is already cropped; closeup composite stays full-size."""
+    kp = (keypoint_crop_abs or "").strip()
+    if not kp:
+        return []
+    urls: list[str] = []
+    close_abs = character_base_closeup_composite_abs_path(character_name)
+    if close_abs:
+        urls.append(close_abs)
+    urls.append(kp)
+    return ["--auxiliary-image-urls-json", json.dumps(urls)]
+
+
+def _run_keypoint_image_edit_with_crop(
+    character_name: str,
+    primary_abs: str,
+    keypoint_abs: str,
+    placed_figure: dict[str, Any],
+    prompt_text: str,
+    log_cb: Callable[[str], None] | None = None,
+    *,
+    keypoint_id: str | None = None,
+) -> str:
+    """
+    Run Qwen image-edit on figure crop, RMBG the result, save RGBA + white plate,
+    return local path to the full-size plate image.
+    """
+    from PIL import Image
+
+    from services import reference_storage
+    from services.figure_crop import (
+        composite_rgba_on_white_plate,
+        crop_image_path,
+        placement_box,
+    )
+
+    placement = placed_figure["placement"]
+    canvas = placed_figure["canvas"]
+    c_w, c_h = int(canvas["width"]), int(canvas["height"])
+
+    tmp_dir = Path(tempfile.gettempdir()) / f"placed_{unique_suffix()}"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    primary_crop = tmp_dir / "primary_crop.png"
+    kp_crop = tmp_dir / "kp_crop.png"
+    crop_image_path(primary_abs, placement, primary_crop)
+    crop_image_path(keypoint_abs, placement, kp_crop)
+
+    if log_cb:
+        x, y, w, h = placement_box(placement)
+        log_cb(f"Cropped figure region {w}×{h} at ({x},{y}) for Qwen edit…")
+
+    body = _run_service_testmode(
+        "services.image_edit_ai_service.serverless",
+        [
+            "--test-mode",
+            "--enable-default",
+            "--default-port",
+            str(COMFY_PORT),
+            "--image-url",
+            str(primary_crop),
+            "--prompt-source",
+            "inline",
+            "--prompts-json",
+            json.dumps([prompt_text]),
+            *_image_edit_aux_cropped_keypoint_cli_args(character_name, str(kp_crop)),
+            "--convert-local-to-url",
+        ],
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise RuntimeError(str(body["error"]))
+    results: list[dict[str, Any]] = body.get("results") or []
+    if not results:
+        raise RuntimeError("Image-edit returned no results.")
+    url = results[0].get("url")
+    if not isinstance(url, str) or not url.strip():
+        raise RuntimeError("Image-edit result missing url.")
+
+    qwen_out = tmp_dir / "qwen_crop.png"
+    download_url_to_file(url.strip(), qwen_out)
+    if log_cb:
+        log_cb("Removing background from generated crop…")
+    rgba_path = Path(remove_background_to_temp_file(str(qwen_out), log_cb=log_cb))
+    with Image.open(rgba_path) as rgba_im:
+        plate = composite_rgba_on_white_plate(rgba_im, c_w, c_h, placement)
+    plate_path = tmp_dir / "plate.png"
+    plate.save(plate_path)
+
+    if keypoint_id:
+        reference_storage.update_placed_figure_outputs(
+            keypoint_id,
+            figure_crop_rgba_abs=str(rgba_path),
+            figure_plate_abs=str(plate_path),
+        )
+        if log_cb:
+            log_cb("Saved placed-figure RGBA layer + white plate preview.")
+
+    return str(plate_path.resolve())
+
+
 def generate_pose_starting_image(
     character_name: str,
     pose_catalog_id: int,
@@ -3555,6 +3779,32 @@ def generate_pose_starting_images_from_prompts(
         else:
             prompts = [_append_keypoint_only_pose_hint(p) for p in prompts]
 
+    from services import reference_storage
+
+    kp_entry = reference_storage.find_keypoint_by_keypoint_abs(kp) if kp else None
+    placed = (
+        kp_entry.get("placedFigure")
+        if kp_entry and isinstance(kp_entry.get("placedFigure"), dict)
+        else None
+    )
+    use_placed_crop = bool(
+        placed and placed.get("placement") and placed.get("canvas")
+    )
+    if use_placed_crop:
+        created: list[tuple[str, str]] = []
+        for i, prompt in enumerate(prompts):
+            out_ref = _generate_pose_image_edit_url(
+                character_name,
+                base_image_path,
+                prompt,
+                keypoint_image_path=kp,
+                log_cb=log_cb,
+            )
+            stem = sanitize_for_folder(prompt) or f"prompt_{i}"
+            abs_path, rel = _download_url_to_pose_gallery(character_name, out_ref, stem)
+            created.append((abs_path, rel))
+        return created
+
     body = _run_service_testmode(
         "services.image_edit_ai_service.serverless",
         [
@@ -3621,6 +3871,25 @@ def _generate_pose_image_edit_url(
             _append_closeup_keypoint_pose_hint(effective)
             if use_closeup_hint
             else _append_keypoint_only_pose_hint(effective)
+        )
+
+    from services import reference_storage
+
+    kp_entry = reference_storage.find_keypoint_by_keypoint_abs(kp) if kp else None
+    placed = (
+        kp_entry.get("placedFigure")
+        if kp_entry and isinstance(kp_entry.get("placedFigure"), dict)
+        else None
+    )
+    if placed and placed.get("placement") and placed.get("canvas"):
+        return _run_keypoint_image_edit_with_crop(
+            character_name,
+            base_image_path,
+            kp,
+            placed,
+            effective,
+            log_cb,
+            keypoint_id=str(kp_entry["id"]) if kp_entry else None,
         )
 
     body = _run_service_testmode(
@@ -7603,22 +7872,26 @@ def _extract_first_rembg_url(body: dict[str, Any]) -> str:
 def remove_background_to_temp_file(
     local_image_path: str,
     log_cb: Callable[[str], None] | None = None,
+    rmbg_overrides: dict[str, Any] | None = None,
 ) -> str:
     """
     Run local background removal (RMBG-2.0 / Comfy + test-mode), download result to a temp ``.png``.
     Does not modify ``local_image_path``.
     """
+    args = [
+        "--test-mode",
+        "--enable-default",
+        "--default-port",
+        str(COMFY_PORT),
+        "--image-url",
+        local_image_path,
+        "--convert-local-to-url",
+    ]
+    if rmbg_overrides:
+        args.extend(["--rmbg-json", json.dumps(rmbg_overrides)])
     body = _run_service_testmode(
         "services.background_removal_ai_service.serverless",
-        [
-            "--test-mode",
-            "--enable-default",
-            "--default-port",
-            str(COMFY_PORT),
-            "--image-url",
-            local_image_path,
-            "--convert-local-to-url",
-        ],
+        args,
         log_cb=log_cb,
     )
     url = _extract_first_rembg_url(body)
@@ -7634,6 +7907,8 @@ def remove_video_background_to_temp_file(
     backbone: str = "mobilenetv3",
     device: str = "auto",
     downsample_ratio: float = 0.25,
+    alpha_dilate_px: int = 0,
+    use_source_rgb: bool = True,
     log_cb: Callable[[str], None] | None = None,
 ) -> str:
     """
@@ -7675,6 +7950,8 @@ def remove_video_background_to_temp_file(
         backbone=backbone,
         device=device,
         downsample_ratio=downsample_ratio,
+        alpha_dilate_px=alpha_dilate_px,
+        use_source_rgb=use_source_rgb,
         log_cb=log_cb,
     )
     out = str(result.get("url") or "").strip()
@@ -7683,6 +7960,243 @@ def remove_video_background_to_temp_file(
             f"Video background removal produced no output file (url={out!r})."
         )
     return out
+
+
+    return out
+
+
+def _process_mask_alpha_array(
+    alpha: Any,
+    *,
+    grow_px: int = 0,
+    blur_px: int = 0,
+) -> Any:
+    """Optionally dilate and blur a uint8 alpha/mask array."""
+    import numpy as np
+    from PIL import Image, ImageFilter
+
+    if grow_px <= 0 and blur_px <= 0:
+        return alpha
+    im = Image.fromarray(np.asarray(alpha, dtype=np.uint8))
+    if grow_px > 0:
+        size = grow_px * 2 + 1
+        im = im.filter(ImageFilter.MaxFilter(size=size))
+    if blur_px > 0:
+        im = im.filter(ImageFilter.GaussianBlur(radius=max(1, blur_px)))
+    return np.asarray(im, dtype=np.uint8)
+
+
+def encode_rgba_frames_to_webm(
+    rgba_frames: list[Any],
+    *,
+    fps: float,
+    width: int,
+    height: int,
+    output_path: str | Path,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Encode RGBA uint8 frames (H×W×4) to WebM VP9+alpha."""
+    import av
+    import numpy as np
+
+    from services.utils import av_output_framerate, av_stream_time_base
+
+    def _log(msg: str) -> None:
+        logger.info(msg)
+        if log_cb:
+            log_cb(msg)
+
+    if not rgba_frames:
+        raise ValueError("rgba_frames is empty.")
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out_rate = av_output_framerate(fps)
+    tb = av_stream_time_base(out_rate)
+    out_fps = float(out_rate)
+
+    out_container = av.open(str(out), mode="w", format="webm")
+    out_stream = out_container.add_stream("libvpx-vp9", rate=out_rate)
+    out_stream.time_base = tb
+    out_stream.width = width
+    out_stream.height = height
+    out_stream.pix_fmt = "yuva420p"
+    out_stream.options = {
+        "crf": "10",
+        "b:v": "0",
+        "deadline": "realtime",
+        "cpu-used": "8",
+        "row-mt": "1",
+        "auto-alt-ref": "0",
+    }
+
+    frame_idx = 0
+    with out_container:
+        for rgba in rgba_frames:
+            arr = np.asarray(rgba, dtype=np.uint8)
+            if arr.shape[0] != height or arr.shape[1] != width:
+                from PIL import Image
+
+                im = Image.fromarray(arr, mode="RGBA")
+                im = im.resize((width, height), Image.Resampling.BILINEAR)
+                arr = np.asarray(im, dtype=np.uint8)
+            out_frame = av.VideoFrame.from_ndarray(arr, format="rgba")
+            out_frame = out_frame.reformat(format="yuva420p")
+            out_frame.pts = frame_idx
+            out_frame.time_base = tb
+            for pkt in out_stream.encode(out_frame):
+                out_container.mux(pkt)
+            frame_idx += 1
+            if frame_idx % 12 == 0:
+                _log(f"  Encoded frame {frame_idx}/{len(rgba_frames)}")
+        for pkt in out_stream.encode():
+            out_container.mux(pkt)
+
+    duration = frame_idx / out_fps if out_fps > 0 else 0.0
+    _log(f"WebM written: {out.name} ({frame_idx} frames @ {out_fps:.2f} fps)")
+    return {
+        "absPath": str(out.resolve()),
+        "fps": out_fps,
+        "width": width,
+        "height": height,
+        "frames": frame_idx,
+        "durationSec": round(duration, 4),
+    }
+
+
+def remove_video_background_rmbg(
+    video_path: str | Path,
+    output_path: str | Path,
+    *,
+    output_fps_24: bool = False,
+    recycle_mask: bool = False,
+    rmbg_overrides: dict[str, Any] | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """
+    Per-frame RMBG video background removal.
+
+    Default (``output_fps_24=False``): subsample to 12 fps, RMBG each kept frame,
+    output WebM at 12 fps.
+
+    ``output_fps_24=True``: output at source fps; RMBG every frame unless
+    ``recycle_mask=True`` (RMBG at 12 fps keyframes, hold alpha between).
+    """
+    import av
+    import numpy as np
+    import shutil
+    from PIL import Image
+
+    from services.utils import video_stream_fps, video_subsample_stride
+
+    def _log(msg: str) -> None:
+        logger.info(msg)
+        if log_cb:
+            log_cb(msg)
+
+    src = Path(video_path)
+    out = Path(output_path)
+    if not src.is_file():
+        raise ValueError(f"Video not found: {src}")
+
+    source_fps = video_stream_fps(str(src))
+    stride = video_subsample_stride(source_fps, 12.0)
+    tmp_dir = Path(tempfile.gettempdir()) / f"rmbg_vid_{unique_suffix()}"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+
+    def _rmbg_rgba_from_rgb(rgb: Any, frame_path: Path) -> Any:
+        Image.fromarray(rgb).save(frame_path, format="PNG")
+        rgba_path = remove_background_to_temp_file(
+            str(frame_path),
+            log_cb=log_cb,
+            rmbg_overrides=rmbg_overrides,
+        )
+        with Image.open(rgba_path) as im:
+            return np.asarray(im.convert("RGBA"), dtype=np.uint8)
+
+    try:
+        in_container = av.open(str(src))
+        in_stream = in_container.streams.video[0]
+        src_w = int(in_stream.width)
+        src_h = int(in_stream.height)
+
+        if not output_fps_24:
+            _log(
+                f"RMBG mode: 12 fps output (source {source_fps:.2f} fps, stride {stride})"
+            )
+            rgba_out: list[Any] = []
+            frame_idx = 0
+            rmbg_count = 0
+            for packet in in_container.demux(in_stream):
+                for av_frame in packet.decode():
+                    if frame_idx % stride != 0:
+                        frame_idx += 1
+                        continue
+                    rgb = av_frame.to_ndarray(format="rgb24")
+                    fp = tmp_dir / f"in_{frame_idx:06d}.png"
+                    rmbg_count += 1
+                    _log(f"RMBG frame {rmbg_count} (source index {frame_idx})…")
+                    rgba_out.append(_rmbg_rgba_from_rgb(rgb, fp))
+                    frame_idx += 1
+            in_container.close()
+            if not rgba_out:
+                raise RuntimeError("No frames extracted for RMBG.")
+            meta = encode_rgba_frames_to_webm(
+                rgba_out,
+                fps=12.0,
+                width=src_w,
+                height=src_h,
+                output_path=out,
+                log_cb=log_cb,
+            )
+            meta["url"] = meta["absPath"]
+            return meta
+
+        # output_fps_24 modes
+        all_rgb: list[Any] = []
+        for packet in in_container.demux(in_stream):
+            for av_frame in packet.decode():
+                all_rgb.append(av_frame.to_ndarray(format="rgb24"))
+        in_container.close()
+        if not all_rgb:
+            raise RuntimeError("Video decode produced zero frames.")
+
+        if recycle_mask:
+            _log(
+                f"RMBG mode: {source_fps:.2f} fps output, recycle mask "
+                f"(RMBG every {stride} frames)"
+            )
+        else:
+            _log(f"RMBG mode: {source_fps:.2f} fps output, every frame")
+
+        rgba_out = []
+        last_alpha: Any | None = None
+        rmbg_count = 0
+        for i, rgb in enumerate(all_rgb):
+            need_rmbg = (not recycle_mask) or (i % stride == 0)
+            if need_rmbg:
+                fp = tmp_dir / f"in_{i:06d}.png"
+                rmbg_count += 1
+                _log(f"RMBG frame {rmbg_count}/{len(all_rgb)}…")
+                rgba = _rmbg_rgba_from_rgb(rgb, fp)
+                last_alpha = rgba[:, :, 3]
+            else:
+                if last_alpha is None:
+                    raise RuntimeError("recycle_mask requires at least one RMBG keyframe.")
+                rgba = np.dstack([rgb, last_alpha])
+            rgba_out.append(rgba)
+
+        meta = encode_rgba_frames_to_webm(
+            rgba_out,
+            fps=source_fps,
+            width=src_w,
+            height=src_h,
+            output_path=out,
+            log_cb=log_cb,
+        )
+        meta["url"] = meta["absPath"]
+        return meta
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def composite_image_on_gaussian_noise_to_temp(local_image_path: str) -> str:
@@ -7862,14 +8376,45 @@ def run_pose_keypoint_for_video_frames(
 def run_pose_keypoint_for_image(
     image_abs_path: str,
     log_cb: Callable[[str], None] | None = None,
+    *,
+    placed_figure: dict[str, Any] | None = None,
 ) -> str:
     """
     Run ``pose_keypoint_ai_service`` on a single image.
+    When ``placed_figure`` is set, SDPose runs on the cropped region and the
+    skeleton is pasted onto a full-size black canvas at ``placement``.
     Returns the local absolute path of the keypoint output image.
     """
+    from PIL import Image
+
+    from services.figure_crop import crop_image_path, paste_on_black_canvas
+
     src = Path(image_abs_path)
     if not src.is_file():
         raise ValueError(f"Input image not found: {src}")
+
+    run_path = str(src)
+    placement: dict[str, int] | None = None
+    canvas_w = canvas_h = 0
+    crop_tmp: Path | None = None
+
+    if (
+        placed_figure
+        and isinstance(placed_figure.get("placement"), dict)
+        and isinstance(placed_figure.get("canvas"), dict)
+    ):
+        placement = placed_figure["placement"]
+        canvas_w = int(placed_figure["canvas"]["width"])
+        canvas_h = int(placed_figure["canvas"]["height"])
+        crop_tmp = Path(tempfile.gettempdir()) / f"kp_crop_{unique_suffix()}.png"
+        crop_image_path(src, placement, crop_tmp)
+        run_path = str(crop_tmp)
+        if log_cb:
+            log_cb(
+                f"SDPose on cropped figure region "
+                f"{placement['width']}×{placement['height']}…"
+            )
+
     body = _run_service_testmode(
         "services.pose_keypoint_ai_service.serverless",
         [
@@ -7878,11 +8423,14 @@ def run_pose_keypoint_for_image(
             "--default-port",
             str(COMFY_PORT),
             "--image-url",
-            image_abs_path,
+            run_path,
             "--convert-local-to-url",
         ],
         log_cb=log_cb,
     )
+    if crop_tmp and crop_tmp.is_file():
+        crop_tmp.unlink(missing_ok=True)
+
     if body.get("error"):
         raise RuntimeError(str(body["error"]))
     results = body.get("results") or []
@@ -7891,12 +8439,54 @@ def run_pose_keypoint_for_image(
     url = results[0].get("url")
     local = results[0].get("local_path")
     if local and Path(local).is_file():
-        return str(local)
-    if not url:
+        kp_crop_path = Path(local)
+    elif url:
+        kp_crop_path = Path(tempfile.gettempdir()) / f"kp_{unique_suffix()}.png"
+        download_url_to_file(url, kp_crop_path)
+    else:
         raise RuntimeError("Pose keypoint result missing url and local_path.")
-    dest = Path(tempfile.gettempdir()) / f"kp_{unique_suffix()}.png"
-    download_url_to_file(url, dest)
-    return str(dest)
+
+    if placement is not None and canvas_w > 0 and canvas_h > 0:
+        with Image.open(kp_crop_path) as patch:
+            full = paste_on_black_canvas(patch, canvas_w, canvas_h, placement)
+        full_dest = Path(tempfile.gettempdir()) / f"kp_full_{unique_suffix()}.png"
+        full.save(full_dest)
+        if log_cb:
+            log_cb(f"Pasted skeleton onto {canvas_w}×{canvas_h} canvas.")
+        return str(full_dest)
+
+    return str(kp_crop_path)
+
+
+def make_reference_keypoint(
+    image_rel_path: str,
+    log_cb: Callable[[str], None] | None = None,
+    *,
+    placed_figure: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run the SD pose service on a saved reference image and store the
+    (original, skeleton) pair in the global keypoint collection."""
+    from services import reference_storage
+    from services.figure_crop import build_placed_figure_meta
+    from PIL import Image
+
+    rel_norm = str(image_rel_path).replace("\\", "/").lstrip("/")
+    if rel_norm.lower().startswith("references/"):
+        abs_path = str(reference_storage.resolve_rel(rel_norm))
+    else:
+        abs_path = str(resolve_storage_rel_path_to_abs(rel_norm))
+    if not Path(abs_path).is_file():
+        raise ValueError(f"Reference image not found: {image_rel_path}")
+
+    pf = placed_figure
+    if pf and pf.get("placement") and not pf.get("canvas"):
+        with Image.open(abs_path) as im:
+            pf = build_placed_figure_meta(im.width, im.height, pf["placement"])
+
+    kp_abs = run_pose_keypoint_for_image(
+        abs_path, log_cb=log_cb, placed_figure=pf
+    )
+    return reference_storage.add_keypoint_pair(abs_path, kp_abs, placed_figure=pf)
 
 
 def save_pose_reference(
@@ -8040,26 +8630,6 @@ def make_reference_keypoint_video(
         )
     finally:
         shutil.rmtree(ref_tmp, ignore_errors=True)
-
-
-def make_reference_keypoint(
-    image_rel_path: str,
-    log_cb: Callable[[str], None] | None = None,
-) -> dict[str, Any]:
-    """Run the SD pose service on a saved reference image and store the
-    (original, skeleton) pair in the global keypoint collection."""
-    from services import reference_storage
-
-    rel_norm = str(image_rel_path).replace("\\", "/").lstrip("/")
-    if rel_norm.lower().startswith("references/"):
-        abs_path = str(reference_storage.resolve_rel(rel_norm))
-    else:
-        # Character-staging uploads etc. resolve under the characters root.
-        abs_path = str(resolve_storage_rel_path_to_abs(rel_norm))
-    if not Path(abs_path).is_file():
-        raise ValueError(f"Reference image not found: {image_rel_path}")
-    kp_abs = run_pose_keypoint_for_image(abs_path, log_cb=log_cb)
-    return reference_storage.add_keypoint_pair(abs_path, kp_abs)
 
 
 def make_reference_angle(
@@ -8879,16 +9449,16 @@ def write_gallery_frame_sequence_set_mp4(
 
 
 def probe_video_meta(path: Path | str) -> dict[str, Any]:
-    """Return ``{durationSec, width, height}`` for an mp4/video via PyAV.
-
-    Duration falls back to (nb_frames / rate) when the container reports none.
-    """
+    """Return ``{durationSec, width, height, fps}`` for a video via PyAV."""
     import av
+
+    from services.utils import video_stream_fps
 
     p = Path(path)
     duration_sec = 0.0
     width = 0
     height = 0
+    fps = 0.0
     with av.open(str(p)) as container:
         vs = next((s for s in container.streams if s.type == "video"), None)
         if vs is not None:
@@ -8896,16 +9466,22 @@ def probe_video_meta(path: Path | str) -> dict[str, Any]:
                 width = int(vs.width)
             if vs.height:
                 height = int(vs.height)
+            rate = vs.average_rate or vs.base_rate
+            if rate is not None:
+                fps = float(rate)
             if container.duration:
                 duration_sec = float(container.duration) / float(av.time_base)
             elif vs.duration is not None and vs.time_base is not None:
                 duration_sec = float(vs.duration) * float(vs.time_base)
             elif vs.frames and vs.average_rate:
                 duration_sec = float(vs.frames) / float(vs.average_rate)
+    if fps <= 0:
+        fps = video_stream_fps(str(p))
     return {
         "durationSec": round(duration_sec, 4),
         "width": width,
         "height": height,
+        "fps": round(fps, 4),
     }
 
 
@@ -9600,6 +10176,7 @@ def _run_sam3_segment_service(
     negative_coords: list[dict[str, Any]] | None = None,
     text_prompt: str | None = None,
     ref_frame_index: int = 0,
+    sam3_options: dict[str, Any] | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     text = _validate_sam3_segment_input(positive_coords or [], text_prompt)
@@ -9621,6 +10198,8 @@ def _run_sam3_segment_service(
     ]
     if text:
         args.extend(["--text-prompt", text])
+    if sam3_options:
+        args.extend(["--sam3-options-json", json.dumps(sam3_options)])
     if job == "video_masks":
         if not video_abs_path:
             raise ValueError("video_abs_path is required for video_masks.")
@@ -9728,26 +10307,131 @@ def extract_video_frame_to_temp(
     raise ValueError(f"Frame index {idx} out of range for {p.name}")
 
 
+def _normalize_sam3_options(raw: Any) -> dict[str, Any]:
+    """Map UI/API sam3Options to workflow + composite fields."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    key_map = {
+        "threshold": "threshold",
+        "refineIterations": "refine_iterations",
+        "refine_iterations": "refine_iterations",
+        "detectionThreshold": "detection_threshold",
+        "detection_threshold": "detection_threshold",
+        "maskGrowPx": "mask_grow_px",
+        "mask_grow_px": "mask_grow_px",
+        "maskBlurPx": "mask_blur_px",
+        "mask_blur_px": "mask_blur_px",
+    }
+    for src_k, dst_k in key_map.items():
+        if src_k in raw and raw[src_k] is not None:
+            out[dst_k] = raw[src_k]
+    return out
+
+
+def _sam3_workflow_options(opts: dict[str, Any]) -> dict[str, Any]:
+    wf: dict[str, Any] = {}
+    if "threshold" in opts:
+        wf["threshold"] = float(opts["threshold"])
+    if "refine_iterations" in opts:
+        wf["refine_iterations"] = int(opts["refine_iterations"])
+    if "detection_threshold" in opts:
+        wf["detection_threshold"] = float(opts["detection_threshold"])
+    return wf
+
+
+def _postprocess_sam3_mask_file(
+    mask_path: str,
+    opts: dict[str, Any],
+) -> str:
+    """Apply mask grow/blur post-process; returns path (may be new temp file)."""
+    grow = int(opts.get("mask_grow_px") or 0)
+    blur = int(opts.get("mask_blur_px") or 0)
+    if grow <= 0 and blur <= 0:
+        return mask_path
+    import numpy as np
+    from PIL import Image
+
+    with Image.open(mask_path) as im:
+        alpha = _process_mask_alpha_array(
+            np.asarray(im.convert("L"), dtype=np.uint8),
+            grow_px=grow,
+            blur_px=blur,
+        )
+    out = Path(tempfile.gettempdir()) / f"sam3_mask_pp_{unique_suffix()}.png"
+    Image.fromarray(alpha, mode="L").save(out)
+    return str(out)
+
+
+def _postprocess_sam3_rgba_file(
+    rgba_path: str,
+    opts: dict[str, Any],
+) -> str:
+    grow = int(opts.get("mask_grow_px") or 0)
+    blur = int(opts.get("mask_blur_px") or 0)
+    if grow <= 0 and blur <= 0:
+        return rgba_path
+    import numpy as np
+    from PIL import Image
+
+    with Image.open(rgba_path) as im:
+        rgba = im.convert("RGBA")
+        arr = np.asarray(rgba, dtype=np.uint8)
+        alpha = _process_mask_alpha_array(arr[:, :, 3], grow_px=grow, blur_px=blur)
+        arr[:, :, 3] = alpha
+    out = Path(tempfile.gettempdir()) / f"sam3_rgba_pp_{unique_suffix()}.png"
+    Image.fromarray(arr, mode="RGBA").save(out)
+    return str(out)
+
+
+def _resolve_rvm_options(msg: dict[str, Any]) -> dict[str, Any]:
+    preset = str(msg.get("preset") or "fast").strip().lower()
+    backbone = str(msg.get("backbone") or "").strip()
+    if not backbone:
+        backbone = "resnet50" if preset == "quality" else "mobilenetv3"
+    ds = msg.get("downsample_ratio")
+    if ds is None:
+        ds = 0.375 if preset == "quality" else 0.25
+    else:
+        ds = float(ds)
+    alpha_dilate = int(msg.get("alpha_dilate_px") or msg.get("alphaDilatePx") or 0)
+    use_src = msg.get("use_source_rgb")
+    if use_src is None:
+        use_src = msg.get("useSourceRgb")
+    if use_src is None:
+        use_src = True
+    return {
+        "backbone": backbone,
+        "downsample_ratio": ds,
+        "alpha_dilate_px": alpha_dilate,
+        "use_source_rgb": bool(use_src),
+    }
+
+
 def run_sam3_segment_preview(
     *,
     image_abs_path: str,
     positive_coords: list[dict[str, Any]],
     negative_coords: list[dict[str, Any]] | None = None,
     text_prompt: str | None = None,
+    sam3_options: dict[str, Any] | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> str:
     """Run SAM3 mask preview; returns temp path to grayscale mask PNG."""
+    opts = _normalize_sam3_options(sam3_options or {})
     result = _run_sam3_segment_service(
         job="image_mask",
         image_abs_path=image_abs_path,
         positive_coords=positive_coords,
         negative_coords=negative_coords,
         text_prompt=text_prompt,
+        sam3_options=_sam3_workflow_options(opts),
         log_cb=log_cb,
     )
     tmp = Path(tempfile.gettempdir()) / f"sam3_preview_{unique_suffix()}"
     paths = _download_sam3_output_urls(result, tmp)
-    return paths[0]
+    opts = _normalize_sam3_options(sam3_options or {})
+    return _postprocess_sam3_mask_file(paths[0], opts)
 
 
 def run_sam3_segment_image_rgba(
@@ -9756,20 +10440,24 @@ def run_sam3_segment_image_rgba(
     positive_coords: list[dict[str, Any]],
     negative_coords: list[dict[str, Any]] | None = None,
     text_prompt: str | None = None,
+    sam3_options: dict[str, Any] | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> str:
     """Segment image to RGBA PNG cutout (transparent outside mask)."""
+    opts = _normalize_sam3_options(sam3_options or {})
     result = _run_sam3_segment_service(
         job="image_rgba",
         image_abs_path=image_abs_path,
         positive_coords=positive_coords,
         negative_coords=negative_coords,
         text_prompt=text_prompt,
+        sam3_options=_sam3_workflow_options(opts),
         log_cb=log_cb,
     )
     tmp = Path(tempfile.gettempdir()) / f"sam3_rgba_{unique_suffix()}"
     paths = _download_sam3_output_urls(result, tmp)
-    return paths[0]
+    opts = _normalize_sam3_options(sam3_options or {})
+    return _postprocess_sam3_rgba_file(paths[0], opts)
 
 
 def composite_video_with_masks(
@@ -9777,6 +10465,8 @@ def composite_video_with_masks(
     video_abs_path: str,
     mask_paths: list[str],
     output_path: str | Path,
+    mask_grow_px: int = 0,
+    mask_blur_px: int = 0,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """
@@ -9834,6 +10524,9 @@ def composite_video_with_masks(
                 with Image.open(mask_path) as m_im:
                     mask = m_im.convert("L").resize((src_w, src_h))
                     alpha = np.asarray(mask, dtype=np.uint8)
+                alpha = _process_mask_alpha_array(
+                    alpha, grow_px=mask_grow_px, blur_px=mask_blur_px
+                )
                 rgb = av_frame.to_ndarray(format="rgb24")
                 rgba = np.dstack([rgb, alpha])
                 out_frame = av.VideoFrame.from_ndarray(rgba, format="rgba")
@@ -9865,9 +10558,11 @@ def run_sam3_segment_video(
     text_prompt: str | None = None,
     ref_frame_index: int = 0,
     output_path: str | Path | None = None,
+    sam3_options: dict[str, Any] | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Track segment across video frames; return WebM+alpha path and metadata."""
+    opts = _normalize_sam3_options(sam3_options or {})
     result = _run_sam3_segment_service(
         job="video_masks",
         video_abs_path=video_abs_path,
@@ -9875,6 +10570,7 @@ def run_sam3_segment_video(
         negative_coords=negative_coords,
         text_prompt=text_prompt,
         ref_frame_index=ref_frame_index,
+        sam3_options=_sam3_workflow_options(opts),
         log_cb=log_cb,
     )
     tmp_masks = Path(tempfile.gettempdir()) / f"sam3_vmasks_{unique_suffix()}"
@@ -9884,11 +10580,15 @@ def run_sam3_segment_video(
         if output_path
         else Path(tempfile.gettempdir()) / f"sam3_vseg_{unique_suffix()}.webm"
     )
+    grow = int(opts.get("mask_grow_px") or 0)
+    blur = int(opts.get("mask_blur_px") or 0)
     try:
         return composite_video_with_masks(
             video_abs_path=video_abs_path,
             mask_paths=mask_paths,
             output_path=out,
+            mask_grow_px=grow,
+            mask_blur_px=blur,
             log_cb=log_cb,
         )
     finally:
@@ -9902,6 +10602,7 @@ def segment_preview_mask_png_base64(
     positive_coords: list[dict[str, Any]],
     negative_coords: list[dict[str, Any]] | None = None,
     text_prompt: str | None = None,
+    sam3_options: dict[str, Any] | None = None,
     in_point_sec: float = 0.0,
     local_time_sec: float = 0.0,
     speed: float = 1.0,
@@ -9909,6 +10610,7 @@ def segment_preview_mask_png_base64(
 ) -> str:
     """Return base64 PNG mask (no data: prefix) for UI overlay."""
     kind = (clip_type or "image").strip().lower()
+    opts = _normalize_sam3_options(sam3_options or {})
     image_path = source_abs_path
     temp_frame: str | None = None
     try:
@@ -9926,6 +10628,7 @@ def segment_preview_mask_png_base64(
             positive_coords=positive_coords,
             negative_coords=negative_coords,
             text_prompt=text_prompt,
+            sam3_options=sam3_options,
             log_cb=log_cb,
         )
         raw = Path(mask_path).read_bytes()
@@ -9943,6 +10646,7 @@ def segment_to_timeline_clip(
     positive_coords: list[dict[str, Any]],
     negative_coords: list[dict[str, Any]] | None = None,
     text_prompt: str | None = None,
+    sam3_options: dict[str, Any] | None = None,
     in_point_sec: float = 0.0,
     local_time_sec: float = 0.0,
     speed: float = 1.0,
@@ -9972,6 +10676,7 @@ def segment_to_timeline_clip(
             text_prompt=text_prompt,
             ref_frame_index=ref_idx,
             output_path=out_path,
+            sam3_options=sam3_options,
             log_cb=log_cb,
         )
         return {
@@ -9987,6 +10692,7 @@ def segment_to_timeline_clip(
         positive_coords=positive_coords,
         negative_coords=negative_coords,
         text_prompt=text_prompt,
+        sam3_options=sam3_options,
         log_cb=log_cb,
     )
     out_path = dest / f"clip_{uuid.uuid4().hex}_seg.png"

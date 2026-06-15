@@ -31,6 +31,7 @@ import { volumeGainAt } from "./volumeAutomation";
 import type { TrajectoryMotionId } from "../../lib/api";
 import { GeometryClipLayer } from "./GeometryClipLayer";
 import { GeometryEditor } from "./GeometryEditor";
+import { geometryBounds, geometryBoundsToScreenPadded } from "./geometryPath";
 import { TextClipLayer } from "./TextClipLayer";
 import { TextStyleBar, type TextStyleModal } from "./TextStyleBar";
 import { TextPickerModals } from "./TextPickerModals";
@@ -78,6 +79,7 @@ export function TimelinePreviewPlayer(props: {
   onTextContentChange?: (clipId: string, content: string) => void;
   onTextEditEnd?: () => void;
   onRequestTextEdit?: (clipId: string) => void;
+  onExitClipEditModes?: () => void;
   height?: number;
 }) {
   const {
@@ -105,6 +107,7 @@ export function TimelinePreviewPlayer(props: {
     onTextContentChange,
     onTextEditEnd,
     onRequestTextEdit,
+    onExitClipEditModes,
     height = 260,
   } = props;
 
@@ -230,6 +233,10 @@ export function TimelinePreviewPlayer(props: {
     }
   }, [playhead, playing, videoTracks, audioTracks]);
 
+  useEffect(() => {
+    setTextStyleModal(null);
+  }, [selectedClipId]);
+
   const dragRef = useRef<
     | {
         mode: "move" | "scale";
@@ -242,6 +249,39 @@ export function TimelinePreviewPlayer(props: {
       }
     | null
   >(null);
+
+  const pendingDragRef = useRef<{
+    clip: TimelineClip;
+    mode: "move" | "scale";
+    startX: number;
+    startY: number;
+    pointerId: number;
+    target: HTMLElement;
+    wasSelected: boolean;
+  } | null>(null);
+
+  const DRAG_THRESHOLD_PX = 4;
+
+  function startDragFromPending(
+    e: React.PointerEvent,
+    p: NonNullable<typeof pendingDragRef.current>
+  ) {
+    if (!editable) return;
+    e.preventDefault();
+    onTransformStart?.();
+    p.target.setPointerCapture?.(p.pointerId);
+    dragRef.current = {
+      mode: p.mode,
+      clipId: p.clip.id,
+      startX: p.startX,
+      startY: p.startY,
+      orig: clipTransform(p.clip, playhead, p.clip.id === trajectoryClipId, playing),
+      w: frameSize.w || 1,
+      h: frameSize.h || 1,
+    };
+    pendingDragRef.current = null;
+    onDragMove(e);
+  }
 
   function beginDrag(
     e: React.PointerEvent,
@@ -266,6 +306,53 @@ export function TimelinePreviewPlayer(props: {
       w: frameSize.w || 1,
       h: frameSize.h || 1,
     };
+  }
+
+  function beginTextPointerDown(
+    e: React.PointerEvent,
+    clip: TimelineClip,
+    mode: "move" | "scale"
+  ) {
+    if (geometryEditClipId === clip.id) return;
+    if (textEditClipId === clip.id) return;
+    e.stopPropagation();
+    const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+    onSelectClip(clip.id, additive);
+    if (!editable) return;
+    if (mode === "scale") {
+      beginDrag(e, clip, "scale");
+      return;
+    }
+    pendingDragRef.current = {
+      clip,
+      mode,
+      startX: e.clientX,
+      startY: e.clientY,
+      pointerId: e.pointerId,
+      target: e.currentTarget as HTMLElement,
+      wasSelected: clip.id === selectedClipId,
+    };
+  }
+
+  function onPointerMoveCombined(e: React.PointerEvent) {
+    const p = pendingDragRef.current;
+    if (p) {
+      const dx = e.clientX - p.startX;
+      const dy = e.clientY - p.startY;
+      if (Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX) {
+        startDragFromPending(e, p);
+      }
+    }
+    onDragMove(e);
+  }
+
+  function onPointerUpCombined(e: React.PointerEvent) {
+    const p = pendingDragRef.current;
+    if (p && !dragRef.current && p.mode === "move" && p.clip.type === "text" && p.wasSelected) {
+      onRequestTextEdit?.(p.clip.id);
+    }
+    pendingDragRef.current = null;
+    endDrag(e);
   }
 
   function onDragMove(e: React.PointerEvent) {
@@ -370,14 +457,15 @@ export function TimelinePreviewPlayer(props: {
       return <GeometryClipLayer clip={clip} opacity={op} />;
     }
     if (clip.type === "text") {
-      const editing = textEditClipId === clip.id && editable;
+      if (textEditClipId === clip.id) return null;
+      const isSelected = clip.id === selectedClipId;
       return (
         <TextClipLayer
           clip={clip}
           opacity={op}
-          editing={editing}
-          onContentChange={(content) => onTextContentChange?.(clip.id, content)}
-          onEditEnd={onTextEditEnd}
+          selected={isSelected}
+          showResizeHandle={isSelected && editable}
+          editing={false}
         />
       );
     }
@@ -435,10 +523,69 @@ export function TimelinePreviewPlayer(props: {
         )
       : null;
 
+  const geometryEditRect = useMemo(() => {
+    if (!geometryEditClipId || frameSize.w < 1) return null;
+    const gClip = videoTracks.flatMap((t) => t.clips).find((c) => c.id === geometryEditClipId);
+    if (!gClip?.geometry) return null;
+    const tf = clipTransform(gClip, playhead, false, playing);
+    const clipRect = clipImageRect(gClip, tf, frameSize.w, frameSize.h);
+    const b = geometryBounds(gClip.geometry);
+    return geometryBoundsToScreenPadded(b, clipRect, 8);
+  }, [geometryEditClipId, videoTracks, playhead, playing, frameSize.w, frameSize.h]);
+
+  const textEditRect = useMemo(() => {
+    if (!textEditClipId || frameSize.w < 1) return null;
+    const tClip = videoTracks.flatMap((t) => t.clips).find((c) => c.id === textEditClipId);
+    if (!tClip || tClip.type !== "text") return null;
+    const tf = clipTransform(tClip, playhead, false, playing);
+    return clipImageRect(tClip, tf, frameSize.w, frameSize.h);
+  }, [textEditClipId, videoTracks, playhead, playing, frameSize.w, frameSize.h]);
+
+  function pointInRect(x: number, y: number, rect: { left: number; top: number; width: number; height: number }) {
+    const frameEl = frameRef.current;
+    if (!frameEl) return false;
+    const fr = frameEl.getBoundingClientRect();
+    const left = fr.left + rect.left;
+    const top = fr.top + rect.top;
+    return x >= left && x <= left + rect.width && y >= top && y <= top + rect.height;
+  }
+
+  function handleFramePointerDownCapture(e: React.PointerEvent) {
+    if (!editable || playing || !onExitClipEditModes) return;
+    if (!textEditClipId && !geometryEditClipId) return;
+
+    const target = e.target as HTMLElement;
+    if (target.closest("[data-text-style-bar]")) return;
+    if (target.closest("[data-geometry-style-bar]")) return;
+
+    const { clientX: x, clientY: y } = e;
+    let shouldExit = false;
+
+    if (textEditClipId) {
+      const inText =
+        textEditRect != null &&
+        pointInRect(x, y, textEditRect);
+      if (!inText) shouldExit = true;
+    }
+    if (geometryEditClipId) {
+      const inGeometry =
+        geometryEditRect != null &&
+        pointInRect(x, y, geometryEditRect);
+      if (!inGeometry) shouldExit = true;
+    }
+
+    if (shouldExit) {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) active.blur();
+      onExitClipEditModes();
+    }
+  }
+
   return (
     <div style={{ display: "flex", justifyContent: "center" }}>
       <div
         ref={frameRef}
+        onPointerDownCapture={handleFramePointerDownCapture}
         onPointerDown={(e) => {
           if (e.target === e.currentTarget) onSelectClip(null, false);
         }}
@@ -494,15 +641,28 @@ export function TimelinePreviewPlayer(props: {
           const rect = clipImageRect(clip, tf, frameSize.w, frameSize.h);
           const selected = clip.id === selectedClipId;
           const inShapeEdit = geometryEditClipId === clip.id;
+          const isText = clip.type === "text";
+          const isTextEditing = isText && textEditClipId === clip.id;
+          const textHandlers = isText
+            ? {
+                onPointerDown: (e: React.PointerEvent) =>
+                  beginTextPointerDown(e, clip, "move"),
+                onPointerMove: onPointerMoveCombined,
+                onPointerUp: onPointerUpCombined,
+              }
+            : {
+                onPointerDown: (e: React.PointerEvent) => beginDrag(e, clip, "move"),
+                onPointerMove: onDragMove,
+                onPointerUp: endDrag,
+              };
           return (
             <div
               key={`hit-${clip.id}`}
-              onPointerDown={(e) => beginDrag(e, clip, "move")}
-              onPointerMove={onDragMove}
-              onPointerUp={endDrag}
+              {...textHandlers}
               onDoubleClick={(e) => {
-                if (clip.type === "text" && editable) {
+                if (isText && editable) {
                   e.stopPropagation();
+                  pendingDragRef.current = null;
                   onRequestTextEdit?.(clip.id);
                 }
               }}
@@ -518,18 +678,43 @@ export function TimelinePreviewPlayer(props: {
                 width: rect.width,
                 height: rect.height,
                 zIndex: trackZ + 100,
-                cursor: editable && !inShapeEdit ? "move" : "pointer",
+                cursor:
+                  editable && !inShapeEdit && !isTextEditing
+                    ? isText
+                      ? "default"
+                      : "move"
+                    : "pointer",
                 outline:
-                  selected && !inShapeEdit
+                  selected && !inShapeEdit && !isText
                     ? editable
-                      ? "2px dashed #ffd166"
-                      : "2px solid #5ad7ff"
+                      ? "2px dashed rgba(255,255,255,0.85)"
+                      : "2px solid rgba(255,255,255,0.55)"
                     : "none",
                 outlineOffset: 2,
-                pointerEvents: inShapeEdit ? "none" : "auto",
+                pointerEvents:
+                  inShapeEdit || isTextEditing ? "none" : "auto",
               }}
             >
-              {selected && editable && !inShapeEdit && textEditClipId !== clip.id ? (
+              {isText && selected && editable && !inShapeEdit && !isTextEditing ? (
+                <div
+                  onPointerDown={(e) => beginTextPointerDown(e, clip, "scale")}
+                  onPointerMove={onPointerMoveCombined}
+                  onPointerUp={onPointerUpCombined}
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    bottom: 0,
+                    width: 14,
+                    height: 14,
+                    transform: "translate(50%, 50%)",
+                    background: "#0b0b0b",
+                    border: "1px solid rgba(255,255,255,0.9)",
+                    cursor: "nwse-resize",
+                    zIndex: 2,
+                  }}
+                />
+              ) : null}
+              {!isText && selected && editable && !inShapeEdit ? (
                 <div
                   onPointerDown={(e) => beginDrag(e, clip, "scale")}
                   onPointerMove={onDragMove}
@@ -540,8 +725,8 @@ export function TimelinePreviewPlayer(props: {
                     bottom: -7,
                     width: 14,
                     height: 14,
-                    background: "#ffd166",
-                    border: "1px solid #000",
+                    background: "#0b0b0b",
+                    border: "1px solid rgba(255,255,255,0.9)",
                     cursor: "nwse-resize",
                   }}
                 />
@@ -549,6 +734,43 @@ export function TimelinePreviewPlayer(props: {
             </div>
           );
         })}
+
+        {textEditClipId &&
+          editable &&
+          (() => {
+            const editClip = videoTracks
+              .flatMap((t) => t.clips)
+              .find((c) => c.id === textEditClipId && c.type === "text");
+            if (!editClip) return null;
+            const layer = interactionLayers.find((l) => l.clip.id === editClip.id);
+            const trackZ = layer?.trackZ ?? 1;
+            const tf = clipTransform(editClip, playhead, false, playing);
+            const rect = clipImageRect(editClip, tf, frameSize.w, frameSize.h);
+            return (
+              <div
+                key={`text-edit-${editClip.id}`}
+                style={{
+                  position: "absolute",
+                  left: rect.left,
+                  top: rect.top,
+                  width: rect.width,
+                  height: rect.height,
+                  zIndex: trackZ + 200,
+                  pointerEvents: "auto",
+                }}
+              >
+                <TextClipLayer
+                  clip={editClip}
+                  editing
+                  selected
+                  onContentChange={(content) =>
+                    onTextContentChange?.(editClip.id, content)
+                  }
+                  onEditEnd={onTextEditEnd}
+                />
+              </div>
+            );
+          })()}
 
         {alignGuides.length > 0 ? (
           <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 9998 }}>
@@ -563,7 +785,7 @@ export function TimelinePreviewPlayer(props: {
                         top: 0,
                         bottom: 0,
                         width: 0,
-                        borderLeft: `1px dashed ${guide.kind === "center" ? "#5ad7ff" : "#ffd166"}`,
+                        borderLeft: `1px dashed rgba(255,255,255,${guide.kind === "center" ? "0.9" : "0.55"})`,
                       }
                     : {
                         position: "absolute",
@@ -571,7 +793,7 @@ export function TimelinePreviewPlayer(props: {
                         left: 0,
                         right: 0,
                         height: 0,
-                        borderTop: `1px dashed ${guide.kind === "center" ? "#5ad7ff" : "#ffd166"}`,
+                        borderTop: `1px dashed rgba(255,255,255,${guide.kind === "center" ? "0.9" : "0.55"})`,
                       }
                 }
               />
@@ -621,8 +843,7 @@ export function TimelinePreviewPlayer(props: {
         selectedClip.text &&
         selectedTextRect &&
         editable &&
-        !playing &&
-        textEditClipId !== selectedClip.id ? (
+        !playing ? (
           <TextStyleBar
             clip={selectedClip}
             rect={selectedTextRect}

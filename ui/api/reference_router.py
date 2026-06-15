@@ -32,15 +32,18 @@ def reference_images() -> list[dict[str, str]]:
 
 
 @router.get("/reference/keypoints")
-def reference_keypoints() -> list[dict[str, str]]:
-    return [
-        {
+def reference_keypoints() -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for e in reference_storage.list_keypoints():
+        item: dict[str, Any] = {
             "id": e["id"],
             "referenceRelPath": e["referenceRelPath"],
             "keypointRelPath": e["keypointRelPath"],
         }
-        for e in reference_storage.list_keypoints()
-    ]
+        if isinstance(e.get("placedFigure"), dict):
+            item["placedFigure"] = e["placedFigure"]
+        out.append(item)
+    return out
 
 
 # --- generate / commit --------------------------------------------------------
@@ -133,15 +136,38 @@ async def reference_make_keypoint_ws(ws: WebSocket) -> None:
         if not image_rel:
             raise ValueError("imageRelPath is required.")
 
-        def work(log_cb: Any) -> dict[str, Any]:
-            entry = logic.make_reference_keypoint(image_rel, log_cb=log_cb)
-            return {
-                "item": {
-                    "id": entry["id"],
-                    "referenceRelPath": entry["referenceRelPath"],
-                    "keypointRelPath": entry["keypointRelPath"],
-                }
+        crop_box = msg.get("cropBox")
+        image_width = msg.get("imageWidth")
+        image_height = msg.get("imageHeight")
+        placed_figure: dict[str, Any] | None = None
+        if isinstance(crop_box, dict) and crop_box.get("width") and crop_box.get("height"):
+            from services.figure_crop import build_placed_figure_meta
+
+            placement = {
+                "x": int(crop_box["x"]),
+                "y": int(crop_box["y"]),
+                "width": int(crop_box["width"]),
+                "height": int(crop_box["height"]),
             }
+            if image_width and image_height:
+                placed_figure = build_placed_figure_meta(
+                    int(image_width), int(image_height), placement
+                )
+            else:
+                placed_figure = {"placement": placement}
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            entry = logic.make_reference_keypoint(
+                image_rel, log_cb=log_cb, placed_figure=placed_figure
+            )
+            item: dict[str, Any] = {
+                "id": entry["id"],
+                "referenceRelPath": entry["referenceRelPath"],
+                "keypointRelPath": entry["keypointRelPath"],
+            }
+            if isinstance(entry.get("placedFigure"), dict):
+                item["placedFigure"] = entry["placedFigure"]
+            return {"item": item}
 
         result, err = await run_with_log_stream(ws, work)
         if err:
