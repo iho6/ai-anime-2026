@@ -250,7 +250,7 @@ async def new_location_generate_stream(payload: NewLocationGeneratePayload) -> S
             log_queue.put(json.dumps({"type": "log", "line": line}) + "\n")
 
         try:
-            preview_abs, _ = logic.generate_character_base_draft_to_temp(pp, log_cb=log_cb)
+            preview_abs, _ = logic.generate_location_base_draft_to_temp(pp, log_cb=log_cb)
             src = Path(preview_abs).resolve()
             ext = src.suffix.lower() or ".png"
             dest = drafts_dir / f"draft_{unique_suffix(12)}{ext}"
@@ -549,7 +549,7 @@ def location_generate(location_key: str, body: dict[str, str]) -> dict[str, str]
     if not prompt:
         raise HTTPException(400, "prompt required")
     d = _ensure_location_dirs(location_key) / sec
-    preview_abs, _ = logic.generate_character_base_draft_to_temp(prompt)
+    preview_abs, _ = logic.generate_location_base_draft_to_temp(prompt)
     src = Path(preview_abs).resolve()
     ext = src.suffix.lower() or ".png"
     dest = d / f"{sec}_{unique_suffix(12)}{ext}"

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   apiHubCharacters,
   apiHubDelete,
@@ -17,6 +17,14 @@ import {
   type SequenceManifest,
 } from "../lib/api";
 import { CollapsibleGallerySection } from "./CollapsibleGallerySection";
+import { GalleryImageLightbox } from "./GalleryImageLightbox";
+import { GalleryPickTile } from "./GalleryPickTile";
+import {
+  lightboxForRelPath,
+  orderedGalleryRelPaths,
+  relPathsToPreviewUrls,
+  toggleSetMember,
+} from "./timeline/pickerGalleryUtils";
 import { SquareButton } from "./SquareButton";
 import { SquareIconButton, TriangleIcon } from "./IconPrimitives";
 import { ReferencePicker } from "./ReferencePicker";
@@ -45,11 +53,13 @@ export function TimelineCharacterPicker(props: {
   /** Pre-select a character key — skips stage 1, opens directly to galleries. */
   initialKey?: string | null;
   charKey?: string;  // alias for initialKey
-  onPickImage: (charKey: string, relPath: string) => void;
-  onPickSequence: (charKey: string, sequenceName: string) => void;
+  /** When true (Change Pose on clip), only one image; sequences hidden. */
+  poseChangeMode?: boolean;
+  onPickImages: (charKey: string, relPaths: string[]) => void;
+  onPickSequences: (charKey: string, sequenceNames: string[]) => void;
   onCancel: () => void;
 }) {
-  const { open, onPickImage, onPickSequence, onCancel } = props;
+  const { open, poseChangeMode = false, onPickImages, onPickSequences, onCancel } = props;
   const initialKey = props.initialKey ?? props.charKey ?? null;
 
   const [stage, setStage] = useState<PickerStage>("pick");
@@ -63,6 +73,13 @@ export function TimelineCharacterPicker(props: {
   const [sectionsError, setSectionsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [seqOpen, setSeqOpen] = useState(true);
+  const [selectedRelPaths, setSelectedRelPaths] = useState<Set<string>>(new Set());
+  const [selectedSequences, setSelectedSequences] = useState<Set<string>>(new Set());
+  const [lightbox, setLightbox] = useState<{
+    paths: string[];
+    index: number;
+    title: string;
+  } | null>(null);
 
   // Image right-click context menu (New Angle / New Pose)
   const [imgCtxMenu, setImgCtxMenu] = useState<{
@@ -136,6 +153,9 @@ export function TimelineCharacterPicker(props: {
     setRefPickerOpen(false);
     setMotionRefOpen(false);
     setSelectedKey(initialKey ?? null);
+    setSelectedRelPaths(new Set());
+    setSelectedSequences(new Set());
+    setLightbox(null);
 
     if (!initialKey) {
       setIcons([]);
@@ -207,6 +227,9 @@ export function TimelineCharacterPicker(props: {
       setSelectedKey(null);
       setStage("pick");
       setSectionData(null);
+      setSelectedRelPaths(new Set());
+      setSelectedSequences(new Set());
+      setLightbox(null);
     }
   }
 
@@ -292,11 +315,70 @@ export function TimelineCharacterPicker(props: {
       if (!done.ok || !newRel) throw new Error(done.error || "Angle generation returned no image.");
       pushLog("Done.");
       endSession();
-      onPickImage(selectedKey, newRel);
+      await loadSections(selectedKey);
+      setSelectedRelPaths((prev) => new Set([...prev, newRel]));
     } catch (e) {
       failSession(e, "Angle generation failed.");
     }
   }
+
+  const poseImages = sectionData?.poseImages ?? [];
+  const exprImages = sectionData?.exprImages ?? [];
+  const sequences = sectionData?.sequences ?? [];
+
+  const allImageRelPaths = useMemo(
+    () =>
+      orderedGalleryRelPaths([
+        { images: poseImages },
+        { images: exprImages },
+      ]),
+    [poseImages, exprImages]
+  );
+
+  const selectionCount = selectedRelPaths.size + selectedSequences.size;
+  const canUse = poseChangeMode
+    ? selectedRelPaths.size === 1 && selectedSequences.size === 0
+    : selectionCount > 0;
+
+  const handleUse = useCallback(() => {
+    if (!selectedKey || !canUse) return;
+    const paths = allImageRelPaths.filter((p) => selectedRelPaths.has(p));
+    if (paths.length) onPickImages(selectedKey, paths);
+    if (!poseChangeMode && selectedSequences.size) {
+      onPickSequences(selectedKey, [...selectedSequences]);
+    }
+  }, [
+    allImageRelPaths,
+    canUse,
+    onPickImages,
+    onPickSequences,
+    poseChangeMode,
+    selectedKey,
+    selectedRelPaths,
+    selectedSequences,
+  ]);
+
+  const openImagePreview = useCallback(
+    (relPath: string) => {
+      const key = selectedKey ?? "";
+      setLightbox(lightboxForRelPath(allImageRelPaths, relPath, `${key} — preview`));
+    },
+    [allImageRelPaths, selectedKey]
+  );
+
+  const openSequencePreview = useCallback(
+    (seq: { name: string; coverRelPath: string }) => {
+      const covers = sequences.map((s) => s.coverRelPath).filter(Boolean);
+      const urls = relPathsToPreviewUrls(covers);
+      const idx = covers.indexOf(seq.coverRelPath);
+      setLightbox({
+        paths: urls,
+        index: Math.max(0, idx),
+        title: `${selectedKey ?? ""} — ${seq.name}`,
+      });
+    },
+    [sequences, selectedKey]
+  );
 
   if (!open) return null;
 
@@ -316,7 +398,11 @@ export function TimelineCharacterPicker(props: {
           justifyContent: "center",
           padding: 16,
         }}
-        onMouseDown={(e) => { e.preventDefault(); void handlePickerCancel(); }}
+        onMouseDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          e.preventDefault();
+          void handlePickerCancel();
+        }}
         // Close context menus on click outside
         onClick={() => { setImgCtxMenu(null); setSeqCtxMenu(null); }}
       >
@@ -449,7 +535,15 @@ export function TimelineCharacterPicker(props: {
                     <CollapsibleGallerySection
                       title="Pose"
                       images={sectionData.poseImages}
-                      onPick={(relPath) => onPickImage(selectedKey, relPath)}
+                      mode="select"
+                      selectedRelPaths={selectedRelPaths}
+                      disabled={poseBusy}
+                      onToggleSelect={(relPath, e) => {
+                        setSelectedRelPaths((prev) =>
+                          toggleSetMember(prev, relPath, e.target.checked)
+                        );
+                      }}
+                      onPreview={openImagePreview}
                       onRightClick={(relPath, x, y) => {
                         setImgCtxMenu({ relPath, x, y });
                       }}
@@ -457,13 +551,21 @@ export function TimelineCharacterPicker(props: {
                     <CollapsibleGallerySection
                       title="Expression"
                       images={sectionData.exprImages}
-                      onPick={(relPath) => onPickImage(selectedKey, relPath)}
+                      mode="select"
+                      selectedRelPaths={selectedRelPaths}
+                      disabled={poseBusy}
+                      onToggleSelect={(relPath, e) => {
+                        setSelectedRelPaths((prev) =>
+                          toggleSetMember(prev, relPath, e.target.checked)
+                        );
+                      }}
+                      onPreview={openImagePreview}
                       onRightClick={(relPath, x, y) => {
                         setImgCtxMenu({ relPath, x, y });
                       }}
                     />
                     {/* Sequence section — collapsible */}
-                    {sectionData.sequences.length > 0 && (
+                    {!poseChangeMode && sectionData.sequences.length > 0 && (
                       <div style={{ marginBottom: 12 }}>
                         <button
                           type="button"
@@ -479,19 +581,39 @@ export function TimelineCharacterPicker(props: {
                         {seqOpen && (
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8, paddingTop: 6 }}>
                             {sectionData.sequences.map((seq) => (
-                              <button key={seq.name} type="button" onClick={() => onPickSequence(selectedKey, seq.name)}
+                              <GalleryPickTile
+                                key={seq.name}
+                                src={assetUrlFromRelPath(seq.coverRelPath)}
+                                caption={seq.name}
+                                checked={selectedSequences.has(seq.name)}
+                                disabled={poseBusy}
+                                onToggle={(on, e) => {
+                                  setSelectedSequences((prev) =>
+                                    toggleSetMember(prev, seq.name, on)
+                                  );
+                                }}
+                                onPrimaryClick={() => openSequencePreview(seq)}
                                 onContextMenu={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
                                   setImgCtxMenu(null);
                                   setSeqCtxMenu({ name: seq.name, x: e.clientX, y: e.clientY });
                                 }}
-                                title={seq.name}
-                                style={{ width: "100%", aspectRatio: "1/1", padding: 4, border: "1px solid rgba(255,255,255,0.2)", background: "transparent", cursor: "pointer" }}>
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={assetUrlFromRelPath(seq.coverRelPath)} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
-                                <div style={{ fontSize: 10, color: "#aaa", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>{seq.name}</div>
-                              </button>
+                                footer={
+                                  <div
+                                    style={{
+                                      fontSize: 10,
+                                      color: "#aaa",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      textAlign: "center",
+                                    }}
+                                  >
+                                    {seq.name}
+                                  </div>
+                                }
+                              />
                             ))}
                           </div>
                         )}
@@ -620,8 +742,40 @@ export function TimelineCharacterPicker(props: {
           </div>
 
           {/* Footer */}
-          <div style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", padding: 12, borderTop: "1px solid rgba(255,255,255,0.15)" }}>
-            <button type="button" onClick={() => void handlePickerCancel()} className="ui-btn-black">Cancel</button>
+          <div
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: 12,
+              borderTop: "1px solid rgba(255,255,255,0.15)",
+            }}
+          >
+            <button type="button" onClick={() => void handlePickerCancel()} className="ui-btn-black">
+              Cancel
+            </button>
+            {stage === "gallery" && selectedKey ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {selectionCount > 0 ? (
+                  <span style={{ fontSize: 12, opacity: 0.7 }}>{selectionCount} selected</span>
+                ) : null}
+                <button
+                  type="button"
+                  className="ui-btn-black"
+                  disabled={poseBusy || !canUse}
+                  onClick={handleUse}
+                  style={{
+                    cursor: poseBusy || !canUse ? "not-allowed" : "pointer",
+                    opacity: poseBusy || !canUse ? 0.5 : 1,
+                  }}
+                >
+                  Use
+                </button>
+              </div>
+            ) : (
+              <span />
+            )}
           </div>
         </div>
       </div>
@@ -800,6 +954,15 @@ export function TimelineCharacterPicker(props: {
           if (ck) await onWizardDone(ck);
         }}
       />
+
+      {lightbox ? (
+        <GalleryImageLightbox
+          paths={lightbox.paths}
+          index={lightbox.index}
+          title={lightbox.title}
+          onClose={() => setLightbox(null)}
+        />
+      ) : null}
     </>
   );
 }

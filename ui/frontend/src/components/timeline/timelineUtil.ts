@@ -1,4 +1,4 @@
-import { assetUrlFromRelPath } from "../../lib/api";
+import { assetUrlFromRelPath, apiTimelineImportPngBase64 } from "../../lib/api";
 import type {
   GeometryTemplate,
   TimelineClip,
@@ -7,6 +7,7 @@ import type {
   TimelineTrack,
 } from "../../lib/api";
 import { createGeometryData, VECTOR_ARTBOARD_SIZE } from "./geometryTemplates";
+import { rasterizeGeometryToPngBase64 } from "./geometryRasterize";
 import { estimateTextClipNaturalSize } from "./textMeasure";
 import { resolveTrajectoryTransformAt } from "./trajectoryMotion";
 import { layersForTransition } from "./transitionEffects";
@@ -173,11 +174,9 @@ export function snapClipRectToFrame(
 const MIN_CLIP_SCALE = 0.1;
 const MAX_CLIP_SCALE = 6;
 
-type ScaleSnapCandidate = { scale: number; delta: number; guide: AlignGuide };
-
 /**
- * Snap uniform scale so a clip edge sticks to the frame border while the
- * transform center stays fixed (bottom-right scale handle in preview).
+ * Alignment guides while scaling from the transform center (bottom-right handle).
+ * Scale is not snapped to borders — clips stay centered and can grow past frame edges.
  */
 export function snapClipScaleToFrame(
   clip: TimelineClip,
@@ -186,49 +185,33 @@ export function snapClipScaleToFrame(
   frameH: number,
   thresholdPx = PREVIEW_ALIGN_SNAP_PX
 ): { scale: number; guides: AlignGuide[] } {
-  const clampedTentative = clamp(tf.scale, MIN_CLIP_SCALE, MAX_CLIP_SCALE);
+  const scale = clamp(tf.scale, MIN_CLIP_SCALE, MAX_CLIP_SCALE);
   const nW = clip.naturalW ?? 0;
   const nH = clip.naturalH ?? 0;
   const { w: baseW, h: baseH } = containedBoxSize(nW, nH, frameW, frameH);
   if (baseW <= 0 || baseH <= 0 || frameW <= 0 || frameH <= 0) {
-    return { scale: clampedTentative, guides: [] };
+    return { scale, guides: [] };
   }
 
-  const cx = frameW / 2 + tf.x * frameW;
-  const cy = frameH / 2 + tf.y * frameH;
-  const rect = clipImageRect(clip, { ...tf, scale: clampedTentative }, frameW, frameH);
+  const rect = clipImageRect(clip, { ...tf, scale }, frameW, frameH);
   const right = rect.left + rect.width;
   const bottom = rect.top + rect.height;
+  const guides: AlignGuide[] = [];
 
-  const candidates: ScaleSnapCandidate[] = [];
-
-  const tryEdge = (edgeDelta: number, scale: number, guide: AlignGuide) => {
-    if (Math.abs(edgeDelta) >= thresholdPx) return;
-    const snapped = clamp(scale, MIN_CLIP_SCALE, MAX_CLIP_SCALE);
-    if (!Number.isFinite(snapped)) return;
-    candidates.push({ scale: snapped, delta: Math.abs(edgeDelta), guide });
-  };
-
-  tryEdge(-rect.left, (2 * cx) / baseW, { axis: "x", pos: 0, kind: "border" });
-  tryEdge(frameW - right, (2 * (frameW - cx)) / baseW, {
-    axis: "x",
-    pos: frameW,
-    kind: "border",
-  });
-  tryEdge(-rect.top, (2 * cy) / baseH, { axis: "y", pos: 0, kind: "border" });
-  tryEdge(frameH - bottom, (2 * (frameH - cy)) / baseH, {
-    axis: "y",
-    pos: frameH,
-    kind: "border",
-  });
-
-  if (candidates.length === 0) {
-    return { scale: clampedTentative, guides: [] };
+  if (Math.abs(rect.left) < thresholdPx) {
+    guides.push({ axis: "x", pos: 0, kind: "border" });
+  }
+  if (Math.abs(frameW - right) < thresholdPx) {
+    guides.push({ axis: "x", pos: frameW, kind: "border" });
+  }
+  if (Math.abs(rect.top) < thresholdPx) {
+    guides.push({ axis: "y", pos: 0, kind: "border" });
+  }
+  if (Math.abs(frameH - bottom) < thresholdPx) {
+    guides.push({ axis: "y", pos: frameH, kind: "border" });
   }
 
-  candidates.sort((a, b) => a.delta - b.delta);
-  const best = candidates[0]!;
-  return { scale: best.scale, guides: [best.guide] };
+  return { scale, guides };
 }
 
 /** Effective transform at playhead (trajectory + motion when present). */
@@ -349,6 +332,10 @@ export function buildTextClip(params: {
     transform: defaultVectorClipTransform(),
     text,
   };
+}
+
+export function clipActsAsImage(clip: TimelineClip): boolean {
+  return clip.type === "image" || clip.type === "geometry";
 }
 
 export function clipTrackLabel(clip: TimelineClip): string {
@@ -573,14 +560,23 @@ export function sourceTimeAtWithTransition(
   const fadeStart = clip.start - d;
   if (t >= fadeStart && t < clip.start) {
     const local = Math.max(0, t - fadeStart);
-    return clip.inPoint + local * clip.speed;
+    const speed = clip.speed || 1;
+    if (clip.reversed) {
+      return clip.outPoint - local * speed;
+    }
+    return clip.inPoint + local * speed;
   }
   return sourceTimeAt(clip, t);
 }
 
 /** Source-media time (seconds) for a video/audio clip at timeline time ``t``. */
 export function sourceTimeAt(clip: TimelineClip, t: number): number {
-  return clip.inPoint + (t - clip.start) * clip.speed;
+  const local = t - clip.start;
+  const speed = clip.speed || 1;
+  if (clip.reversed && (clip.type === "video" || clip.type === "audio")) {
+    return clip.outPoint - local * speed;
+  }
+  return clip.inPoint + local * speed;
 }
 
 export function formatTime(sec: number): string {
@@ -648,7 +644,23 @@ function loadHTMLImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
+async function loadClipHtmlImage(clip: TimelineClip): Promise<HTMLImageElement> {
+  if (clip.type === "geometry") {
+    if (!clip.geometry) throw new Error("Geometry clip has no shape data.");
+    const b64 = await rasterizeGeometryToPngBase64(clip.geometry);
+    return loadHTMLImage(`data:image/png;base64,${b64}`);
+  }
+  return loadHTMLImage(assetUrlFromRelPath(clip.srcRelPath));
+}
+
 async function clipWithResolvedDims(clip: TimelineClip): Promise<TimelineClip> {
+  if (clip.type === "geometry") {
+    return {
+      ...clip,
+      naturalW: clip.naturalW ?? VECTOR_ARTBOARD_SIZE,
+      naturalH: clip.naturalH ?? VECTOR_ARTBOARD_SIZE,
+    };
+  }
   const { width, height } = await resolveImportDimensions(
     clip.srcRelPath,
     clip.naturalW ?? 0,
@@ -659,6 +671,21 @@ async function clipWithResolvedDims(clip: TimelineClip): Promise<TimelineClip> {
     ...(width > 0 ? { naturalW: width } : {}),
     ...(height > 0 ? { naturalH: height } : {}),
   };
+}
+
+/** Rasterize a geometry clip and import it as a timeline image; return storage path. */
+export async function resolveClipImageRelPath(
+  timelineKey: string,
+  clip: TimelineClip
+): Promise<string> {
+  if (clip.type === "image") return clip.srcRelPath;
+  if (clip.type === "geometry") {
+    if (!clip.geometry) throw new Error("Geometry clip has no shape data.");
+    const pngBase64 = await rasterizeGeometryToPngBase64(clip.geometry);
+    const r = await apiTimelineImportPngBase64({ timelineKey, pngBase64 });
+    return r.srcRelPath;
+  }
+  throw new Error("Clip cannot be used as an image source.");
 }
 
 /** Map overlay draw rect from reference-frame coords into backdrop-native pixel placement. */
@@ -720,8 +747,8 @@ export async function buildTimelineCompositePngBase64(params: {
   const ovRect = clipImageRect(overlay, tfOv, frameW, frameH);
 
   const [bgImg, overlayImg] = await Promise.all([
-    loadHTMLImage(assetUrlFromRelPath(backdrop.srcRelPath)),
-    loadHTMLImage(assetUrlFromRelPath(overlay.srcRelPath)),
+    loadClipHtmlImage(backdrop),
+    loadClipHtmlImage(overlay),
   ]);
 
   const backdropNaturalW = backdrop.naturalW ?? bgImg.naturalWidth;

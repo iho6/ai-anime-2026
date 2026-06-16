@@ -1,5 +1,35 @@
 {
-  "rootOrder": [],
-  "folders": [],
-  "folderOrder": {}
+  "rootOrder": [
+    "folder:e61212a58f78",
+    "folder:56af1c999302"
+  ],
+  "folders": [
+    {
+      "id": "e61212a58f78",
+      "name": "cat walk",
+      "linkedPoseFolderId": "f5e99d887680"
+    },
+    {
+      "id": "56af1c999302",
+      "name": "hand behind back walk",
+      "linkedPoseFolderId": "ac7b7d7b3798"
+    }
+  ],
+  "folderOrder": {
+    "e61212a58f78": [],
+    "56af1c999302": [
+      "97bd258670df",
+      "3b43710ae36a",
+      "cab59d76af20",
+      "4a6b4ef272c0",
+      "2679148caea2",
+      "fd6da6be6db8",
+      "70c8f0f42dd2",
+      "941e7d3a070c",
+      "74e1cd90b3f7",
+      "d294a6e50865",
+      "6932a86a54d4",
+      "1224b6ac3a6d"
+    ]
+  }
 }

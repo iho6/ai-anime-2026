@@ -1,0 +1,218 @@
+[
+  {
+    "id": "1224b6ac3a6d",
+    "motionKey": "walking_with_hands_in_pockets",
+    "frameIndex": 182,
+    "azimuth": 49.7520751953125,
+    "elevation": 1.44626464843748,
+    "relPath": "motion_refs/walking_with_hands_in_pockets/shots/1224b6ac3a6d.png",
+    "createdAt": 1781623387.7817261,
+    "cropBox": {
+      "x": 236,
+      "y": 0,
+      "width": 168,
+      "height": 387
+    },
+    "imageWidth": 1034,
+    "imageHeight": 387,
+    "keypointId": "74f9cfca828d"
+  },
+  {
+    "id": "6932a86a54d4",
+    "motionKey": "walking_with_hands_in_pockets",
+    "frameIndex": 168,
+    "azimuth": 49.7520751953125,
+    "elevation": 1.44626464843748,
+    "relPath": "motion_refs/walking_with_hands_in_pockets/shots/6932a86a54d4.png",
+    "createdAt": 1781623383.3350832,
+    "cropBox": {
+      "x": 260,
+      "y": 0,
+      "width": 234,
+      "height": 387
+    },
+    "imageWidth": 1034,
+    "imageHeight": 387,
+    "keypointId": "1adf92a919e3"
+  },
+  {
+    "id": "d294a6e50865",
+    "motionKey": "walking_with_hands_in_pockets",
+    "frameIndex": 162,
+    "azimuth": 49.7520751953125,
+    "elevation": 1.44626464843748,
+    "relPath": "motion_refs/walking_with_hands_in_pockets/shots/d294a6e50865.png",
+    "createdAt": 1781623380.5414124,
+    "cropBox": {
+      "x": 367,
+      "y": 0,
+      "width": 131,
+      "height": 387
+    },
+    "imageWidth": 1034,
+    "imageHeight": 387,
+    "keypointId": "0ef4b2e3b794"
+  },
+  {
+    "id": "74e1cd90b3f7",
+    "motionKey": "walking_with_hands_in_pockets",
+    "frameIndex": 104,
+    "azimuth": 49.7520751953125,
+    "elevation": 1.44626464843748,
+    "relPath": "motion_refs/walking_with_hands_in_pockets/shots/74e1cd90b3f7.png",
+    "createdAt": 1781623375.7208862,
+    "cropBox": {
+      "x": 626,
+      "y": 62,
+      "width": 77,
+      "height": 257
+    },
+    "imageWidth": 1034,
+    "imageHeight": 387,
+    "keypointId": "a352619098b9"
+  },
+  {
+    "id": "941e7d3a070c",
+    "motionKey": "walking_with_hands_in_pockets",
+    "frameIndex": 0,
+    "azimuth": 49.7520751953125,
+    "elevation": 1.44626464843748,
+    "relPath": "motion_refs/walking_with_hands_in_pockets/shots/941e7d3a070c.png",
+    "createdAt": 1781623369.7348788,
+    "cropBox": {
+      "x": 786,
+      "y": 101,
+      "width": 65,
+      "height": 172
+    },
+    "imageWidth": 1034,
+    "imageHeight": 387,
+    "keypointId": "f74227b6d650"
+  },
+  {
+    "id": "70c8f0f42dd2",
+    "motionKey": "cool_walking_with_hands_in_pocket",
+    "frameIndex": 73,
+    "azimuth": 22.479339599609375,
+    "elevation": 8.057873535156235,
+    "relPath": "motion_refs/cool_walking_with_hands_in_pocket/shots/70c8f0f42dd2.png",
+    "createdAt": 1781622876.1060164,
+    "cropBox": {
+      "x": 417,
+      "y": 0,
+      "width": 180,
+      "height": 387
+    },
+    "imageWidth": 1034,
+    "imageHeight": 387,
+    "keypointId": "257082a8f855"
+  },
+  {
+    "id": "fd6da6be6db8",
+    "motionKey": "cool_walking_with_hands_in_pocket",
+    "frameIndex": 67,
+    "azimuth": 22.479339599609375,
+    "elevation": 8.057873535156235,
+    "relPath": "motion_refs/cool_walking_with_hands_in_pocket/shots/fd6da6be6db8.png",
+    "createdAt": 1781622873.2410123,
+    "cropBox": {
+      "x": 392,
+      "y": 0,
+      "width": 209,
+      "height": 387
+    },
+    "imageWidth": 1034,
+    "imageHeight": 387,
+    "keypointId": "24a66afbe4ad"
+  },
+  {
+    "id": "2679148caea2",
+    "motionKey": "cool_walking_with_hands_in_pocket",
+    "frameIndex": 57,
+    "azimuth": 22.479339599609375,
+    "elevation": 8.057873535156235,
+    "relPath": "motion_refs/cool_walking_with_hands_in_pocket/shots/2679148caea2.png",
+    "createdAt": 1781622868.7058141,
+    "cropBox": {
+      "x": 453,
+      "y": 0,
+      "width": 138,
+      "height": 387
+    },
+    "imageWidth": 1034,
+    "imageHeight": 387,
+    "keypointId": "aeb824cf523d"
+  },
+  {
+    "id": "4a6b4ef272c0",
+    "motionKey": "cool_walking_with_hands_in_pocket",
+    "frameIndex": 47,
+    "azimuth": 22.479339599609375,
+    "elevation": 8.057873535156235,
+    "relPath": "motion_refs/cool_walking_with_hands_in_pocket/shots/4a6b4ef272c0.png",
+    "createdAt": 1781622865.089986,
+    "cropBox": {
+      "x": 425,
+      "y": 0,
+      "width": 160,
+      "height": 387
+    },
+    "imageWidth": 1034,
+    "imageHeight": 387,
+    "keypointId": "472724b96d10"
+  },
+  {
+    "id": "cab59d76af20",
+    "motionKey": "cool_walking_with_hands_in_pocket",
+    "frameIndex": 39,
+    "azimuth": 22.479339599609375,
+    "elevation": 8.057873535156235,
+    "relPath": "motion_refs/cool_walking_with_hands_in_pocket/shots/cab59d76af20.png",
+    "createdAt": 1781622856.9599612,
+    "cropBox": {
+      "x": 424,
+      "y": 0,
+      "width": 156,
+      "height": 387
+    },
+    "imageWidth": 1034,
+    "imageHeight": 387,
+    "keypointId": "448d1e40d8ad"
+  },
+  {
+    "id": "3b43710ae36a",
+    "motionKey": "cool_walking_with_hands_in_pocket",
+    "frameIndex": 25,
+    "azimuth": 22.479339599609375,
+    "elevation": 8.057873535156235,
+    "relPath": "motion_refs/cool_walking_with_hands_in_pocket/shots/3b43710ae36a.png",
+    "createdAt": 1781622851.8051238,
+    "cropBox": {
+      "x": 405,
+      "y": 0,
+      "width": 192,
+      "height": 387
+    },
+    "imageWidth": 1034,
+    "imageHeight": 387,
+    "keypointId": "7e15890a8922"
+  },
+  {
+    "id": "97bd258670df",
+    "motionKey": "cool_walking_with_hands_in_pocket",
+    "frameIndex": 13,
+    "azimuth": 22.479339599609375,
+    "elevation": 8.057873535156235,
+    "relPath": "motion_refs/cool_walking_with_hands_in_pocket/shots/97bd258670df.png",
+    "createdAt": 1781622844.03213,
+    "cropBox": {
+      "x": 452,
+      "y": 0,
+      "width": 127,
+      "height": 387
+    },
+    "imageWidth": 1034,
+    "imageHeight": 387,
+    "keypointId": "1971c966c3f3"
+  }
+]

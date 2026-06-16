@@ -56,6 +56,7 @@ from services.prompts import (
     build_positive_prompt,
     build_shot_prompt,
     compose_new_character_positive_prompt,
+    compose_new_location_positive_prompt,
     load_catalog as _load_catalog,
 )
 from services.sequence_gallery_strip import gallery_item_from_frame_urls
@@ -2210,6 +2211,63 @@ def generate_character_base_draft_to_temp(
     return path_str, path_str
 
 
+def generate_location_base_draft_to_temp(
+    prompt: str,
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> tuple[str, str]:
+    """
+    React new-location flow: append ``baseN`` under ``characters/temp`` (same T2I scratch
+    dir as character drafts; callers copy into ``locations/_drafts``).
+    Returns (path to image for preview, same path on disk).
+    """
+    _ensure_storage_root()
+    draft_root = new_character_draft_dir()
+    ensure_dirs(draft_root)
+
+    full_prompt = compose_new_location_positive_prompt(prompt)
+    if log_cb:
+        snip = full_prompt.replace("\n", " ").replace("\r", "")
+        if len(snip) > 200:
+            snip = snip[:197] + "..."
+        log_cb(f"new_location_base prompt (composed): {snip}")
+
+    body = _run_service_testmode(
+        "services.anime_img_gen_ai_service.serverless",
+        [
+            "--test-mode",
+            "--enable-default",
+            "--default-port",
+            str(COMFY_PORT),
+            "--skip-default-style-prefix",
+            "--prompt",
+            full_prompt,
+        ],
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise AnimeGenServiceError(
+            str(body["error"]),
+            prompt_id=body.get("prompt_id") if isinstance(body.get("prompt_id"), str) else None,
+            prompt_index=body.get("prompt_index") if isinstance(body.get("prompt_index"), int) else None,
+        )
+
+    url = _extract_image_url_from_anime_results(body)
+    idx = next_base_draft_index_in_dir(draft_root)
+    if os.path.isfile(url):
+        src = Path(url)
+        ext = src.suffix.lower() if src.suffix else ".png"
+        dest = draft_root / f"base{idx}{ext}"
+        shutil.copy2(src, dest)
+        path_str = str(dest)
+        return path_str, path_str
+    ext = infer_ext_from_url(url)
+    dest = draft_root / f"base{idx}{ext}"
+    download_url_to_file(url, dest)
+    path_str = str(dest)
+    return path_str, path_str
+
+
 def save_uploaded_character_base(character_name: str, source_path: str | Path) -> str:
     src = Path(source_path)
     if not src.is_file():
@@ -3506,32 +3564,55 @@ def _run_keypoint_image_edit_with_crop(
     keypoint_id: str | None = None,
 ) -> str:
     """
-    Run Qwen image-edit on figure crop, RMBG the result, save RGBA + white plate,
-    return local path to the full-size plate image.
+    Run Qwen image-edit on 1024×1024 square RGB crops, then paste the result back
+    onto the full-size canvas (same dimensions as the starting image).
     """
     from PIL import Image
 
     from services import reference_storage
     from services.figure_crop import (
-        composite_rgba_on_white_plate,
-        crop_image_path,
-        placement_box,
+        MIN_SQUARE_WORKING_SIZE,
+        extract_square_working_crop_path,
+        paste_square_working_onto_canvas,
+        upscale_to_working_square,
     )
 
     placement = placed_figure["placement"]
     canvas = placed_figure["canvas"]
     c_w, c_h = int(canvas["width"]), int(canvas["height"])
+    min_side = int(placed_figure.get("workingSquareSize") or MIN_SQUARE_WORKING_SIZE)
 
     tmp_dir = Path(tempfile.gettempdir()) / f"placed_{unique_suffix()}"
     tmp_dir.mkdir(parents=True, exist_ok=True)
-    primary_crop = tmp_dir / "primary_crop.png"
-    kp_crop = tmp_dir / "kp_crop.png"
-    crop_image_path(primary_abs, placement, primary_crop)
-    crop_image_path(keypoint_abs, placement, kp_crop)
+    primary_crop = tmp_dir / "primary_square.png"
+    kp_crop = tmp_dir / "kp_square.png"
+
+    pf = placed_figure
+    square_ref_rel = pf.get("squareRefCropRelPath")
+    square_kp_rel = pf.get("squareKeypointCropRelPath")
+    if square_ref_rel and square_kp_rel:
+        ref_src = reference_storage.resolve_rel(str(square_ref_rel))
+        kp_src = reference_storage.resolve_rel(str(square_kp_rel))
+        if ref_src.is_file() and kp_src.is_file():
+            shutil.copy2(ref_src, primary_crop)
+            shutil.copy2(kp_src, kp_crop)
+        else:
+            extract_square_working_crop_path(
+                primary_abs, placement, primary_crop, min_side=min_side
+            )
+            extract_square_working_crop_path(
+                keypoint_abs, placement, kp_crop, min_side=min_side
+            )
+    else:
+        extract_square_working_crop_path(
+            primary_abs, placement, primary_crop, min_side=min_side
+        )
+        extract_square_working_crop_path(
+            keypoint_abs, placement, kp_crop, min_side=min_side
+        )
 
     if log_cb:
-        x, y, w, h = placement_box(placement)
-        log_cb(f"Cropped figure region {w}×{h} at ({x},{y}) for Qwen edit…")
+        log_cb(f"Qwen edit on {min_side}×{min_side} square crops…")
 
     body = _run_service_testmode(
         "services.image_edit_ai_service.serverless",
@@ -3560,24 +3641,24 @@ def _run_keypoint_image_edit_with_crop(
     if not isinstance(url, str) or not url.strip():
         raise RuntimeError("Image-edit result missing url.")
 
-    qwen_out = tmp_dir / "qwen_crop.png"
+    qwen_out = tmp_dir / "qwen_square.png"
     download_url_to_file(url.strip(), qwen_out)
-    if log_cb:
-        log_cb("Removing background from generated crop…")
-    rgba_path = Path(remove_background_to_temp_file(str(qwen_out), log_cb=log_cb))
-    with Image.open(rgba_path) as rgba_im:
-        plate = composite_rgba_on_white_plate(rgba_im, c_w, c_h, placement)
+    with Image.open(qwen_out) as qwen_im:
+        working = upscale_to_working_square(qwen_im, min_side=min_side)
+    working_path = tmp_dir / "working_square.png"
+    working.save(working_path)
+    plate = paste_square_working_onto_canvas(working, c_w, c_h, placement)
     plate_path = tmp_dir / "plate.png"
     plate.save(plate_path)
 
     if keypoint_id:
         reference_storage.update_placed_figure_outputs(
             keypoint_id,
-            figure_crop_rgba_abs=str(rgba_path),
+            figure_square_crop_abs=str(working_path),
             figure_plate_abs=str(plate_path),
         )
         if log_cb:
-            log_cb("Saved placed-figure RGBA layer + white plate preview.")
+            log_cb("Saved square RGB crop + full-size plate preview.")
 
     return str(plate_path.resolve())
 
@@ -8378,16 +8459,22 @@ def run_pose_keypoint_for_image(
     log_cb: Callable[[str], None] | None = None,
     *,
     placed_figure: dict[str, Any] | None = None,
+    save_square_crops_to: Path | str | None = None,
 ) -> str:
     """
     Run ``pose_keypoint_ai_service`` on a single image.
-    When ``placed_figure`` is set, SDPose runs on the cropped region and the
+    When ``placed_figure`` is set, SDPose runs on a 1024×1024 square crop and the
     skeleton is pasted onto a full-size black canvas at ``placement``.
     Returns the local absolute path of the keypoint output image.
     """
     from PIL import Image
 
-    from services.figure_crop import crop_image_path, paste_on_black_canvas
+    from services.figure_crop import (
+        MIN_SQUARE_WORKING_SIZE,
+        extract_square_working_crop,
+        paste_square_working_onto_canvas,
+        upscale_to_working_square,
+    )
 
     src = Path(image_abs_path)
     if not src.is_file():
@@ -8396,7 +8483,8 @@ def run_pose_keypoint_for_image(
     run_path = str(src)
     placement: dict[str, int] | None = None
     canvas_w = canvas_h = 0
-    crop_tmp: Path | None = None
+    min_side = MIN_SQUARE_WORKING_SIZE
+    work_dir: Path | None = None
 
     if (
         placed_figure
@@ -8406,14 +8494,20 @@ def run_pose_keypoint_for_image(
         placement = placed_figure["placement"]
         canvas_w = int(placed_figure["canvas"]["width"])
         canvas_h = int(placed_figure["canvas"]["height"])
-        crop_tmp = Path(tempfile.gettempdir()) / f"kp_crop_{unique_suffix()}.png"
-        crop_image_path(src, placement, crop_tmp)
-        run_path = str(crop_tmp)
+        min_side = int(placed_figure.get("workingSquareSize") or MIN_SQUARE_WORKING_SIZE)
+        work_dir = Path(tempfile.gettempdir()) / f"kp_crop_{unique_suffix()}"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        ref_square_path = work_dir / "ref_square.png"
+        with Image.open(src) as im:
+            ref_square = extract_square_working_crop(im, placement, min_side=min_side)
+        ref_square.save(ref_square_path)
+        run_path = str(ref_square_path)
+        if save_square_crops_to:
+            out_dir = Path(save_square_crops_to)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ref_square_path, out_dir / "ref_square.png")
         if log_cb:
-            log_cb(
-                f"SDPose on cropped figure region "
-                f"{placement['width']}×{placement['height']}…"
-            )
+            log_cb(f"SDPose on {min_side}×{min_side} square crop…")
 
     body = _run_service_testmode(
         "services.pose_keypoint_ai_service.serverless",
@@ -8428,8 +8522,6 @@ def run_pose_keypoint_for_image(
         ],
         log_cb=log_cb,
     )
-    if crop_tmp and crop_tmp.is_file():
-        crop_tmp.unlink(missing_ok=True)
 
     if body.get("error"):
         raise RuntimeError(str(body["error"]))
@@ -8448,11 +8540,21 @@ def run_pose_keypoint_for_image(
 
     if placement is not None and canvas_w > 0 and canvas_h > 0:
         with Image.open(kp_crop_path) as patch:
-            full = paste_on_black_canvas(patch, canvas_w, canvas_h, placement)
+            kp_square = upscale_to_working_square(patch, min_side=min_side)
+        kp_on_black = Image.new("RGB", (kp_square.width, kp_square.height), (0, 0, 0))
+        kp_on_black.paste(kp_square)
+        kp_square_path = (work_dir or Path(tempfile.gettempdir())) / "kp_square.png"
+        kp_square_path.parent.mkdir(parents=True, exist_ok=True)
+        kp_on_black.save(kp_square_path)
+        if save_square_crops_to:
+            shutil.copy2(kp_square_path, Path(save_square_crops_to) / "kp_square.png")
+        full = paste_square_working_onto_canvas(
+            kp_on_black, canvas_w, canvas_h, placement, background=(0, 0, 0)
+        )
         full_dest = Path(tempfile.gettempdir()) / f"kp_full_{unique_suffix()}.png"
         full.save(full_dest)
         if log_cb:
-            log_cb(f"Pasted skeleton onto {canvas_w}×{canvas_h} canvas.")
+            log_cb(f"Pasted {min_side}×{min_side} skeleton onto {canvas_w}×{canvas_h} canvas.")
         return str(full_dest)
 
     return str(kp_crop_path)
@@ -8483,14 +8585,38 @@ def make_reference_keypoint(
         raise ValueError(f"Reference image not found: {image_rel_path}")
 
     pf = placed_figure
-    if pf and pf.get("placement") and not pf.get("canvas"):
+    if pf and pf.get("placement"):
         with Image.open(abs_path) as im:
-            pf = build_placed_figure_meta(im.width, im.height, pf["placement"])
+            if pf.get("canvas"):
+                pf = build_placed_figure_meta(
+                    int(pf["canvas"]["width"]),
+                    int(pf["canvas"]["height"]),
+                    pf["placement"],
+                )
+            else:
+                pf = build_placed_figure_meta(im.width, im.height, pf["placement"])
 
+    square_dir = Path(tempfile.gettempdir()) / f"kp_sq_{unique_suffix()}"
+    square_dir.mkdir(parents=True, exist_ok=True)
     kp_abs = run_pose_keypoint_for_image(
-        abs_path, log_cb=log_cb, placed_figure=pf
+        abs_path,
+        log_cb=log_cb,
+        placed_figure=pf,
+        save_square_crops_to=square_dir,
     )
-    return reference_storage.add_keypoint_pair(abs_path, kp_abs, placed_figure=pf)
+    entry = reference_storage.add_keypoint_pair(abs_path, kp_abs, placed_figure=pf)
+    ref_square = square_dir / "ref_square.png"
+    kp_square = square_dir / "kp_square.png"
+    if ref_square.is_file() and kp_square.is_file():
+        reference_storage.update_placed_figure_outputs(
+            str(entry["id"]),
+            square_ref_crop_abs=str(ref_square),
+            square_keypoint_crop_abs=str(kp_square),
+        )
+        updated = reference_storage.find_keypoint_by_id(str(entry["id"]))
+        if updated:
+            entry = updated
+    return entry
 
 
 def save_pose_reference(
@@ -9561,6 +9687,36 @@ def import_image_to_timeline_clip(
     return {"absPath": str(out_path), "width": width, "height": height}
 
 
+def save_png_base64_to_timeline_clip(
+    png_base64: str,
+    dest_dir: Path | str,
+) -> dict[str, Any]:
+    """Decode a PNG (base64) and write it into ``dest_dir``."""
+    import base64
+    import uuid
+
+    from PIL import Image
+
+    raw = str(png_base64 or "").strip()
+    if not raw:
+        raise ValueError("pngBase64 is required.")
+    if "," in raw:
+        raw = raw.split(",", 1)[1]
+    data = base64.b64decode(raw)
+    dest = Path(dest_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    out_path = dest / f"clip_{uuid.uuid4().hex}.png"
+    out_path.write_bytes(data)
+    width = 0
+    height = 0
+    try:
+        with Image.open(out_path) as im:
+            width, height = int(im.width), int(im.height)
+    except Exception:
+        pass
+    return {"absPath": str(out_path), "width": width, "height": height}
+
+
 def _ensure_rel_under_sequence_folder(
     char_key: str, sequence_name: str, rel_path: str
 ) -> None:
@@ -10093,6 +10249,380 @@ def generate_i2v_to_timeline_clip(
         log_cb(f"I2V: {p.name} (length={int(length)})")
     frame_urls = _run_i2v_service(p, text, int(length), width, height, log_cb=log_cb)
     return _frames_to_timeline_clip(frame_urls, dest_dir)
+
+
+_TIMELINE_FRAME_EXTRACT_MAX = 600
+
+
+def _timeline_strip_rel_to_abs(rel: str) -> Path:
+    rel_norm = str(rel).replace("\\", "/").lstrip("/")
+    if rel_norm.lower().startswith("timelines/"):
+        from services import timeline_storage
+
+        return timeline_storage.timeline_rel_to_abs(rel_norm)
+    return resolve_storage_rel_path_to_abs(rel_norm)
+
+
+def _abs_to_any_storage_rel(abs_path: Path | str) -> str:
+    p = Path(abs_path).resolve()
+    from services import timeline_storage
+
+    try:
+        rel = p.relative_to(timeline_storage.TIMELINES_STORAGE_ROOT.resolve())
+        return timeline_storage.timeline_abs_to_rel(p)
+    except Exception:
+        pass
+    return _abs_to_storage_rel(p)
+
+
+def timeline_video_to_frame_sequence(
+    timeline_key: str,
+    clip_id: str,
+    video_rel: str,
+    *,
+    in_point_sec: float,
+    out_point_sec: float,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Extract trimmed video frames into ``timelines/<key>/frames/<clip_id>/``."""
+    from services import timeline_storage
+    from services.utils import extract_video_frames_range_to_pngs
+
+    cid = str(clip_id or "").strip()
+    if not cid:
+        raise ValueError("clip_id is required.")
+    video_abs = timeline_storage.timeline_rel_to_abs(video_rel)
+    if not video_abs.is_file():
+        raise ValueError(f"Video not found: {video_rel}")
+
+    fps, total = probe_video_fps_and_frame_count(video_abs)
+    if total <= 0:
+        raise ValueError("Could not determine video frame count.")
+    start_idx = max(0, int(round(float(in_point_sec) * fps)))
+    end_idx = min(total - 1, max(start_idx, int(round(float(out_point_sec) * fps)) - 1))
+    frame_count = end_idx - start_idx + 1
+    if frame_count > _TIMELINE_FRAME_EXTRACT_MAX:
+        raise ValueError(
+            f"Clip has {frame_count} frames; max {_TIMELINE_FRAME_EXTRACT_MAX}. "
+            "Trim the clip before editing frames."
+        )
+    if log_cb:
+        log_cb(
+            f"Extracting frames {start_idx}–{end_idx} ({frame_count} frames) from {video_abs.name}"
+        )
+
+    frames_dir = timeline_storage.timeline_frames_dir(timeline_key, cid)
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    png_paths = extract_video_frames_range_to_pngs(
+        str(video_abs),
+        str(frames_dir),
+        start_frame=start_idx,
+        end_frame=end_idx,
+        max_frames=_TIMELINE_FRAME_EXTRACT_MAX,
+    )
+    strip: list[dict[str, Any]] = []
+    for abs_p in png_paths:
+        rel = timeline_storage.timeline_abs_to_rel(abs_p)
+        strip.append({"kind": "image", "relPath": rel})
+    frames_dir_rel = timeline_storage.timeline_abs_to_rel(frames_dir)
+    return {
+        "frameSequence": {
+            "sequenceGroupId": cid,
+            "strip": strip,
+            "hidden": [],
+        },
+        "frameEdit": {"framesDirRel": frames_dir_rel},
+    }
+
+
+def _validate_strip_paths_under_dir(
+    strip: list[dict[str, Any]],
+    allowed_dir_abs: Path,
+) -> None:
+    allowed = allowed_dir_abs.resolve()
+    for k, slot in enumerate(strip):
+        if not isinstance(slot, dict):
+            raise ValueError(f"Strip slot {k}: invalid object.")
+        if str(slot.get("kind") or "") != "image":
+            continue
+        rel = str(slot.get("relPath") or "").strip()
+        if not rel:
+            continue
+        pth = _timeline_strip_rel_to_abs(rel)
+        if allowed != pth and allowed not in pth.parents:
+            raise ValueError(f"Strip slot {k}: path outside allowed directory.")
+
+
+def write_frame_sequence_strip_mp4(
+    strip: list[dict[str, Any]],
+    output_path: Path | str,
+    *,
+    fps: int = 24,
+    resolve_rel: Callable[[str], Path] | None = None,
+    use_sequence_cell_render: bool = False,
+    char_key: str | None = None,
+    sequence_name: str | None = None,
+) -> None:
+    """Encode a frame-sequence strip to MP4 (empty slots hold; hidden images skip)."""
+    import av
+    import numpy as np
+    from PIL import Image
+
+    if not isinstance(strip, list) or not strip:
+        raise ValueError("frameSequence.strip is missing or empty.")
+
+    def resolve_slot_path(rel: str) -> Path:
+        if resolve_rel is not None:
+            return resolve_rel(rel)
+        rel_norm = str(rel).replace("\\", "/").lstrip("/")
+        if use_sequence_cell_render:
+            if not char_key or not sequence_name:
+                raise ValueError("char_key and sequence_name required for sequence render.")
+            _ensure_rel_under_sequence_folder(char_key, sequence_name, rel_norm)
+            return (DEFAULT_STORAGE_ROOT / rel_norm).resolve()
+        return _timeline_strip_rel_to_abs(rel_norm)
+
+    export_paths: list[Path] = []
+    for k, slot in enumerate(strip):
+        if not isinstance(slot, dict):
+            continue
+        if not _frame_sequence_strip_slot_visible_for_export(slot):
+            continue
+        rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+        pth = resolve_slot_path(rel)
+        if not pth.is_file():
+            raise ValueError(f"Strip slot {k}: missing file {rel!r}.")
+        export_paths.append(pth)
+
+    w, h = _sequence_export_dimensions_from_images(export_paths)
+    export_bg = (255, 255, 255)
+    rate = max(1, int(fps))
+    from services.utils import av_output_framerate
+
+    out_rate = av_output_framerate(rate)
+
+    def load_rgb_array(path: Path, crop: dict[str, Any] | None) -> Any:
+        if use_sequence_cell_render:
+            rgba = render_sequence_timeline_cell_rgba(path, crop, w, h)
+            rgb = _flatten_rgba_for_video(rgba, export_bg)
+            return np.asarray(rgb, dtype=np.uint8)
+        with Image.open(path) as im:
+            im_rgba = im.convert("RGBA")
+            if im_rgba.size != (w, h):
+                im_rgba = im_rgba.resize((w, h), Image.Resampling.LANCZOS)
+            rgb = _flatten_rgba_for_video(np.asarray(im_rgba), export_bg)
+            return np.asarray(rgb, dtype=np.uint8)
+
+    def blank_rgb_array() -> Any:
+        return np.asarray(Image.new("RGB", (w, h), export_bg), dtype=np.uint8)
+
+    current_path: Path | None = None
+    current_crop: dict[str, Any] | None = None
+    out_p = Path(output_path)
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+    frames_written = 0
+
+    try:
+        with av.open(str(out_p), mode="w") as container:
+            stream = container.add_stream("libx264", rate=out_rate)
+            stream.width = w
+            stream.height = h
+            stream.pix_fmt = "yuv420p"
+            stream.options = {"crf": "23", "preset": "veryfast"}
+
+            for k, slot in enumerate(strip):
+                if not isinstance(slot, dict):
+                    continue
+                if str(slot.get("kind") or "") == "image" and slot.get("hidden") is True:
+                    continue
+                if _frame_sequence_strip_slot_visible_for_export(slot):
+                    rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+                    pth = resolve_slot_path(rel)
+                    raw_crop = slot.get("crop")
+                    current_crop = raw_crop if isinstance(raw_crop, dict) else None
+                    current_path = pth
+
+                if current_path is not None:
+                    arr = load_rgb_array(current_path, current_crop)
+                else:
+                    arr = blank_rgb_array()
+
+                frame = av.VideoFrame.from_ndarray(arr, format="rgb24")
+                frame = frame.reformat(format="yuv420p")
+                for packet in stream.encode(frame):
+                    if packet is not None:
+                        container.mux(packet)
+                frames_written += 1
+            for packet in stream.encode(None):
+                if packet is not None:
+                    container.mux(packet)
+        if frames_written == 0:
+            if out_p.is_file():
+                out_p.unlink(missing_ok=True)
+            raise ValueError("No frames to export from strip.")
+    except ValueError:
+        if out_p.is_file():
+            out_p.unlink(missing_ok=True)
+        raise
+    except Exception as ex:
+        if out_p.is_file():
+            out_p.unlink(missing_ok=True)
+        raise RuntimeError(f"Frame sequence strip MP4 export failed: {ex}") from ex
+
+
+def timeline_frame_sequence_to_video(
+    timeline_key: str,
+    frame_sequence: dict[str, Any],
+    *,
+    fps: int = 24,
+    output_basename: str | None = None,
+) -> dict[str, Any]:
+    """Encode a timeline clip frame strip to MP4 in ``clips/``."""
+    from services import timeline_storage
+
+    fs = frame_sequence if isinstance(frame_sequence, dict) else {}
+    strip_raw = fs.get("strip")
+    if not isinstance(strip_raw, list) or not strip_raw:
+        raise ValueError("frameSequence.strip is missing or empty.")
+    strip: list[dict[str, Any]] = [s for s in strip_raw if isinstance(s, dict)]
+    gid = str(fs.get("sequenceGroupId") or "").strip()
+    if gid:
+        allowed = timeline_storage.timeline_frames_dir(timeline_key, gid)
+        _validate_strip_paths_under_dir(strip, allowed)
+
+    clips_dir = timeline_storage.timeline_clips_dir(timeline_key)
+    clips_dir.mkdir(parents=True, exist_ok=True)
+    base = (output_basename or f"clip_{unique_suffix(12)}").strip()
+    if not base.lower().endswith(".mp4"):
+        base = f"{base}.mp4"
+    out_path = clips_dir / base
+    write_frame_sequence_strip_mp4(strip, out_path, fps=int(fps))
+    meta = probe_video_meta(out_path)
+    return {
+        "absPath": str(out_path),
+        "srcRelPath": timeline_storage.timeline_abs_to_rel(out_path),
+        **meta,
+    }
+
+
+def _copy_frame_urls_to_dir(
+    frame_urls: list[str],
+    output_dir: Path,
+    *,
+    prefix: str,
+) -> list[str]:
+    """Download frame URLs into ``output_dir``; return storage-relative paths."""
+    from services.character_storage import download_url_to_file
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    rels: list[str] = []
+    for i, url in enumerate(frame_urls):
+        if not isinstance(url, str) or not str(url).strip():
+            continue
+        dest = output_dir / f"{prefix}_{i + 1:06d}.png"
+        download_url_to_file(url.strip(), dest)
+        rels.append(_abs_to_any_storage_rel(dest))
+    if not rels:
+        raise RuntimeError("No frames were downloaded.")
+    return rels
+
+
+def remove_background_next_to_source(
+    source_rel: str,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """Remove background and write a new PNG beside the source file (for strip frames)."""
+    rel_norm = str(source_rel).replace("\\", "/").lstrip("/")
+    if rel_norm.lower().startswith("timelines/"):
+        from services import timeline_storage
+
+        src_abs = timeline_storage.timeline_rel_to_abs(rel_norm)
+    else:
+        src_abs = resolve_storage_rel_path_to_abs(rel_norm)
+    if not src_abs.is_file():
+        raise ValueError(f"Source image not found: {source_rel}")
+    temp_path = remove_background_to_temp_file(str(src_abs), log_cb=log_cb)
+    try:
+        dest = src_abs.parent / f"rembg_{unique_suffix(12)}.png"
+        shutil.copy2(temp_path, dest)
+        return _abs_to_any_storage_rel(dest)
+    finally:
+        Path(temp_path).unlink(missing_ok=True)
+
+
+def ai_edit_next_to_source(
+    source_rel: str,
+    prompt: str,
+    *,
+    mask_png_base64: str | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """AI-edit an image and save the result beside the source (for strip frames)."""
+    rel_norm = str(source_rel).replace("\\", "/").lstrip("/")
+    if rel_norm.lower().startswith("timelines/"):
+        from services import timeline_storage
+
+        src_abs = timeline_storage.timeline_rel_to_abs(rel_norm)
+    else:
+        src_abs = resolve_storage_rel_path_to_abs(rel_norm)
+    if not src_abs.is_file():
+        raise ValueError(f"Source image not found: {source_rel}")
+    mask_abs: str | None = None
+    if mask_png_base64:
+        mask_abs = decode_mask_png_to_temp_file(mask_png_base64)
+    try:
+        temp_out = ai_edit_image_inline_to_temp_file(
+            input_image_abs_path=str(src_abs),
+            prompt_text=(prompt or "").strip(),
+            mask_abs_path=mask_abs,
+            log_cb=log_cb,
+        )
+        ext = Path(temp_out).suffix.lower() or ".png"
+        dest = src_abs.parent / f"aiedit_{unique_suffix(12)}{ext}"
+        shutil.copy2(temp_out, dest)
+        Path(temp_out).unlink(missing_ok=True)
+        return _abs_to_any_storage_rel(dest)
+    finally:
+        if mask_abs:
+            Path(mask_abs).unlink(missing_ok=True)
+
+
+def generate_i2v_strip_segment(
+    output_dir_abs: Path | str,
+    image_abs_path: str,
+    *,
+    length: int,
+    prompt: str,
+    width: int | None = None,
+    height: int | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> list[str]:
+    """Run I2V with individual frames; save PNGs under ``output_dir_abs``."""
+    p = Path(image_abs_path)
+    if not p.is_file():
+        raise ValueError("I2V source image not found.")
+    text = (prompt or "").strip()
+    if not text:
+        raise ValueError("A prompt is required for I2V.")
+    frame_urls = _run_i2v_service(p, text, int(length), width, height, log_cb=log_cb)
+    return _copy_frame_urls_to_dir(frame_urls, Path(output_dir_abs), prefix="i2v")
+
+
+def generate_flf_strip_segment(
+    output_dir_abs: Path | str,
+    image_a_abs_path: str,
+    image_b_abs_path: str,
+    *,
+    length: int,
+    log_cb: Callable[[str], None] | None = None,
+) -> list[str]:
+    """Run FLF with individual frames; save PNGs under ``output_dir_abs``."""
+    pa = Path(image_a_abs_path)
+    pb = Path(image_b_abs_path)
+    if not pa.is_file() or not pb.is_file():
+        raise ValueError("FLF source images not found.")
+    frame_urls = _run_flf_service(pa, pb, int(length), log_cb=log_cb)
+    return _copy_frame_urls_to_dir(frame_urls, Path(output_dir_abs), prefix="flf")
 
 
 def ai_edit_to_timeline_clip(

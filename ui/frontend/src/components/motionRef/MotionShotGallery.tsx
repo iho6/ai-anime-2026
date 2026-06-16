@@ -23,7 +23,7 @@ export function MotionShotGallery(props: {
   onRestoreShot: (shot: MotionRefShot) => void;
   onAddToPose: (shots: MotionRefShot[]) => void;
   onDeleteShot: (shotId: string) => void;
-  onCreateFolder: (parentFolderId: string | null) => void;
+  onCreateFolder: (parentFolderId: string | null, shotIds: string[]) => void;
   onRenameFolder: (folderId: string, currentName: string) => void;
   onDeleteFolder: (folderId: string) => void;
 }) {
@@ -158,7 +158,8 @@ export function MotionShotGallery(props: {
   const openShotMenu = useCallback(
     (e: React.MouseEvent, shot: MotionRefShot) => {
       e.preventDefault();
-      const groupIds = [...selectedIds];
+      const visibleShotIdSet = new Set(shotOrderInView);
+      const groupIds = [...selectedIds].filter((id) => visibleShotIdSet.has(id));
       const items: ContextMenuItem[] = [
         {
           key: "add",
@@ -176,12 +177,12 @@ export function MotionShotGallery(props: {
         items.splice(1, 0, {
           key: "group",
           label: "Group into folder",
-          onSelect: () => onCreateFolder(viewFolderId),
+          onSelect: () => onCreateFolder(viewFolderId, groupIds),
         });
       }
       setMenu({ open: true, x: e.clientX, y: e.clientY, items });
     },
-    [busy, onAddToPose, onCreateFolder, onDeleteShot, selectedIds, viewFolderId]
+    [busy, onAddToPose, onCreateFolder, onDeleteShot, selectedIds, shotOrderInView, viewFolderId]
   );
 
   const openFolderMenu = useCallback(
@@ -232,7 +233,11 @@ export function MotionShotGallery(props: {
           <button
             type="button"
             disabled={busy}
-            onClick={() => setViewFolderId(null)}
+            onClick={() => {
+              setViewFolderId(null);
+              onSelectedIdsChange(new Set());
+              setAnchorId(null);
+            }}
             style={navBtn}
           >
             Back
@@ -279,7 +284,11 @@ export function MotionShotGallery(props: {
                     name={folder.name}
                     count={count}
                     disabled={busy}
-                    onOpen={() => setViewFolderId(fid)}
+                    onOpen={() => {
+                      setViewFolderId(fid);
+                      onSelectedIdsChange(new Set());
+                      setAnchorId(null);
+                    }}
                   />
                 </div>
               </SortableItem>

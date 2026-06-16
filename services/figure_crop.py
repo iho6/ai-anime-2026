@@ -2,7 +2,7 @@
 Figure crop / placement helpers for motion-ref keypoint and Qwen generation.
 
 A ``placedFigure`` stores canvas size + pixel placement so SDPose and Qwen can run
-on a tight crop while outputs are composited back to the original frame.
+on a tight square crop while outputs are composited back to the original frame.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from PIL import Image
 
 FIGURE_CROP_PAD_FRAC = 0.15
 MIN_CROP_SIZE = 64
+MIN_SQUARE_WORKING_SIZE = 1024
 
 
 def pad_clamp_bbox(
@@ -63,6 +64,59 @@ def pad_clamp_bbox(
     return {"x": ix1, "y": iy1, "width": w, "height": h}
 
 
+def pad_clamp_square_bbox(
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    img_w: int,
+    img_h: int,
+    *,
+    pad_frac: float = FIGURE_CROP_PAD_FRAC,
+    min_size: int = MIN_CROP_SIZE,
+) -> dict[str, int]:
+    """Pad/clamp AABB, then expand to a centered square within image bounds."""
+    box = pad_clamp_bbox(x1, y1, x2, y2, img_w, img_h, pad_frac=pad_frac, min_size=min_size)
+    x, y, w, h = placement_box(box)
+    side = max(w, h)
+    cx = x + w / 2.0
+    cy = y + h / 2.0
+    nx1 = int(round(cx - side / 2.0))
+    ny1 = int(round(cy - side / 2.0))
+    nx2 = nx1 + side
+    ny2 = ny1 + side
+    if nx1 < 0:
+        nx2 -= nx1
+        nx1 = 0
+    if ny1 < 0:
+        ny2 -= ny1
+        ny1 = 0
+    if nx2 > img_w:
+        shift = nx2 - img_w
+        nx1 = max(0, nx1 - shift)
+        nx2 = img_w
+    if ny2 > img_h:
+        shift = ny2 - img_h
+        ny1 = max(0, ny1 - shift)
+        ny2 = img_h
+    side = min(nx2 - nx1, ny2 - ny1)
+    if side < min_size:
+        side = min(min_size, img_w, img_h)
+        cx = min(max(cx, side / 2.0), img_w - side / 2.0)
+        cy = min(max(cy, side / 2.0), img_h - side / 2.0)
+        nx1 = int(round(cx - side / 2.0))
+        ny1 = int(round(cy - side / 2.0))
+        nx2 = nx1 + side
+        ny2 = ny1 + side
+    return {"x": nx1, "y": ny1, "width": side, "height": side}
+
+
+def square_bbox_from_box(box: dict[str, int], img_w: int, img_h: int) -> dict[str, int]:
+    """Convert an existing placement box to a centered square within bounds."""
+    x, y, w, h = placement_box(box)
+    return pad_clamp_square_bbox(float(x), float(y), float(x + w), float(y + h), img_w, img_h)
+
+
 def placement_box(box: dict[str, int]) -> tuple[int, int, int, int]:
     return int(box["x"]), int(box["y"]), int(box["width"]), int(box["height"])
 
@@ -71,11 +125,15 @@ def build_placed_figure_meta(
     canvas_w: int,
     canvas_h: int,
     placement: dict[str, int],
+    *,
+    working_square_size: int = MIN_SQUARE_WORKING_SIZE,
 ) -> dict[str, Any]:
-    x, y, w, h = placement_box(placement)
+    square = square_bbox_from_box(placement, canvas_w, canvas_h)
+    x, y, w, h = placement_box(square)
     return {
         "canvas": {"width": int(canvas_w), "height": int(canvas_h)},
         "placement": {"x": x, "y": y, "width": w, "height": h},
+        "workingSquareSize": int(working_square_size),
     }
 
 
@@ -92,6 +150,50 @@ def crop_image_path(src: Path | str, box: dict[str, int], dest: Path | str) -> P
     dest_p.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(src) as im:
         crop_image(im.convert("RGB"), box).save(dest_p)
+    return dest_p
+
+
+def upscale_to_working_square(
+    image: Image.Image,
+    min_side: int = MIN_SQUARE_WORKING_SIZE,
+) -> Image.Image:
+    """Upscale a square image so its side is at least ``min_side`` (never downscale)."""
+    rgb = image.convert("RGB")
+    w, h = rgb.size
+    if w != h:
+        side = max(w, h)
+        canvas = Image.new("RGB", (side, side), (0, 0, 0))
+        ox = (side - w) // 2
+        oy = (side - h) // 2
+        canvas.paste(rgb, (ox, oy))
+        rgb = canvas
+    if rgb.width >= min_side:
+        return rgb
+    return rgb.resize((min_side, min_side), Image.Resampling.LANCZOS)
+
+
+def extract_square_working_crop(
+    image: Image.Image,
+    placement: dict[str, int],
+    *,
+    min_side: int = MIN_SQUARE_WORKING_SIZE,
+) -> Image.Image:
+    """Crop square region from image and upscale to working resolution if needed."""
+    cropped = crop_image(image, placement)
+    return upscale_to_working_square(cropped, min_side=min_side)
+
+
+def extract_square_working_crop_path(
+    src: Path | str,
+    placement: dict[str, int],
+    dest: Path | str,
+    *,
+    min_side: int = MIN_SQUARE_WORKING_SIZE,
+) -> Path:
+    dest_p = Path(dest)
+    dest_p.parent.mkdir(parents=True, exist_ok=True)
+    with Image.open(src) as im:
+        extract_square_working_crop(im, placement, min_side=min_side).save(dest_p)
     return dest_p
 
 
@@ -131,6 +233,38 @@ def paste_on_black_canvas(
         patch, canvas_w, canvas_h, box, background=(0, 0, 0), feather_px=0
     )
     return rgb.convert("RGB")
+
+
+def paste_on_white_canvas(
+    patch: Image.Image,
+    canvas_w: int,
+    canvas_h: int,
+    box: dict[str, int],
+) -> Image.Image:
+    """Paste RGB patch on white (for Qwen figure composites)."""
+    rgb = paste_patch_on_canvas(
+        patch, canvas_w, canvas_h, box, background=(255, 255, 255), feather_px=0
+    )
+    return rgb.convert("RGB")
+
+
+def paste_square_working_onto_canvas(
+    working_square: Image.Image,
+    canvas_w: int,
+    canvas_h: int,
+    placement: dict[str, int],
+    *,
+    background: tuple[int, int, int] = (255, 255, 255),
+) -> Image.Image:
+    """Paste a working-resolution square patch into placement on a full-size canvas."""
+    return paste_patch_on_canvas(
+        working_square,
+        canvas_w,
+        canvas_h,
+        placement,
+        background=background,
+        feather_px=0,
+    ).convert("RGB")
 
 
 def composite_rgba_on_white_plate(

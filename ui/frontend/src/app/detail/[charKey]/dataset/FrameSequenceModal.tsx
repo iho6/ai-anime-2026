@@ -26,6 +26,44 @@ import {
   SEQUENCE_CROP_OUTER_CLIP_FLEX,
   sequenceCropTransformWrapperStyle,
 } from "../../../../lib/sequenceCrop";
+import {
+  DesktopContextMenu,
+  type ContextMenuItem,
+} from "../../../../components/DesktopContextMenu";
+import {
+  SEQUENCE_FLF_OUTPUT_LENGTHS,
+  SEQUENCE_I2V_OUTPUT_LENGTHS,
+  SequenceOutputLengthStepper,
+} from "../../../../components/sequenceOutputLength";
+import {
+  alignFrameStripsToLength,
+  canGenerateFlfFromStripSelection,
+  canGenerateI2vFromStripSelection,
+  frameSequenceStripSlotHasImage,
+  occupiedStripSelectionCount,
+  payloadFromAlignedStrips,
+  relPathsFromStripSelection,
+  reverseStripSelection,
+  spliceStripFrames,
+} from "../../../../components/frameSequenceStripUtils";
+
+export type FrameSequenceEditorMode = "sequence" | "timeline";
+
+export type FrameSequenceStripActions = {
+  busy?: boolean;
+  onRemoveBackground?: (relPaths: string[]) => Promise<string[] | void>;
+  onAiEdit?: (relPath: string) => Promise<string | void>;
+  onGenerateI2v?: (
+    relPath: string,
+    prompt: string,
+    length: number
+  ) => Promise<string[] | void>;
+  onGenerateFlf?: (
+    relPathA: string,
+    relPathB: string,
+    length: number
+  ) => Promise<string[] | void>;
+};
 
 const CELL = 72;
 
@@ -192,11 +230,22 @@ function StripDraggableCell(props: {
   /** Index in visible strip (play/export); null for hidden image cells. */
   visibleFooterLabel: number | null;
   onStripSlotClick: (i: number, ev: React.MouseEvent) => void;
+  onStripSlotContextMenu?: (i: number, ev: React.MouseEvent) => void;
+  disableDrag?: boolean;
 }) {
-  const { stripIndex, sourceGalleryIndex, slot, selected, isFocus, visibleFooterLabel, onStripSlotClick } =
-    props;
+  const {
+    stripIndex,
+    sourceGalleryIndex,
+    slot,
+    selected,
+    isFocus,
+    visibleFooterLabel,
+    onStripSlotClick,
+    onStripSlotContextMenu,
+    disableDrag = false,
+  } = props;
   const canDrag =
-    slot.kind === "image" && !!slot.relPath?.trim() && !slot.hidden;
+    !disableDrag && slot.kind === "image" && !!slot.relPath?.trim() && !slot.hidden;
   const id = `fs-strip:${sourceGalleryIndex}:${stripIndex}`;
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id,
@@ -226,6 +275,15 @@ function StripDraggableCell(props: {
       {...(canDrag ? listeners : {})}
       {...(canDrag ? attributes : {})}
       onClick={(ev) => onStripSlotClick(stripIndex, ev)}
+      onContextMenu={
+        onStripSlotContextMenu
+          ? (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              onStripSlotContextMenu(stripIndex, ev);
+            }
+          : undefined
+      }
       style={{
         width: CELL,
         minHeight: CELL + 8,
@@ -284,6 +342,114 @@ function StripDraggableCell(props: {
   );
 }
 
+function GroupStripStackedColumn(props: {
+  stripIndex: number;
+  layers: Array<{ clipId: string; label: string; slot: FrameSequenceStripSlot }>;
+  selected: boolean;
+  isFocus: boolean;
+  visibleFooterLabel: number | null;
+  onStripSlotClick: (i: number, ev: React.MouseEvent) => void;
+  onLayerContextMenu: (clipId: string, stripIndex: number, ev: React.MouseEvent) => void;
+}) {
+  const {
+    stripIndex,
+    layers,
+    selected,
+    isFocus,
+    visibleFooterLabel,
+    onStripSlotClick,
+    onLayerContextMenu,
+  } = props;
+  const layerCount = Math.max(1, layers.length);
+  const thumbH = Math.max(16, Math.floor(CELL / layerCount));
+
+  return (
+    <button
+      type="button"
+      title={`Strip #${stripIndex}`}
+      onClick={(ev) => onStripSlotClick(stripIndex, ev)}
+      style={{
+        width: CELL,
+        minHeight: CELL + 8,
+        padding: 2,
+        boxSizing: "border-box",
+        border: selected
+          ? isFocus
+            ? "2px solid #6cf"
+            : "2px solid rgba(100,200,255,0.55)"
+          : "1px solid #444",
+        background: "#000",
+        flexShrink: 0,
+        cursor: "pointer",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <div style={{ width: "100%", flex: 1, display: "flex", flexDirection: "column", gap: 1 }}>
+        {layers.map((layer) => (
+          <div
+            key={layer.clipId}
+            title={layer.label}
+            onContextMenu={(ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              onLayerContextMenu(layer.clipId, stripIndex, ev);
+            }}
+            style={{
+              width: "100%",
+              height: thumbH,
+              position: "relative",
+              flexShrink: 0,
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            {layer.slot.kind === "image" && layer.slot.relPath ? (
+              <>
+                <div style={{ ...SEQUENCE_CROP_OUTER_CLIP_FLEX, height: "100%" }}>
+                  <div style={sequenceCropTransformWrapperStyle(layer.slot.crop)}>
+                    <img
+                      src={assetUrlFromRelPath(layer.slot.relPath)}
+                      alt=""
+                      style={{
+                        maxWidth: "100%",
+                        maxHeight: thumbH,
+                        objectFit: "contain",
+                        display: "block",
+                      }}
+                    />
+                  </div>
+                </div>
+                {layer.slot.hidden ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "rgba(0,0,0,0.55)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 8,
+                      color: "#ccc",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    Hidden
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div style={{ width: "100%", height: thumbH, background: "#222" }} />
+            )}
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, color: "#888" }}>
+        {visibleFooterLabel != null ? String(visibleFooterLabel) : ""}
+      </div>
+    </button>
+  );
+}
+
 export function FrameSequenceModal(props: {
   open: boolean;
   title: string;
@@ -296,12 +462,59 @@ export function FrameSequenceModal(props: {
   previewFps: number;
   onClose: () => void;
   onSave: (next: FrameSequencePayload) => void;
+  editorMode?: FrameSequenceEditorMode;
+  stripActions?: FrameSequenceStripActions;
+  onApplyVideo?: (strip: FrameSequencePayload) => void;
+  onReExtract?: () => void;
+  disableStripDrag?: boolean;
+  groupLayers?: Array<{
+    clipId: string;
+    label: string;
+    initial: FrameSequencePayload;
+  }>;
+  getStripActionsForClip?: (clipId: string) => FrameSequenceStripActions | undefined;
+  onSaveGroup?: (payloads: Record<string, FrameSequencePayload>) => void;
+  onApplyVideoGroup?: (payloads: Record<string, FrameSequencePayload>) => void;
 }) {
-  const { open, title, initial, sourceGalleryIndex, charKey, sequenceName, onError, previewFps, onClose, onSave } =
-    props;
+  const {
+    open,
+    title,
+    initial,
+    sourceGalleryIndex,
+    charKey,
+    sequenceName,
+    onError,
+    previewFps,
+    onClose,
+    onSave,
+    editorMode = "sequence",
+    stripActions,
+    onApplyVideo,
+    onReExtract,
+    disableStripDrag = false,
+    groupLayers,
+    getStripActionsForClip,
+    onSaveGroup,
+    onApplyVideoGroup,
+  } = props;
+  const isGroupMode = Boolean(groupLayers && groupLayers.length > 1);
   const [strip, setStrip] = useState<FrameSequenceStripSlot[]>(() =>
     migrateLegacyFrameSequence(initial)
   );
+  const [layerStrips, setLayerStrips] = useState<FrameSequenceStripSlot[][]>([]);
+  const [layerVisible, setLayerVisible] = useState<Record<string, boolean>>({});
+  const [contextLayerId, setContextLayerId] = useState("");
+  const layerStripsRef = useRef(layerStrips);
+  layerStripsRef.current = layerStrips;
+  const displayStrip = isGroupMode ? (layerStrips[0] ?? []) : strip;
+  const contextLayerIndex = isGroupMode
+    ? Math.max(0, groupLayers?.findIndex((g) => g.clipId === contextLayerId) ?? 0)
+    : 0;
+  const contextStrip = isGroupMode ? (layerStrips[contextLayerIndex] ?? []) : strip;
+  const activeStripActions =
+    isGroupMode && contextLayerId
+      ? getStripActionsForClip?.(contextLayerId)
+      : stripActions;
   /** Multi-select strip indices; preview / arrows use focusIx when not playing. */
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(() => new Set([0]));
   const [focusIx, setFocusIx] = useState(0);
@@ -309,13 +522,15 @@ export function FrameSequenceModal(props: {
   const [playIx, setPlayIx] = useState(0);
   const undoStack = useRef<FrameSequencePayload[]>([]);
   const redoStack = useRef<FrameSequencePayload[]>([]);
+  const groupUndoStack = useRef<FrameSequenceStripSlot[][][]>([]);
+  const groupRedoStack = useRef<FrameSequenceStripSlot[][][]>([]);
   /** Anchor for Shift+click range selection (strip index). */
   const rangeAnchorRef = useRef(0);
   /** Latest indices for keyboard nav (preview uses playIx while playing, else focusIx). */
   const navRef = useRef({ play: false, playIx: 0, focusIx: 0 });
   navRef.current = { play, playIx, focusIx };
-  const stripRef = useRef(strip);
-  stripRef.current = strip;
+  const stripRef = useRef(displayStrip);
+  stripRef.current = displayStrip;
   const selectedIndicesRef = useRef(selectedIndices);
   selectedIndicesRef.current = selectedIndices;
   const focusIxRef = useRef(focusIx);
@@ -347,23 +562,239 @@ export function FrameSequenceModal(props: {
       setPlay(false);
       return;
     }
-    if (!strip.length) return;
-    if (!strip.some((slot) => frameSequenceStripSlotHasTimelineImage(slot))) return;
-    setPlayIx(firstVisibleStripIndexAtOrAfterFocus(strip, focusIx));
+    const s = isGroupMode ? layerStripsRef.current[0] ?? [] : strip;
+    if (!s.length) return;
+    if (!s.some((slot) => frameSequenceStripSlotHasTimelineImage(slot))) return;
+    setPlayIx(firstVisibleStripIndexAtOrAfterFocus(s, focusIx));
     setPlay(true);
-  }, [play, focusIx, strip]);
+  }, [play, focusIx, strip, isGroupMode]);
+
+  const [stripMenu, setStripMenu] = useState<{
+    open: boolean;
+    x: number;
+    y: number;
+  }>({ open: false, x: 0, y: 0 });
+  const [stripI2vDialog, setStripI2vDialog] = useState<{
+    relPath: string;
+    index: number;
+    length: number;
+    prompt: string;
+  } | null>(null);
+  const [stripFlfDialog, setStripFlfDialog] = useState<{
+    relPathA: string;
+    relPathB: string;
+    start: number;
+    end: number;
+    length: number;
+  } | null>(null);
+
+  const updateStripSlots = useCallback(
+    (updater: (prev: FrameSequenceStripSlot[]) => FrameSequenceStripSlot[]) => {
+      if (isGroupMode) {
+        groupUndoStack.current.push(layerStripsRef.current.map((s) => s.map(cloneStripSlot)));
+        groupRedoStack.current = [];
+        setLayerStrips((prev) =>
+          prev.map((layerStrip, i) => (i === contextLayerIndex ? updater(layerStrip) : layerStrip))
+        );
+        return;
+      }
+      undoStack.current.push(payloadFromState(initial.sequenceGroupId, stripRef.current));
+      redoStack.current = [];
+      setStrip((prev) => updater(prev));
+    },
+    [initial.sequenceGroupId, isGroupMode, contextLayerIndex]
+  );
+
+  const updateAllLayerStrips = useCallback(
+    (updater: (prev: FrameSequenceStripSlot[]) => FrameSequenceStripSlot[]) => {
+      if (!isGroupMode) {
+        undoStack.current.push(payloadFromState(initial.sequenceGroupId, stripRef.current));
+        redoStack.current = [];
+        setStrip((prev) => updater(prev));
+        return;
+      }
+      groupUndoStack.current.push(layerStripsRef.current.map((s) => s.map(cloneStripSlot)));
+      groupRedoStack.current = [];
+      setLayerStrips((prev) => prev.map((layerStrip) => updater(layerStrip)));
+    },
+    [initial.sequenceGroupId, isGroupMode]
+  );
+
+  const applyRelPathUpdates = useCallback(
+    (updates: Map<number, string>) => {
+      if (!updates.size) return;
+      updateStripSlots((prev) =>
+        prev.map((slot, i) => {
+          const nextRel = updates.get(i);
+          if (!nextRel || slot.kind !== "image") return slot;
+          return { ...slot, relPath: nextRel };
+        })
+      );
+    },
+    [updateStripSlots]
+  );
+
+  const stripMenuItems: ContextMenuItem[] = useMemo(() => {
+    if (!stripMenu.open) return [];
+    const items: ContextMenuItem[] = [];
+    const menuStrip = isGroupMode ? contextStrip : strip;
+    const relPaths = relPathsFromStripSelection(menuStrip, selectedIndices);
+    const occupiedCount = occupiedStripSelectionCount(menuStrip, selectedIndices);
+    const i2v = canGenerateI2vFromStripSelection(menuStrip, selectedIndices);
+    const flf = canGenerateFlfFromStripSelection(menuStrip, selectedIndices);
+    const busy = activeStripActions?.busy ?? false;
+
+    if (occupiedCount >= 2) {
+      items.push({
+        key: "invert",
+        label: "Invert",
+        onSelect: () => {
+          updateStripSlots((prev) => reverseStripSelection(prev, selectedIndices));
+        },
+      });
+    }
+
+    if (relPaths.length && activeStripActions?.onRemoveBackground) {
+      items.push({
+        key: "rembg",
+        label: relPaths.length > 1 ? "Remove Background" : "Remove Background",
+        disabled: busy,
+        onSelect: () => {
+          void (async () => {
+            try {
+              const out = await activeStripActions.onRemoveBackground!(relPaths);
+              if (!out?.length) return;
+              const updates = new Map<number, string>();
+              let j = 0;
+              for (const i of [...selectedIndices].sort((a, b) => a - b)) {
+                const slot = menuStrip[i];
+                if (!frameSequenceStripSlotHasImage(slot)) continue;
+                const nextRel = out[j];
+                if (nextRel) updates.set(i, nextRel);
+                j += 1;
+              }
+              applyRelPathUpdates(updates);
+            } catch (e) {
+              onErrorRef.current("Remove background failed.", e);
+            }
+          })();
+        },
+      });
+    }
+    if (relPaths.length === 1 && activeStripActions?.onAiEdit) {
+      items.push({
+        key: "aiEdit",
+        label: "AI Edit",
+        disabled: busy,
+        onSelect: () => {
+          void (async () => {
+            try {
+              const rel = relPaths[0]!;
+              const nextRel = await activeStripActions.onAiEdit!(rel);
+              if (!nextRel) return;
+              const ix = [...selectedIndices].find((i) =>
+                frameSequenceStripSlotHasImage(menuStrip[i])
+              );
+              if (ix == null) return;
+              applyRelPathUpdates(new Map([[ix, nextRel]]));
+            } catch (e) {
+              onErrorRef.current("AI edit failed.", e);
+            }
+          })();
+        },
+      });
+    }
+    if (i2v.ok && activeStripActions?.onGenerateI2v) {
+      items.push({
+        key: "i2v",
+        label: "Generate I2V",
+        disabled: busy,
+        onSelect: () =>
+          setStripI2vDialog({
+            relPath: i2v.relPath,
+            index: i2v.index,
+            length: 129,
+            prompt: "",
+          }),
+      });
+    }
+    if (flf.ok && activeStripActions?.onGenerateFlf) {
+      const a = menuStrip[flf.start]!;
+      const b = menuStrip[flf.end]!;
+      const relA = a.kind === "image" ? a.relPath?.trim() : "";
+      const relB = b.kind === "image" ? b.relPath?.trim() : "";
+      if (relA && relB) {
+        items.push({
+          key: "flf",
+          label: "Generate FLF",
+          disabled: busy,
+          onSelect: () =>
+            setStripFlfDialog({
+              relPathA: relA,
+              relPathB: relB,
+              start: flf.start,
+              end: flf.end,
+              length: 33,
+            }),
+        });
+      }
+    }
+    return items;
+  }, [
+    stripMenu.open,
+    activeStripActions,
+    strip,
+    contextStrip,
+    isGroupMode,
+    selectedIndices,
+    applyRelPathUpdates,
+    updateStripSlots,
+  ]);
 
   const snapshot = useCallback((): FrameSequencePayload => {
-    return payloadFromState(initial.sequenceGroupId, strip);
-  }, [initial.sequenceGroupId, strip]);
+    return payloadFromState(initial.sequenceGroupId, isGroupMode ? displayStrip : strip);
+  }, [initial.sequenceGroupId, strip, displayStrip, isGroupMode]);
+
+  const groupPayloadsFromState = useCallback((): Record<string, FrameSequencePayload> => {
+    if (!groupLayers) return {};
+    return payloadFromAlignedStrips(
+      groupLayers.map((layer, i) => ({
+        clipId: layer.clipId,
+        sequenceGroupId: layer.initial.sequenceGroupId,
+        strip: layerStrips[i] ?? [],
+      }))
+    );
+  }, [groupLayers, layerStrips]);
 
   const pushUndo = useCallback(() => {
+    if (isGroupMode) {
+      groupUndoStack.current.push(layerStripsRef.current.map((s) => s.map(cloneStripSlot)));
+      groupRedoStack.current = [];
+      return;
+    }
     undoStack.current.push(snapshot());
     redoStack.current = [];
-  }, [snapshot]);
+  }, [snapshot, isGroupMode]);
 
   useEffect(() => {
     if (!open) return;
+    if (isGroupMode && groupLayers) {
+      const aligned = alignFrameStripsToLength(
+        groupLayers.map((g) => migrateLegacyFrameSequence(g.initial))
+      );
+      setLayerStrips(aligned);
+      setLayerVisible(Object.fromEntries(groupLayers.map((g) => [g.clipId, true])));
+      setContextLayerId(groupLayers[0]!.clipId);
+      const len = aligned[0]?.length ?? 0;
+      setSelectedIndices(len ? new Set([0]) : new Set());
+      rangeAnchorRef.current = 0;
+      setFocusIx(0);
+      setPlay(false);
+      setPlayIx(0);
+      groupUndoStack.current = [];
+      groupRedoStack.current = [];
+      return;
+    }
     const nextStrip = migrateLegacyFrameSequence(initial);
     setStrip(nextStrip);
     setSelectedIndices(nextStrip.length ? new Set([0]) : new Set());
@@ -374,7 +805,7 @@ export function FrameSequenceModal(props: {
     undoStack.current = [];
     redoStack.current = [];
     stripClipRef.current = null;
-  }, [open, initial]);
+  }, [open, initial, isGroupMode, groupLayers]);
 
   useEffect(() => {
     if (!open || !play) return;
@@ -392,8 +823,13 @@ export function FrameSequenceModal(props: {
 
   const addEmpty = () => {
     pushUndo();
-    if (strip.length === 0) {
-      setStrip([{ kind: "empty" }]);
+    const currentStrip = isGroupMode ? displayStrip : strip;
+    if (currentStrip.length === 0) {
+      if (isGroupMode) {
+        setLayerStrips((prev) => prev.map(() => [{ kind: "empty" }]));
+      } else {
+        setStrip([{ kind: "empty" }]);
+      }
       setSelectedIndices(new Set([0]));
       rangeAnchorRef.current = 0;
       setFocusIx(0);
@@ -401,9 +837,9 @@ export function FrameSequenceModal(props: {
       setPlay(false);
       return;
     }
-    const insertAfter = Math.min(Math.max(0, focusIx), strip.length - 1);
+    const insertAfter = Math.min(Math.max(0, focusIx), currentStrip.length - 1);
     const newIx = insertAfter + 1;
-    setStrip((s) => {
+    updateAllLayerStrips((s) => {
       const t = [...s];
       t.splice(newIx, 0, { kind: "empty" });
       return t;
@@ -417,26 +853,33 @@ export function FrameSequenceModal(props: {
 
   const removeSelectedSlots = useCallback(() => {
     if (selectedIndices.size === 0) return;
+    const currentStrip = isGroupMode ? displayStrip : strip;
     const toRemove = new Set(
-      [...selectedIndices].filter((i) => i >= 0 && i < strip.length)
+      [...selectedIndices].filter((i) => i >= 0 && i < currentStrip.length)
     );
     if (toRemove.size === 0) return;
     pushUndo();
-    const next = strip.filter((_, j) => !toRemove.has(j));
-    setStrip(next);
-    if (next.length === 0) {
+    if (isGroupMode) {
+      setLayerStrips((prev) =>
+        prev.map((layerStrip) => layerStrip.filter((_, j) => !toRemove.has(j)))
+      );
+    } else {
+      setStrip((prev) => prev.filter((_, j) => !toRemove.has(j)));
+    }
+    const nextLen = currentStrip.length - toRemove.size;
+    if (nextLen === 0) {
       setSelectedIndices(new Set());
       setFocusIx(0);
       setPlayIx(0);
       setPlay(false);
       return;
     }
-    const nf = Math.min(Math.max(0, focusIx), next.length - 1);
+    const nf = Math.min(Math.max(0, focusIx), nextLen - 1);
     setSelectedIndices(new Set([nf]));
     rangeAnchorRef.current = nf;
     setFocusIx(nf);
     setPlayIx(nf);
-  }, [selectedIndices, strip, focusIx, pushUndo]);
+  }, [selectedIndices, strip, displayStrip, isGroupMode, focusIx, pushUndo]);
 
   useEffect(() => {
     if (!open) return;
@@ -564,13 +1007,28 @@ export function FrameSequenceModal(props: {
   }, [open, charKey, sequenceName, stepPreviewFrame, snapshot, pushUndo, removeSelectedSlots]);
 
   const hideSelectedSlots = () => {
+    const editStrip = isGroupMode ? contextStrip : strip;
     const targets = [...selectedIndices].filter((i) => {
-      if (i < 0 || i >= strip.length) return false;
-      const sl = strip[i]!;
+      if (i < 0 || i >= editStrip.length) return false;
+      const sl = editStrip[i]!;
       return sl.kind === "image" && !!sl.relPath?.trim() && !sl.hidden;
     });
     if (!targets.length) return;
     pushUndo();
+    if (isGroupMode) {
+      setLayerStrips((prev) =>
+        prev.map((layerStrip, i) =>
+          i === contextLayerIndex
+            ? layerStrip.map((slot, j) =>
+                targets.includes(j) && slot.kind === "image" && slot.relPath
+                  ? { ...slot, hidden: true }
+                  : slot
+              )
+            : layerStrip
+        )
+      );
+      return;
+    }
     setStrip((s) =>
       s.map((slot, j) =>
         targets.includes(j) && slot.kind === "image" && slot.relPath
@@ -581,14 +1039,15 @@ export function FrameSequenceModal(props: {
   };
 
   const unhideSelectedSlots = () => {
+    const editStrip = isGroupMode ? contextStrip : strip;
     const targets = [...selectedIndices].filter((i) => {
-      if (i < 0 || i >= strip.length) return false;
-      const sl = strip[i]!;
+      if (i < 0 || i >= editStrip.length) return false;
+      const sl = editStrip[i]!;
       return sl.kind === "image" && !!sl.hidden;
     });
     if (!targets.length) return;
     pushUndo();
-    setStrip((s) =>
+    const unhideMap = (s: FrameSequenceStripSlot[]) =>
       s.map((slot, j) => {
         if (!targets.includes(j) || slot.kind !== "image" || !slot.hidden) return slot;
         const { hidden: _h, ...rest } = slot;
@@ -597,35 +1056,57 @@ export function FrameSequenceModal(props: {
           relPath: rest.relPath || "",
           crop: cloneCrop(rest.crop),
         };
-      })
-    );
+      });
+    if (isGroupMode) {
+      setLayerStrips((prev) =>
+        prev.map((layerStrip, i) => (i === contextLayerIndex ? unhideMap(layerStrip) : layerStrip))
+      );
+      return;
+    }
+    setStrip(unhideMap);
   };
 
   const hasSelectedImageToHide = useMemo(
     () =>
       [...selectedIndices].some((i) => {
-        if (i < 0 || i >= strip.length) return false;
-        const sl = strip[i]!;
+        const editStrip = isGroupMode ? contextStrip : strip;
+        if (i < 0 || i >= editStrip.length) return false;
+        const sl = editStrip[i]!;
         return sl.kind === "image" && !!sl.relPath?.trim() && !sl.hidden;
       }),
-    [selectedIndices, strip]
+    [selectedIndices, strip, contextStrip, isGroupMode]
   );
 
   const hasSelectedHiddenImage = useMemo(
     () =>
       [...selectedIndices].some((i) => {
-        if (i < 0 || i >= strip.length) return false;
-        const sl = strip[i]!;
+        const editStrip = isGroupMode ? contextStrip : strip;
+        if (i < 0 || i >= editStrip.length) return false;
+        const sl = editStrip[i]!;
         return sl.kind === "image" && !!sl.hidden;
       }),
-    [selectedIndices, strip]
+    [selectedIndices, strip, contextStrip, isGroupMode]
   );
 
   const previewSlot = useMemo(() => {
-    if (!strip.length) return null;
+    if (!displayStrip.length) return null;
     const ix = play ? playIx : focusIx;
-    return previewDisplaySlot(strip, ix);
-  }, [strip, play, playIx, focusIx]);
+    return previewDisplaySlot(displayStrip, ix);
+  }, [displayStrip, play, playIx, focusIx]);
+
+  const groupPreviewLayers = useMemo(() => {
+    if (!isGroupMode || !groupLayers?.length) return [];
+    const ix = play ? playIx : focusIx;
+    return groupLayers
+      .map((layer, li) => {
+        if (!layerVisible[layer.clipId]) return null;
+        const layerStrip = layerStrips[li] ?? [];
+        const slot = previewDisplaySlot(layerStrip, ix);
+        if (!slot || slot.kind !== "image" || !slot.relPath) return null;
+        return { clipId: layer.clipId, label: layer.label, slot };
+      })
+      .filter((x): x is NonNullable<typeof x> => x != null);
+  }, [isGroupMode, groupLayers, layerStrips, layerVisible, play, playIx, focusIx]);
 
   const onStripSlotClick = (i: number, ev: React.MouseEvent) => {
     setPlay(false);
@@ -645,8 +1126,8 @@ export function FrameSequenceModal(props: {
         const n = new Set(prev);
         if (n.has(i)) n.delete(i);
         else n.add(i);
-        if (n.size === 0 && strip.length > 0) {
-          const fallback = Math.min(Math.max(0, i), strip.length - 1);
+        if (n.size === 0 && displayStrip.length > 0) {
+          const fallback = Math.min(Math.max(0, i), displayStrip.length - 1);
           return new Set([fallback]);
         }
         return n;
@@ -662,7 +1143,7 @@ export function FrameSequenceModal(props: {
     setPlayIx(i);
   };
 
-  const visibleIx = useMemo(() => visibleStripIndices(strip), [strip]);
+  const visibleIx = useMemo(() => visibleStripIndices(displayStrip), [displayStrip]);
   const stripIndexToVisiblePos = useMemo(() => {
     const m = new Map<number, number>();
     visibleIx.forEach((stripIdx, visPos) => {
@@ -673,17 +1154,20 @@ export function FrameSequenceModal(props: {
   const hasVisibleFrames = visibleIx.length > 0;
   const previewStripIx = play ? playIx : focusIx;
   const previewVisiblePos = useMemo(
-    () => (visibleIx.length ? positionInVisibleOrNearest(strip, previewStripIx) : 0),
-    [strip, visibleIx.length, previewStripIx]
+    () => (visibleIx.length ? positionInVisibleOrNearest(displayStrip, previewStripIx) : 0),
+    [displayStrip, visibleIx.length, previewStripIx]
   );
+  const columnCount = isGroupMode ? displayStrip.length : strip.length;
 
   const { setNodeRef: setBackdropDropRef, isOver: isOverBackdrop } = useDroppable({
     id: FS_MODAL_GALLERY_BACKDROP_DROP_ID,
-    disabled: !open,
+    disabled: !open || disableStripDrag,
   });
   const { active } = useDndContext();
   const stripSlotDragActive = active?.data.current?.kind === "frameSeqStripSlot";
-  const showAddToGalleryHint = Boolean(stripSlotDragActive && isOverBackdrop);
+  const showAddToGalleryHint = Boolean(
+    !disableStripDrag && stripSlotDragActive && isOverBackdrop
+  );
 
   if (!open) return null;
 
@@ -754,6 +1238,11 @@ export function FrameSequenceModal(props: {
           <button type="button" style={modalBtnSecondary} onClick={addEmpty}>
             Add empty
           </button>
+          {editorMode === "timeline" && onReExtract ? (
+            <button type="button" style={modalBtnSecondary} onClick={onReExtract}>
+              Re-extract from video
+            </button>
+          ) : null}
           <button
             type="button"
             style={selectedIndices.size === 0 ? modalBtnSecondaryDisabled : modalBtnSecondary}
@@ -810,18 +1299,45 @@ export function FrameSequenceModal(props: {
             }}
           >
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "flex-end" }}>
-              {strip.map((slot, i) => (
-                <StripDraggableCell
-                  key={`s-${i}`}
-                  stripIndex={i}
-                  sourceGalleryIndex={sourceGalleryIndex}
-                  slot={slot}
-                  selected={selectedIndices.has(i)}
-                  isFocus={focusIx === i}
-                  visibleFooterLabel={stripIndexToVisiblePos.get(i) ?? null}
-                  onStripSlotClick={onStripSlotClick}
-                />
-              ))}
+              {isGroupMode && groupLayers
+                ? Array.from({ length: columnCount }, (_, i) => (
+                    <GroupStripStackedColumn
+                      key={`g-${i}`}
+                      stripIndex={i}
+                      layers={groupLayers.map((layer, li) => ({
+                        clipId: layer.clipId,
+                        label: layer.label,
+                        slot: layerStrips[li]?.[i] ?? { kind: "empty" },
+                      }))}
+                      selected={selectedIndices.has(i)}
+                      isFocus={focusIx === i}
+                      visibleFooterLabel={stripIndexToVisiblePos.get(i) ?? null}
+                      onStripSlotClick={onStripSlotClick}
+                      onLayerContextMenu={(clipId, stripIndex, ev) => {
+                        setContextLayerId(clipId);
+                        setSelectedIndices(new Set([stripIndex]));
+                        setFocusIx(stripIndex);
+                        setPlayIx(stripIndex);
+                        setStripMenu({ open: true, x: ev.clientX, y: ev.clientY });
+                      }}
+                    />
+                  ))
+                : strip.map((slot, i) => (
+                    <StripDraggableCell
+                      key={`s-${i}`}
+                      stripIndex={i}
+                      sourceGalleryIndex={sourceGalleryIndex}
+                      slot={slot}
+                      selected={selectedIndices.has(i)}
+                      isFocus={focusIx === i}
+                      visibleFooterLabel={stripIndexToVisiblePos.get(i) ?? null}
+                      onStripSlotClick={onStripSlotClick}
+                      disableDrag={disableStripDrag}
+                      onStripSlotContextMenu={(_i, ev) =>
+                        setStripMenu({ open: true, x: ev.clientX, y: ev.clientY })
+                      }
+                    />
+                  ))}
             </div>
           </div>
           <div
@@ -834,6 +1350,43 @@ export function FrameSequenceModal(props: {
             }}
           >
             <div style={{ ...sectionLabelStyle, textAlign: "center", width: "100%" }}>Preview</div>
+            {isGroupMode && groupLayers ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 10,
+                  justifyContent: "center",
+                  marginBottom: 8,
+                  width: "100%",
+                }}
+              >
+                {groupLayers.map((layer) => (
+                  <label
+                    key={layer.clipId}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={layerVisible[layer.clipId] ?? true}
+                      onChange={() =>
+                        setLayerVisible((prev) => ({
+                          ...prev,
+                          [layer.clipId]: !(prev[layer.clipId] ?? true),
+                        }))
+                      }
+                    />
+                    <span>{layer.label}</span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
             <div
               title="Drag the corner to resize the preview"
               style={{
@@ -863,7 +1416,60 @@ export function FrameSequenceModal(props: {
                   boxSizing: "border-box",
                 }}
               >
-                {previewSlot?.kind === "image" && previewSlot.relPath ? (
+                {isGroupMode ? (
+                  groupPreviewLayers.length ? (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}
+                    >
+                      {groupPreviewLayers.map((layer) => (
+                        <div
+                          key={layer.clipId}
+                          style={{
+                            flex: 1,
+                            minHeight: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <div
+                            style={{
+                              ...SEQUENCE_CROP_OUTER_CLIP_FLEX,
+                              maxWidth: "100%",
+                              maxHeight: "100%",
+                              width: "100%",
+                              height: "100%",
+                            }}
+                          >
+                            <div style={sequenceCropTransformWrapperStyle(layer.slot.crop)}>
+                              <img
+                                src={assetUrlFromRelPath(layer.slot.relPath!)}
+                                alt=""
+                                style={{
+                                  maxWidth: "100%",
+                                  maxHeight: "100%",
+                                  width: "auto",
+                                  height: "auto",
+                                  objectFit: "contain",
+                                  display: "block",
+                                  margin: "0 auto",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ width: "100%", height: "100%", minHeight: 80, background: "#222" }} />
+                  )
+                ) : previewSlot?.kind === "image" && previewSlot.relPath ? (
                   <div
                     style={{
                       ...SEQUENCE_CROP_OUTER_CLIP_FLEX,
@@ -964,18 +1570,219 @@ export function FrameSequenceModal(props: {
           <button type="button" style={modalBtnSecondary} onClick={onClose}>
             Cancel
           </button>
+          {editorMode === "timeline" && (onApplyVideo || onApplyVideoGroup) ? (
+            <button
+              type="button"
+              style={modalBtnPrimary}
+              onClick={() => {
+                if (isGroupMode && onSaveGroup && onApplyVideoGroup) {
+                  const payloads = groupPayloadsFromState();
+                  onSaveGroup(payloads);
+                  onApplyVideoGroup(payloads);
+                  return;
+                }
+                const payload = payloadFromState(initial.sequenceGroupId, strip);
+                onSave(payload);
+                onApplyVideo?.(payload);
+              }}
+            >
+              Apply video…
+            </button>
+          ) : null}
           <button
             type="button"
             style={modalBtnPrimary}
             onClick={() => {
-              onSave(payloadFromState(initial.sequenceGroupId, strip));
-              onClose();
+              if (isGroupMode && onSaveGroup) {
+                onSaveGroup(groupPayloadsFromState());
+              } else {
+                onSave(payloadFromState(initial.sequenceGroupId, strip));
+              }
+              if (editorMode !== "timeline") onClose();
             }}
           >
-            Save
+            {editorMode === "timeline" ? "Save strip" : "Save"}
           </button>
         </div>
       </div>
+
+      <DesktopContextMenu
+        open={stripMenu.open}
+        x={stripMenu.x}
+        y={stripMenu.y}
+        items={stripMenuItems}
+        onClose={() => setStripMenu((s) => ({ ...s, open: false }))}
+      />
+
+      {stripI2vDialog ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            zIndex: 5000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onMouseDown={() => setStripI2vDialog(null)}
+        >
+          <div
+            style={{
+              background: "#0b0b0b",
+              color: "#eee",
+              padding: 14,
+              maxWidth: 400,
+              width: "100%",
+              border: "1px solid rgba(255,255,255,0.22)",
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Generate I2V (strip)</div>
+            <SequenceOutputLengthStepper
+              lengths={SEQUENCE_I2V_OUTPUT_LENGTHS}
+              value={stripI2vDialog.length}
+              onChange={(next) =>
+                setStripI2vDialog((d) => (d ? { ...d, length: next } : null))
+              }
+            />
+            <textarea
+              value={stripI2vDialog.prompt}
+              onChange={(e) =>
+                setStripI2vDialog((d) => (d ? { ...d, prompt: e.target.value } : null))
+              }
+              rows={3}
+              placeholder="Motion prompt"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                marginTop: 8,
+                background: "rgba(0,0,0,0.35)",
+                color: "inherit",
+                border: "1px solid rgba(255,255,255,0.25)",
+                padding: 8,
+              }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+              <button type="button" onClick={() => setStripI2vDialog(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!stripI2vDialog.prompt.trim() || !activeStripActions?.onGenerateI2v}
+                onClick={() => {
+                  const dlg = stripI2vDialog;
+                  setStripI2vDialog(null);
+                  if (!dlg || !activeStripActions?.onGenerateI2v) return;
+                  void (async () => {
+                    try {
+                      const rels = await activeStripActions.onGenerateI2v!(
+                        dlg.relPath,
+                        dlg.prompt.trim(),
+                        dlg.length
+                      );
+                      if (!rels?.length) return;
+                      const insert: FrameSequenceStripSlot[] = rels.map((relPath) => ({
+                        kind: "image",
+                        relPath,
+                      }));
+                      updateStripSlots((prev) =>
+                        spliceStripFrames(prev, dlg.index, 1, insert)
+                      );
+                      setFocusIx(dlg.index);
+                      setSelectedIndices(new Set([dlg.index]));
+                    } catch (e) {
+                      onErrorRef.current("Strip I2V failed.", e);
+                    }
+                  })();
+                }}
+              >
+                Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {stripFlfDialog ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            zIndex: 5000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onMouseDown={() => setStripFlfDialog(null)}
+        >
+          <div
+            style={{
+              background: "#0b0b0b",
+              color: "#eee",
+              padding: 14,
+              maxWidth: 400,
+              width: "100%",
+              border: "1px solid rgba(255,255,255,0.22)",
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Generate FLF (strip)</div>
+            <SequenceOutputLengthStepper
+              lengths={SEQUENCE_FLF_OUTPUT_LENGTHS}
+              value={stripFlfDialog.length}
+              onChange={(next) =>
+                setStripFlfDialog((d) => (d ? { ...d, length: next } : null))
+              }
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+              <button type="button" onClick={() => setStripFlfDialog(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!activeStripActions?.onGenerateFlf}
+                onClick={() => {
+                  const dlg = stripFlfDialog;
+                  setStripFlfDialog(null);
+                  if (!dlg || !activeStripActions?.onGenerateFlf) return;
+                  void (async () => {
+                    try {
+                      const rels = await activeStripActions.onGenerateFlf!(
+                        dlg.relPathA,
+                        dlg.relPathB,
+                        dlg.length
+                      );
+                      if (!rels?.length) return;
+                      const insert: FrameSequenceStripSlot[] = rels.map((relPath) => ({
+                        kind: "image",
+                        relPath,
+                      }));
+                      const removeCount = Math.max(0, dlg.end - dlg.start - 1);
+                      updateStripSlots((prev) =>
+                        spliceStripFrames(prev, dlg.start + 1, removeCount, insert)
+                      );
+                      setFocusIx(dlg.start + 1);
+                      setSelectedIndices(new Set([dlg.start + 1]));
+                    } catch (e) {
+                      onErrorRef.current("Strip FLF failed.", e);
+                    }
+                  })();
+                }}
+              >
+                Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -104,6 +104,28 @@ function padClampFigureBbox(
   return { x: ix1, y: iy1, width: w, height: h };
 }
 
+function padClampSquareFigureBbox(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  imgW: number,
+  imgH: number
+): { x: number; y: number; width: number; height: number } {
+  const rect = padClampFigureBbox(x1, y1, x2, y2, imgW, imgH);
+  const side = Math.max(rect.width, rect.height);
+  let cx = rect.x + rect.width / 2;
+  let cy = rect.y + rect.height / 2;
+  let nx = Math.round(cx - side / 2);
+  let ny = Math.round(cy - side / 2);
+  if (nx < 0) nx = 0;
+  if (ny < 0) ny = 0;
+  if (nx + side > imgW) nx = Math.max(0, imgW - side);
+  if (ny + side > imgH) ny = Math.max(0, imgH - side);
+  const clampedSide = Math.min(side, imgW - nx, imgH - ny);
+  return { x: nx, y: ny, width: clampedSide, height: clampedSide };
+}
+
 type ThreeModule = typeof import("three");
 
 const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
@@ -244,7 +266,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
         renderer.setSize(w0, h0);
-        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setPixelRatio(Math.min(2, Math.max(1, window.devicePixelRatio)));
         renderer.setClearColor(0x1a1a1a);
         container.appendChild(renderer.domElement);
 
@@ -457,7 +479,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           maxY = Math.max(maxY, py);
         }
         if (!Number.isFinite(minX)) return null;
-        const box = padClampFigureBbox(minX, minY, maxX, maxY, imgW, imgH);
+        const box = padClampSquareFigureBbox(minX, minY, maxX, maxY, imgW, imgH);
         return { ...box, imageWidth: imgW, imageHeight: imgH };
       },
     }));

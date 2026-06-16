@@ -44,7 +44,7 @@ def load_catalog(path: Path) -> list[dict[str, Any]]:
 # ============================================================================
 # CHARACTER GENERATION
 #   services/anime_img_gen_ai_service/serverless.py (Anima T2I),
-#   services/logic.generate_character_base_draft_to_temp (new-character / new-location)
+#   services/logic.generate_character_base_draft_to_temp (new-character)
 # ============================================================================
 
 # Shared quality/anime style lead. Used both as the anime T2I default prefix and as the
@@ -84,6 +84,31 @@ def compose_new_character_positive_prompt(user_description: str) -> str:
     if not u:
         return NEW_CHARACTER_POSITIVE_LEAD
     return f"{NEW_CHARACTER_POSITIVE_LEAD}, {u}"
+
+
+# ============================================================================
+# LOCATION GENERATION
+#   services/logic.generate_location_base_draft_to_temp (new-location, location gallery)
+# ============================================================================
+
+# Full positive lead for a new-location base background (environment / no characters).
+NEW_LOCATION_POSITIVE_LEAD = (
+    "masterpiece, best quality, score_7, safe. anime, anime background art, "
+    "studio-quality animation environment, cinematic composition, richly detailed scenery, "
+    "depth and atmosphere, empty scene, no characters"
+)
+
+
+def compose_new_location_positive_prompt(user_description: str) -> str:
+    """
+    Build the full positive prompt for a new-location base background image.
+
+    ``user_description`` is the scene the user typed (setting, mood, time of day, etc.).
+    """
+    u = (user_description or "").strip()
+    if not u:
+        return NEW_LOCATION_POSITIVE_LEAD
+    return f"{NEW_LOCATION_POSITIVE_LEAD}, {u}"
 
 
 # ============================================================================

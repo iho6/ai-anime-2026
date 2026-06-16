@@ -4,26 +4,52 @@
   "previewAspect": "16:9",
   "tracks": [
     {
-      "id": "trk_mqdyb46d_12",
-      "name": "Segment",
+      "id": "trk_mqgqoiqx_22",
+      "name": "FLF",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mqgqoiqx_20",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_15a3016f77a44ee18302d1ca044e6102.mp4",
+          "start": 13.368300466826465,
+          "inPoint": 0,
+          "outPoint": 1.375,
+          "speed": 1,
+          "duration": 1.375,
+          "srcDuration": 1.375,
+          "naturalW": 1280,
+          "naturalH": 1280
+        }
+      ]
+    },
+    {
+      "id": "trk_mqgqehuo_19",
+      "name": "AI Edit",
       "kind": "video",
       "clips": []
     },
     {
-      "id": "trk_mqdxyp88_9",
-      "name": "Remove Background",
+      "id": "trk_mqgqdf19_16",
+      "name": "AI Edit",
+      "kind": "video",
+      "clips": []
+    },
+    {
+      "id": "trk_mqgq6sn6_12",
+      "name": "FLF",
       "kind": "video",
       "clips": [
         {
-          "id": "clip_mqdxyp87_7",
+          "id": "clip_mqgpepqe_1",
           "type": "video",
-          "srcRelPath": "timelines/Timeline/clips/clip_9f89fa1f975040c79916f973f7bcea26_nobg_1781451051.webm",
-          "start": 19.777284675167746,
+          "srcRelPath": "timelines/Timeline/clips/clip_9f89fa1f975040c79916f973f7bcea26_rmbg_1781617959.webm",
+          "start": 0,
           "inPoint": 0,
-          "outPoint": 3.916,
-          "speed": 1,
-          "duration": 3.916,
-          "srcDuration": 3.916,
+          "outPoint": 2,
+          "speed": 0.3,
+          "duration": 6.666666666666667,
+          "srcDuration": 2,
           "naturalW": 1920,
           "naturalH": 1080,
           "source": {
@@ -31,35 +57,8 @@
             "sequenceName": "Sequence_1"
           },
           "transform": {
-            "x": 0.9594587461194303,
-            "y": -0.24469411741767105,
-            "scale": 0.7810626293523253,
-            "rotation": 0,
-            "opacity": 1
-          }
-        }
-      ]
-    },
-    {
-      "id": "trk_mqdxx4qs_6",
-      "name": "Segment",
-      "kind": "video",
-      "clips": [
-        {
-          "id": "clip_mqdxx4qr_4",
-          "type": "video",
-          "srcRelPath": "timelines/Timeline/clips/clip_2f09f81713144ca88eb0345d5637f24d_seg.webm",
-          "start": 15.168989967709042,
-          "inPoint": 0,
-          "outPoint": 1.9583333333333333,
-          "speed": 1,
-          "duration": 1.9583333333333333,
-          "srcDuration": 1.9583333333333333,
-          "naturalW": 1920,
-          "naturalH": 1080,
-          "transform": {
-            "x": -1.0818053589907475,
-            "y": 0.09015036732255904,
+            "x": 0,
+            "y": 0,
             "scale": 1,
             "rotation": 0,
             "opacity": 1
@@ -68,21 +67,68 @@
       ]
     },
     {
-      "id": "trk_mqdxvgow_3",
-      "name": "Remove Background",
+      "id": "trk_mqgq3gip_9",
+      "name": "I2V",
       "kind": "video",
-      "clips": []
+      "clips": [
+        {
+          "id": "clip_mqgq6sn5_10",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_4b867953cc1347bf8bd02b3f5deda872.mp4",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 0.9466663745186955,
+          "speed": 0.2,
+          "duration": 4.733331872593477,
+          "srcDuration": 1.375,
+          "naturalW": 1280,
+          "naturalH": 1280
+        },
+        {
+          "id": "clip_mqgq3gin_7",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_c28186b33f5d49f290460c822209323b.mp4",
+          "start": 43.472922376416086,
+          "inPoint": 0,
+          "outPoint": 5.375,
+          "speed": 1,
+          "duration": 5.375,
+          "srcDuration": 5.375,
+          "naturalW": 640,
+          "naturalH": 640
+        },
+        {
+          "id": "clip_mqgpx6t9_6",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_6bebaa5dd6d5464ab451ca157ff135b7.png",
+          "start": 13.041921344718176,
+          "inPoint": 0,
+          "outPoint": 4,
+          "speed": 1,
+          "duration": 4,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "city"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        }
+      ]
     },
     {
-      "id": "trk_mqdxe5tz_3",
+      "id": "trk_mqgpt59k_4",
       "name": "Remove Background",
       "kind": "video",
       "clips": [
         {
-          "id": "clip_mqdxe5tz_1",
+          "id": "clip_mqgpsp0s_1",
           "type": "image",
-          "srcRelPath": "timelines/Timeline/clips/clip_1daf3e6be6ed4e61bd334ad926c2014c.png",
-          "start": 10.552062589953191,
+          "srcRelPath": "timelines/Timeline/clips/clip_da64f2c95bca4412a5780beca25332e9.png",
+          "start": 23.217733526979856,
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
@@ -90,7 +136,7 @@
           "naturalW": 1024,
           "naturalH": 1024,
           "source": {
-            "charKey": "luka"
+            "locationKey": "city"
           },
           "transform": {
             "x": 0,
@@ -99,273 +145,10 @@
           }
         },
         {
-          "id": "clip_mqf8ppe0_1",
+          "id": "clip_mqgqvkmv_1",
           "type": "geometry",
           "srcRelPath": "",
-          "start": 0,
-          "inPoint": 0,
-          "outPoint": 3,
-          "speed": 1,
-          "duration": 3,
-          "naturalW": 1000,
-          "naturalH": 1000,
-          "transform": {
-            "x": 0.7962767309701964,
-            "y": -0.09185175799390065,
-            "scale": 0.9515223322210494,
-            "rotation": 0,
-            "opacity": 1
-          },
-          "geometry": {
-            "template": "rect",
-            "closed": true,
-            "points": [
-              {
-                "x": 0.2,
-                "y": 0.2
-              },
-              {
-                "x": 0.8,
-                "y": 0.2
-              },
-              {
-                "x": 0.8,
-                "y": 0.8
-              },
-              {
-                "x": 0.2,
-                "y": 0.8
-              }
-            ],
-            "cornerRadius": 0,
-            "fill": "#ffffff",
-            "stroke": {
-              "color": "#ffffff",
-              "width": 4
-            }
-          }
-        }
-      ]
-    },
-    {
-      "id": "trk_mqduevs8_2",
-      "name": "Video 1",
-      "kind": "video",
-      "clips": [
-        {
-          "id": "clip_mqduf4v0_3",
-          "type": "video",
-          "srcRelPath": "timelines/Timeline/clips/clip_9f89fa1f975040c79916f973f7bcea26.mp4",
-          "start": 0,
-          "inPoint": 0,
-          "outPoint": 1.958,
-          "speed": 0.5,
-          "duration": 3.916,
-          "srcDuration": 1.958,
-          "naturalW": 1920,
-          "naturalH": 1080,
-          "source": {
-            "charKey": "luka",
-            "sequenceName": "Sequence_1"
-          },
-          "transform": {
-            "x": 0.0027863847367406366,
-            "y": -0.005603999269539921,
-            "scale": 1.0112079985390798,
-            "rotation": 0,
-            "opacity": 1
-          }
-        },
-        {
-          "id": "clip_mqduocu0_7",
-          "type": "image",
-          "srcRelPath": "timelines/Timeline/clips/clip_a55ed0da067f4929bca86d3a8fb007fc.png",
-          "start": 4.6111904749766826,
-          "inPoint": 0,
-          "outPoint": 3,
-          "speed": 1,
-          "duration": 5.940872114976509,
-          "naturalW": 1024,
-          "naturalH": 1024,
-          "source": {
-            "charKey": "luka"
-          },
-          "transform": {
-            "x": 1.10724945431328e-16,
-            "y": 0,
-            "scale": 1,
-            "rotation": 0,
-            "opacity": 1
-          }
-        }
-      ],
-      "hidden": false
-    },
-    {
-      "id": "trk_mqdvzr4q_3",
-      "name": "Video 2",
-      "kind": "video",
-      "clips": [
-        {
-          "id": "clip_mqeytqs3_1",
-          "type": "geometry",
-          "srcRelPath": "",
-          "start": 14.945596372509003,
-          "inPoint": 0,
-          "outPoint": 3,
-          "speed": 1,
-          "duration": 3,
-          "naturalW": 1000,
-          "naturalH": 1000,
-          "transform": {
-            "x": -0.027014427414961354,
-            "y": 0,
-            "scale": 0.8984991992468502,
-            "rotation": 0,
-            "opacity": 1
-          },
-          "geometry": {
-            "template": "rect",
-            "closed": true,
-            "points": [
-              {
-                "x": 0.2,
-                "y": 0.2
-              },
-              {
-                "x": 0.8,
-                "y": 0.2
-              },
-              {
-                "x": 0.8,
-                "y": 0.8
-              },
-              {
-                "x": 0.2,
-                "y": 0.8
-              }
-            ],
-            "cornerRadius": 0,
-            "fill": "#ffffff",
-            "stroke": {
-              "color": "#000000",
-              "width": 4
-            }
-          }
-        },
-        {
-          "id": "clip_mqez79co_2",
-          "type": "text",
-          "srcRelPath": "",
-          "start": 19.3438625496374,
-          "inPoint": 0,
-          "outPoint": 3,
-          "speed": 1,
-          "duration": 3,
-          "naturalW": 149,
-          "naturalH": 148,
-          "transform": {
-            "x": 0,
-            "y": 0,
-            "scale": 0.5367400550888726,
-            "rotation": 0,
-            "opacity": 1
-          },
-          "text": {
-            "content": "Eons \nAway",
-            "fontFamilyId": "roboto",
-            "fontWeight": 400,
-            "fontStyle": "normal",
-            "fontSize": 48,
-            "color": "#ff88cc",
-            "align": "center"
-          }
-        },
-        {
-          "id": "clip_mqf7j27b_1",
-          "type": "text",
-          "srcRelPath": "",
-          "start": 7.929880356788635,
-          "inPoint": 0,
-          "outPoint": 3,
-          "speed": 1,
-          "duration": 3,
-          "naturalW": 121,
-          "naturalH": 90,
-          "transform": {
-            "x": 0,
-            "y": 0,
-            "scale": 0.35
-          },
-          "text": {
-            "content": "Text",
-            "fontFamilyId": "inter",
-            "fontWeight": 400,
-            "fontStyle": "normal",
-            "fontSize": 48,
-            "color": "#ffffff",
-            "align": "center"
-          }
-        },
-        {
-          "id": "clip_mqf8td4b_2",
-          "type": "text",
-          "srcRelPath": "",
-          "start": 1.0012442415410823,
-          "inPoint": 0,
-          "outPoint": 3,
-          "speed": 1,
-          "duration": 3,
-          "naturalW": 121,
-          "naturalH": 90,
-          "transform": {
-            "x": 0.318770961728353,
-            "y": 0.21249751519889823,
-            "scale": 0.35,
-            "rotation": 0,
-            "opacity": 1
-          },
-          "text": {
-            "content": "Text",
-            "fontFamilyId": "inter",
-            "fontWeight": 400,
-            "fontStyle": "normal",
-            "fontSize": 48,
-            "color": "#ffffff",
-            "align": "center"
-          }
-        },
-        {
-          "id": "clip_mqf8thfk_3",
-          "type": "text",
-          "srcRelPath": "",
-          "start": 1.0012442415410823,
-          "inPoint": 0,
-          "outPoint": 3,
-          "speed": 1,
-          "duration": 3,
-          "naturalW": 121,
-          "naturalH": 90,
-          "transform": {
-            "x": 0,
-            "y": 0,
-            "scale": 0.35
-          },
-          "text": {
-            "content": "Text",
-            "fontFamilyId": "inter",
-            "fontWeight": 400,
-            "fontStyle": "normal",
-            "fontSize": 48,
-            "color": "#ffffff",
-            "align": "center"
-          }
-        },
-        {
-          "id": "clip_mqfcfhjl_1",
-          "type": "geometry",
-          "srcRelPath": "",
-          "start": 0,
+          "start": 7.5646030766711245,
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
@@ -375,7 +158,7 @@
           "transform": {
             "x": 0,
             "y": 0,
-            "scale": 0.8325777873523862,
+            "scale": 1.689918632316388,
             "rotation": 0,
             "opacity": 1
           },
@@ -407,25 +190,117 @@
               "width": 0
             }
           }
-        },
+        }
+      ]
+    },
+    {
+      "id": "trk_mqgpepqf_3",
+      "name": "Remove Background (RMBG)",
+      "kind": "video",
+      "clips": [
         {
-          "id": "clip_mqg0604m_1",
+          "id": "clip_mqgpv05u_5",
           "type": "image",
-          "srcRelPath": "timelines/Timeline/clips/clip_2d943a862d274dd186c099b2ad994175.png",
-          "start": 22.3438625496374,
+          "srcRelPath": "timelines/Timeline/clips/clip_44a136606edb42f5bd7ef9196ebf4874.png",
+          "start": 11.864091259995316,
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
-          "duration": 3,
-          "naturalW": 864,
-          "naturalH": 1184,
+          "duration": 4,
+          "naturalW": 1024,
+          "naturalH": 1024,
           "source": {
-            "charKey": "Bee"
+            "locationKey": "city"
           },
           "transform": {
             "x": 0,
             "y": 0,
             "scale": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "trk_mqduevs8_2",
+      "name": "Video 1",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mqduocu0_7",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_a55ed0da067f4929bca86d3a8fb007fc.png",
+          "start": 26.042803379408255,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 5.940872114976509,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "luka"
+          },
+          "transform": {
+            "x": 1.10724945431328e-16,
+            "y": 0,
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "clip_mqdxe5tz_1",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_1daf3e6be6ed4e61bd334ad926c2014c.png",
+          "start": 39.52491972446442,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "luka"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        }
+      ],
+      "hidden": false
+    },
+    {
+      "id": "trk_mqdvzr4q_3",
+      "name": "Video 2",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mqez79co_2",
+          "type": "text",
+          "srcRelPath": "",
+          "start": 19.3438625496374,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 149,
+          "naturalH": 148,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 0.5367400550888726,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "text": {
+            "content": "Eons \nAway",
+            "fontFamilyId": "roboto",
+            "fontWeight": 400,
+            "fontStyle": "normal",
+            "fontSize": 48,
+            "color": "#ff88cc",
+            "align": "center"
           }
         }
       ],

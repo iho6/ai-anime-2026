@@ -494,6 +494,8 @@ export type TimelineClip = {
   outPoint: number;
   /** Playback speed multiplier (1 = normal). */
   speed: number;
+  /** When true, source media plays from outPoint toward inPoint. */
+  reversed?: boolean;
   /** Timeline duration in seconds = (outPoint - inPoint) / speed. */
   duration: number;
   /** Source media duration in seconds (video/audio); caps right-trim. */
@@ -541,6 +543,9 @@ export type TimelineClip = {
   text?: TimelineText;
   /** Outgoing crossfade to the next connected clip on the same track. */
   transitionOut?: TimelineTransitionOut;
+  /** Per-frame strip for video frame editing (persisted across re-opens). */
+  frameSequence?: FrameSequencePayload;
+  frameEdit?: { framesDirRel: string };
 };
 
 export type TimelineTrack = {
@@ -636,6 +641,23 @@ export async function apiTimelineImportImage(params: {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ sourceRelPath: params.sourceRelPath }),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ type: "image"; srcRelPath: string; width: number; height: number }>(res);
+}
+
+/** Save a client-rasterized PNG (e.g. geometry clip) into the timeline clips folder. */
+export async function apiTimelineImportPngBase64(params: {
+  timelineKey: string;
+  pngBase64: string;
+}): Promise<{ type: "image"; srcRelPath: string; width: number; height: number }> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(params.timelineKey)}/import_png_base64`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pngBase64: params.pngBase64 }),
       credentials: "omit",
     }
   );
@@ -940,12 +962,87 @@ export function runTimelineI2vWsJob(params: {
   );
 }
 
+export type TimelineFrameExtractResult = {
+  frameSequence: FrameSequencePayload;
+  frameEdit: { framesDirRel: string };
+};
+
+/** Extract trimmed video clip frames for per-frame editing. */
+export function runTimelineVideoFramesExtractWsJob(params: {
+  timelineKey: string;
+  clipId: string;
+  videoRelPath: string;
+  inPoint: number;
+  outPoint: number;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<TimelineFrameExtractResult>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<TimelineFrameExtractResult>(
+    `/timeline/${encodeURIComponent(timelineKey)}/video_frames/extract/ws`,
+    payload,
+    onLogLine
+  );
+}
+
+/** Encode a frame-sequence strip to a timeline video clip. */
+export function runTimelineVideoFramesEncodeWsJob(params: {
+  timelineKey: string;
+  frameSequence: FrameSequencePayload;
+  fps?: number;
+  outputBasename?: string;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<TimelineVideoClipResult>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<TimelineVideoClipResult>(
+    `/timeline/${encodeURIComponent(timelineKey)}/video_frames/encode/ws`,
+    payload,
+    onLogLine
+  );
+}
+
+/** Mini I2V inside a timeline frame strip. */
+export function runTimelineStripI2vWsJob(params: {
+  timelineKey: string;
+  imageRelPath: string;
+  outputDirRel: string;
+  prompt: string;
+  length?: number;
+  width?: number;
+  height?: number;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<{ relPaths: string[] }>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<{ relPaths: string[] }>(
+    `/timeline/${encodeURIComponent(timelineKey)}/strip_i2v/ws`,
+    payload,
+    onLogLine
+  );
+}
+
+/** Mini FLF inside a timeline frame strip. */
+export function runTimelineStripFlfWsJob(params: {
+  timelineKey: string;
+  imageRelPathA: string;
+  imageRelPathB: string;
+  outputDirRel: string;
+  length?: number;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<{ relPaths: string[] }>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<{ relPaths: string[] }>(
+    `/timeline/${encodeURIComponent(timelineKey)}/strip_flf/ws`,
+    payload,
+    onLogLine
+  );
+}
+
 /** AI-edit a timeline image clip (prompt + optional mask) → new image clip. */
 export function runTimelineAiEditWsJob(params: {
   timelineKey: string;
   imageRelPath: string;
   prompt: string;
   maskPngBase64?: string;
+  inPlace?: boolean;
   onLogLine: (line: string) => void;
 }): Promise<WsDoneMessage<TimelineImageClipResult>> {
   const { timelineKey, onLogLine, ...payload } = params;
@@ -1571,6 +1668,7 @@ export function runShotCreateWsJob(params: {
  */
 export function runShotRemoveBgWsJob(params: {
   imageRelPath: string;
+  inPlace?: boolean;
   onLogLine: (line: string) => void;
 }): Promise<WsDoneMessage<{ relPath: string }>> {
   const url = wsUrlForPath("/shot/remove_bg/ws");
@@ -2818,8 +2916,12 @@ export async function apiUploadStaging(params: {
 export type PlacedFigureMeta = {
   canvas: { width: number; height: number };
   placement: { x: number; y: number; width: number; height: number };
+  workingSquareSize?: number;
   figureCropRgbaRelPath?: string;
+  figureSquareCropRelPath?: string;
   figurePlateRelPath?: string;
+  squareRefCropRelPath?: string;
+  squareKeypointCropRelPath?: string;
 };
 
 export type PoseReference = {
@@ -4089,6 +4191,61 @@ export async function apiSequenceGenerateI2v(params: {
     }
   );
   return readJson<{ galleryItem: SequenceGalleryItem }>(res);
+}
+
+export async function apiSequenceStripGenerateI2v(params: {
+  charKey: string;
+  sequenceName: string;
+  sourceRelPath: string;
+  outputDirRel: string;
+  length?: number;
+  width?: number;
+  height?: number;
+  positivePrompt: string;
+}): Promise<{ relPaths: string[] }> {
+  const body: Record<string, unknown> = {
+    sourceRelPath: params.sourceRelPath,
+    outputDirRel: params.outputDirRel,
+    length: params.length ?? 129,
+    positivePrompt: params.positivePrompt,
+  };
+  if (params.width != null) body.width = params.width;
+  if (params.height != null) body.height = params.height;
+  const res = await fetch(
+    `${API_BASE_URL}/detail/${encodeURIComponent(params.charKey)}/sequence/${encodeURIComponent(params.sequenceName)}/strip_generate_i2v`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ relPaths: string[] }>(res);
+}
+
+export async function apiSequenceStripGenerateFlf(params: {
+  charKey: string;
+  sequenceName: string;
+  imageRelPathA: string;
+  imageRelPathB: string;
+  outputDirRel: string;
+  length?: number;
+}): Promise<{ relPaths: string[] }> {
+  const res = await fetch(
+    `${API_BASE_URL}/detail/${encodeURIComponent(params.charKey)}/sequence/${encodeURIComponent(params.sequenceName)}/strip_generate_flf`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        imageRelPathA: params.imageRelPathA,
+        imageRelPathB: params.imageRelPathB,
+        outputDirRel: params.outputDirRel,
+        length: params.length ?? 33,
+      }),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ relPaths: string[] }>(res);
 }
 
 export async function apiSequenceDuplicateAsset(params: {

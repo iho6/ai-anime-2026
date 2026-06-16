@@ -1186,10 +1186,26 @@ def video_subsample_stride(source_fps: float, target_fps: float = 12.0) -> int:
 
 def extract_video_frames_to_pngs(video_path: str, dest_dir: str) -> list[str]:
     """Decode every video frame to PNGs (frame_000001.png, …). Returns ordered absolute paths."""
+    return extract_video_frames_range_to_pngs(
+        video_path, dest_dir, start_frame=0, end_frame=None
+    )
+
+
+def extract_video_frames_range_to_pngs(
+    video_path: str,
+    dest_dir: str,
+    *,
+    start_frame: int = 0,
+    end_frame: int | None = None,
+    max_frames: int = 600,
+) -> list[str]:
+    """Decode a contiguous frame range to PNGs. Returns ordered absolute paths."""
     import av  # type: ignore
     from PIL import Image  # type: ignore
 
     os.makedirs(dest_dir, exist_ok=True)
+    start = max(0, int(start_frame))
+    end = int(end_frame) if end_frame is not None else None
     paths: list[str] = []
     try:
         with av.open(video_path) as container:
@@ -1198,9 +1214,17 @@ def extract_video_frames_to_pngs(video_path: str, dest_dir: str) -> list[str]:
             stream = container.streams.video[0]
             stream.thread_type = "AUTO"
             for i, frame in enumerate(container.decode(stream)):
+                if i < start:
+                    continue
+                if end is not None and i > end:
+                    break
+                if len(paths) >= max_frames:
+                    raise RuntimeError(
+                        f"video frame extraction exceeds max_frames={max_frames}"
+                    )
                 arr = frame.to_ndarray(format="rgb24")
                 im = Image.fromarray(arr)
-                out_path = osp.join(dest_dir, f"frame_{i + 1:06d}.png")
+                out_path = osp.join(dest_dir, f"frame_{len(paths) + 1:06d}.png")
                 im.save(out_path)
                 paths.append(osp.abspath(out_path))
     except RuntimeError:
@@ -1208,5 +1232,5 @@ def extract_video_frames_to_pngs(video_path: str, dest_dir: str) -> list[str]:
     except Exception as e:
         raise RuntimeError(f"video frame extraction failed: {e}") from e
     if not paths:
-        raise RuntimeError("video decode produced zero frames")
+        raise RuntimeError("video decode produced zero frames in requested range")
     return paths

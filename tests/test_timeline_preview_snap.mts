@@ -27,18 +27,25 @@ function imageClip(nW: number, nH: number): TimelineClip {
 const frameW = 1920;
 const frameH = 1080;
 
-// Left edge within snap threshold: scale snaps so left=0.
+// Left edge within snap threshold: scale stays free; guide shown only.
 {
   const clip = imageClip(800, 600);
   const tf: ClipTransform = { x: 0, y: 0, scale: 1.328 };
   const before = clipImageRect(clip, tf, frameW, frameH);
   assert.ok(before.left > 0 && before.left < 8, `setup left=${before.left}`);
   const { scale, guides } = snapClipScaleToFrame(clip, tf, frameW, frameH);
-  const rect = clipImageRect(clip, { ...tf, scale }, frameW, frameH);
-  assert.ok(Math.abs(rect.left) < 0.01, `expected left≈0, got ${rect.left}`);
-  assert.equal(guides.length, 1);
-  assert.equal(guides[0]?.axis, "x");
-  assert.equal(guides[0]?.pos, 0);
+  assert.equal(scale, 1.328);
+  assert.ok(guides.some((g) => g.axis === "x" && g.pos === 0));
+}
+
+// Scale past fill-width: can continue growing centered (no snap back to border).
+{
+  const clip = imageClip(800, 600);
+  const tf: ClipTransform = { x: 0, y: 0, scale: 2.5 };
+  const rect = clipImageRect(clip, tf, frameW, frameH);
+  assert.ok(rect.left < 0, `expected left past border, got ${rect.left}`);
+  const { scale } = snapClipScaleToFrame(clip, tf, frameW, frameH);
+  assert.equal(scale, 2.5);
 }
 
 // Far from any edge: scale unchanged, no guides.

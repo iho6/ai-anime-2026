@@ -2,31 +2,46 @@
 
 import React, { useState } from "react";
 import { assetUrlFromRelPath } from "../lib/api";
+import { GalleryPickTile } from "./GalleryPickTile";
 import { TriangleIcon } from "./IconPrimitives";
 
 export type GallerySectionImage = { relPath: string; caption?: string };
 
-/**
- * A truncatable gallery section: a title row with a downward triangle that
- * collapses/expands a grid of square, clickable thumbnails. Used inside the
- * shot backdrop/character pickers (Angles/Lighting, Pose/Expression).
- */
-export function CollapsibleGallerySection(props: {
+type BaseProps = {
   title: string;
   images: GallerySectionImage[];
-  onPick: (relPath: string) => void;
-  onRightClick?: (relPath: string, x: number, y: number) => void;
   defaultOpen?: boolean;
   emptyText?: string;
-}) {
+  onRightClick?: (relPath: string, x: number, y: number) => void;
+};
+
+type ImmediateProps = BaseProps & {
+  mode?: "immediate";
+  onPick: (relPath: string) => void;
+};
+
+type SelectProps = BaseProps & {
+  mode: "select";
+  selectedRelPaths: Set<string>;
+  onToggleSelect: (relPath: string, e: React.ChangeEvent<HTMLInputElement>) => void;
+  onPreview: (relPath: string) => void;
+  disabled?: boolean;
+};
+
+/**
+ * A truncatable gallery section: a title row with a downward triangle that
+ * collapses/expands a grid of square thumbnails. Used inside the
+ * shot backdrop/character pickers (Angles/Lighting, Pose/Expression).
+ */
+export function CollapsibleGallerySection(props: ImmediateProps | SelectProps) {
   const {
     title,
     images,
-    onPick,
-    onRightClick,
     defaultOpen = true,
     emptyText = "No images",
+    onRightClick,
   } = props;
+  const mode = props.mode ?? "immediate";
   const [open, setOpen] = useState(defaultOpen);
 
   return (
@@ -81,39 +96,69 @@ export function CollapsibleGallerySection(props: {
               paddingTop: 6,
             }}
           >
-            {images.map((img) => (
-              <button
-                key={img.relPath}
-                type="button"
-                onClick={() => onPick(img.relPath)}
-                onContextMenu={onRightClick ? (e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onRightClick(img.relPath, e.clientX, e.clientY);
-                } : undefined}
-                title={img.caption}
-                style={{
-                  width: "100%",
-                  aspectRatio: "1 / 1",
-                  padding: 4,
-                  borderRadius: 0,
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  background: "transparent",
-                  cursor: "pointer",
-                }}
-              >
-                <img
-                  src={assetUrlFromRelPath(img.relPath)}
-                  alt=""
+            {images.map((img) => {
+              if (mode === "select") {
+                const selectProps = props as SelectProps;
+                return (
+                  <GalleryPickTile
+                    key={img.relPath}
+                    src={assetUrlFromRelPath(img.relPath)}
+                    caption={img.caption}
+                    checked={selectProps.selectedRelPaths.has(img.relPath)}
+                    disabled={selectProps.disabled}
+                    onToggle={(on, e) => selectProps.onToggleSelect(img.relPath, e)}
+                    onPrimaryClick={() => selectProps.onPreview(img.relPath)}
+                    onContextMenu={
+                      onRightClick
+                        ? (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onRightClick(img.relPath, e.clientX, e.clientY);
+                          }
+                        : undefined
+                    }
+                  />
+                );
+              }
+              const immediateProps = props as ImmediateProps;
+              return (
+                <button
+                  key={img.relPath}
+                  type="button"
+                  onClick={() => immediateProps.onPick(img.relPath)}
+                  onContextMenu={
+                    onRightClick
+                      ? (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onRightClick(img.relPath, e.clientX, e.clientY);
+                        }
+                      : undefined
+                  }
+                  title={img.caption}
                   style={{
                     width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                    display: "block",
+                    aspectRatio: "1 / 1",
+                    padding: 4,
+                    borderRadius: 0,
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    background: "transparent",
+                    cursor: "pointer",
                   }}
-                />
-              </button>
-            ))}
+                >
+                  <img
+                    src={assetUrlFromRelPath(img.relPath)}
+                    alt=""
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      display: "block",
+                    }}
+                  />
+                </button>
+              );
+            })}
           </div>
         )
       ) : null}

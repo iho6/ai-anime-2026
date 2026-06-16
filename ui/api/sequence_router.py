@@ -250,6 +250,94 @@ def sequence_generate_i2v(
         ) from ex
 
 
+class SequenceStripI2vBody(BaseModel):
+    sourceRelPath: str
+    outputDirRel: str
+    length: int = 129
+    width: int | None = None
+    height: int | None = None
+    positivePrompt: str
+
+
+class SequenceStripFlfBody(BaseModel):
+    imageRelPathA: str
+    imageRelPathB: str
+    outputDirRel: str
+    length: int = 33
+
+
+@router.post("/detail/{char_key}/sequence/{sequence_name}/strip_generate_i2v")
+def sequence_strip_generate_i2v(
+    char_key: str, sequence_name: str, body: SequenceStripI2vBody
+) -> dict[str, Any]:
+    def svc_log(line: str) -> None:
+        logger.info("strip_i2v[%s/%s] %s", char_key, sequence_name, line)
+
+    try:
+        src_rel = body.sourceRelPath.strip()
+        out_rel = body.outputDirRel.strip()
+        prompt = (body.positivePrompt or "").strip()
+        if not src_rel or not out_rel:
+            raise ValueError("sourceRelPath and outputDirRel are required.")
+        if not prompt:
+            raise ValueError("positivePrompt is required.")
+        logic._ensure_rel_under_sequence_folder(char_key, sequence_name, src_rel)
+        logic._ensure_rel_under_sequence_folder(char_key, sequence_name, out_rel)
+        src_abs = str(logic.resolve_storage_rel_path_to_abs(src_rel))
+        out_abs = logic.resolve_storage_rel_path_to_abs(out_rel)
+        if not out_abs.is_dir():
+            raise ValueError("outputDirRel must be an existing directory.")
+        rels = logic.generate_i2v_strip_segment(
+            out_abs,
+            src_abs,
+            length=max(1, int(body.length)),
+            prompt=prompt,
+            width=body.width,
+            height=body.height,
+            log_cb=svc_log,
+        )
+        return {"relPaths": rels}
+    except ValueError as ex:
+        raise HTTPException(400, str(ex)) from ex
+    except RuntimeError as ex:
+        raise HTTPException(502, detail={"error": str(ex), "stage": "strip_generate_i2v"}) from ex
+
+
+@router.post("/detail/{char_key}/sequence/{sequence_name}/strip_generate_flf")
+def sequence_strip_generate_flf(
+    char_key: str, sequence_name: str, body: SequenceStripFlfBody
+) -> dict[str, Any]:
+    def svc_log(line: str) -> None:
+        logger.info("strip_flf[%s/%s] %s", char_key, sequence_name, line)
+
+    try:
+        rel_a = body.imageRelPathA.strip()
+        rel_b = body.imageRelPathB.strip()
+        out_rel = body.outputDirRel.strip()
+        if not rel_a or not rel_b or not out_rel:
+            raise ValueError("imageRelPathA, imageRelPathB, and outputDirRel are required.")
+        logic._ensure_rel_under_sequence_folder(char_key, sequence_name, rel_a)
+        logic._ensure_rel_under_sequence_folder(char_key, sequence_name, rel_b)
+        logic._ensure_rel_under_sequence_folder(char_key, sequence_name, out_rel)
+        abs_a = str(logic.resolve_storage_rel_path_to_abs(rel_a))
+        abs_b = str(logic.resolve_storage_rel_path_to_abs(rel_b))
+        out_abs = logic.resolve_storage_rel_path_to_abs(out_rel)
+        if not out_abs.is_dir():
+            raise ValueError("outputDirRel must be an existing directory.")
+        rels = logic.generate_flf_strip_segment(
+            out_abs,
+            abs_a,
+            abs_b,
+            length=max(1, int(body.length)),
+            log_cb=svc_log,
+        )
+        return {"relPaths": rels}
+    except ValueError as ex:
+        raise HTTPException(400, str(ex)) from ex
+    except RuntimeError as ex:
+        raise HTTPException(502, detail={"error": str(ex), "stage": "strip_generate_flf"}) from ex
+
+
 @router.get("/detail/{char_key}/sequence/{sequence_name}/export_timeline_mp4")
 def sequence_export_timeline_mp4(char_key: str, sequence_name: str) -> FileResponse:
     """Slideshow: one frame per visible timeline cell at ``manifest.fps``."""

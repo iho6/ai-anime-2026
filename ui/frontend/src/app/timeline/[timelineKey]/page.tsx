@@ -16,6 +16,10 @@ import {
   runTimelineExportMp4WsJob,
   runTimelineFlfWsJob,
   runTimelineI2vWsJob,
+  runTimelineVideoFramesExtractWsJob,
+  runTimelineVideoFramesEncodeWsJob,
+  runTimelineStripI2vWsJob,
+  runTimelineStripFlfWsJob,
   runTimelineImportSequenceWsJob,
   runTimelineVideoRemoveBgWsJob,
   runTimelineVideoRemoveBgRmbgWsJob,
@@ -39,6 +43,7 @@ import {
   TimelineManifest,
   TimelineText,
   TimelineTransitionOut,
+  FrameSequencePayload,
   ShotLayerMeta,
   TrajectoryMotionId,
 } from "../../../lib/api";
@@ -63,7 +68,7 @@ import {
   createGeometryData,
   geometryIsCustomized,
 } from "../../../components/timeline/geometryTemplates";
-import { TimelineTracks, AddTrackStrip } from "../../../components/timeline/TimelineTracks";
+import { TimelineTracks, AddTrackStrip, type TimelineTracksHandle } from "../../../components/timeline/TimelineTracks";
 import {
   SequenceVideoPicker,
   SequenceVideoChoice,
@@ -87,7 +92,9 @@ import {
   buildImageClip,
   buildTextClip,
   buildTimelineCompositePngBase64,
+  clipActsAsImage,
   clipEnd,
+  clamp,
   formatTime,
   genId,
   newAudioTrack,
@@ -97,10 +104,21 @@ import {
   defaultTrackNameForKind,
   overlayShotLayerPlacement,
   pruneBrokenTransitions,
+  resolveClipImageRelPath,
   resolveImportDimensions,
   timelineDuration,
 } from "../../../components/timeline/timelineUtil";
+import { rasterizeGeometryToPngBase64 } from "../../../components/timeline/geometryRasterize";
 import { measureTextClipNaturalSize } from "../../../components/timeline/textMeasure";
+import {
+  SEQUENCE_FLF_OUTPUT_LENGTHS,
+  SEQUENCE_I2V_OUTPUT_LENGTHS,
+  SequenceOutputLengthStepper,
+} from "../../../components/sequenceOutputLength";
+import {
+  FrameSequenceModal,
+  type FrameSequenceStripActions,
+} from "../../detail/[charKey]/dataset/FrameSequenceModal";
 
 export default function TimelineEditorPage() {
   const router = useRouter();
@@ -135,11 +153,12 @@ export default function TimelineEditorPage() {
   const [selectedSavedShapeId, setSelectedSavedShapeId] = useState<string | null>(null);
   const [savedShapes, setSavedShapes] = useState<SavedGeometryShape[]>([]);
   const geomBtnRef = useRef<HTMLButtonElement | null>(null);
+  const tracksRef = useRef<TimelineTracksHandle>(null);
 
   // AI Edit modal (image clips).
   const [aiEditOpen, setAiEditOpen] = useState(false);
   const [aiEditImageSrc, setAiEditImageSrc] = useState("");
-  const aiEditTargetRef = useRef<{ srcRelPath: string; start: number } | null>(null);
+  const aiEditTargetRef = useRef<{ clipId: string; start: number } | null>(null);
   const [segmentOpen, setSegmentOpen] = useState(false);
   const [segmentMediaSrc, setSegmentMediaSrc] = useState("");
   const [segmentVideoSeekSec, setSegmentVideoSeekSec] = useState(0);
@@ -183,6 +202,35 @@ export default function TimelineEditorPage() {
   const [cameraAngleOpen, setCameraAngleOpen] = useState(false);
   const [cameraAngleImageUrl, setCameraAngleImageUrl] = useState<string | null>(null);
   const cameraAngleClipIdRef = useRef<string | null>(null);
+
+  const [i2vDialog, setI2vDialog] = useState<{
+    open: boolean;
+    clipId: string;
+    length: number;
+    prompt: string;
+  } | null>(null);
+  const [flfDialog, setFlfDialog] = useState<{
+    open: boolean;
+    clipIdA: string;
+    clipIdB: string;
+    length: number;
+  } | null>(null);
+
+  const [videoFrameEditor, setVideoFrameEditor] = useState<{
+    clipIds: string[];
+    primaryClipId: string;
+    primaryTrackId: string;
+  } | null>(null);
+  const [videoFrameApplyOpen, setVideoFrameApplyOpen] = useState(false);
+  const [videoFrameApplyStep, setVideoFrameApplyStep] = useState<"pick" | "mode">("mode");
+  const [videoFrameApplyPickIds, setVideoFrameApplyPickIds] = useState<string[]>([]);
+  const [videoFrameApplyIsGroup, setVideoFrameApplyIsGroup] = useState(false);
+  const videoFrameApplyStripRef = useRef<FrameSequencePayload | null>(null);
+  const videoFrameApplyGroupRef = useRef<Record<string, FrameSequencePayload> | null>(null);
+  const [stripAiEditOpen, setStripAiEditOpen] = useState(false);
+  const [stripAiEditImageSrc, setStripAiEditImageSrc] = useState("");
+  const stripAiEditResolveRef = useRef<((rel: string) => void) | null>(null);
+  const stripAiEditRelRef = useRef<string | null>(null);
 
   // Context menus.
   const [clipMenu, setClipMenu] = useState<{
@@ -673,30 +721,41 @@ export default function TimelineEditorPage() {
     }
   }
 
-  async function importImageClip(sourceRelPath: string, source: TimelineClip["source"]) {
-    beginSession({ title: "Importing image", clearLog: true });
+  async function importImageClipsBatch(
+    relPaths: string[],
+    source: TimelineClip["source"],
+    sessionTitle = "Importing images"
+  ) {
+    if (!relPaths.length) return;
+    beginSession({ title: sessionTitle, clearLog: true });
     await Promise.resolve();
-    pushLog("Importing image…");
     try {
-      const r = await apiTimelineImportImage({ timelineKey, sourceRelPath });
-      const { width, height } = await resolveImportDimensions(
-        r.srcRelPath,
-        r.width || 0,
-        r.height || 0
-      );
-      addClip(
-        "video",
-        buildImageClip({
-          srcRelPath: r.srcRelPath,
-          width,
-          height,
-          source,
-        })
-      );
+      for (const sourceRelPath of relPaths) {
+        pushLog(`Importing ${sourceRelPath.split("/").pop() ?? "image"}…`);
+        const r = await apiTimelineImportImage({ timelineKey, sourceRelPath });
+        const { width, height } = await resolveImportDimensions(
+          r.srcRelPath,
+          r.width || 0,
+          r.height || 0
+        );
+        addClip(
+          "video",
+          buildImageClip({
+            srcRelPath: r.srcRelPath,
+            width,
+            height,
+            source,
+          })
+        );
+      }
       endSession();
     } catch (e) {
-      failSession(e, "Could not import image.");
+      failSession(e, "Could not import images.");
     }
+  }
+
+  async function importImageClip(sourceRelPath: string, source: TimelineClip["source"]) {
+    await importImageClipsBatch([sourceRelPath], source, "Importing image");
   }
 
   // ---- Character picker (pose / expression / sequence) ---------------------
@@ -732,23 +791,68 @@ export default function TimelineEditorPage() {
     }
   }
 
-  function onPickCharImage(charKey: string, relPath: string) {
+  function onPickCharImages(charKey: string, relPaths: string[]) {
+    if (!relPaths.length) return;
     setCharPickerOpen(false);
     const sourceClipId = changePoseClipId;
     setChangePoseClipId(null);
     setCharPickerInitialKey(null);
     if (sourceClipId) {
-      void addPoseClipFromSource(sourceClipId, relPath, charKey);
+      void addPoseClipFromSource(sourceClipId, relPaths[0], charKey);
     } else {
-      void importImageClip(relPath, { charKey });
+      void importImageClipsBatch(relPaths, { charKey });
     }
   }
 
-  function onPickCharSequence(charKey: string, sequenceName: string) {
+  async function onPickCharSequences(charKey: string, sequenceNames: string[]) {
+    if (!sequenceNames.length) return;
     setCharPickerOpen(false);
     setChangePoseClipId(null);
     setCharPickerInitialKey(null);
-    void onPickSequence({ charKey, sequenceName, label: sequenceName });
+    beginSession({ title: "Importing sequences", clearLog: true });
+    await Promise.resolve();
+    try {
+      for (const sequenceName of sequenceNames) {
+        pushLog(`Materializing ${sequenceName}…`);
+        const done = await runTimelineImportSequenceWsJob({
+          timelineKey,
+          charKey,
+          sequenceName,
+          onLogLine: (line) => pushLog(line),
+        });
+        const r = done.result;
+        if (!done.ok || !r?.srcRelPath) {
+          throw new Error(done.error || "Import returned no clip.");
+        }
+        const dur = r.durationSec || 5;
+        addClip("video", {
+          id: genId("clip"),
+          type: "video",
+          srcRelPath: r.srcRelPath,
+          start: 0,
+          inPoint: 0,
+          outPoint: dur,
+          speed: 1,
+          duration: dur,
+          srcDuration: dur,
+          naturalW: r.width || undefined,
+          naturalH: r.height || undefined,
+          source: {
+            charKey,
+            sequenceName,
+          },
+        });
+      }
+      endSession();
+    } catch (e) {
+      failSession(e, "Could not import sequences.");
+    }
+  }
+
+  function onPickLocationImages(locationKey: string, relPaths: string[]) {
+    if (!relPaths.length) return;
+    setLocPickerOpen(false);
+    void importImageClipsBatch(relPaths, { locationKey });
   }
 
   // ---- New Angle ------------------------------------------------------------
@@ -809,8 +913,8 @@ export default function TimelineEditorPage() {
     const aEnd = a.start + a.duration;
     const bEnd = b.start + b.duration;
     if (a.start >= bEnd || b.start >= aEnd) return null;
-    const overlay = [a, b].find((c) => c.source?.charKey);
-    const backdrop = [a, b].find((c) => !c.source?.charKey);
+    const overlay = [a, b].find((c) => c.source?.charKey || c.type === "geometry");
+    const backdrop = [a, b].find((c) => c !== overlay && c.type === "image");
     if (!overlay || !backdrop) return null;
     return [backdrop, overlay];
   }
@@ -837,10 +941,11 @@ export default function TimelineEditorPage() {
         backdropNaturalW: compositeResult.backdropNaturalW,
         backdropNaturalH: compositeResult.backdropNaturalH,
       });
+      const overlayRel = await resolveClipImageRelPath(timelineKey, overlay);
       const charKey = overlay.source?.charKey ?? "";
       const layers: ShotLayerMeta[] = [{
         charKey,
-        imageRelPath: overlay.srcRelPath,
+        imageRelPath: overlayRel,
         ...placement,
       }];
       pushLog("Sending to generation…");
@@ -867,16 +972,6 @@ export default function TimelineEditorPage() {
     }
   }
 
-  function onPickLocationImage(locationKey: string, relPath: string) {
-    setLocPickerOpen(false);
-    if (!relPath) {
-      showError({ message: "That location has no image to import." });
-      return;
-    }
-    void importImageClip(relPath, { locationKey });
-  }
-
-  // ---- Clip operations -----------------------------------------------------
   /** Delete clip(s) by ID in one undo-able operation (works across all tracks). */
   function deleteClips(clipIds: string[]) {
     const idSet = new Set(clipIds);
@@ -933,6 +1028,21 @@ export default function TimelineEditorPage() {
         return;
       }
 
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        if (modalBlocksDelete() || !manifest) return;
+        e.preventDefault();
+        const dir = e.key === "ArrowRight" ? 1 : -1;
+        const fps = Math.max(1, manifest.fps || 24);
+        const step = e.shiftKey ? 1 : e.altKey ? 0.1 : 1 / fps;
+        setPlaying(false);
+        setPlayhead((p) => {
+          const next = clamp(p + dir * step, 0, total);
+          tracksRef.current?.ensurePlayheadVisible(next);
+          return next;
+        });
+        return;
+      }
+
       if (!(e.ctrlKey || e.metaKey)) return;
       const k = e.key.toLowerCase();
       if (k === "z" && !e.shiftKey) {
@@ -961,6 +1071,8 @@ export default function TimelineEditorPage() {
     audioPickerOpen,
     seqPickerOpen,
     jobModalProps.open,
+    manifest,
+    total,
   ]);
 
   function updateClipTrajectory(clipId: string, trajectory: TimelineClip["trajectory"]) {
@@ -1216,23 +1328,59 @@ export default function TimelineEditorPage() {
           }
           const leftDur = playhead - c.start;
           const hasSrc = c.type === "video" || c.type === "audio";
-          const cutPoint = hasSrc ? c.inPoint + leftDur * c.speed : c.inPoint;
-          clips.push({
-            ...c,
-            duration: leftDur,
-            outPoint: hasSrc ? cutPoint : c.outPoint,
-          });
-          clips.push({
-            ...c,
-            id: genId("clip"),
-            start: playhead,
-            inPoint: hasSrc ? cutPoint : c.inPoint,
-            duration: clipEnd(c) - playhead,
-          });
+          const cutPoint = hasSrc
+            ? c.reversed
+              ? c.outPoint - leftDur * c.speed
+              : c.inPoint + leftDur * c.speed
+            : c.inPoint;
+          if (c.reversed && hasSrc) {
+            clips.push({
+              ...c,
+              duration: leftDur,
+              inPoint: cutPoint,
+            });
+            clips.push({
+              ...c,
+              id: genId("clip"),
+              start: playhead,
+              outPoint: cutPoint,
+              duration: clipEnd(c) - playhead,
+            });
+          } else {
+            clips.push({
+              ...c,
+              duration: leftDur,
+              outPoint: hasSrc ? cutPoint : c.outPoint,
+            });
+            clips.push({
+              ...c,
+              id: genId("clip"),
+              start: playhead,
+              inPoint: hasSrc ? cutPoint : c.inPoint,
+              duration: clipEnd(c) - playhead,
+            });
+          }
         }
         return { ...t, clips };
       }),
     }));
+  }
+
+  function toggleClipReverse(trackId: string, clipId: string) {
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) =>
+        t.id !== trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id !== clipId ? c : { ...c, reversed: !c.reversed }
+              ),
+            }
+      ),
+    }));
+    setClipMenu((s) => ({ ...s, open: false }));
   }
 
   async function changeClipSpeed(trackId: string, clipId: string) {
@@ -1306,14 +1454,29 @@ export default function TimelineEditorPage() {
     return null;
   }
 
-  /** Selected image clips, ordered by timeline start. */
+  /** Selected image-like clips (images + geometries), ordered by timeline start. */
   function selectedImageClips(): TimelineClip[] {
     if (!manifest) return [];
     const all = manifest.tracks.flatMap((t) => t.clips);
     return selectedClipIds
       .map((id) => all.find((c) => c.id === id))
-      .filter((c): c is TimelineClip => !!c && c.type === "image")
+      .filter((c): c is TimelineClip => !!c && clipActsAsImage(c))
       .sort((a, b) => a.start - b.start);
+  }
+
+  /** Selected video clips, ordered by timeline start. */
+  function selectedVideoClips(): TimelineClip[] {
+    if (!manifest) return [];
+    const all = manifest.tracks.flatMap((t) => t.clips);
+    return selectedClipIds
+      .map((id) => all.find((c) => c.id === id))
+      .filter((c): c is TimelineClip => !!c && c.type === "video")
+      .sort((a, b) => a.start - b.start);
+  }
+
+  function clipVideoLabel(clip: TimelineClip): string {
+    const base = clip.srcRelPath.split("/").pop();
+    return base || clip.id.slice(0, 8);
   }
 
   function setClipTransform(clipId: string, transform: { x: number; y: number; scale: number }) {
@@ -1344,14 +1507,19 @@ export default function TimelineEditorPage() {
     }));
   }
 
-  function openAiEdit(clipId: string) {
+  async function openAiEdit(clipId: string) {
     const found = findClip(clipId);
-    if (!found || found.clip.type !== "image") return;
+    if (!found || !clipActsAsImage(found.clip)) return;
     aiEditTargetRef.current = {
-      srcRelPath: found.clip.srcRelPath,
+      clipId,
       start: found.clip.start,
     };
-    setAiEditImageSrc(assetUrlFromRelPath(found.clip.srcRelPath));
+    if (found.clip.type === "image") {
+      setAiEditImageSrc(assetUrlFromRelPath(found.clip.srcRelPath));
+    } else if (found.clip.geometry) {
+      const b64 = await rasterizeGeometryToPngBase64(found.clip.geometry);
+      setAiEditImageSrc(`data:image/png;base64,${b64}`);
+    }
     setAiEditOpen(true);
   }
 
@@ -1485,13 +1653,16 @@ export default function TimelineEditorPage() {
     const tgt = aiEditTargetRef.current;
     aiEditTargetRef.current = null;
     if (!tgt) return;
+    const found = findClip(tgt.clipId);
+    if (!found) return;
     beginSession({ title: "AI editing", clearLog: true });
     await Promise.resolve();
     pushLog("AI editing image…");
     try {
+      const imageRelPath = await resolveClipImageRelPath(timelineKey, found.clip);
       const done = await runTimelineAiEditWsJob({
         timelineKey,
-        imageRelPath: tgt.srcRelPath,
+        imageRelPath,
         prompt,
         maskPngBase64,
         onLogLine: (line) => pushLog(line),
@@ -1518,25 +1689,22 @@ export default function TimelineEditorPage() {
     }
   }
 
-  async function runI2v(clipId: string) {
+  async function runI2v(clipId: string, prompt: string, length: number) {
     const found = findClip(clipId);
-    if (!found || found.clip.type !== "image") return;
-    const prompt = await askText({
-      title: "Image → Video (I2V)",
-      message: "Describe the motion / prompt:",
-      confirmText: "Generate",
-    });
-    if (!prompt?.trim()) return;
-    const src = found.clip.srcRelPath;
+    if (!found || !clipActsAsImage(found.clip)) return;
+    if (!prompt.trim()) return;
     const start = found.clip.start;
     beginSession({ title: "Generating video (I2V)", clearLog: true });
     await Promise.resolve();
-    pushLog("Generating image-to-video…");
+    pushLog("Rasterizing source…");
     try {
+      const src = await resolveClipImageRelPath(timelineKey, found.clip);
+      pushLog("Generating image-to-video…");
       const done = await runTimelineI2vWsJob({
         timelineKey,
         imageRelPath: src,
         prompt: prompt.trim(),
+        length,
         onLogLine: (line) => pushLog(line),
       });
       const r = done.result;
@@ -1565,21 +1733,24 @@ export default function TimelineEditorPage() {
     }
   }
 
-  async function runFlf() {
-    const sel = selectedImageClips();
-    if (sel.length !== 2) {
-      showError({ message: "Select exactly two image clips first (Shift/Ctrl-click)." });
-      return;
-    }
-    const [a, b] = sel;
+  async function runFlf(clipIdA: string, clipIdB: string, length: number) {
+    const a = findClip(clipIdA);
+    const b = findClip(clipIdB);
+    if (!a || !b || !clipActsAsImage(a.clip) || !clipActsAsImage(b.clip)) return;
     beginSession({ title: "Generating video (FLF)", clearLog: true });
     await Promise.resolve();
-    pushLog("Generating first-last-frame video…");
+    pushLog("Rasterizing sources…");
     try {
+      const [relA, relB] = await Promise.all([
+        resolveClipImageRelPath(timelineKey, a.clip),
+        resolveClipImageRelPath(timelineKey, b.clip),
+      ]);
+      pushLog("Generating first-last-frame video…");
       const done = await runTimelineFlfWsJob({
         timelineKey,
-        imageRelPathA: a.srcRelPath,
-        imageRelPathB: b.srcRelPath,
+        imageRelPathA: relA,
+        imageRelPathB: relB,
+        length,
         onLogLine: (line) => pushLog(line),
       });
       const r = done.result;
@@ -1599,7 +1770,7 @@ export default function TimelineEditorPage() {
           naturalW: r.width || undefined,
           naturalH: r.height || undefined,
         },
-        a.start,
+        a.clip.start,
         "FLF"
       );
       endSession();
@@ -1608,11 +1779,367 @@ export default function TimelineEditorPage() {
     }
   }
 
+  function updateClipFrameSequence(
+    clipId: string,
+    patch: { frameSequence: FrameSequencePayload; frameEdit?: { framesDirRel: string } }
+  ) {
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          c.id === clipId
+            ? {
+                ...c,
+                frameSequence: patch.frameSequence,
+                ...(patch.frameEdit ? { frameEdit: patch.frameEdit } : {}),
+              }
+            : c
+        ),
+      })),
+    }));
+  }
+
+  async function extractVideoFramesForClip(clipId: string, trackId?: string) {
+    const found = findClip(clipId);
+    if (!found || found.clip.type !== "video") return false;
+    const clip = found.clip;
+    pushLog(`Decoding video frames: ${clipVideoLabel(clip)}…`);
+    const done = await runTimelineVideoFramesExtractWsJob({
+      timelineKey,
+      clipId,
+      videoRelPath: clip.srcRelPath,
+      inPoint: clip.inPoint,
+      outPoint: clip.outPoint,
+      onLogLine: (line) => pushLog(line),
+    });
+    if (!done.ok || !done.result?.frameSequence) {
+      throw new Error(done.error || "Frame extraction returned no strip.");
+    }
+    updateClipFrameSequence(clipId, {
+      frameSequence: done.result.frameSequence,
+      frameEdit: done.result.frameEdit,
+    });
+    if (trackId) {
+      setVideoFrameEditor({
+        clipIds: [clipId],
+        primaryClipId: clipId,
+        primaryTrackId: trackId,
+      });
+    }
+    return true;
+  }
+
+  async function ensureVideoFramesExtracted(clipIds: string[]): Promise<boolean> {
+    const missing = clipIds.filter((id) => {
+      const found = findClip(id);
+      return !found?.clip.frameSequence?.strip?.length;
+    });
+    if (!missing.length) return true;
+    beginSession({ title: "Extracting video frames", clearLog: true });
+    await Promise.resolve();
+    try {
+      await Promise.all(missing.map((clipId) => extractVideoFramesForClip(clipId)));
+      endSession();
+      return true;
+    } catch (e) {
+      failSession(e, "Could not extract video frames.");
+      return false;
+    }
+  }
+
+  async function openVideoFrameEditor(clipId: string, trackId: string) {
+    const found = findClip(clipId);
+    if (!found || found.clip.type !== "video") return;
+    const selected = selectedVideoClips();
+    const clipIds =
+      selected.length >= 2 && selected.some((c) => c.id === clipId)
+        ? selected.map((c) => c.id)
+        : [clipId];
+    const ok = await ensureVideoFramesExtracted(clipIds);
+    if (!ok) return;
+    setVideoFrameEditor({
+      clipIds,
+      primaryClipId: clipId,
+      primaryTrackId: trackId,
+    });
+  }
+
+  async function reExtractVideoFrames() {
+    if (!videoFrameEditor) return;
+    const { clipIds } = videoFrameEditor;
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          clipIds.includes(c.id)
+            ? { ...c, frameSequence: undefined, frameEdit: undefined }
+            : c
+        ),
+      })),
+    }));
+    beginSession({ title: "Re-extracting video frames", clearLog: true });
+    await Promise.resolve();
+    try {
+      for (const clipId of clipIds) {
+        const ok = await extractVideoFramesForClip(clipId);
+        if (!ok) throw new Error("Frame extraction failed.");
+      }
+      endSession();
+    } catch (e) {
+      failSession(e, "Could not re-extract video frames.");
+    }
+  }
+
+  function saveVideoFrameStrip(next: FrameSequencePayload) {
+    if (!videoFrameEditor) return;
+    updateClipFrameSequence(videoFrameEditor.primaryClipId, { frameSequence: next });
+  }
+
+  function saveVideoFrameGroup(payloads: Record<string, FrameSequencePayload>) {
+    if (!videoFrameEditor) return;
+    for (const [clipId, frameSequence] of Object.entries(payloads)) {
+      updateClipFrameSequence(clipId, { frameSequence });
+    }
+  }
+
+  function promptVideoFrameApply(strip: FrameSequencePayload) {
+    videoFrameApplyStripRef.current = strip;
+    videoFrameApplyGroupRef.current = null;
+    setVideoFrameApplyIsGroup(false);
+    setVideoFrameApplyStep("mode");
+    setVideoFrameApplyOpen(true);
+  }
+
+  function promptVideoFrameApplyGroup(payloads: Record<string, FrameSequencePayload>) {
+    videoFrameApplyGroupRef.current = payloads;
+    videoFrameApplyStripRef.current = null;
+    setVideoFrameApplyIsGroup(true);
+    setVideoFrameApplyPickIds(
+      videoFrameEditor ? [videoFrameEditor.primaryClipId] : Object.keys(payloads)
+    );
+    setVideoFrameApplyStep("pick");
+    setVideoFrameApplyOpen(true);
+  }
+
+  async function applyVideoFrameStrip(mode: "replace" | "new_track") {
+    setVideoFrameApplyOpen(false);
+    if (!videoFrameEditor || !manifest) return;
+    const strip = videoFrameApplyStripRef.current;
+    const groupPayloads = videoFrameApplyGroupRef.current;
+    videoFrameApplyStripRef.current = null;
+    videoFrameApplyGroupRef.current = null;
+
+    const encodeJobs: Array<{ clipId: string; strip: FrameSequencePayload }> = [];
+    if (groupPayloads) {
+      for (const clipId of videoFrameApplyPickIds) {
+        const s = groupPayloads[clipId];
+        if (s) encodeJobs.push({ clipId, strip: s });
+      }
+    } else if (strip) {
+      encodeJobs.push({ clipId: videoFrameEditor.primaryClipId, strip });
+    }
+    if (!encodeJobs.length) return;
+
+    beginSession({ title: "Encoding video from frames", clearLog: true });
+    await Promise.resolve();
+    try {
+      for (const { clipId, strip: jobStrip } of encodeJobs) {
+        const found = findClip(clipId);
+        if (!found || found.clip.type !== "video") continue;
+        pushLog(`Encoding frame sequence: ${clipVideoLabel(found.clip)}…`);
+        const done = await runTimelineVideoFramesEncodeWsJob({
+          timelineKey,
+          frameSequence: jobStrip,
+          fps: manifest.fps,
+          onLogLine: (line) => pushLog(line),
+        });
+        const r = done.result;
+        if (!done.ok || !r?.srcRelPath) {
+          throw new Error(done.error || "Encode returned no clip.");
+        }
+        const dur = r.durationSec || found.clip.duration;
+        const framePatch = {
+          frameSequence: jobStrip,
+          frameEdit: found.clip.frameEdit,
+        };
+        if (mode === "replace") {
+          historyUpdate((m) => ({
+            ...m,
+            tracks: m.tracks.map((t) => ({
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id === clipId
+                  ? {
+                      ...c,
+                      srcRelPath: r.srcRelPath,
+                      inPoint: 0,
+                      outPoint: dur,
+                      duration: dur / Math.max(0.01, c.speed),
+                      srcDuration: dur,
+                      naturalW: r.width || c.naturalW,
+                      naturalH: r.height || c.naturalH,
+                      ...framePatch,
+                    }
+                  : c
+              ),
+            })),
+          }));
+        } else {
+          insertClipOnNewTrack(
+            {
+              id: genId("clip"),
+              type: "video",
+              srcRelPath: r.srcRelPath,
+              start: 0,
+              inPoint: 0,
+              outPoint: dur,
+              speed: 1,
+              duration: dur,
+              srcDuration: dur,
+              naturalW: r.width || undefined,
+              naturalH: r.height || undefined,
+              ...framePatch,
+            },
+            found.clip.start,
+            "Edited frames"
+          );
+        }
+      }
+      endSession();
+      setVideoFrameEditor(null);
+    } catch (e) {
+      failSession(e, "Could not encode video from frames.");
+    }
+  }
+
+  function getVideoFrameStripActions(clipId: string): FrameSequenceStripActions | undefined {
+    if (!videoFrameEditor) return undefined;
+    const found = findClip(clipId);
+    const framesDirRel = found?.clip.frameEdit?.framesDirRel ?? "";
+    return {
+      busy,
+      onRemoveBackground: async (relPaths) => {
+        const out: string[] = [];
+        beginSession({ title: "Removing background", clearLog: true });
+        await Promise.resolve();
+        try {
+          for (const rel of relPaths) {
+            pushLog(`Removing background: ${rel.split("/").pop() ?? "frame"}…`);
+            const done = await runShotRemoveBgWsJob({
+              imageRelPath: rel,
+              inPlace: true,
+              onLogLine: (line) => pushLog(line),
+            });
+            const nextRel = done.result?.relPath;
+            if (!done.ok || !nextRel) throw new Error(done.error || "Remove background failed.");
+            out.push(nextRel);
+          }
+          endSession();
+          return out;
+        } catch (e) {
+          failSession(e, "Remove background failed.");
+          throw e;
+        }
+      },
+      onAiEdit: (relPath) =>
+        new Promise<string>((resolve) => {
+          stripAiEditResolveRef.current = resolve;
+          stripAiEditRelRef.current = relPath;
+          setStripAiEditImageSrc(assetUrlFromRelPath(relPath));
+          setStripAiEditOpen(true);
+        }),
+      onGenerateI2v: async (relPath, prompt, length) => {
+        if (!framesDirRel) throw new Error("Missing frames directory.");
+        beginSession({ title: "Generating strip I2V", clearLog: true });
+        await Promise.resolve();
+        try {
+          const done = await runTimelineStripI2vWsJob({
+            timelineKey,
+            imageRelPath: relPath,
+            outputDirRel: framesDirRel,
+            prompt,
+            length,
+            onLogLine: (line) => pushLog(line),
+          });
+          if (!done.ok || !done.result?.relPaths?.length) {
+            throw new Error(done.error || "Strip I2V failed.");
+          }
+          endSession();
+          return done.result.relPaths;
+        } catch (e) {
+          failSession(e, "Strip I2V failed.");
+          throw e;
+        }
+      },
+      onGenerateFlf: async (relPathA, relPathB, length) => {
+        if (!framesDirRel) throw new Error("Missing frames directory.");
+        beginSession({ title: "Generating strip FLF", clearLog: true });
+        await Promise.resolve();
+        try {
+          const done = await runTimelineStripFlfWsJob({
+            timelineKey,
+            imageRelPathA: relPathA,
+            imageRelPathB: relPathB,
+            outputDirRel: framesDirRel,
+            length,
+            onLogLine: (line) => pushLog(line),
+          });
+          if (!done.ok || !done.result?.relPaths?.length) {
+            throw new Error(done.error || "Strip FLF failed.");
+          }
+          endSession();
+          return done.result.relPaths;
+        } catch (e) {
+          failSession(e, "Strip FLF failed.");
+          throw e;
+        }
+      },
+    };
+  }
+
+  const videoFrameStripActions = useMemo(
+    (): FrameSequenceStripActions | undefined =>
+      videoFrameEditor ? getVideoFrameStripActions(videoFrameEditor.primaryClipId) : undefined,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [videoFrameEditor, busy, manifest, timelineKey]
+  );
+
+  async function runStripAiEdit(promptText: string, maskPngBase64?: string) {
+    const resolve = stripAiEditResolveRef.current;
+    const imageRelPath = stripAiEditRelRef.current;
+    stripAiEditResolveRef.current = null;
+    stripAiEditRelRef.current = null;
+    setStripAiEditOpen(false);
+    if (!resolve || !imageRelPath) return;
+    beginSession({ title: "AI Editing frame", clearLog: true });
+    await Promise.resolve();
+    try {
+      const done = await runTimelineAiEditWsJob({
+        timelineKey,
+        imageRelPath,
+        prompt: promptText,
+        maskPngBase64,
+        inPlace: true,
+        onLogLine: (line) => pushLog(line),
+      });
+      const nextRel = done.result?.srcRelPath;
+      if (!done.ok || !nextRel) throw new Error(done.error || "AI edit failed.");
+      endSession();
+      resolve(nextRel);
+    } catch (e) {
+      failSession(e, "AI edit failed.");
+      throw e;
+    }
+  }
+
   // ---- Context menu item builders -----------------------------------------
   const clipMenuItems: ContextMenuItem[] = useMemo(() => {
     if (!clipMenu.open) return [];
     const rc = findClip(clipMenu.clipId);
     const isImage = rc?.clip.type === "image";
+    const isRaster = rc?.clip ? clipActsAsImage(rc.clip) : false;
     const isCharImage = isImage && Boolean(rc?.clip.source?.charKey);
     const twoImagesSelected = selectedImageClips().length === 2;
     const pair = getOverlappingCharBgPair();
@@ -1636,6 +2163,13 @@ export default function TimelineEditorPage() {
           onSelect: () => void changeClipSpeed(clipMenu.trackId, clipMenu.clipId),
         }
       );
+      if (isVideo || isAudio) {
+        items.push({
+          key: "invert",
+          label: rc?.clip.reversed ? "Un-invert" : "Invert",
+          onSelect: () => toggleClipReverse(clipMenu.trackId, clipMenu.clipId),
+        });
+      }
     }
 
     if (pair) {
@@ -1723,15 +2257,47 @@ export default function TimelineEditorPage() {
         disabled: busy,
         onSelect: () => openRemoveBgVideo(clipMenu.clipId),
       });
+      items.push({
+        key: "editVideoFrames",
+        label: selectedVideoClips().length >= 2 ? "Edit Video Group" : "Edit Video Frames",
+        disabled: busy,
+        onSelect: () => void openVideoFrameEditor(clipMenu.clipId, clipMenu.trackId),
+      });
     }
 
-    if (isImage && !pair) {
+    if (isRaster && !pair) {
       items.push({
         key: "aiedit",
         label: "AI Edit",
         disabled: busy,
-        onSelect: () => openAiEdit(clipMenu.clipId),
+        onSelect: () => void openAiEdit(clipMenu.clipId),
       });
+      items.push(
+        {
+          key: "i2v",
+          label: "I2V (image to video)",
+          disabled: busy,
+          onSelect: () =>
+            setI2vDialog({ open: true, clipId: clipMenu.clipId, length: 129, prompt: "" }),
+        },
+        {
+          key: "flf",
+          label: twoImagesSelected
+            ? "FLF (selected 2 images to video)"
+            : "FLF (select 2 image clips first)",
+          disabled: busy || !twoImagesSelected,
+          onSelect: () => {
+            const sel = selectedImageClips();
+            if (sel.length !== 2) return;
+            setFlfDialog({
+              open: true,
+              clipIdA: sel[0]!.id,
+              clipIdB: sel[1]!.id,
+              length: 33,
+            });
+          },
+        }
+      );
     }
 
     if (isImage || isVideo || isGeometry || isText) {
@@ -1777,25 +2343,6 @@ export default function TimelineEditorPage() {
           setClipMenu((s) => ({ ...s, open: false }));
         },
       });
-    }
-
-    if (isImage && !pair) {
-      items.push(
-        {
-          key: "i2v",
-          label: "I2V (image to video)",
-          disabled: busy,
-          onSelect: () => void runI2v(clipMenu.clipId),
-        },
-        {
-          key: "flf",
-          label: twoImagesSelected
-            ? "FLF (selected 2 images to video)"
-            : "FLF (select 2 image clips first)",
-          disabled: busy || !twoImagesSelected,
-          onSelect: () => void runFlf(),
-        }
-      );
     }
 
     return items;
@@ -2207,6 +2754,7 @@ export default function TimelineEditorPage() {
           </div>
         ) : (
           <TimelineTracks
+            ref={tracksRef}
             manifest={manifest}
             pxPerSec={pxPerSec}
             playhead={playhead}
@@ -2254,14 +2802,15 @@ export default function TimelineEditorPage() {
       <TimelineCharacterPicker
         open={charPickerOpen}
         initialKey={charPickerInitialKey}
-        onPickImage={onPickCharImage}
-        onPickSequence={onPickCharSequence}
+        poseChangeMode={changePoseClipId != null}
+        onPickImages={onPickCharImages}
+        onPickSequences={onPickCharSequences}
         onCancel={() => { setCharPickerOpen(false); setChangePoseClipId(null); setCharPickerInitialKey(null); }}
       />
       <TimelineLocationPicker
         open={locPickerOpen}
         onCancel={() => setLocPickerOpen(false)}
-        onPickImage={onPickLocationImage}
+        onPickImages={onPickLocationImages}
       />
       <TimelineAudioPicker
         open={audioPickerOpen}
@@ -2353,6 +2902,321 @@ export default function TimelineEditorPage() {
         onRunRvm={(options) => void runRemoveBgRvm(options)}
         onRunRmbg={(options) => void runRemoveBgRmbg(options)}
       />
+
+      {i2vDialog?.open ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Image to video"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.65)",
+            zIndex: 10040,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onMouseDown={() => setI2vDialog(null)}
+        >
+          <div
+            data-native-clipboard-shortcuts
+            style={{
+              background: "#0b0b0b",
+              color: "#eee",
+              padding: 14,
+              borderRadius: 0,
+              maxWidth: 400,
+              width: "100%",
+              border: "1px solid rgba(255,255,255,0.22)",
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Image → Video (I2V)</div>
+            <div style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
+              <span style={{ display: "block", marginBottom: 2 }}>
+                Output length (latent frames): 25 (~1s), 49 (~2s), 73 (~3s), 97 (~4s), 121 (~5s),
+                129 (~5.4s, default)
+              </span>
+              <SequenceOutputLengthStepper
+                lengths={SEQUENCE_I2V_OUTPUT_LENGTHS}
+                value={i2vDialog.length}
+                onChange={(next) => setI2vDialog((d) => (d ? { ...d, length: next } : null))}
+              />
+            </div>
+            <label style={{ display: "block", fontSize: 13, marginBottom: 12 }}>
+              <span style={{ display: "block", marginBottom: 4 }}>Motion prompt</span>
+              <textarea
+                value={i2vDialog.prompt}
+                onChange={(e) =>
+                  setI2vDialog((d) => (d ? { ...d, prompt: e.target.value } : null))
+                }
+                rows={3}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  background: "rgba(0,0,0,0.35)",
+                  color: "inherit",
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  borderRadius: 0,
+                  padding: 8,
+                  resize: "vertical",
+                }}
+              />
+            </label>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => setI2vDialog(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!i2vDialog.prompt.trim() || busy}
+                onClick={() => {
+                  const dlg = i2vDialog;
+                  setI2vDialog(null);
+                  if (dlg) void runI2v(dlg.clipId, dlg.prompt, dlg.length);
+                }}
+              >
+                Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {videoFrameEditor && manifest ? (() => {
+        const { clipIds, primaryClipId } = videoFrameEditor;
+        const isGroup = clipIds.length > 1;
+        const vf = findClip(primaryClipId);
+        const fs = vf?.clip.frameSequence;
+        if (!vf || !fs) return null;
+        const groupLayers = isGroup
+          ? clipIds
+              .map((id) => {
+                const found = findClip(id);
+                if (!found?.clip.frameSequence) return null;
+                return {
+                  clipId: id,
+                  label: clipVideoLabel(found.clip),
+                  initial: found.clip.frameSequence,
+                };
+              })
+              .filter((g): g is NonNullable<typeof g> => g != null)
+          : undefined;
+        if (isGroup && (!groupLayers || groupLayers.length < 2)) return null;
+        return (
+          <FrameSequenceModal
+            key={clipIds.join("-")}
+            open
+            editorMode="timeline"
+            title={isGroup ? `Edit Video Group (${clipIds.length} videos)` : "Edit Video Frames"}
+            initial={fs}
+            sourceGalleryIndex={0}
+            charKey=""
+            sequenceName=""
+            previewFps={Math.max(1, manifest.fps)}
+            disableStripDrag
+            stripActions={videoFrameStripActions}
+            groupLayers={groupLayers}
+            getStripActionsForClip={getVideoFrameStripActions}
+            onError={(message, error) => showError({ message, error })}
+            onClose={() => setVideoFrameEditor(null)}
+            onSave={saveVideoFrameStrip}
+            onSaveGroup={saveVideoFrameGroup}
+            onApplyVideo={(strip) => promptVideoFrameApply(strip)}
+            onApplyVideoGroup={(payloads) => promptVideoFrameApplyGroup(payloads)}
+            onReExtract={() => void reExtractVideoFrames()}
+          />
+        );
+      })() : null}
+
+      {videoFrameApplyOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Apply edited video"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.65)",
+            zIndex: 10050,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onMouseDown={() => setVideoFrameApplyOpen(false)}
+        >
+          <div
+            style={{
+              background: "#0b0b0b",
+              color: "#eee",
+              padding: 14,
+              maxWidth: 400,
+              width: "100%",
+              border: "1px solid rgba(255,255,255,0.22)",
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {videoFrameApplyStep === "pick" && videoFrameEditor ? (
+              <>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>Choose clips to apply</div>
+                <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 12 }}>
+                  Select which videos to encode from their edited frame strips.
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                  {videoFrameEditor.clipIds.map((clipId) => {
+                    const found = findClip(clipId);
+                    if (!found) return null;
+                    const checked = videoFrameApplyPickIds.includes(clipId);
+                    return (
+                      <label
+                        key={clipId}
+                        style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            setVideoFrameApplyPickIds((prev) =>
+                              checked ? prev.filter((id) => id !== clipId) : [...prev, clipId]
+                            );
+                          }}
+                        />
+                        <span>{clipVideoLabel(found.clip)}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <button
+                    type="button"
+                    disabled={videoFrameApplyPickIds.length === 0}
+                    onClick={() => setVideoFrameApplyStep("mode")}
+                  >
+                    Next
+                  </button>
+                  <button type="button" onClick={() => setVideoFrameApplyOpen(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>Apply edited video</div>
+                <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 16 }}>
+                  Replace the original clip or insert the encoded video on a new track. Frame edits
+                  are kept for re-opening the editor.
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void applyVideoFrameStrip("replace")}
+                  >
+                    Replace clip
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void applyVideoFrameStrip("new_track")}
+                  >
+                    New track
+                  </button>
+                  {videoFrameApplyIsGroup ? (
+                    <button type="button" onClick={() => setVideoFrameApplyStep("pick")}>
+                      Back
+                    </button>
+                  ) : null}
+                  <button type="button" onClick={() => setVideoFrameApplyOpen(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      <AiEditModal
+        open={stripAiEditOpen}
+        title="AI Edit frame"
+        imageSrc={stripAiEditImageSrc}
+        busy={busy}
+        onCancel={() => {
+          setStripAiEditOpen(false);
+          stripAiEditResolveRef.current = null;
+          stripAiEditRelRef.current = null;
+        }}
+        onGenerate={(promptText, maskPngBase64) =>
+          void runStripAiEdit(promptText, maskPngBase64)
+        }
+      />
+
+      {flfDialog?.open ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="First-last-frame video"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.65)",
+            zIndex: 10040,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onMouseDown={() => setFlfDialog(null)}
+        >
+          <div
+            data-native-clipboard-shortcuts
+            style={{
+              background: "#0b0b0b",
+              color: "#eee",
+              padding: 14,
+              borderRadius: 0,
+              maxWidth: 400,
+              width: "100%",
+              border: "1px solid rgba(255,255,255,0.22)",
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>First–Last Frame (FLF)</div>
+            <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 12 }}>
+              Two selected image clips will be used as start and end frames.
+            </div>
+            <div style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
+              <span style={{ display: "block", marginBottom: 2 }}>
+                Output length (frames, 4k+1 step 4: 25–121)
+              </span>
+              <SequenceOutputLengthStepper
+                lengths={SEQUENCE_FLF_OUTPUT_LENGTHS}
+                value={flfDialog.length}
+                onChange={(next) => setFlfDialog((d) => (d ? { ...d, length: next } : null))}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+              <button type="button" onClick={() => setFlfDialog(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  const dlg = flfDialog;
+                  setFlfDialog(null);
+                  if (dlg) void runFlf(dlg.clipIdA, dlg.clipIdB, dlg.length);
+                }}
+              >
+                Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
     </div>

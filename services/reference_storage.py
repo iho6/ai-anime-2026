@@ -979,8 +979,11 @@ def update_placed_figure_outputs(
     *,
     figure_crop_rgba_abs: str | None = None,
     figure_plate_abs: str | None = None,
+    figure_square_crop_abs: str | None = None,
+    square_ref_crop_abs: str | None = None,
+    square_keypoint_crop_abs: str | None = None,
 ) -> dict[str, Any]:
-    """Attach generated RGBA crop + white plate paths to a keypoint entry."""
+    """Attach generated square crops + full plate paths to a keypoint entry."""
     _ensure_dirs()
     entries = _read_manifest(_keypoints_manifest_path())
     for e in entries:
@@ -991,10 +994,22 @@ def update_placed_figure_outputs(
             dest = placed_dir() / f"pf_{keypoint_id}_figure.png"
             shutil.copy2(figure_crop_rgba_abs, dest)
             pf["figureCropRgbaRelPath"] = _abs_to_storage_rel(dest)
+        if figure_square_crop_abs:
+            dest = placed_dir() / f"pf_{keypoint_id}_square.png"
+            shutil.copy2(figure_square_crop_abs, dest)
+            pf["figureSquareCropRelPath"] = _abs_to_storage_rel(dest)
         if figure_plate_abs:
             dest = placed_dir() / f"pf_{keypoint_id}_plate.png"
             shutil.copy2(figure_plate_abs, dest)
             pf["figurePlateRelPath"] = _abs_to_storage_rel(dest)
+        if square_ref_crop_abs:
+            dest = placed_dir() / f"pf_{keypoint_id}_ref_square.png"
+            shutil.copy2(square_ref_crop_abs, dest)
+            pf["squareRefCropRelPath"] = _abs_to_storage_rel(dest)
+        if square_keypoint_crop_abs:
+            dest = placed_dir() / f"pf_{keypoint_id}_kp_square.png"
+            shutil.copy2(square_keypoint_crop_abs, dest)
+            pf["squareKeypointCropRelPath"] = _abs_to_storage_rel(dest)
         e["placedFigure"] = pf
         _write_manifest(_keypoints_manifest_path(), entries)
         return e
@@ -1030,7 +1045,13 @@ def delete_keypoint(keypoint_id: str) -> bool:
                 except Exception:
                     pass
             pf = e.get("placedFigure") if isinstance(e.get("placedFigure"), dict) else {}
-            for key in ("figureCropRgbaRelPath", "figurePlateRelPath"):
+            for key in (
+                "figureCropRgbaRelPath",
+                "figureSquareCropRelPath",
+                "figurePlateRelPath",
+                "squareRefCropRelPath",
+                "squareKeypointCropRelPath",
+            ):
                 try:
                     _resolve_rel(pf.get(key, "")).unlink(missing_ok=True)
                 except Exception:

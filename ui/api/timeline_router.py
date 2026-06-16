@@ -155,6 +155,26 @@ def timeline_import_image(timeline_key: str, body: dict[str, str]) -> dict[str, 
     }
 
 
+@router.post("/timeline/{timeline_key}/import_png_base64")
+def timeline_import_png_base64(timeline_key: str, body: dict[str, str]) -> dict[str, Any]:
+    """Save a client-rasterized PNG (e.g. geometry clip) into ``clips/``."""
+    d = _timeline_dir(timeline_key)
+    if not d.is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    png_b64 = (body.get("pngBase64") or "").strip()
+    if not png_b64:
+        raise HTTPException(400, "pngBase64 is required.")
+    info = logic.save_png_base64_to_timeline_clip(
+        png_b64, timeline_storage.timeline_clips_dir(timeline_key)
+    )
+    return {
+        "type": "image",
+        "srcRelPath": storage_rel_from_abs(info["absPath"]),
+        "width": info.get("width") or 0,
+        "height": info.get("height") or 0,
+    }
+
+
 @router.get("/timeline/{timeline_key}/assets")
 def timeline_assets_layout(timeline_key: str) -> dict[str, Any]:
     d = _timeline_dir(timeline_key)
@@ -650,6 +670,19 @@ async def timeline_ai_edit_ws(ws: WebSocket, timeline_key: str) -> None:
         mask_b64 = msg.get("maskPngBase64") or None
 
         def work(log_cb: Any) -> dict[str, Any]:
+            if bool(msg.get("inPlace")):
+                new_rel = logic.ai_edit_next_to_source(
+                    rel,
+                    prompt,
+                    mask_png_base64=mask_b64,
+                    log_cb=log_cb,
+                )
+                return {
+                    "type": "image",
+                    "srcRelPath": new_rel,
+                    "width": 0,
+                    "height": 0,
+                }
             info = logic.ai_edit_to_timeline_clip(
                 src_abs,
                 prompt,
@@ -663,6 +696,178 @@ async def timeline_ai_edit_ws(ws: WebSocket, timeline_key: str) -> None:
                 "width": info.get("width") or 0,
                 "height": info.get("height") or 0,
             }
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
+@router.websocket("/timeline/{timeline_key}/video_frames/extract/ws")
+async def timeline_video_frames_extract_ws(ws: WebSocket, timeline_key: str) -> None:
+    """Extract a trimmed video clip into per-frame PNGs for frame-sequence editing."""
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+    try:
+        if not _timeline_dir(timeline_key).is_dir():
+            raise ValueError("Timeline not found.")
+        clip_id = (msg.get("clipId") or "").strip()
+        video_rel = (msg.get("videoRelPath") or "").strip()
+        if not clip_id:
+            raise ValueError("clipId is required.")
+        if not video_rel:
+            raise ValueError("videoRelPath is required.")
+        in_point = float(msg.get("inPoint") or 0)
+        out_point = float(msg.get("outPoint") or 0)
+        if out_point <= in_point:
+            raise ValueError("outPoint must be greater than inPoint.")
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            return logic.timeline_video_to_frame_sequence(
+                timeline_key,
+                clip_id,
+                video_rel,
+                in_point_sec=in_point,
+                out_point_sec=out_point,
+                log_cb=log_cb,
+            )
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
+@router.websocket("/timeline/{timeline_key}/video_frames/encode/ws")
+async def timeline_video_frames_encode_ws(ws: WebSocket, timeline_key: str) -> None:
+    """Encode a frame-sequence strip to a new timeline clip MP4."""
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+    try:
+        if not _timeline_dir(timeline_key).is_dir():
+            raise ValueError("Timeline not found.")
+        frame_sequence = msg.get("frameSequence")
+        if not isinstance(frame_sequence, dict):
+            raise ValueError("frameSequence is required.")
+        fps = int(msg.get("fps") or 24)
+        output_basename = (msg.get("outputBasename") or "").strip() or None
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            if log_cb:
+                log_cb("Encoding frame sequence to MP4…")
+            info = logic.timeline_frame_sequence_to_video(
+                timeline_key,
+                frame_sequence,
+                fps=fps,
+                output_basename=output_basename,
+            )
+            return {
+                "type": "video",
+                "srcRelPath": info.get("srcRelPath") or storage_rel_from_abs(info["absPath"]),
+                "durationSec": info.get("durationSec") or 0,
+                "width": info.get("width") or 0,
+                "height": info.get("height") or 0,
+                "fps": info.get("fps") or fps,
+            }
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
+@router.websocket("/timeline/{timeline_key}/strip_i2v/ws")
+async def timeline_strip_i2v_ws(ws: WebSocket, timeline_key: str) -> None:
+    """Mini I2V for a strip frame; writes PNGs into a timeline frames folder."""
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+    try:
+        if not _timeline_dir(timeline_key).is_dir():
+            raise ValueError("Timeline not found.")
+        image_rel = (msg.get("imageRelPath") or "").strip()
+        output_dir_rel = (msg.get("outputDirRel") or "").strip()
+        prompt = (msg.get("prompt") or "").strip()
+        length = int(msg.get("length") or 129)
+        if not image_rel:
+            raise ValueError("imageRelPath is required.")
+        if not output_dir_rel:
+            raise ValueError("outputDirRel is required.")
+        if not prompt:
+            raise ValueError("prompt is required.")
+        src_abs = str(timeline_storage.timeline_rel_to_abs(image_rel))
+        out_abs = timeline_storage.timeline_rel_to_abs(output_dir_rel)
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            rels = logic.generate_i2v_strip_segment(
+                out_abs,
+                src_abs,
+                length=length,
+                prompt=prompt,
+                width=msg.get("width"),
+                height=msg.get("height"),
+                log_cb=log_cb,
+            )
+            return {"relPaths": rels}
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
+@router.websocket("/timeline/{timeline_key}/strip_flf/ws")
+async def timeline_strip_flf_ws(ws: WebSocket, timeline_key: str) -> None:
+    """Mini FLF between two strip frames; writes PNGs into a timeline frames folder."""
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+    try:
+        if not _timeline_dir(timeline_key).is_dir():
+            raise ValueError("Timeline not found.")
+        rel_a = (msg.get("imageRelPathA") or "").strip()
+        rel_b = (msg.get("imageRelPathB") or "").strip()
+        output_dir_rel = (msg.get("outputDirRel") or "").strip()
+        length = int(msg.get("length") or 33)
+        if not rel_a or not rel_b:
+            raise ValueError("imageRelPathA and imageRelPathB are required.")
+        if not output_dir_rel:
+            raise ValueError("outputDirRel is required.")
+        abs_a = str(timeline_storage.timeline_rel_to_abs(rel_a))
+        abs_b = str(timeline_storage.timeline_rel_to_abs(rel_b))
+        out_abs = timeline_storage.timeline_rel_to_abs(output_dir_rel)
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            rels = logic.generate_flf_strip_segment(
+                out_abs,
+                abs_a,
+                abs_b,
+                length=length,
+                log_cb=log_cb,
+            )
+            return {"relPaths": rels}
 
         result, err = await run_with_log_stream(ws, work)
         if err:

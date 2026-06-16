@@ -448,7 +448,7 @@ export const NewLocationCreatePanel = forwardRef<
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe the scene for the base background image"
+                placeholder="e.g. sunlit anime city street at dusk"
                 rows={3}
                 style={{
                   ...fieldStyle,

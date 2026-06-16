@@ -249,6 +249,9 @@ async def shot_remove_bg_ws(ws: WebSocket) -> None:
         src_abs = str(resolve_storage_rel_file(image_rel))
 
         def work(log_cb: Any) -> dict[str, str]:
+            if bool(msg.get("inPlace")):
+                rel = logic.remove_background_next_to_source(image_rel, log_cb=log_cb)
+                return {"relPath": rel}
             temp_path = logic.remove_background_to_temp_file(src_abs, log_cb=log_cb)
             dest_dir = SHOTS_STORAGE_ROOT / "_rembg"
             dest_dir.mkdir(parents=True, exist_ok=True)

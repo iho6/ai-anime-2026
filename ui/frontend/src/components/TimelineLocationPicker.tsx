@@ -16,10 +16,16 @@ import {
 import { AiEditModal } from "./AiEditModal";
 import { CameraAngleModal } from "./CameraAngleModal";
 import { CollapsibleGallerySection } from "./CollapsibleGallerySection";
+import { GalleryImageLightbox } from "./GalleryImageLightbox";
 import {
   DesktopContextMenu,
   type ContextMenuItem,
 } from "./DesktopContextMenu";
+import {
+  lightboxForRelPath,
+  orderedGalleryRelPaths,
+  toggleSetMember,
+} from "./timeline/pickerGalleryUtils";
 import { SquareIconButton, TriangleIcon } from "./IconPrimitives";
 import type { SharedLogStreamHandle } from "./SharedLogStream";
 import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
@@ -52,10 +58,10 @@ function truncateJobModalStatusLine(raw: string, maxLen = 120): string {
 export function TimelineLocationPicker(props: {
   open: boolean;
   initialKey?: string | null;
-  onPickImage: (locationKey: string, relPath: string) => void;
+  onPickImages: (locationKey: string, relPaths: string[]) => void;
   onCancel: () => void;
 }) {
-  const { open, onPickImage, onCancel } = props;
+  const { open, onPickImages, onCancel } = props;
   const initialKey = props.initialKey ?? null;
 
   const [stage, setStage] = useState<PickerStage>("pick");
@@ -66,6 +72,12 @@ export function TimelineLocationPicker(props: {
   const [split, setSplit] = useState<GallerySplit | null>(null);
   const [sectionsError, setSectionsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedRelPaths, setSelectedRelPaths] = useState<Set<string>>(new Set());
+  const [lightbox, setLightbox] = useState<{
+    paths: string[];
+    index: number;
+    title: string;
+  } | null>(null);
 
   const [menu, setMenu] = useState<{
     open: boolean;
@@ -136,6 +148,8 @@ export function TimelineLocationPicker(props: {
     setAiOpen(false);
     setAiCtx(null);
     setSelectedKey(initialKey ?? null);
+    setSelectedRelPaths(new Set());
+    setLightbox(null);
 
     if (!initialKey) {
       setIcons([]);
@@ -181,6 +195,8 @@ export function TimelineLocationPicker(props: {
       setSelectedKey(null);
       setStage("pick");
       setSplit(null);
+      setSelectedRelPaths(new Set());
+      setLightbox(null);
     }
   }
 
@@ -301,18 +317,55 @@ export function TimelineLocationPicker(props: {
     return items;
   }, [menu.item, menu.relPath, selectedKey, hiddenIds, loadSections]);
 
-  if (!open) return null;
-
-  const showBackButton =
-    (stage === "gallery" && Boolean(selectedKey) && !initialKey) || stage === "create";
-  const locationKey = selectedKey ?? "";
-
   const baseImages = split?.baseRelPath
     ? [{ relPath: split.baseRelPath, caption: "Base" }]
     : [];
   const viewImages = (split?.view ?? []).map((x) => ({ relPath: x.relPath }));
   const lightingImages = (split?.lighting ?? []).map((x) => ({ relPath: x.relPath }));
   const hiddenImages = (split?.hidden ?? []).map((x) => ({ relPath: x.relPath }));
+
+  const allImageRelPaths = useMemo(
+    () =>
+      orderedGalleryRelPaths([
+        { images: baseImages },
+        { images: viewImages },
+        { images: lightingImages },
+        { images: hiddenImages },
+      ]),
+    [baseImages, viewImages, lightingImages, hiddenImages]
+  );
+
+  const handleUse = useCallback(() => {
+    if (!selectedKey || selectedRelPaths.size === 0) return;
+    const paths = allImageRelPaths.filter((p) => selectedRelPaths.has(p));
+    if (!paths.length) return;
+    onPickImages(selectedKey, paths);
+  }, [allImageRelPaths, onPickImages, selectedKey, selectedRelPaths]);
+
+  const openPreview = useCallback(
+    (relPath: string) => {
+      const key = selectedKey ?? "";
+      setLightbox(lightboxForRelPath(allImageRelPaths, relPath, `${key} — preview`));
+    },
+    [allImageRelPaths, selectedKey]
+  );
+
+  if (!open) return null;
+
+  const showBackButton =
+    (stage === "gallery" && Boolean(selectedKey) && !initialKey) || stage === "create";
+  const locationKey = selectedKey ?? "";
+
+  const gallerySelectProps = {
+    mode: "select" as const,
+    selectedRelPaths,
+    disabled: jobBusy,
+    onToggleSelect: (relPath: string, e: React.ChangeEvent<HTMLInputElement>) => {
+      setSelectedRelPaths((prev) => toggleSetMember(prev, relPath, e.target.checked));
+    },
+    onPreview: openPreview,
+    onRightClick: openContextMenu,
+  };
 
   return (
     <>
@@ -328,6 +381,7 @@ export function TimelineLocationPicker(props: {
           padding: 16,
         }}
         onMouseDown={(e) => {
+          if (e.target !== e.currentTarget) return;
           e.preventDefault();
           void handlePickerCancel();
         }}
@@ -502,32 +556,28 @@ export function TimelineLocationPicker(props: {
                         title="Base"
                         images={baseImages}
                         defaultOpen
-                        onPick={(relPath) => onPickImage(locationKey, relPath)}
-                        onRightClick={openContextMenu}
+                        {...gallerySelectProps}
                       />
                     ) : null}
                     <CollapsibleGallerySection
                       title="View"
                       images={viewImages}
                       defaultOpen
-                      onPick={(relPath) => onPickImage(locationKey, relPath)}
-                      onRightClick={openContextMenu}
+                      {...gallerySelectProps}
                       emptyText="No view images"
                     />
                     <CollapsibleGallerySection
                       title="Lighting"
                       images={lightingImages}
                       defaultOpen
-                      onPick={(relPath) => onPickImage(locationKey, relPath)}
-                      onRightClick={openContextMenu}
+                      {...gallerySelectProps}
                       emptyText="No lighting images"
                     />
                     <CollapsibleGallerySection
                       title="Hidden"
                       images={hiddenImages}
                       defaultOpen={false}
-                      onPick={(relPath) => onPickImage(locationKey, relPath)}
-                      onRightClick={openContextMenu}
+                      {...gallerySelectProps}
                       emptyText="No hidden images"
                     />
                   </>
@@ -540,7 +590,8 @@ export function TimelineLocationPicker(props: {
             style={{
               flexShrink: 0,
               display: "flex",
-              justifyContent: "flex-end",
+              justifyContent: "space-between",
+              alignItems: "center",
               padding: 12,
               borderTop: "1px solid rgba(255,255,255,0.15)",
             }}
@@ -548,6 +599,29 @@ export function TimelineLocationPicker(props: {
             <button type="button" onClick={() => void handlePickerCancel()} className="ui-btn-black">
               Cancel
             </button>
+            {stage === "gallery" && selectedKey ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {selectedRelPaths.size > 0 ? (
+                  <span style={{ fontSize: 12, opacity: 0.7 }}>
+                    {selectedRelPaths.size} selected
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  className="ui-btn-black"
+                  disabled={jobBusy || selectedRelPaths.size === 0}
+                  onClick={handleUse}
+                  style={{
+                    cursor: jobBusy || selectedRelPaths.size === 0 ? "not-allowed" : "pointer",
+                    opacity: jobBusy || selectedRelPaths.size === 0 ? 0.5 : 1,
+                  }}
+                >
+                  Use
+                </button>
+              </div>
+            ) : (
+              <span />
+            )}
           </div>
         </div>
       </div>
@@ -613,6 +687,15 @@ export function TimelineLocationPicker(props: {
       />
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
+
+      {lightbox ? (
+        <GalleryImageLightbox
+          paths={lightbox.paths}
+          index={lightbox.index}
+          title={lightbox.title}
+          onClose={() => setLightbox(null)}
+        />
+      ) : null}
     </>
   );
 }

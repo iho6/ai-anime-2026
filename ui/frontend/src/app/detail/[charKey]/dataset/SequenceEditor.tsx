@@ -19,9 +19,13 @@ import {
   apiSequenceExportTimelineMp4Blob,
   apiSequenceGenerateFlf,
   apiSequenceGenerateI2v,
+  apiSequenceStripGenerateFlf,
+  apiSequenceStripGenerateI2v,
   apiSequenceGet,
   apiSequencePut,
   assetUrlFromRelPath,
+  runDetailWsJob,
+  runShotRemoveBgWsJob,
   type FrameSequencePayload,
   type FrameSequenceStripSlot,
   type SequenceFrameItem,
@@ -29,7 +33,18 @@ import {
   type SequenceManifest,
   type SequencePreviewAspect,
 } from "../../../../lib/api";
-import { FrameSequenceModal } from "./FrameSequenceModal";
+import {
+  FrameSequenceModal,
+  type FrameSequenceStripActions,
+} from "./FrameSequenceModal";
+import { outputDirFromRelPath } from "../../../../components/frameSequenceStripUtils";
+import { AiEditModal } from "../../../../components/AiEditModal";
+import {
+  SEQUENCE_FLF_OUTPUT_LENGTHS,
+  SEQUENCE_I2V_OUTPUT_LENGTHS,
+  SequenceOutputLengthStepper,
+  sequenceVideoLengthIndex,
+} from "../../../../components/sequenceOutputLength";
 import {
   normalizeSequencePreviewAspect,
   SEQUENCE_PREVIEW_ASPECT_OPTIONS,
@@ -80,116 +95,6 @@ const BASE_RULER_H = 22;
 const BASE_FOOTER_H = 18;
 const TIMELINE_ZOOM_MIN = 0.55;
 const TIMELINE_ZOOM_MAX = 3.2;
-
-/** Wan FLF: 4k+1 step 4 from 25 through 121 (see flf2video_ai_service README). */
-const SEQUENCE_FLF_OUTPUT_LENGTHS: readonly number[] = Object.freeze(
-  Array.from({ length: Math.floor((121 - 25) / 4) + 1 }, (_, i) => 25 + i * 4)
-);
-
-/** Hunyuan I2V: discrete latent lengths (approx. duration at 24fps). */
-const SEQUENCE_I2V_OUTPUT_LENGTHS: readonly number[] = Object.freeze([
-  25, 49, 73, 97, 121, 129,
-]);
-
-function sequenceVideoLengthIndex(value: number, lengths: readonly number[]): number {
-  if (!lengths.length) return 0;
-  let idx = lengths.indexOf(value);
-  if (idx >= 0) return idx;
-  idx = lengths.findIndex((n) => n >= value);
-  if (idx <= 0) return 0;
-  if (idx < 0) return lengths.length - 1;
-  const prev = lengths[idx - 1]!;
-  const cur = lengths[idx]!;
-  return value - prev <= cur - value ? idx - 1 : idx;
-}
-
-function SequenceOutputLengthStepper(props: {
-  lengths: readonly number[];
-  value: number;
-  onChange: (next: number) => void;
-}) {
-  const { lengths } = props;
-  const i = sequenceVideoLengthIndex(props.value, lengths);
-  const shown = lengths[i]!;
-  const atMin = i <= 0;
-  const atMax = i >= lengths.length - 1;
-  const border = "1px solid rgba(255,255,255,0.25)";
-  const btn: React.CSSProperties = {
-    flex: 1,
-    minHeight: 22,
-    padding: 0,
-    border: "none",
-    borderRadius: 0,
-    background: "rgba(255,255,255,0.08)",
-    color: "inherit",
-    cursor: "pointer",
-    fontSize: 11,
-    lineHeight: 1,
-  };
-  return (
-    <div
-      style={{
-        display: "flex",
-        marginTop: 4,
-        border,
-        background: "rgba(0,0,0,0.35)",
-      }}
-    >
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "6px 8px",
-          fontVariantNumeric: "tabular-nums",
-          fontSize: 15,
-        }}
-        aria-live="polite"
-      >
-        {shown}
-      </div>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          width: 28,
-          borderLeft: border,
-        }}
-      >
-        <button
-          type="button"
-          aria-label="Increase output length"
-          disabled={atMax}
-          onClick={() =>
-            props.onChange(lengths[Math.min(lengths.length - 1, i + 1)]!)
-          }
-          style={{
-            ...btn,
-            borderBottom: border,
-            opacity: atMax ? 0.35 : 1,
-            cursor: atMax ? "default" : "pointer",
-          }}
-        >
-          ▲
-        </button>
-        <button
-          type="button"
-          aria-label="Decrease output length"
-          disabled={atMin}
-          onClick={() => props.onChange(lengths[Math.max(0, i - 1)]!)}
-          style={{
-            ...btn,
-            opacity: atMin ? 0.35 : 1,
-            cursor: atMin ? "default" : "pointer",
-          }}
-        >
-          ▼
-        </button>
-      </div>
-    </div>
-  );
-}
 
 type FrameMapValue = Pick<
   SequenceFrameItem,
@@ -757,6 +662,10 @@ export function SequenceEditor(props: {
     prompt: string;
   } | null>(null);
   const [frameSeqModal, setFrameSeqModal] = useState<{ galleryIndex: number } | null>(null);
+  const [stripAiEditOpen, setStripAiEditOpen] = useState(false);
+  const [stripAiEditImageSrc, setStripAiEditImageSrc] = useState("");
+  const stripAiEditResolveRef = useRef<((rel: string) => void) | null>(null);
+  const stripAiEditRelRef = useRef<string | null>(null);
   const [timelineScale, setTimelineScale] = useState(1);
   const [timelineExportBusy, setTimelineExportBusy] = useState(false);
   /** When set, a gallery sequence-set MP4 export is in progress for that gallery item id. */
@@ -1723,6 +1632,128 @@ export function SequenceEditor(props: {
     onNewAngleSequenceGallery,
   ]);
 
+  const sequenceStripActions = useMemo((): FrameSequenceStripActions | undefined => {
+    if (frameSeqModal == null || !manifest) return undefined;
+    const gi = frameSeqModal.galleryIndex;
+    const g = manifest.gallery[gi];
+    const firstRel = g?.frameSequence?.strip?.find(
+      (s) => s.kind === "image" && s.relPath?.trim()
+    );
+    const outputDirRel = firstRel?.kind === "image" && firstRel.relPath
+      ? outputDirFromRelPath(firstRel.relPath)
+      : "";
+    if (!outputDirRel) return undefined;
+    const jm = jobModal;
+    return {
+      busy: false,
+      onRemoveBackground: async (relPaths) => {
+        jm?.begin({ title: "Removing background", clearLog: true });
+        await Promise.resolve();
+        const out: string[] = [];
+        try {
+          for (const rel of relPaths) {
+            jm?.log(`Removing background: ${rel.split("/").pop() ?? "frame"}…`);
+            const done = await runShotRemoveBgWsJob({
+              imageRelPath: rel,
+              inPlace: true,
+              onLogLine: (line) => jm?.log(line),
+            });
+            const nextRel = done.result?.relPath;
+            if (!done.ok || !nextRel) throw new Error(done.error || "Remove background failed.");
+            out.push(nextRel);
+          }
+          jm?.end();
+          return out;
+        } catch (e) {
+          jm?.fail(e, "Remove background failed.");
+          throw e;
+        }
+      },
+      onAiEdit: (relPath) =>
+        new Promise<string>((resolve) => {
+          stripAiEditResolveRef.current = resolve;
+          stripAiEditRelRef.current = relPath;
+          setStripAiEditImageSrc(assetUrlFromRelPath(relPath));
+          setStripAiEditOpen(true);
+        }),
+      onGenerateI2v: async (relPath, prompt, length) => {
+        jm?.begin({ title: "Generating strip I2V", clearLog: true });
+        await Promise.resolve();
+        try {
+          const r = await apiSequenceStripGenerateI2v({
+            charKey,
+            sequenceName,
+            sourceRelPath: relPath,
+            outputDirRel,
+            length,
+            positivePrompt: prompt,
+          });
+          jm?.end();
+          return r.relPaths;
+        } catch (e) {
+          jm?.fail(e, "Strip I2V failed.");
+          throw e;
+        }
+      },
+      onGenerateFlf: async (relPathA, relPathB, length) => {
+        jm?.begin({ title: "Generating strip FLF", clearLog: true });
+        await Promise.resolve();
+        try {
+          const r = await apiSequenceStripGenerateFlf({
+            charKey,
+            sequenceName,
+            imageRelPathA: relPathA,
+            imageRelPathB: relPathB,
+            outputDirRel,
+            length,
+          });
+          jm?.end();
+          return r.relPaths;
+        } catch (e) {
+          jm?.fail(e, "Strip FLF failed.");
+          throw e;
+        }
+      },
+    };
+  }, [frameSeqModal, manifest, charKey, sequenceName, jobModal]);
+
+  const runStripAiEdit = useCallback(
+    async (promptText: string, maskPngBase64?: string) => {
+      const resolve = stripAiEditResolveRef.current;
+      const sourceRelPath = stripAiEditRelRef.current;
+      stripAiEditResolveRef.current = null;
+      stripAiEditRelRef.current = null;
+      setStripAiEditOpen(false);
+      if (!resolve || !sourceRelPath) return;
+      const jm = jobModal;
+      jm?.begin({ title: "AI Editing frame", clearLog: true });
+      await Promise.resolve();
+      try {
+        const done = await runDetailWsJob<{ fileRelPath: string }>({
+          charKey,
+          pathSuffix: "/dataset/ws",
+          payload: {
+            job: "ai_edit_sequence_gallery_image",
+            sequenceName,
+            sourceRelPath,
+            promptText,
+            ...(maskPngBase64 ? { maskPngBase64 } : {}),
+          },
+          onLogLine: (line) => jm?.log(line),
+        });
+        if (!done.ok || !done.result?.fileRelPath) {
+          throw new Error(done.error ?? "AI Edit failed");
+        }
+        jm?.end();
+        resolve(done.result.fileRelPath);
+      } catch (e) {
+        jm?.fail(e, "AI Edit failed.");
+        throw e;
+      }
+    },
+    [charKey, sequenceName, jobModal]
+  );
+
   useEffect(() => {
     function onKeyDown(ev: KeyboardEvent) {
       if (ev.key === "Delete" || ev.key === "Backspace") {
@@ -2471,6 +2502,7 @@ export function SequenceEditor(props: {
             sequenceName={sequenceName}
             onError={onError}
             previewFps={Math.max(1, manifest.fps)}
+            stripActions={sequenceStripActions}
             onClose={() => setFrameSeqModal(null)}
             onSave={(next) => {
               const gi = frameSeqModal.galleryIndex;
@@ -2501,6 +2533,20 @@ export function SequenceEditor(props: {
           ) : null}
         </DragOverlay>
       </DndContext>
+      <AiEditModal
+        open={stripAiEditOpen}
+        title="AI Edit frame"
+        imageSrc={stripAiEditImageSrc}
+        busy={false}
+        onCancel={() => {
+          setStripAiEditOpen(false);
+          stripAiEditResolveRef.current = null;
+          stripAiEditRelRef.current = null;
+        }}
+        onGenerate={(promptText, maskPngBase64) =>
+          void runStripAiEdit(promptText, maskPngBase64)
+        }
+      />
     </div>
   );
 }

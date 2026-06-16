@@ -212,13 +212,15 @@ export function TimelinePreviewPlayer(props: {
         track.kind === "video"
           ? sourceTimeAtWithTransition(clip, playhead, track)
           : sourceTimeAt(clip, playhead);
+      const reversed = !!clip.reversed;
       el.playbackRate = clip.speed || 1;
       if (track.kind === "audio") {
         el.volume = clamp(volumeGainAt(clip, playhead), 0, 1);
       }
-      if (!playing) {
+      const seekThreshold = reversed ? 0.05 : playing ? 0.35 : 0.05;
+      if (!playing || reversed) {
         if (!el.paused) el.pause();
-        if (Math.abs(el.currentTime - want) > 0.05) {
+        if (Math.abs(el.currentTime - want) > seekThreshold) {
           try {
             el.currentTime = want;
           } catch {
@@ -226,7 +228,7 @@ export function TimelinePreviewPlayer(props: {
           }
         }
       } else {
-        if (Math.abs(el.currentTime - want) > 0.35) {
+        if (Math.abs(el.currentTime - want) > seekThreshold) {
           try {
             el.currentTime = want;
           } catch {

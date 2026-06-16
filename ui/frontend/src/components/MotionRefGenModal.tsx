@@ -625,8 +625,8 @@ export function MotionRefGenModal(props: {
     }
   }
 
-  async function createShotFolder(parentFolderId: string | null) {
-    const ids = [...selectedShotIds];
+  async function createShotFolder(parentFolderId: string | null, shotIds: string[]) {
+    const ids = shotIds.length ? shotIds : [...selectedShotIds];
     if (!ids.length) return;
     const name = await askText({
       title: "New folder",
@@ -893,7 +893,7 @@ export function MotionRefGenModal(props: {
             onRestoreShot={(shot) => void restoreShot(shot)}
             onAddToPose={(shots) => void addShotsToPose(shots)}
             onDeleteShot={(id) => void deleteShot(id)}
-            onCreateFolder={(parentId) => void createShotFolder(parentId)}
+            onCreateFolder={(parentId, shotIds) => void createShotFolder(parentId, shotIds)}
             onRenameFolder={(id, name) => void renameShotFolder(id, name)}
             onDeleteFolder={(id) => void deleteShotFolder(id)}
           />

@@ -1,6 +1,13 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import {
   TimelineManifest,
   TimelineClip,
@@ -62,6 +69,46 @@ const MIN_DUR = 0.05;
 const MIN_PXPS = 20;
 const MAX_PXPS = 400;
 const SNAP_PX = 8; // pixel radius for snapping clip edges to the playhead.
+const PLAYHEAD_HIT_W = 12;
+
+type RulerTick = { sec: number; label: string | null; major: boolean };
+
+function formatRulerMinutes(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function buildRulerTicks(
+  contentSec: number,
+  total: number,
+  pxPerSec: number
+): RulerTick[] {
+  const maxSec = Math.ceil(contentSec);
+  const ticks: RulerTick[] = [];
+
+  if (total < 60) {
+    const step = pxPerSec >= 80 ? 1 : pxPerSec >= 40 ? 5 : 10;
+    for (let s = 0; s <= maxSec; s += step) {
+      ticks.push({ sec: s, label: `${s}s`, major: true });
+    }
+    return ticks;
+  }
+
+  const majorStep = pxPerSec >= 40 ? 10 : 30;
+  const minorStep = pxPerSec >= 60 ? 1 : 0;
+  for (let s = 0; s <= maxSec; s++) {
+    const isMajor = s % majorStep === 0;
+    const isMinor = minorStep > 0 && s % minorStep === 0 && !isMajor;
+    if (!isMajor && !isMinor) continue;
+    ticks.push({
+      sec: s,
+      label: isMajor ? formatRulerMinutes(s) : null,
+      major: isMajor,
+    });
+  }
+  return ticks;
+}
 
 type DragKind = "move" | "trimL" | "trimR";
 type DragState = {
@@ -72,7 +119,11 @@ type DragState = {
   orig: TimelineClip;
 };
 
-export function TimelineTracks(props: {
+export type TimelineTracksHandle = {
+  ensurePlayheadVisible: (t?: number) => void;
+};
+
+export const TimelineTracks = forwardRef<TimelineTracksHandle, {
   manifest: TimelineManifest;
   pxPerSec: number;
   playhead: number;
@@ -106,7 +157,7 @@ export function TimelineTracks(props: {
   onVolumePointsChange?: (clipId: string, points: VolumeAutomationPoint[]) => void;
   onVolumeSeek?: (t: number) => void;
   onVolumeClear?: (clipId: string) => void;
-}) {
+}>(function TimelineTracks(props, ref) {
   const {
     manifest,
     pxPerSec,
@@ -140,6 +191,26 @@ export function TimelineTracks(props: {
   } | null>(null);
   const laneAreaRef = useRef<HTMLDivElement | null>(null);
   const gestureCommittedRef = useRef(false);
+  const playheadDragRef = useRef(false);
+  const playheadRef = useRef(playhead);
+  playheadRef.current = playhead;
+
+  const ensurePlayheadVisible = useCallback((t?: number) => {
+    const el = laneAreaRef.current;
+    if (!el) return;
+    const time = t ?? playheadRef.current;
+    const x = LABEL_W + time * pxPerSec;
+    const margin = 40;
+    const viewL = el.scrollLeft;
+    const viewR = viewL + el.clientWidth;
+    if (x < viewL + margin) {
+      el.scrollLeft = Math.max(0, x - LABEL_W - margin);
+    } else if (x > viewR - margin) {
+      el.scrollLeft = x - el.clientWidth + margin;
+    }
+  }, [pxPerSec]);
+
+  useImperativeHandle(ref, () => ({ ensurePlayheadVisible }), [ensurePlayheadVisible]);
 
   // Track drag-to-reorder state.
   const trackDragRef = useRef<{ trackId: string; startY: number } | null>(null);
@@ -154,8 +225,8 @@ export function TimelineTracks(props: {
     const onWheel = (e: WheelEvent) => {
       const rect = el.getBoundingClientRect();
       const offsetX = e.clientX - rect.left;
-      if (e.shiftKey) {
-        // Shift+wheel → horizontal scroll.
+      if (!e.shiftKey) {
+        // Default wheel → horizontal scroll.
         el.scrollLeft += e.deltaY || e.deltaX;
         e.preventDefault();
         return;
@@ -186,6 +257,7 @@ export function TimelineTracks(props: {
   const total = timelineDuration(manifest);
   const contentSec = Math.max(total + 5, 20);
   const laneWidth = contentSec * pxPerSec;
+  const rulerTicks = buildRulerTicks(contentSec, total, pxPerSec);
 
   function renameTrack(trackId: string, name: string) {
     onCommit();
@@ -335,6 +407,12 @@ export function TimelineTracks(props: {
   }
 
   function onPointerMove(e: React.PointerEvent) {
+    if (playheadDragRef.current) {
+      seekFromClientX(e.clientX);
+      ensurePlayheadVisible();
+      return;
+    }
+
     // Track reorder drag takes priority.
     if (trackDragRef.current) {
       setTrackDropIndex(getTrackDropIndexFromY(e.clientY));
@@ -380,7 +458,13 @@ export function TimelineTracks(props: {
     }
     if (d.kind === "trimL") {
       // Drag head: limit so duration stays >= MIN_DUR and inPoint >= 0.
-      const minShift = hasSrc ? -o.inPoint / speed : -Infinity;
+      const minShift = hasSrc
+        ? o.reversed
+          ? o.srcDuration
+            ? -(o.srcDuration - o.outPoint) / speed
+            : -Infinity
+          : -o.inPoint / speed
+        : -Infinity;
       const maxShift = o.duration - MIN_DUR;
       let shift = clamp(dt, Math.max(minShift, -o.start), maxShift);
       // Snap the head to the playhead or another clip edge when close.
@@ -389,14 +473,23 @@ export function TimelineTracks(props: {
         shift = clamp(snappedHead - o.start, Math.max(minShift, -o.start), maxShift);
       }
       const newStart = o.start + shift;
-      const newInPoint = hasSrc ? o.inPoint + shift * speed : o.inPoint;
       const newDuration = o.duration - shift;
-      mutateClip(d.trackId, d.clipId, {
-        start: newStart,
-        inPoint: Math.max(0, newInPoint),
-        duration: newDuration,
-        outPoint: hasSrc ? Math.max(0, newInPoint) + newDuration * speed : o.outPoint,
-      });
+      if (o.reversed && hasSrc) {
+        const newOutPoint = o.outPoint - shift * speed;
+        mutateClip(d.trackId, d.clipId, {
+          start: newStart,
+          outPoint: Math.max(o.inPoint + MIN_DUR * speed, newOutPoint),
+          duration: newDuration,
+        });
+      } else {
+        const newInPoint = hasSrc ? o.inPoint + shift * speed : o.inPoint;
+        mutateClip(d.trackId, d.clipId, {
+          start: newStart,
+          inPoint: Math.max(0, newInPoint),
+          duration: newDuration,
+          outPoint: hasSrc ? Math.max(0, newInPoint) + newDuration * speed : o.outPoint,
+        });
+      }
       return;
     }
     if (d.kind === "trimR") {
@@ -406,15 +499,29 @@ export function TimelineTracks(props: {
       if (snappedTail != null) {
         newDuration = clamp(snappedTail - o.start, MIN_DUR, maxDur);
       }
-      mutateClip(d.trackId, d.clipId, {
-        duration: newDuration,
-        outPoint: hasSrc ? o.inPoint + newDuration * speed : o.outPoint,
-      });
+      if (o.reversed && hasSrc) {
+        mutateClip(d.trackId, d.clipId, {
+          duration: newDuration,
+          inPoint: Math.max(0, o.outPoint - newDuration * speed),
+        });
+      } else {
+        mutateClip(d.trackId, d.clipId, {
+          duration: newDuration,
+          outPoint: hasSrc ? o.inPoint + newDuration * speed : o.outPoint,
+        });
+      }
       return;
     }
   }
 
   function onPointerUp(e: React.PointerEvent) {
+    if (playheadDragRef.current) {
+      playheadDragRef.current = false;
+      (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+      ensurePlayheadVisible();
+      return;
+    }
+
     // Finish track reorder drag.
     if (trackDragRef.current) {
       (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
@@ -474,6 +581,15 @@ export function TimelineTracks(props: {
     onSeek(clamp(t, 0, Infinity));
   }
 
+  function startPlayheadDrag(e: React.PointerEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    playheadDragRef.current = true;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    seekFromClientX(e.clientX);
+  }
+
   return (
     <div
       style={{
@@ -523,7 +639,7 @@ export function TimelineTracks(props: {
             }}
             onPointerDown={(e) => {
               onSelectClip(null, false);
-              seekFromClientX(e.clientX);
+              startPlayheadDrag(e);
             }}
             onContextMenu={(e) => {
               if (!onSurfaceContextMenu) return;
@@ -532,22 +648,26 @@ export function TimelineTracks(props: {
               onSurfaceContextMenu(null, e.clientX, e.clientY);
             }}
           >
-            {Array.from({ length: Math.ceil(contentSec) + 1 }).map((_, s) => (
+            {rulerTicks.map((tick) => (
               <div
-                key={s}
+                key={tick.sec}
                 style={{
                   position: "absolute",
-                  left: s * pxPerSec,
+                  left: tick.sec * pxPerSec,
                   top: 0,
                   height: RULER_H,
-                  borderLeft: "1px solid rgba(255,255,255,0.12)",
+                  borderLeft: tick.major
+                    ? "1px solid rgba(255,255,255,0.22)"
+                    : "1px solid rgba(255,255,255,0.08)",
                   paddingLeft: 3,
                   fontSize: 9,
-                  color: "rgba(255,255,255,0.45)",
+                  color: tick.major
+                    ? "rgba(255,255,255,0.55)"
+                    : "rgba(255,255,255,0.25)",
                   userSelect: "none",
                 }}
               >
-                {s}s
+                {tick.label ?? ""}
               </div>
             ))}
           </div>
@@ -593,7 +713,7 @@ export function TimelineTracks(props: {
               onPointerDown={(e) => {
                 if (e.target === e.currentTarget) {
                   onSelectClip(null, false);
-                  seekFromClientX(e.clientX);
+                  startPlayheadDrag(e);
                 }
               }}
               onContextMenu={(e) => {
@@ -658,7 +778,7 @@ export function TimelineTracks(props: {
                   >
                     {clip.type === "audio" && !clip.srcRelPath
                       ? "♪ audio (empty)"
-                      : `${clipTrackLabel(clip)} · ${clip.speed !== 1 ? `${clip.speed}× · ` : ""}${clip.duration.toFixed(1)}s`}
+                      : `${clipTrackLabel(clip)} · ${clip.reversed ? "↩ · " : ""}${clip.speed !== 1 ? `${clip.speed}× · ` : ""}${clip.duration.toFixed(1)}s`}
                     {clip.trajectory && (
                       <span style={{ marginLeft: 4, fontSize: 8, opacity: 0.75 }} title="Has trajectory">↗</span>
                     )}
@@ -789,19 +909,53 @@ export function TimelineTracks(props: {
           <div style={{ height: 3, background: "#ffd166", marginLeft: LABEL_W, width: laneWidth }} />
         )}
 
-        {/* Playhead overlay (spans ruler + rows, offset past the label column). */}
+        {/* Playhead line (spans ruler + rows). */}
         <div
           style={{
             position: "absolute",
             top: 0,
             bottom: 0,
-            left: LABEL_W + playhead * pxPerSec,
+            left: LABEL_W + playhead * pxPerSec - 1,
             width: 2,
             background: "#ff5d5d",
             pointerEvents: "none",
             zIndex: 5,
           }}
         />
+        {/* Draggable playhead scrubber. */}
+        <div
+          role="slider"
+          aria-label="Playhead"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={playhead}
+          onPointerDown={startPlayheadDrag}
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: LABEL_W + playhead * pxPerSec - PLAYHEAD_HIT_W / 2,
+            width: PLAYHEAD_HIT_W,
+            cursor: "ew-resize",
+            zIndex: 6,
+            touchAction: "none",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 0,
+              height: 0,
+              borderLeft: "5px solid transparent",
+              borderRight: "5px solid transparent",
+              borderTop: "7px solid #ff5d5d",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
       </div>
       </div>
 
@@ -825,7 +979,7 @@ export function TimelineTracks(props: {
       />
     </div>
   );
-}
+});
 
 function handleStyle(side: "left" | "right"): React.CSSProperties {
   return {

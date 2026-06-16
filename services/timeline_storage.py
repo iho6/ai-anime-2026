@@ -47,6 +47,28 @@ def timeline_assets_dir(timeline_key: str) -> Path:
     return timeline_dir(timeline_key) / "assets"
 
 
+def timeline_frames_dir(timeline_key: str, clip_id: str) -> Path:
+    return timeline_dir(timeline_key) / "frames" / sanitize_for_folder(clip_id)
+
+
+def timeline_abs_to_rel(abs_path: Path | str) -> str:
+    p = Path(abs_path).resolve()
+    rel = p.relative_to(TIMELINES_STORAGE_ROOT.resolve())
+    return str(Path("timelines") / rel).replace("\\", "/")
+
+
+def timeline_rel_to_abs(rel_path: str) -> Path:
+    rel = Path(str(rel_path).replace("\\", "/").lstrip("/"))
+    parts = rel.parts
+    if parts and parts[0].lower() == "timelines":
+        rel = Path(*parts[1:])
+    target = (TIMELINES_STORAGE_ROOT / rel).resolve()
+    root = TIMELINES_STORAGE_ROOT.resolve()
+    if root != target and root not in target.parents:
+        raise ValueError("Timeline-relative path escapes root")
+    return target
+
+
 def list_timeline_keys() -> list[str]:
     root = TIMELINES_STORAGE_ROOT
     if not root.exists():

@@ -1,0 +1,39 @@
+{
+  "order": [
+    "asset_f2f80240f5f346659046e8e09c45ef25",
+    "asset_32ac01f0089d498ca4dd92dc8aeac446",
+    "asset_eedcbe6a6fe24373a791a627e2869dac"
+  ],
+  "items": {
+    "asset_eedcbe6a6fe24373a791a627e2869dac": {
+      "id": "asset_eedcbe6a6fe24373a791a627e2869dac",
+      "relPath": "timelines/Timeline/assets/asset_eedcbe6a6fe24373a791a627e2869dac.png",
+      "kind": "t2i",
+      "prompt": "plain white",
+      "modelMode": "general",
+      "width": 1024,
+      "height": 576,
+      "createdAt": 1781620704
+    },
+    "asset_32ac01f0089d498ca4dd92dc8aeac446": {
+      "id": "asset_32ac01f0089d498ca4dd92dc8aeac446",
+      "relPath": "timelines/Timeline/assets/asset_32ac01f0089d498ca4dd92dc8aeac446.png",
+      "kind": "t2i",
+      "prompt": "plain white backdrop, nothing in foreground",
+      "modelMode": "general",
+      "width": 1024,
+      "height": 576,
+      "createdAt": 1781620765
+    },
+    "asset_f2f80240f5f346659046e8e09c45ef25": {
+      "id": "asset_f2f80240f5f346659046e8e09c45ef25",
+      "relPath": "timelines/Timeline/assets/asset_f2f80240f5f346659046e8e09c45ef25.png",
+      "kind": "t2i",
+      "prompt": "white backdrop, stylized anime text title card with text: \"Eons Away\"",
+      "modelMode": "general",
+      "width": 1024,
+      "height": 576,
+      "createdAt": 1781621056
+    }
+  }
+}

@@ -322,14 +322,20 @@ def _source_time_at_with_transition(
     fade_start = float(clip.get("start", 0)) - d
     if t >= fade_start and t < float(clip.get("start", 0)):
         local = max(0.0, t - fade_start)
-        return float(clip.get("inPoint", 0)) + local * float(clip.get("speed", 1))
+        speed = float(clip.get("speed", 1))
+        if clip.get("reversed"):
+            return float(clip.get("outPoint", 0)) - local * speed
+        return float(clip.get("inPoint", 0)) + local * speed
     return _source_time_at(clip, t)
 
 
 def _source_time_at(clip: dict[str, Any], t: float) -> float:
-    return float(clip.get("inPoint", 0)) + (t - float(clip.get("start", 0))) * float(
-        clip.get("speed", 1)
-    )
+    local = t - float(clip.get("start", 0))
+    speed = float(clip.get("speed", 1))
+    clip_type = str(clip.get("type") or "")
+    if clip.get("reversed") and clip_type in ("video", "audio"):
+        return float(clip.get("outPoint", 0)) - local * speed
+    return float(clip.get("inPoint", 0)) + local * speed
 
 
 # ── Trajectory + motion (keep in sync with trajectoryMotion.ts) ───────────────
@@ -725,10 +731,12 @@ class _CompositorState:
         cid = str(clip.get("id", key))
         if cid not in self._video_decoders:
             self._video_decoders[cid] = _VideoFrameDecoder(abs_path)
+        in_point = float(clip.get("inPoint", 0))
         out_point = float(clip.get("outPoint", 0))
-        st = max(0.0, source_time)
-        if out_point > 0 and st > out_point:
-            st = out_point
+        st = source_time
+        if out_point > 0:
+            st = min(st, out_point)
+        st = max(st, in_point)
         return self._video_decoders[cid].frame_at_source_time(st)
 
     def clip_with_dims(self, clip: dict[str, Any], abs_path: Path) -> dict[str, Any]:
