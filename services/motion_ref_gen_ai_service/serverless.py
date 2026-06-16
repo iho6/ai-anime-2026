@@ -396,6 +396,77 @@ def _write_mesh_stream(
     return True, V, F
 
 
+# ── Post-generation reskin ────────────────────────────────────────────────────
+
+def reskin_motion(motion_key: str, log_cb: Callable[[str], None] | None = None) -> dict:
+    """
+    Reskin an existing skeleton-only motion by rerunning SMPL-X skinning on the
+    stored ``motion.npz``.  Writes ``mesh.f16.gz`` + ``mesh_faces.json.gz`` next to
+    the existing joints file and updates ``manifest.json``.
+
+    Returns a dict with ``motionKey``, ``hasMesh``, ``vertexCount``, ``faceCount``.
+    """
+    import numpy as np
+    from services import motion_ref_storage
+
+    def _log(msg: str) -> None:
+        logger.info(msg)
+        if log_cb:
+            log_cb(msg)
+
+    motion_dir = motion_ref_storage.motion_ref_dir(motion_key)
+    npz_path = motion_dir / "motion.npz"
+    if not npz_path.is_file():
+        raise FileNotFoundError(f"motion.npz not found for motion '{motion_key}'")
+
+    manifest = motion_ref_storage.read_manifest(motion_key)
+    if not manifest:
+        raise FileNotFoundError(f"manifest.json not found for motion '{motion_key}'")
+
+    _log(f"Loading motion.npz for '{motion_key}'…")
+    output = dict(np.load(str(npz_path), allow_pickle=True))
+
+    # Re-derive center_xz from posed_joints (same logic as generate_motion).
+    posed_joints_raw = output.get("posed_joints")
+    if posed_joints_raw is None:
+        raise RuntimeError(
+            "motion.npz does not contain 'posed_joints'; cannot derive center for skinning."
+        )
+    posed_joints = np.asarray(posed_joints_raw, dtype=np.float32)
+    if posed_joints.ndim == 4:
+        posed_joints = posed_joints[0]
+    mean_xz = posed_joints[:, 0, [0, 2]].mean(axis=0)
+
+    model_name = manifest.get("model", _DEFAULT_MODEL)
+    _log(f"Loading KiMoD model '{model_name}' (cached after first use)…")
+    model = _load_kimodo_model(model_name)
+
+    _log("Running SMPL-X skinning…")
+    has_mesh, V, F = _write_mesh_stream(
+        motion_dir,
+        output,
+        skeleton=model.skeleton,
+        center_xz=(float(mean_xz[0]), float(mean_xz[1])),
+        log=_log,
+    )
+
+    manifest.update(
+        has_mesh=has_mesh,
+        vertex_count=V,
+        face_count=F,
+        display_mode="mesh" if has_mesh else "skeleton",
+    )
+    motion_ref_storage.write_manifest(motion_key, manifest)
+    _log(f"Manifest updated — has_mesh={has_mesh}, V={V}, F={F}")
+
+    return {
+        "motionKey": motion_key,
+        "hasMesh": has_mesh,
+        "vertexCount": V,
+        "faceCount": F,
+    }
+
+
 # ── Pose-constrained generation ───────────────────────────────────────────────
 
 

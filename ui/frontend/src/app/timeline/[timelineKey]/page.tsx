@@ -7,6 +7,8 @@ import {
   apiTimelineImportAudio,
   apiTimelineImportImage,
   apiTimelinePut,
+  apiTimelineSavedShapes,
+  apiSaveTimelineShape,
   AudioReference,
   runReferenceAudioGenerateWsJob,
   assetUrlFromRelPath,
@@ -21,6 +23,7 @@ import {
   runTimelineSegmentWsJob,
   runTimelineT2iWsJob,
   type TimelineAsset,
+  type SavedGeometryShape,
   type Sam3Point,
   type Sam3SegmentOptions,
   type RvmBgOptions,
@@ -55,6 +58,11 @@ import { useJobRunSession } from "../../../hooks/useJobRunSession";
 import { useAppError } from "../../../components/ErrorProvider";
 import { TimelinePreviewPlayer } from "../../../components/timeline/TimelinePreviewPlayer";
 import { GeometryShapePicker } from "../../../components/timeline/GeometryShapePicker";
+import {
+  cloneTimelineGeometry,
+  createGeometryData,
+  geometryIsCustomized,
+} from "../../../components/timeline/geometryTemplates";
 import { TimelineTracks, AddTrackStrip } from "../../../components/timeline/TimelineTracks";
 import {
   SequenceVideoPicker,
@@ -124,6 +132,8 @@ export default function TimelineEditorPage() {
   const [textEditClipId, setTextEditClipId] = useState<string | null>(null);
   const [geomPickerOpen, setGeomPickerOpen] = useState(false);
   const [selectedGeomTemplate, setSelectedGeomTemplate] = useState<GeometryTemplate | null>(null);
+  const [selectedSavedShapeId, setSelectedSavedShapeId] = useState<string | null>(null);
+  const [savedShapes, setSavedShapes] = useState<SavedGeometryShape[]>([]);
   const geomBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // AI Edit modal (image clips).
@@ -181,7 +191,8 @@ export default function TimelineEditorPage() {
     y: number;
     trackId: string;
     clipId: string;
-  }>({ open: false, x: 0, y: 0, trackId: "", clipId: "" });
+    fromTrack: boolean;
+  }>({ open: false, x: 0, y: 0, trackId: "", clipId: "", fromTrack: false });
   const [trackMenu, setTrackMenu] = useState<{
     open: boolean;
     x: number;
@@ -206,6 +217,13 @@ export default function TimelineEditorPage() {
       })
       .catch((e) => showError({ message: "Could not load timeline.", error: e }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timelineKey]);
+
+  useEffect(() => {
+    if (!timelineKey) return;
+    apiTimelineSavedShapes(timelineKey)
+      .then((layout) => setSavedShapes(layout.items ?? []))
+      .catch(() => setSavedShapes([]));
   }, [timelineKey]);
 
   useEffect(() => {
@@ -327,11 +345,41 @@ export default function TimelineEditorPage() {
     selectClip(clip.id, false);
   }
 
-  function addGeometryClip(template: GeometryTemplate) {
-    const clip = buildGeometryClip({ template });
+  function addGeometryClip(template?: GeometryTemplate, geometry?: TimelineGeometry) {
+    const geom =
+      geometry ??
+      (template ? createGeometryData(template) : undefined);
+    if (!geom) return;
+    const clip = buildGeometryClip({ template: geom.template, geometry: geom });
     addVectorClipAtPlayhead(clip);
     setGeomPickerOpen(false);
     setSelectedGeomTemplate(null);
+    setSelectedSavedShapeId(null);
+  }
+
+  async function refreshSavedShapes() {
+    try {
+      const layout = await apiTimelineSavedShapes(timelineKey);
+      setSavedShapes(layout.items ?? []);
+    } catch {
+      setSavedShapes([]);
+    }
+  }
+
+  async function saveShapeFromClip(clipId: string) {
+    const rc = findClip(clipId);
+    if (!rc?.clip.geometry || !geometryIsCustomized(rc.clip.geometry)) return;
+    const name = window.prompt("Shape name", "My Shape");
+    if (!name?.trim()) return;
+    try {
+      await apiSaveTimelineShape(timelineKey, {
+        name: name.trim(),
+        geometry: rc.clip.geometry,
+      });
+      await refreshSavedShapes();
+    } catch (e) {
+      showError({ message: "Could not save shape.", error: e });
+    }
   }
 
   function addTextClip() {
@@ -1573,18 +1621,22 @@ export default function TimelineEditorPage() {
     const isText = rc?.clip.type === "text";
     const isAudio = rc?.clip.type === "audio";
 
-    const items: ContextMenuItem[] = [
-      {
-        key: "split",
-        label: "Split at playhead",
-        onSelect: () => splitClipAtPlayhead(clipMenu.trackId, clipMenu.clipId),
-      },
-      {
-        key: "speed",
-        label: "Speed",
-        onSelect: () => void changeClipSpeed(clipMenu.trackId, clipMenu.clipId),
-      },
-    ];
+    const items: ContextMenuItem[] = [];
+
+    if (clipMenu.fromTrack) {
+      items.push(
+        {
+          key: "split",
+          label: "Split at playhead",
+          onSelect: () => splitClipAtPlayhead(clipMenu.trackId, clipMenu.clipId),
+        },
+        {
+          key: "speed",
+          label: "Speed",
+          onSelect: () => void changeClipSpeed(clipMenu.trackId, clipMenu.clipId),
+        }
+      );
+    }
 
     if (pair) {
       items.push(
@@ -1636,6 +1688,16 @@ export default function TimelineEditorPage() {
           setClipMenu((s) => ({ ...s, open: false }));
         },
       });
+      if (rc?.clip.geometry && geometryIsCustomized(rc.clip.geometry)) {
+        items.push({
+          key: "saveShape",
+          label: "Save Shape",
+          onSelect: () => {
+            setClipMenu((s) => ({ ...s, open: false }));
+            void saveShapeFromClip(clipMenu.clipId);
+          },
+        });
+      }
     }
 
     if (isImage || isVideo) {
@@ -1929,7 +1991,7 @@ export default function TimelineEditorPage() {
           onTransformStart={commit}
           onClipContextMenu={(clipId, x, y) => {
             const rc = findClip(clipId);
-            setClipMenu({ open: true, x, y, trackId: rc?.trackId ?? "", clipId });
+            setClipMenu({ open: true, x, y, trackId: rc?.trackId ?? "", clipId, fromTrack: false });
           }}
           trajectoryClipId={trajectoryClipId}
           geometryEditClipId={geometryEditClipId}
@@ -1947,6 +2009,18 @@ export default function TimelineEditorPage() {
           onRequestTextEdit={(clipId) => {
             selectClip(clipId, false);
             setTextEditClipId(clipId);
+          }}
+          onRequestGeometryEdit={(clipId) => {
+            selectClip(clipId, false);
+            setTrajectoryClipId(null);
+            setVolumeEditClipId(null);
+            setTextEditClipId(null);
+            setGeometryEditClipId(clipId);
+          }}
+          onGeometryContextMenu={(clipId, x, y) => {
+            const rc = findClip(clipId);
+            if (!rc?.clip.geometry) return;
+            setClipMenu({ open: true, x, y, trackId: rc.trackId, clipId, fromTrack: false });
           }}
           height={previewHeight}
         />
@@ -2093,8 +2167,27 @@ export default function TimelineEditorPage() {
         open={geomPickerOpen}
         anchorRef={geomBtnRef}
         selected={selectedGeomTemplate}
-        onSelect={setSelectedGeomTemplate}
+        selectedSavedId={selectedSavedShapeId}
+        savedShapes={savedShapes}
+        onSelect={(template) => {
+          setSelectedGeomTemplate(template);
+          setSelectedSavedShapeId(null);
+        }}
+        onSelectSaved={(shapeId) => {
+          setSelectedSavedShapeId(shapeId);
+          setSelectedGeomTemplate(null);
+        }}
         onAdd={() => {
+          if (selectedSavedShapeId) {
+            const sh = savedShapes.find((s) => s.id === selectedSavedShapeId);
+            if (sh) {
+              addGeometryClip(
+                undefined,
+                cloneTimelineGeometry({ ...sh.geometry, template: "custom" })
+              );
+            }
+            return;
+          }
           if (selectedGeomTemplate) addGeometryClip(selectedGeomTemplate);
         }}
         onClose={() => setGeomPickerOpen(false)}
@@ -2128,7 +2221,7 @@ export default function TimelineEditorPage() {
             setPxPerSec={setPxPerSec}
             onAddTrack={addNeutralTrack}
             onClipContextMenu={(trackId, clipId, x, y) =>
-              setClipMenu({ open: true, x, y, trackId, clipId })
+              setClipMenu({ open: true, x, y, trackId, clipId, fromTrack: true })
             }
             onTrackContextMenu={(trackId, x, y) =>
               setTrackMenu({ open: true, x, y, trackId })

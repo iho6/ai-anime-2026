@@ -1,6 +1,7 @@
 "use client";
 
 import React, {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -13,13 +14,21 @@ import {
   apiMotionRefJoints,
   apiMotionRefList,
   apiMotionRefDelete,
-  apiUploadStaging,
+  apiMotionRefShotsLayout,
+  apiMotionRefShotSave,
+  apiMotionRefShotDelete,
+  apiMotionRefShotFolderCreate,
+  apiMotionRefShotFolderRename,
+  apiMotionRefShotFolderDelete,
   MotionRefManifest,
   MotionRefListItem,
   MotionRefSegment,
+  MotionRefShot,
+  MotionShotsLayout,
   assetUrlFromRelPath,
   runMotionRefGenerateWsJob,
-  runReferenceMakeKeypointWsJob,
+  runMotionRefSkinWsJob,
+  runMotionRefShotAddToPoseWsJob,
   PoseReference,
 } from "../lib/api";
 import { useJobRunSession } from "../hooks/useJobRunSession";
@@ -28,6 +37,7 @@ import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 import { useAppError } from "./ErrorProvider";
 import { SkeletonViewer3D, SkeletonViewer3DHandle, CameraState, ViewerMode } from "./motionRef/SkeletonViewer3D";
 import { MotionTimeline } from "./motionRef/MotionTimeline";
+import { MotionShotGallery } from "./motionRef/MotionShotGallery";
 import { SMPLX22_BONES } from "./motionRef/smplx22Bones";
 
 const DEFAULT_SEGMENTS: MotionRefSegment[] = [
@@ -44,7 +54,7 @@ export function MotionRefGenModal(props: {
   onKeypointsMade?: (ref: PoseReference) => void;
 }) {
   const { open, charKey, onBack, onClose, onKeypointsMade } = props;
-  const { showError } = useAppError();
+  const { showError, askText, confirmAction } = useAppError();
 
   const logRef = useRef<SharedLogStreamHandle | null>(null);
   const {
@@ -76,6 +86,16 @@ export function MotionRefGenModal(props: {
   } | null>(null);
   const [displayMode, setDisplayMode] = useState<ViewerMode>("mesh");
 
+  // ── In-place preview ───────────────────────────────────────────────────────
+  // Viewer-only: strips per-frame horizontal root translation so the figure
+  // stays centered during playback. Does not modify stored motion files.
+  const [inPlace, setInPlace] = useState(false);
+  const inPlaceRef = useRef(false);
+  // Root XZ per frame for mesh mode: Float32Array [x0,z0, x1,z1, ...].
+  // Fetched from joints alongside the mesh; used to lock hips horizontally.
+  const rootXZRef = useRef<Float32Array | null>(null);
+  useEffect(() => { inPlaceRef.current = inPlace; }, [inPlace]);
+
   // ── Motion gallery (persisted motions) ────────────────────────────────────
   const [motions, setMotions] = useState<MotionRefListItem[]>([]);
   const [motionCtxMenu, setMotionCtxMenu] = useState<{
@@ -83,6 +103,24 @@ export function MotionRefGenModal(props: {
     x: number;
     y: number;
   } | null>(null);
+
+  // ── Shots gallery ─────────────────────────────────────────────────────────
+  const [shotsLayout, setShotsLayout] = useState<MotionShotsLayout>({
+    folders: [],
+    rootOrder: [],
+    folderOrder: {},
+    items: [],
+  });
+  const [selectedShotIds, setSelectedShotIds] = useState<Set<string>>(new Set());
+
+  const loadShotsLayout = useCallback(async () => {
+    try {
+      const layout = await apiMotionRefShotsLayout();
+      setShotsLayout(layout);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // ── Playback ───────────────────────────────────────────────────────────────
   const [frameIndex, setFrameIndex] = useState(0);
@@ -100,11 +138,40 @@ export function MotionRefGenModal(props: {
   const totalFrames =
     meshData?.frameCount ?? jointsData?.frameCount ?? manifest?.frameCount ?? 0;
 
+  function pushMeshFrame(
+    md: { frames: Float32Array; vertexCount: number; frameCount: number },
+    frameIdx: number,
+  ) {
+    const stride = md.vertexCount * 3;
+    if (stride <= 0 || md.frames.length < stride) return;
+    const maxFrame = Math.max(0, md.frameCount - 1);
+    const fi = Math.min(Math.max(0, frameIdx), maxFrame);
+    const start = fi * stride;
+    if (start + stride > md.frames.length) return;
+    skeletonRef.current?.setMode("mesh");
+
+    const slice = md.frames.subarray(start, start + stride);
+    if (inPlaceRef.current && rootXZRef.current && fi * 2 + 1 < rootXZRef.current.length) {
+      const rx = rootXZRef.current[fi * 2];
+      const rz = rootXZRef.current[fi * 2 + 1];
+      const shifted = new Float32Array(stride);
+      for (let i = 0; i < stride; i += 3) {
+        shifted[i]     = slice[i]     - rx;
+        shifted[i + 1] = slice[i + 1];   // Y unchanged
+        shifted[i + 2] = slice[i + 2] - rz;
+      }
+      skeletonRef.current?.setFrame(shifted);
+    } else {
+      skeletonRef.current?.setFrame(slice);
+    }
+  }
+
   // ── Load saved motions on open ─────────────────────────────────────────────
   useEffect(() => {
     if (!open) return;
     apiMotionRefList().then(setMotions).catch(() => {});
-  }, [open]);
+    void loadShotsLayout();
+  }, [open, loadShotsLayout]);
 
   // ── Playback engine ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -135,24 +202,25 @@ export function MotionRefGenModal(props: {
   // Push the current frame into the viewer (mesh or skeleton).
   useEffect(() => {
     if (displayMode === "mesh" && meshData) {
-      const stride = meshData.vertexCount * 3;
-      const start = frameIndex * stride;
-      if (start + stride > meshData.frames.length) return;
-      skeletonRef.current?.setFrame(meshData.frames.subarray(start, start + stride));
+      pushMeshFrame(meshData, frameIndex);
       return;
     }
     if (displayMode === "bones" && jointsData) {
       const frame = jointsData.frames[frameIndex];
       if (!frame) return;
+      const rootX = inPlace ? (frame[0]?.[0] ?? 0) : 0;
+      const rootZ = inPlace ? (frame[0]?.[2] ?? 0) : 0;
       const flat = new Float32Array(jointsData.jointCount * 3);
       for (let j = 0; j < jointsData.jointCount; j++) {
-        flat[j * 3] = frame[j][0];
-        flat[j * 3 + 1] = frame[j][1];
-        flat[j * 3 + 2] = frame[j][2];
+        flat[j * 3]     = frame[j][0] - rootX;
+        flat[j * 3 + 1] = frame[j][1];          // Y unchanged
+        flat[j * 3 + 2] = frame[j][2] - rootZ;
       }
       skeletonRef.current?.setJointFrame(flat);
     }
-  }, [frameIndex, meshData, jointsData, displayMode]);
+  // inPlace is consumed via inPlaceRef in pushMeshFrame, but is listed here so
+  // the effect re-runs when the toggle changes, updating the current mesh frame.
+  }, [frameIndex, meshData, jointsData, displayMode, inPlace]);
 
   useEffect(() => {
     if (!open) {
@@ -204,6 +272,22 @@ export function MotionRefGenModal(props: {
 
     const stride = vertexCount * 3;
     const frameCount = stride > 0 ? Math.floor(frames.length / stride) : 0;
+
+    // Fetch joints in the background to extract per-frame root XZ for in-place preview.
+    try {
+      const jBuf = await apiMotionRefJoints(motionKey);
+      const jText = await decompressGzipToText(jBuf);
+      const jFrames = JSON.parse(jText) as number[][][];
+      const rxz = new Float32Array(jFrames.length * 2);
+      for (let i = 0; i < jFrames.length; i++) {
+        rxz[i * 2]     = jFrames[i][0][0]; // hips X
+        rxz[i * 2 + 1] = jFrames[i][0][2]; // hips Z
+      }
+      rootXZRef.current = rxz;
+    } catch {
+      rootXZRef.current = null;
+    }
+
     return { frames, vertexCount, frameCount };
   }
 
@@ -255,6 +339,7 @@ export function MotionRefGenModal(props: {
   async function loadMotionDisplay(
     mf: MotionRefManifest,
     logPrefix: string,
+    initialFrame = 0,
   ): Promise<{ frameCount: number; mode: ViewerMode }> {
     if (mf.hasMesh && (mf.vertexCount ?? 0) > 0) {
       pushLog(`${logPrefix} mesh…`);
@@ -262,14 +347,33 @@ export function MotionRefGenModal(props: {
       setMeshData(md);
       setJointsData(null);
       setDisplayMode("mesh");
-      skeletonRef.current?.setMode("mesh");
+      pushMeshFrame(md, initialFrame);
       return { frameCount: md.frameCount, mode: "mesh" };
     }
-    pushLog(`${logPrefix} skeleton (no mesh)…`);
+    pushLog(`${logPrefix} no mesh — loading skeleton, then attempting auto-skin…`);
     const jd = await loadJointsForMotion(mf.motionKey, mf);
     setJointsData(jd);
     setMeshData(null);
     setDisplayMode("bones");
+
+    try {
+      const skinDone = await runMotionRefSkinWsJob(mf.motionKey, (line) => pushLog(line));
+      if (skinDone.ok && skinDone.result?.hasMesh) {
+        const { vertexCount } = skinDone.result;
+        const md = await loadMeshForMotion(mf.motionKey, vertexCount);
+        setMeshData(md);
+        setJointsData(null);
+        setDisplayMode("mesh");
+        pushMeshFrame(md, initialFrame);
+        setManifest((prev) =>
+          prev ? { ...prev, hasMesh: true, vertexCount, displayMode: "mesh" } : prev,
+        );
+        return { frameCount: md.frameCount, mode: "mesh" };
+      }
+    } catch {
+      // skinning failed — stay on skeleton, no error surfaced to user
+    }
+
     return { frameCount: jd.frameCount, mode: "bones" };
   }
 
@@ -334,9 +438,13 @@ export function MotionRefGenModal(props: {
   }
 
   // ── Load a saved motion into the viewer ───────────────────────────────────
-  async function loadMotion(item: MotionRefListItem) {
+  async function loadMotion(
+    item: MotionRefListItem,
+    opts?: { initialFrame?: number; camera?: Pick<CameraState, "azimuth" | "elevation"> },
+  ) {
     if (busy) return;
     setPlaying(false);
+    rootXZRef.current = null;
     setManifest({
       motionKey: item.motionKey,
       fps: item.fps,
@@ -352,6 +460,7 @@ export function MotionRefGenModal(props: {
     beginSession({ title: "Loading motion…", clearLog: false });
     await Promise.resolve();
     try {
+      const fi = opts?.initialFrame ?? 0;
       const { frameCount, mode } = await loadMotionDisplay(
         {
           motionKey: item.motionKey,
@@ -366,8 +475,14 @@ export function MotionRefGenModal(props: {
           segments: item.segments ?? [],
         },
         "Loading",
+        fi,
       );
-      setFrameIndex(0);
+      const clamped = Math.min(Math.max(0, fi), Math.max(0, frameCount - 1));
+      setFrameIndex(clamped);
+      if (opts?.camera) {
+        skeletonRef.current?.setCameraState(opts.camera);
+        setCameraState((prev) => ({ ...prev, ...opts.camera }));
+      }
       pushLog(
         mode === "mesh"
           ? `Loaded — ${frameCount} frames @ ${item.fps} fps (mesh).`
@@ -398,50 +513,24 @@ export function MotionRefGenModal(props: {
     }
   }
 
-  // ── Save shot → unified keypoint pose gallery ─────────────────────────────
-  // Captures a WebGL screenshot of the live viewer (puppet pose or the current
-  // playback frame) and runs SDpose/ControlNet on it — no server-side render,
-  // so the heavy KiMoD worker is never involved in the shot path. When a motion
-  // is loaded, the screenshot is also persisted as the gallery thumbnail.
   async function saveShot() {
+    if (!manifest) {
+      showError({ message: "Load an animation before saving a shot." });
+      return;
+    }
     const dataUrl = skeletonRef.current?.captureFrame();
     if (!dataUrl) {
       showError({ message: "Could not capture the viewer. Try again." });
       return;
     }
-    const blob = await (await fetch(dataUrl)).blob();
-    const file = new File([blob], "motion_shot.png", { type: "image/png" });
-
-    beginSession({ title: "Saving shot", clearLog: false });
-    await Promise.resolve();
-    pushLog("Capturing viewer…");
+    const screenBbox = skeletonRef.current?.getFigureScreenBbox();
     try {
-      // Persist the screenshot as the motion thumbnail (pure file write, no worker).
-      if (manifest) {
-        try {
-          const { shotRelPath } = await apiMotionRefSaveShotImage({
-            motionKey: manifest.motionKey,
-            pngBase64: dataUrl,
-            shotName: `shot_f${frameIndex}_${Date.now()}`,
-          });
-          setMotions((prev) =>
-            prev.map((m) =>
-              m.motionKey === manifest.motionKey
-                ? { ...m, thumbnailRelPath: shotRelPath }
-                : m
-            )
-          );
-        } catch {
-          /* thumbnail is best-effort — don't fail the shot over it */
-        }
-      }
-
-      pushLog("Uploading capture…");
-      const { relPath } = await apiUploadStaging({ charKey, file });
-      const screenBbox = skeletonRef.current?.getFigureScreenBbox();
-      pushLog("Running SDpose keypoint detection…");
-      const done = await runReferenceMakeKeypointWsJob({
-        imageRelPath: relPath,
+      await apiMotionRefShotSave({
+        motionKey: manifest.motionKey,
+        pngBase64: dataUrl,
+        frameIndex,
+        azimuth: cameraState.azimuth,
+        elevation: cameraState.elevation,
         ...(screenBbox
           ? {
               cropBox: {
@@ -454,16 +543,135 @@ export function MotionRefGenModal(props: {
               imageHeight: screenBbox.imageHeight,
             }
           : {}),
-        onLogLine: (line) => pushLog(line),
       });
-      if (!done.ok || !done.result?.item) {
-        throw new Error(done.error || "Keypoint detection returned no result.");
+      try {
+        const { shotRelPath } = await apiMotionRefSaveShotImage({
+          motionKey: manifest.motionKey,
+          pngBase64: dataUrl,
+          shotName: `shot_f${frameIndex}_${Date.now()}`,
+        });
+        setMotions((prev) =>
+          prev.map((m) =>
+            m.motionKey === manifest.motionKey
+              ? { ...m, thumbnailRelPath: shotRelPath }
+              : m
+          )
+        );
+      } catch {
+        /* thumbnail is best-effort */
       }
-      onKeypointsMade?.(done.result.item);
-      pushLog("Shot saved to pose gallery.");
+      await loadShotsLayout();
+    } catch {
+      showError({ message: "Could not save shot." });
+    }
+  }
+
+  async function restoreShot(shot: MotionRefShot) {
+    const motion = motions.find((m) => m.motionKey === shot.motionKey);
+    if (!motion) {
+      showError({ message: "The motion for this shot was deleted." });
+      return;
+    }
+    setPlaying(false);
+    const camera = { azimuth: shot.azimuth, elevation: shot.elevation };
+    if (manifest?.motionKey === shot.motionKey) {
+      const maxFrame = Math.max(0, totalFrames - 1);
+      setFrameIndex(Math.min(shot.frameIndex, maxFrame));
+      skeletonRef.current?.setCameraState(camera);
+      setCameraState((prev) => ({ ...prev, ...camera }));
+      return;
+    }
+    await loadMotion(motion, { initialFrame: shot.frameIndex, camera });
+  }
+
+  async function addShotsToPose(shots: MotionRefShot[]) {
+    const pending = shots.filter((s) => !s.keypointId);
+    if (!pending.length) return;
+    beginSession({ title: "Add to Pose", clearLog: false });
+    await Promise.resolve();
+    try {
+      for (const shot of pending) {
+        pushLog(`Shot f${shot.frameIndex}…`);
+        const done = await runMotionRefShotAddToPoseWsJob({
+          shotId: shot.id,
+          onLogLine: (line) => pushLog(line),
+        });
+        if (!done.ok || !done.result?.item) {
+          throw new Error(done.error || "Add to Pose failed.");
+        }
+        if (!done.result.skipped) {
+          onKeypointsMade?.(done.result.item);
+        }
+      }
+      await loadShotsLayout();
+      pushLog("Done.");
       endSession();
     } catch (e) {
-      failSession(e, "Could not save shot.");
+      failSession(e, "Could not add shot to pose ref.");
+    }
+  }
+
+  async function deleteShot(shotId: string) {
+    try {
+      await apiMotionRefShotDelete(shotId);
+      setSelectedShotIds((prev) => {
+        const n = new Set(prev);
+        n.delete(shotId);
+        return n;
+      });
+      await loadShotsLayout();
+    } catch {
+      showError({ message: "Could not delete shot." });
+    }
+  }
+
+  async function createShotFolder(parentFolderId: string | null) {
+    const ids = [...selectedShotIds];
+    if (!ids.length) return;
+    const name = await askText({
+      title: "New folder",
+      message: "Name for this shots folder:",
+      defaultValue: "Folder",
+      confirmText: "Create",
+    });
+    if (!name?.trim()) return;
+    try {
+      await apiMotionRefShotFolderCreate(name.trim(), ids, parentFolderId);
+      setSelectedShotIds(new Set());
+      await loadShotsLayout();
+    } catch {
+      showError({ message: "Could not create folder." });
+    }
+  }
+
+  async function renameShotFolder(folderId: string, currentName: string) {
+    const name = await askText({
+      title: "Rename folder",
+      message: "Folder name:",
+      defaultValue: currentName,
+      confirmText: "Rename",
+    });
+    if (!name?.trim()) return;
+    try {
+      await apiMotionRefShotFolderRename(folderId, name.trim());
+      await loadShotsLayout();
+    } catch {
+      showError({ message: "Could not rename folder." });
+    }
+  }
+
+  async function deleteShotFolder(folderId: string) {
+    const ok = await confirmAction({
+      title: "Ungroup folder",
+      message: "Dissolve this folder and move its contents to the parent level?",
+      confirmText: "Ungroup",
+    });
+    if (!ok) return;
+    try {
+      await apiMotionRefShotFolderDelete(folderId);
+      await loadShotsLayout();
+    } catch {
+      showError({ message: "Could not ungroup folder." });
     }
   }
 
@@ -486,7 +694,7 @@ export function MotionRefGenModal(props: {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        zIndex: 1100,
+        zIndex: 10200, // above TimelineCharacterPicker (9998) and ReferencePicker (10000)
       }}
       onClick={() => {
         if (motionCtxMenu) { setMotionCtxMenu(null); return; }
@@ -570,6 +778,18 @@ export function MotionRefGenModal(props: {
             onChange={(e) => { setPlaying(false); setFrameIndex(Number(e.target.value)); }}
             disabled={totalFrames === 0} style={{ flex: 1 }}
           />
+          <label
+            style={{ fontSize: 11, color: inPlace ? "#ffd166" : "#888", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+            title="Remove horizontal root translation so the figure stays centered during playback"
+          >
+            <input
+              type="checkbox"
+              checked={inPlace}
+              onChange={(e) => setInPlace(e.target.checked)}
+              style={{ accentColor: "#ffd166" }}
+            />
+            In place
+          </label>
         </div>
 
         {/* Motion segments */}
@@ -593,8 +813,8 @@ export function MotionRefGenModal(props: {
             Reset
           </button>
           <button
-            type="button" onClick={() => void saveShot()} disabled={busy}
-            title="Capture the viewer → SDpose keypoints → pose gallery"
+            type="button" onClick={() => void saveShot()} disabled={busy || !manifest}
+            title="Bookmark this frame and camera angle in the Shots gallery"
             style={{ ...actionBtn, background: "rgba(255,209,102,0.15)" }}
           >
             {manifest ? `Save Shot  (f${frameIndex} · Az ${cameraState.azimuth.toFixed(0)}°)` : "Save Shot"}
@@ -658,6 +878,26 @@ export function MotionRefGenModal(props: {
             </div>
           )}
         </div>
+
+        {/* Shots gallery */}
+        <div style={{ padding: "10px 16px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+          <div style={{ fontSize: 11, color: "#aaa", marginBottom: 8 }}>
+            Shots
+          </div>
+          <MotionShotGallery
+            busy={busy}
+            layout={shotsLayout}
+            onLayoutChange={setShotsLayout}
+            selectedIds={selectedShotIds}
+            onSelectedIdsChange={setSelectedShotIds}
+            onRestoreShot={(shot) => void restoreShot(shot)}
+            onAddToPose={(shots) => void addShotsToPose(shots)}
+            onDeleteShot={(id) => void deleteShot(id)}
+            onCreateFolder={(parentId) => void createShotFolder(parentId)}
+            onRenameFolder={(id, name) => void renameShotFolder(id, name)}
+            onDeleteFolder={(id) => void deleteShotFolder(id)}
+          />
+        </div>
       </div>
 
       {/* Motion context menu */}
@@ -669,7 +909,7 @@ export function MotionRefGenModal(props: {
             left: motionCtxMenu.x,
             background: "#1e1e1e",
             border: "1px solid rgba(255,255,255,0.2)",
-            zIndex: 1200,
+            zIndex: 10300,
             minWidth: 120,
           }}
           onClick={(e) => e.stopPropagation()}

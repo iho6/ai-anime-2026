@@ -8,14 +8,16 @@ import { VECTOR_ARTBOARD_SIZE } from "./geometryTemplates";
 export function GeometryClipLayer(props: {
   clip: TimelineClip;
   opacity?: number;
+  editing?: boolean;
 }) {
-  const { clip, opacity = 1 } = props;
+  const { clip, opacity = 1, editing = false } = props;
   const geom = clip.geometry;
   if (!geom) return null;
 
   const fill = geom.fill ?? "none";
-  const stroke = geom.stroke?.color ?? "#000000";
-  const strokeWidth = geom.stroke?.width ?? 2;
+  const strokeColor = geom.stroke?.color ?? "#000000";
+  const strokeWidth = geom.stroke?.width ?? 0;
+  const showStroke = !editing && strokeWidth > 0;
 
   return (
     <svg
@@ -28,8 +30,8 @@ export function GeometryClipLayer(props: {
       <path
         d={geometryToSvgPath(geom)}
         fill={geom.closed ? fill : "none"}
-        stroke={stroke}
-        strokeWidth={strokeWidth}
+        stroke={showStroke ? strokeColor : "none"}
+        strokeWidth={showStroke ? strokeWidth : 0}
         vectorEffect="non-scaling-stroke"
       />
     </svg>

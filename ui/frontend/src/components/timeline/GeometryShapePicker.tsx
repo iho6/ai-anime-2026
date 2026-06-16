@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import type { GeometryTemplate } from "../../lib/api";
+import type { GeometryTemplate, SavedGeometryShape } from "../../lib/api";
 
 const SHAPES: { id: GeometryTemplate; label: string; icon: string }[] = [
   { id: "rect", label: "Rect", icon: "▢" },
@@ -14,11 +14,24 @@ export function GeometryShapePicker(props: {
   open: boolean;
   anchorRef: React.RefObject<HTMLElement | null>;
   selected: GeometryTemplate | null;
+  selectedSavedId: string | null;
+  savedShapes: SavedGeometryShape[];
   onSelect: (template: GeometryTemplate) => void;
+  onSelectSaved: (shapeId: string) => void;
   onAdd: () => void;
   onClose: () => void;
 }) {
-  const { open, anchorRef, selected, onSelect, onAdd, onClose } = props;
+  const {
+    open,
+    anchorRef,
+    selected,
+    selectedSavedId,
+    savedShapes,
+    onSelect,
+    onSelectSaved,
+    onAdd,
+    onClose,
+  } = props;
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -37,6 +50,7 @@ export function GeometryShapePicker(props: {
   const rect = anchorRef.current?.getBoundingClientRect();
   const top = rect ? rect.bottom + 6 : 0;
   const left = rect ? rect.left : 0;
+  const canAdd = Boolean(selected || selectedSavedId);
 
   return (
     <div
@@ -61,36 +75,45 @@ export function GeometryShapePicker(props: {
             key={s.id}
             type="button"
             onClick={() => onSelect(s.id)}
-            style={{
-              padding: "8px 10px",
-              background: selected === s.id ? "rgba(255,209,102,0.2)" : "rgba(255,255,255,0.06)",
-              border:
-                selected === s.id
-                  ? "1px solid #ffd166"
-                  : "1px solid rgba(255,255,255,0.15)",
-              color: "#eee",
-              cursor: "pointer",
-              fontSize: 13,
-              textAlign: "left",
-            }}
+            style={tileStyle(selected === s.id && !selectedSavedId)}
           >
             <span style={{ marginRight: 6 }}>{s.icon}</span>
             {s.label}
           </button>
         ))}
       </div>
+
+      {savedShapes.length > 0 ? (
+        <>
+          <div style={{ fontSize: 11, color: "#aaa", margin: "12px 0 8px" }}>Saved shapes</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {savedShapes.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onSelectSaved(s.id)}
+                style={tileStyle(selectedSavedId === s.id)}
+                title={s.name}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+
       <button
         type="button"
-        disabled={!selected}
+        disabled={!canAdd}
         onClick={onAdd}
         style={{
           marginTop: 10,
           width: "100%",
           padding: "8px 12px",
-          background: selected ? "#ffd166" : "rgba(255,255,255,0.08)",
-          color: selected ? "#111" : "#666",
-          border: "none",
-          cursor: selected ? "pointer" : "not-allowed",
+          background: canAdd ? "#000" : "rgba(255,255,255,0.08)",
+          color: canAdd ? "#fff" : "#666",
+          border: canAdd ? "1px solid rgba(255,255,255,0.85)" : "1px solid rgba(255,255,255,0.15)",
+          cursor: canAdd ? "pointer" : "not-allowed",
           fontWeight: 600,
           fontSize: 13,
         }}
@@ -99,4 +122,19 @@ export function GeometryShapePicker(props: {
       </button>
     </div>
   );
+}
+
+function tileStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: "8px 10px",
+    background: active ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)",
+    border: active ? "1px solid #fff" : "1px solid rgba(255,255,255,0.15)",
+    color: "#eee",
+    cursor: "pointer",
+    fontSize: 13,
+    textAlign: "left",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
 }

@@ -6,14 +6,16 @@ import {
   bendSegment,
   bboxAnchorForHandle,
   bboxHandlePosition,
+  bboxHandlePositionOffset,
   distToSegment,
-  geometryBounds,
+  geometryPathBounds,
   geometryToSvgPath,
   localFromScreen,
+  localHitRadius,
   pointInBounds,
   scaleGeometryPoints,
   segmentControlOrigin,
-  splitSegmentAt,
+  splitSegmentAtClick,
   translateGeometryPoints,
   type BboxHandleId,
   type GeometryBounds,
@@ -31,15 +33,25 @@ type Props = {
   onGeometryChange: (geometry: TimelineGeometry) => void;
   onCommit?: () => void;
   onExit?: () => void;
+  onStyleModalChange?: (open: boolean) => void;
+  onGeometryContextMenu?: (clipId: string, clientX: number, clientY: number) => void;
 };
 
 const ARTBOARD = VECTOR_ARTBOARD_SIZE;
 const BBOX_HANDLE_IDS: BboxHandleId[] = ["nw", "n", "ne", "w", "e", "sw", "s", "se"];
-const POINT_HIT = 0.02;
-const HANDLE_HIT = 0.018;
-const BBOX_HANDLE_HIT = 0.022;
-const SEG_HIT = 0.028;
+
+const CHROME_STROKE = "#fff";
+const CHROME_FILL = "#000";
+const CHROME_MUTED = "rgba(255,255,255,0.5)";
+const CHROME_MUTED_STRONG = "rgba(255,255,255,0.6)";
+const CHROME_ANCHOR_IDLE = "rgba(255,255,255,0.45)";
+
+const HIT_POINT_PX = 12;
+const HIT_HANDLE_PX = 12;
+const HIT_BBOX_PX = 14;
+const HIT_SEG_PX = 8;
 const HANDLE_HALF = 7;
+const HANDLE_OFFSET_PX = 6;
 
 type DragState =
   | { kind: "point"; index: number }
@@ -48,6 +60,7 @@ type DragState =
   | {
       kind: "segment";
       segIndex: number;
+      hitT: number;
       startLocal: { x: number; y: number };
       cpOrig: { x: number; y: number };
       origGeometry: TimelineGeometry;
@@ -100,7 +113,17 @@ function cursorForHandle(handle: BboxHandleId): string {
 }
 
 export function GeometryEditor(props: Props) {
-  const { clip, frameW, frameH, transform, onGeometryChange, onCommit, onExit } = props;
+  const {
+    clip,
+    frameW,
+    frameH,
+    transform,
+    onGeometryChange,
+    onCommit,
+    onExit,
+    onStyleModalChange,
+    onGeometryContextMenu,
+  } = props;
   const geom = clip.geometry;
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -109,7 +132,25 @@ export function GeometryEditor(props: Props) {
   const [styleModal, setStyleModal] = useState<GeometryStyleModal>(null);
 
   const rect = clipImageRect(clip, transform, frameW, frameH);
-  const bounds = useMemo(() => (geom ? geometryBounds(geom, 0.008) : null), [geom]);
+  const bounds = useMemo(
+    () => (geom ? geometryPathBounds(geom, 0.002, { width: rect.width, height: rect.height }) : null),
+    [geom, rect.width, rect.height]
+  );
+
+  const hit = useMemo(
+    () => ({
+      point: localHitRadius(HIT_POINT_PX, rect),
+      handle: localHitRadius(HIT_HANDLE_PX, rect),
+      bbox: localHitRadius(HIT_BBOX_PX, rect),
+      seg: localHitRadius(HIT_SEG_PX, rect),
+      handleOffset: localHitRadius(HANDLE_OFFSET_PX, rect),
+    }),
+    [rect.width, rect.height]
+  );
+
+  useEffect(() => {
+    onStyleModalChange?.(styleModal != null);
+  }, [styleModal, onStyleModalChange]);
 
   const updatePoint = useCallback(
     (index: number, patch: Partial<GeometryPoint>) => {
@@ -123,6 +164,10 @@ export function GeometryEditor(props: Props) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
+        if (styleModal) {
+          setStyleModal(null);
+          return;
+        }
         onExit?.();
         return;
       }
@@ -137,7 +182,7 @@ export function GeometryEditor(props: Props) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedIndex, geom, onGeometryChange, onCommit, onExit]);
+  }, [selectedIndex, geom, onGeometryChange, onCommit, onExit, styleModal]);
 
   if (!geom || !bounds || frameW < 1 || frameH < 1) return null;
 
@@ -147,8 +192,8 @@ export function GeometryEditor(props: Props) {
 
   function hitBboxHandle(loc: { x: number; y: number }): BboxHandleId | null {
     for (const handle of BBOX_HANDLE_IDS) {
-      const p = bboxHandlePosition(bounds!, handle);
-      if (Math.hypot(loc.x - p.x, loc.y - p.y) <= BBOX_HANDLE_HIT) return handle;
+      const p = bboxHandlePositionOffset(bounds!, handle, hit.handleOffset);
+      if (Math.hypot(loc.x - p.x, loc.y - p.y) <= hit.bbox) return handle;
     }
     return null;
   }
@@ -159,25 +204,6 @@ export function GeometryEditor(props: Props) {
     (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
 
     const loc = clientToLocal(e.clientX, e.clientY);
-
-    for (let i = 0; i < geom!.points.length; i++) {
-      const pt = geom!.points[i];
-      if (pt.handleIn && Math.hypot(loc.x - pt.handleIn.x, loc.y - pt.handleIn.y) <= HANDLE_HIT) {
-        dragRef.current = { kind: "handleIn", index: i };
-        setSelectedIndex(i);
-        return;
-      }
-      if (pt.handleOut && Math.hypot(loc.x - pt.handleOut.x, loc.y - pt.handleOut.y) <= HANDLE_HIT) {
-        dragRef.current = { kind: "handleOut", index: i };
-        setSelectedIndex(i);
-        return;
-      }
-      if (Math.hypot(loc.x - pt.x, loc.y - pt.y) <= POINT_HIT) {
-        dragRef.current = { kind: "point", index: i };
-        setSelectedIndex(i);
-        return;
-      }
-    }
 
     const bboxHandle = hitBboxHandle(loc);
     if (bboxHandle) {
@@ -195,13 +221,33 @@ export function GeometryEditor(props: Props) {
       return;
     }
 
-    const segHit = distToSegment(loc.x, loc.y, geom!, SEG_HIT);
+    for (let i = 0; i < geom!.points.length; i++) {
+      const pt = geom!.points[i];
+      if (pt.handleIn && Math.hypot(loc.x - pt.handleIn.x, loc.y - pt.handleIn.y) <= hit.handle) {
+        dragRef.current = { kind: "handleIn", index: i };
+        setSelectedIndex(i);
+        return;
+      }
+      if (pt.handleOut && Math.hypot(loc.x - pt.handleOut.x, loc.y - pt.handleOut.y) <= hit.handle) {
+        dragRef.current = { kind: "handleOut", index: i };
+        setSelectedIndex(i);
+        return;
+      }
+      if (Math.hypot(loc.x - pt.x, loc.y - pt.y) <= hit.point) {
+        dragRef.current = { kind: "point", index: i };
+        setSelectedIndex(i);
+        return;
+      }
+    }
+
+    const segHit = distToSegment(loc.x, loc.y, geom!, hit.seg);
     if (segHit) {
       const a = geom!.points[segHit.segIndex];
       const b = geom!.points[(segHit.segIndex + 1) % geom!.points.length];
       dragRef.current = {
         kind: "segment",
         segIndex: segHit.segIndex,
+        hitT: segHit.t,
         startLocal: loc,
         cpOrig: segmentControlOrigin(a, b),
         origGeometry: cloneGeometry(geom!),
@@ -278,25 +324,34 @@ export function GeometryEditor(props: Props) {
   }
 
   function onSvgPointerUp(e: React.PointerEvent<SVGSVGElement>) {
-    if (dragRef.current) {
-      (e.currentTarget as SVGElement).releasePointerCapture?.(e.pointerId);
-      dragRef.current = null;
-      setActiveSeg(null);
-      onCommit?.();
+    const d = dragRef.current;
+    if (!d) return;
+    (e.currentTarget as SVGElement).releasePointerCapture?.(e.pointerId);
+
+    if (d.kind === "segment" && geom) {
+      const loc = clientToLocal(e.clientX, e.clientY);
+      const movedPx = Math.hypot(
+        (loc.x - d.startLocal.x) * rect.width,
+        (loc.y - d.startLocal.y) * rect.height
+      );
+      if (movedPx < 4) {
+        const segHit = distToSegment(loc.x, loc.y, geom, hit.seg);
+        const t = segHit?.segIndex === d.segIndex ? segHit.t : d.hitT;
+        const { geometry: next, insertIndex } = splitSegmentAtClick(geom, d.segIndex, t);
+        onGeometryChange(next);
+        setSelectedIndex(insertIndex);
+      }
     }
+
+    dragRef.current = null;
+    setActiveSeg(null);
+    onCommit?.();
   }
 
-  function onPathDoubleClick(e: React.MouseEvent) {
-    if (!geom || dragRef.current) return;
+  function onSvgContextMenu(e: React.MouseEvent<SVGSVGElement>) {
+    e.preventDefault();
     e.stopPropagation();
-    const loc = clientToLocal(e.clientX, e.clientY);
-    const hit = distToSegment(loc.x, loc.y, geom, SEG_HIT);
-    if (hit) {
-      const { geometry: next, insertIndex } = splitSegmentAt(geom, hit.segIndex, hit.t);
-      onGeometryChange(next);
-      setSelectedIndex(insertIndex);
-      onCommit?.();
-    }
+    onGeometryContextMenu?.(clip.id, e.clientX, e.clientY);
   }
 
   const pathD = geometryToSvgPath(geom);
@@ -313,13 +368,7 @@ export function GeometryEditor(props: Props) {
 
   return (
     <>
-      <GeometryStyleBar
-        geometry={geom}
-        rect={styleBarRect}
-        onOpenModal={setStyleModal}
-        onCornerRadiusChange={(value) => onGeometryChange({ ...geom, cornerRadius: value })}
-        onCornerRadiusCommit={onCommit}
-      />
+      <GeometryStyleBar geometry={geom} rect={styleBarRect} onOpenModal={setStyleModal} />
       {styleModal ? (
         <GeometryPickerModals
           open={styleModal}
@@ -333,6 +382,7 @@ export function GeometryEditor(props: Props) {
       ) : null}
       <svg
         ref={svgRef}
+        data-geometry-editor
         style={{
           position: "absolute",
           left: rect.left,
@@ -348,58 +398,43 @@ export function GeometryEditor(props: Props) {
         onPointerDown={onSvgPointerDown}
         onPointerMove={onSvgPointerMove}
         onPointerUp={onSvgPointerUp}
+        onContextMenu={onSvgContextMenu}
       >
+        {/* 1. Bbox fill — no pointer capture */}
         <rect
           x={bx}
           y={by}
           width={bw}
           height={bh}
           fill="rgba(255,255,255,0.03)"
-          stroke="#fff"
+          stroke={CHROME_STROKE}
           strokeWidth={1.5}
           strokeDasharray="4 4"
           vectorEffect="non-scaling-stroke"
-          style={{ cursor: "move" }}
+          style={{ cursor: "move", pointerEvents: "none" }}
         />
 
-        {BBOX_HANDLE_IDS.map((handle) => {
-          const p = bboxHandlePosition(bounds, handle);
-          const cx = p.x * ARTBOARD;
-          const cy = p.y * ARTBOARD;
-          return (
-            <rect
-              key={handle}
-              x={cx - HANDLE_HALF}
-              y={cy - HANDLE_HALF}
-              width={HANDLE_HALF * 2}
-              height={HANDLE_HALF * 2}
-              fill="#000"
-              stroke="#fff"
-              strokeWidth={1}
-              vectorEffect="non-scaling-stroke"
-              style={{ cursor: cursorForHandle(handle) }}
-            />
-          );
-        })}
-
+        {/* 2. Path hit area */}
         <path
           d={pathD}
           fill="none"
           stroke="transparent"
           strokeWidth={20}
           style={{ cursor: "pointer", pointerEvents: "stroke" }}
-          onDoubleClick={onPathDoubleClick}
         />
+
+        {/* 3. Path dash outline */}
         <path
           d={pathD}
           fill="none"
-          stroke="#fff"
+          stroke={CHROME_STROKE}
           strokeWidth={1.5}
           strokeDasharray="4 4"
           vectorEffect="non-scaling-stroke"
           style={{ pointerEvents: "none" }}
         />
 
+        {/* 4. Active segment guides */}
         {activeSeg !== null && (() => {
           const a = geom.points[activeSeg];
           const b = geom.points[(activeSeg + 1) % geom.points.length];
@@ -412,13 +447,14 @@ export function GeometryEditor(props: Props) {
           const my = mid.y * ARTBOARD;
           return (
             <g style={{ pointerEvents: "none" }}>
-              <line x1={ax} y1={ay} x2={mx} y2={my} stroke="#aaa" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-              <line x1={bx2} y1={by2} x2={mx} y2={my} stroke="#aaa" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-              <circle cx={mx} cy={my} r={5} fill="#ccc" stroke="#000" strokeWidth={1} />
+              <line x1={ax} y1={ay} x2={mx} y2={my} stroke={CHROME_MUTED_STRONG} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+              <line x1={bx2} y1={by2} x2={mx} y2={my} stroke={CHROME_MUTED_STRONG} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+              <circle cx={mx} cy={my} r={5} fill={CHROME_STROKE} stroke={CHROME_FILL} strokeWidth={1} />
             </g>
           );
         })()}
 
+        {/* 5. Anchor points + bezier handles */}
         {geom.points.map((pt, i) => {
           const sx = pt.x * ARTBOARD;
           const sy = pt.y * ARTBOARD;
@@ -432,7 +468,7 @@ export function GeometryEditor(props: Props) {
                     y1={sy}
                     x2={pt.handleIn.x * ARTBOARD}
                     y2={pt.handleIn.y * ARTBOARD}
-                    stroke="#888"
+                    stroke={CHROME_MUTED}
                     strokeWidth={1}
                     vectorEffect="non-scaling-stroke"
                   />
@@ -440,8 +476,8 @@ export function GeometryEditor(props: Props) {
                     cx={pt.handleIn.x * ARTBOARD}
                     cy={pt.handleIn.y * ARTBOARD}
                     r={5}
-                    fill="#ccc"
-                    stroke="#000"
+                    fill={CHROME_STROKE}
+                    stroke={CHROME_FILL}
                     strokeWidth={1}
                   />
                 </>
@@ -453,7 +489,7 @@ export function GeometryEditor(props: Props) {
                     y1={sy}
                     x2={pt.handleOut.x * ARTBOARD}
                     y2={pt.handleOut.y * ARTBOARD}
-                    stroke="#888"
+                    stroke={CHROME_MUTED}
                     strokeWidth={1}
                     vectorEffect="non-scaling-stroke"
                   />
@@ -461,8 +497,8 @@ export function GeometryEditor(props: Props) {
                     cx={pt.handleOut.x * ARTBOARD}
                     cy={pt.handleOut.y * ARTBOARD}
                     r={5}
-                    fill="#ccc"
-                    stroke="#000"
+                    fill={CHROME_STROKE}
+                    stroke={CHROME_FILL}
                     strokeWidth={1}
                   />
                 </>
@@ -471,11 +507,32 @@ export function GeometryEditor(props: Props) {
                 cx={sx}
                 cy={sy}
                 r={sel ? 8 : 6}
-                fill={sel ? "#fff" : "#888"}
-                stroke="#000"
+                fill={sel ? CHROME_STROKE : CHROME_ANCHOR_IDLE}
+                stroke={CHROME_FILL}
                 strokeWidth={1}
               />
             </g>
+          );
+        })}
+
+        {/* 6. Bbox resize handles — on top */}
+        {BBOX_HANDLE_IDS.map((handle) => {
+          const p = bboxHandlePositionOffset(bounds, handle, hit.handleOffset);
+          const cx = p.x * ARTBOARD;
+          const cy = p.y * ARTBOARD;
+          return (
+            <rect
+              key={handle}
+              x={cx - HANDLE_HALF}
+              y={cy - HANDLE_HALF}
+              width={HANDLE_HALF * 2}
+              height={HANDLE_HALF * 2}
+              fill={CHROME_FILL}
+              stroke={CHROME_STROKE}
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+              style={{ cursor: cursorForHandle(handle) }}
+            />
           );
         })}
       </svg>

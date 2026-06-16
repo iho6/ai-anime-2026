@@ -31,7 +31,7 @@ import { volumeGainAt } from "./volumeAutomation";
 import type { TrajectoryMotionId } from "../../lib/api";
 import { GeometryClipLayer } from "./GeometryClipLayer";
 import { GeometryEditor } from "./GeometryEditor";
-import { geometryBounds, geometryBoundsToScreenPadded } from "./geometryPath";
+import { GEOMETRY_STYLE_BAR_OFFSET } from "./GeometryStyleBar";
 import { TextClipLayer } from "./TextClipLayer";
 import { TextStyleBar, type TextStyleModal } from "./TextStyleBar";
 import { TextPickerModals } from "./TextPickerModals";
@@ -79,6 +79,8 @@ export function TimelinePreviewPlayer(props: {
   onTextContentChange?: (clipId: string, content: string) => void;
   onTextEditEnd?: () => void;
   onRequestTextEdit?: (clipId: string) => void;
+  onRequestGeometryEdit?: (clipId: string) => void;
+  onGeometryContextMenu?: (clipId: string, clientX: number, clientY: number) => void;
   onExitClipEditModes?: () => void;
   height?: number;
 }) {
@@ -107,6 +109,8 @@ export function TimelinePreviewPlayer(props: {
     onTextContentChange,
     onTextEditEnd,
     onRequestTextEdit,
+    onRequestGeometryEdit,
+    onGeometryContextMenu,
     onExitClipEditModes,
     height = 260,
   } = props;
@@ -119,6 +123,11 @@ export function TimelinePreviewPlayer(props: {
   const [frameSize, setFrameSize] = useState({ w: 0, h: 0 });
   const [alignGuides, setAlignGuides] = useState<AlignGuide[]>([]);
   const [textStyleModal, setTextStyleModal] = useState<TextStyleModal>(null);
+  const [geometryStyleModalOpen, setGeometryStyleModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!geometryEditClipId) setGeometryStyleModalOpen(false);
+  }, [geometryEditClipId]);
 
   const selectedClip = useMemo(() => {
     if (!selectedClipId) return null;
@@ -454,7 +463,13 @@ export function TimelinePreviewPlayer(props: {
 
   function renderClipContent(clip: TimelineClip, op: number) {
     if (clip.type === "geometry") {
-      return <GeometryClipLayer clip={clip} opacity={op} />;
+      return (
+        <GeometryClipLayer
+          clip={clip}
+          opacity={op}
+          editing={geometryEditClipId === clip.id}
+        />
+      );
     }
     if (clip.type === "text") {
       if (textEditClipId === clip.id) return null;
@@ -529,8 +544,13 @@ export function TimelinePreviewPlayer(props: {
     if (!gClip?.geometry) return null;
     const tf = clipTransform(gClip, playhead, false, playing);
     const clipRect = clipImageRect(gClip, tf, frameSize.w, frameSize.h);
-    const b = geometryBounds(gClip.geometry);
-    return geometryBoundsToScreenPadded(b, clipRect, 8);
+    const styleBand = GEOMETRY_STYLE_BAR_OFFSET + 8;
+    return {
+      left: clipRect.left,
+      top: Math.max(0, clipRect.top - styleBand),
+      width: clipRect.width,
+      height: clipRect.height + styleBand,
+    };
   }, [geometryEditClipId, videoTracks, playhead, playing, frameSize.w, frameSize.h]);
 
   const textEditRect = useMemo(() => {
@@ -557,6 +577,9 @@ export function TimelinePreviewPlayer(props: {
     const target = e.target as HTMLElement;
     if (target.closest("[data-text-style-bar]")) return;
     if (target.closest("[data-geometry-style-bar]")) return;
+    if (target.closest("[data-geometry-picker-modal]")) return;
+    if (target.closest("[data-geometry-editor]")) return;
+    if (geometryStyleModalOpen) return;
 
     const { clientX: x, clientY: y } = e;
     let shouldExit = false;
@@ -660,10 +683,17 @@ export function TimelinePreviewPlayer(props: {
               key={`hit-${clip.id}`}
               {...textHandlers}
               onDoubleClick={(e) => {
-                if (isText && editable) {
+                if (!editable) return;
+                if (clip.type === "text") {
                   e.stopPropagation();
                   pendingDragRef.current = null;
                   onRequestTextEdit?.(clip.id);
+                  return;
+                }
+                if (clip.type === "geometry") {
+                  e.stopPropagation();
+                  pendingDragRef.current = null;
+                  onRequestGeometryEdit?.(clip.id);
                 }
               }}
               onContextMenu={(e) => {
@@ -835,6 +865,8 @@ export function TimelinePreviewPlayer(props: {
               onGeometryChange={(g) => onGeometryChange?.(gClip.id, g)}
               onCommit={onGeometryCommit}
               onExit={onExitGeometryEdit}
+              onStyleModalChange={setGeometryStyleModalOpen}
+              onGeometryContextMenu={onGeometryContextMenu}
             />
           );
         })()}

@@ -1,7 +1,7 @@
 {
   "version": 2,
   "fps": 24,
-  "previewAspect": "1:1",
+  "previewAspect": "16:9",
   "tracks": [
     {
       "id": "trk_mqdyb46d_12",
@@ -64,34 +64,6 @@
             "rotation": 0,
             "opacity": 1
           }
-        },
-        {
-          "id": "clip_mqdyjevi_16",
-          "type": "text",
-          "srcRelPath": "",
-          "start": 6.34762201309204,
-          "inPoint": 0,
-          "outPoint": 3,
-          "speed": 1,
-          "duration": 3,
-          "naturalW": 1000,
-          "naturalH": 1000,
-          "transform": {
-            "x": 0,
-            "y": 0,
-            "scale": 1.2515043865656197,
-            "rotation": 0,
-            "opacity": 1
-          },
-          "text": {
-            "content": "Text",
-            "fontFamilyId": "inter",
-            "fontWeight": 400,
-            "fontStyle": "normal",
-            "fontSize": 48,
-            "color": "#ffffff",
-            "align": "center"
-          }
         }
       ]
     },
@@ -125,6 +97,53 @@
             "y": 0,
             "scale": 1
           }
+        },
+        {
+          "id": "clip_mqf8ppe0_1",
+          "type": "geometry",
+          "srcRelPath": "",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1000,
+          "naturalH": 1000,
+          "transform": {
+            "x": 0.7962767309701964,
+            "y": -0.09185175799390065,
+            "scale": 0.9515223322210494,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "geometry": {
+            "template": "rect",
+            "closed": true,
+            "points": [
+              {
+                "x": 0.2,
+                "y": 0.2
+              },
+              {
+                "x": 0.8,
+                "y": 0.2
+              },
+              {
+                "x": 0.8,
+                "y": 0.8
+              },
+              {
+                "x": 0.2,
+                "y": 0.8
+              }
+            ],
+            "cornerRadius": 0,
+            "fill": "#ffffff",
+            "stroke": {
+              "color": "#ffffff",
+              "width": 4
+            }
+          }
         }
       ]
     },
@@ -150,9 +169,9 @@
             "sequenceName": "Sequence_1"
           },
           "transform": {
-            "x": 0,
-            "y": 0,
-            "scale": 1.7777777777777777,
+            "x": 0.0027863847367406366,
+            "y": -0.005603999269539921,
+            "scale": 1.0112079985390798,
             "rotation": 0,
             "opacity": 1
           }
@@ -172,7 +191,7 @@
             "charKey": "luka"
           },
           "transform": {
-            "x": 8.521054028883948e-17,
+            "x": 1.10724945431328e-16,
             "y": 0,
             "scale": 1,
             "rotation": 0,
@@ -199,9 +218,9 @@
           "naturalW": 1000,
           "naturalH": 1000,
           "transform": {
-            "x": 0,
+            "x": -0.027014427414961354,
             "y": 0,
-            "scale": 0.40503484269742734,
+            "scale": 0.8984991992468502,
             "rotation": 0,
             "opacity": 1
           },
@@ -260,6 +279,153 @@
             "fontSize": 48,
             "color": "#ff88cc",
             "align": "center"
+          }
+        },
+        {
+          "id": "clip_mqf7j27b_1",
+          "type": "text",
+          "srcRelPath": "",
+          "start": 7.929880356788635,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 121,
+          "naturalH": 90,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 0.35
+          },
+          "text": {
+            "content": "Text",
+            "fontFamilyId": "inter",
+            "fontWeight": 400,
+            "fontStyle": "normal",
+            "fontSize": 48,
+            "color": "#ffffff",
+            "align": "center"
+          }
+        },
+        {
+          "id": "clip_mqf8td4b_2",
+          "type": "text",
+          "srcRelPath": "",
+          "start": 1.0012442415410823,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 121,
+          "naturalH": 90,
+          "transform": {
+            "x": 0.318770961728353,
+            "y": 0.21249751519889823,
+            "scale": 0.35,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "text": {
+            "content": "Text",
+            "fontFamilyId": "inter",
+            "fontWeight": 400,
+            "fontStyle": "normal",
+            "fontSize": 48,
+            "color": "#ffffff",
+            "align": "center"
+          }
+        },
+        {
+          "id": "clip_mqf8thfk_3",
+          "type": "text",
+          "srcRelPath": "",
+          "start": 1.0012442415410823,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 121,
+          "naturalH": 90,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 0.35
+          },
+          "text": {
+            "content": "Text",
+            "fontFamilyId": "inter",
+            "fontWeight": 400,
+            "fontStyle": "normal",
+            "fontSize": 48,
+            "color": "#ffffff",
+            "align": "center"
+          }
+        },
+        {
+          "id": "clip_mqfcfhjl_1",
+          "type": "geometry",
+          "srcRelPath": "",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1000,
+          "naturalH": 1000,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 0.8325777873523862,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "geometry": {
+            "template": "rect",
+            "closed": true,
+            "points": [
+              {
+                "x": 0.2,
+                "y": 0.2
+              },
+              {
+                "x": 0.8,
+                "y": 0.2
+              },
+              {
+                "x": 0.8,
+                "y": 0.8
+              },
+              {
+                "x": 0.2,
+                "y": 0.8
+              }
+            ],
+            "cornerRadius": 0,
+            "fill": "#ffffff",
+            "stroke": {
+              "color": "#000000",
+              "width": 0
+            }
+          }
+        },
+        {
+          "id": "clip_mqg0604m_1",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_2d943a862d274dd186c099b2ad994175.png",
+          "start": 22.3438625496374,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 864,
+          "naturalH": 1184,
+          "source": {
+            "charKey": "Bee"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
           }
         }
       ],

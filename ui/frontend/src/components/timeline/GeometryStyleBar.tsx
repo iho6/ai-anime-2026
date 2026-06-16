@@ -5,15 +5,17 @@ import type { TimelineGeometry } from "../../lib/api";
 
 export type GeometryStyleModal = "fill" | "stroke" | "strokeWidth" | null;
 
+/** Vertical offset of style bar above shape bounds (px). */
+export const GEOMETRY_STYLE_BAR_OFFSET = 32;
+
 export function GeometryStyleBar(props: {
   geometry: TimelineGeometry;
   rect: { left: number; top: number; width: number; height: number };
   onOpenModal: (modal: GeometryStyleModal) => void;
-  onCornerRadiusChange?: (value: number) => void;
-  onCornerRadiusCommit?: () => void;
 }) {
-  const { geometry, rect, onOpenModal, onCornerRadiusChange, onCornerRadiusCommit } = props;
-  const barTop = Math.max(0, rect.top - 32);
+  const { geometry, rect, onOpenModal } = props;
+  const barTop = Math.max(0, rect.top - GEOMETRY_STYLE_BAR_OFFSET);
+  const centerX = rect.left + rect.width / 2;
   const fill = geometry.fill ?? "#ffffff";
   const strokeColor = geometry.stroke?.color ?? "#000000";
   const strokeWidth = geometry.stroke?.width ?? 4;
@@ -23,14 +25,16 @@ export function GeometryStyleBar(props: {
     <div
       style={{
         position: "absolute",
-        left: rect.left,
+        left: centerX,
         top: barTop,
-        width: rect.width,
+        transform: "translateX(-50%)",
+        width: "max-content",
         zIndex: 10002,
         display: "flex",
         gap: 4,
         justifyContent: "center",
-        flexWrap: "wrap",
+        flexWrap: "nowrap",
+        whiteSpace: "nowrap",
         pointerEvents: "auto",
       }}
       data-geometry-style-bar
@@ -86,35 +90,6 @@ export function GeometryStyleBar(props: {
       >
         {Math.round(strokeWidth)}
       </button>
-      {geometry.template === "rect" && onCornerRadiusChange ? (
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 11,
-            color: "#eee",
-            padding: "4px 8px",
-            background: "#000",
-            border: "1px solid rgba(255,255,255,0.35)",
-          }}
-        >
-          Corner
-          <input
-            type="number"
-            min={0}
-            max={200}
-            step={1}
-            value={Math.round((geometry.cornerRadius ?? 0) * 100)}
-            onChange={(e) => {
-              const v = Math.max(0, Math.min(200, Number(e.target.value) || 0)) / 100;
-              onCornerRadiusChange(v);
-            }}
-            onBlur={() => onCornerRadiusCommit?.()}
-            style={{ width: 44, fontSize: 11, padding: "2px 4px" }}
-          />
-        </label>
-      ) : null}
     </div>
   );
 }

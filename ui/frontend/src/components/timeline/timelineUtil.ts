@@ -2,6 +2,7 @@ import { assetUrlFromRelPath } from "../../lib/api";
 import type {
   GeometryTemplate,
   TimelineClip,
+  TimelineGeometry,
   TimelineManifest,
   TimelineTrack,
 } from "../../lib/api";
@@ -296,6 +297,7 @@ export function buildImageClip(params: {
 
 export function buildGeometryClip(params: {
   template: GeometryTemplate;
+  geometry?: TimelineGeometry;
   start?: number;
   durationSec?: number;
 }): TimelineClip {
@@ -312,7 +314,7 @@ export function buildGeometryClip(params: {
     naturalW: VECTOR_ARTBOARD_SIZE,
     naturalH: VECTOR_ARTBOARD_SIZE,
     transform: defaultVectorClipTransform(),
-    geometry: createGeometryData(params.template),
+    geometry: params.geometry ?? createGeometryData(params.template),
   };
 }
 

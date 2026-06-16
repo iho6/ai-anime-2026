@@ -21,7 +21,6 @@ import {
   type ContextMenuItem,
 } from "./DesktopContextMenu";
 import { SquareIconButton, TriangleIcon } from "./IconPrimitives";
-import { SquareButton } from "./SquareButton";
 import type { SharedLogStreamHandle } from "./SharedLogStream";
 import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 import { useJobRunSession } from "../hooks/useJobRunSession";
@@ -388,16 +387,46 @@ export function TimelineLocationPicker(props: {
                     gap: 10,
                   }}
                 >
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <SquareButton
-                      variant="tile"
-                      tone="dark"
-                      style={{ width: "100%", aspectRatio: "1/1", fontWeight: 400, fontSize: 12 }}
-                      onClick={() => setStage("create")}
+                  <button
+                    type="button"
+                    onClick={() => setStage("create")}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      padding: 6,
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      background: "transparent",
+                      color: "inherit",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "100%",
+                        aspectRatio: "1/1",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 28,
+                        fontWeight: 300,
+                        lineHeight: 1,
+                      }}
+                    >
+                      +
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        textAlign: "center",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
                     >
                       New Location
-                    </SquareButton>
-                  </div>
+                    </span>
+                  </button>
                   {icons.map((ic) => (
                     <button
                       key={ic.key}

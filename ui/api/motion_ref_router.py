@@ -16,12 +16,14 @@ import time
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
-from services import motion_ref_storage
+from services import motion_ref_storage, motion_shot_storage
 from services.character_storage import sanitize_for_folder
 from services.motion_ref_gen_ai_service.serverless import (
     call_generate,
     ensure_worker,
+    reskin_motion,
 )
 from .storage_paths import (
     MOTION_REFS_STORAGE_ROOT,
@@ -153,6 +155,165 @@ def motion_ref_save_shot_image(
     out_path.write_bytes(data)
 
     return {"shotRelPath": storage_rel_from_abs(str(out_path))}
+
+
+# ── Global motion shots gallery ───────────────────────────────────────────────
+
+
+class MotionShotSaveBody(BaseModel):
+    motionKey: str
+    pngBase64: str
+    frameIndex: int
+    azimuth: float
+    elevation: float
+    cropBox: dict[str, int] | None = None
+    imageWidth: int | None = None
+    imageHeight: int | None = None
+
+
+class MotionShotFolderBody(BaseModel):
+    name: str
+    itemIds: list[str] = []
+    parentFolderId: str | None = None
+
+
+class MotionShotFolderRenameBody(BaseModel):
+    name: str
+
+
+class MotionShotFolderAssignBody(BaseModel):
+    folderId: str | None = None
+    itemIds: list[str]
+
+
+@router.get("/motion_ref/shots/layout")
+def motion_ref_shots_layout() -> dict[str, Any]:
+    MOTION_REFS_STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
+    return motion_shot_storage.get_shots_layout()
+
+
+@router.post("/motion_ref/shots")
+def motion_ref_shots_save(body: MotionShotSaveBody) -> dict[str, Any]:
+    try:
+        item = motion_shot_storage.save_shot(
+            motion_key=body.motionKey,
+            png_base64=body.pngBase64,
+            frame_index=body.frameIndex,
+            azimuth=body.azimuth,
+            elevation=body.elevation,
+            crop_box=body.cropBox,
+            image_width=body.imageWidth,
+            image_height=body.imageHeight,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"item": item}
+
+
+@router.delete("/motion_ref/shots/{shot_id}")
+def motion_ref_shots_delete(shot_id: str) -> dict[str, bool]:
+    ok = motion_shot_storage.delete_shot(shot_id)
+    if not ok:
+        raise HTTPException(404, "Shot not found.")
+    return {"ok": True}
+
+
+@router.post("/motion_ref/shots/reorder")
+def motion_ref_shots_reorder(body: dict[str, Any]) -> dict[str, bool]:
+    scope = str(body.get("scope") or "flat").strip()
+    order = [str(x) for x in (body.get("order") or [])]
+    try:
+        if scope == "folder":
+            folder_id = str(body.get("folderId") or "").strip()
+            if not folder_id:
+                raise HTTPException(400, "folderId is required for folder scope.")
+            motion_shot_storage.set_shot_folder_order(folder_id, order)
+        elif scope == "root":
+            motion_shot_storage.set_shots_root_order(order)
+        else:
+            motion_shot_storage.set_shots_root_order(order)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"ok": True}
+
+
+@router.post("/motion_ref/shots/folders")
+def motion_ref_shots_create_folder(body: MotionShotFolderBody) -> dict[str, Any]:
+    try:
+        folder = motion_shot_storage.create_shot_folder(
+            body.name, body.itemIds, body.parentFolderId
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"folder": folder}
+
+
+@router.patch("/motion_ref/shots/folders/{folder_id}")
+def motion_ref_shots_rename_folder(
+    folder_id: str, body: MotionShotFolderRenameBody
+) -> dict[str, Any]:
+    try:
+        folder = motion_shot_storage.rename_shot_folder(folder_id, body.name)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"folder": folder}
+
+
+@router.post("/motion_ref/shots/folders/assign")
+def motion_ref_shots_assign_folder(body: MotionShotFolderAssignBody) -> dict[str, bool]:
+    try:
+        motion_shot_storage.assign_shots_to_folder(body.folderId, body.itemIds)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"ok": True}
+
+
+@router.delete("/motion_ref/shots/folders/{folder_id}")
+def motion_ref_shots_delete_folder(folder_id: str) -> dict[str, bool]:
+    ok = motion_shot_storage.delete_shot_folder(folder_id)
+    if not ok:
+        raise HTTPException(404, "Folder not found.")
+    return {"ok": True}
+
+
+@router.websocket("/motion_ref/shots/{shot_id}/add_to_pose/ws")
+async def motion_ref_shot_add_to_pose_ws(ws: WebSocket, shot_id: str) -> None:
+    await ws.accept()
+    try:
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            return motion_shot_storage.add_shot_to_pose_ref(shot_id, log_cb=log_cb)
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
+# ── Reskin (WebSocket, streams logs) ─────────────────────────────────────────
+
+@router.websocket("/motion_ref/{motion_key}/skin/ws")
+async def motion_ref_skin_ws(ws: WebSocket, motion_key: str) -> None:
+    """Re-run SMPL-X skinning on an existing skeleton-only motion.
+
+    Streams ``{"type":"log","line":"..."}`` during skinning, then:
+    ``{"type":"done","ok":true,"result":{"motionKey","hasMesh","vertexCount","faceCount"}}``
+    """
+    await ws.accept()
+    try:
+        def work(log_cb: Any) -> dict[str, Any]:
+            return reskin_motion(motion_key, log_cb=log_cb)
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
 
 
 # ── Generation (WebSocket, streams logs) ─────────────────────────────────────

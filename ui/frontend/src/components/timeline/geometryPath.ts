@@ -25,10 +25,48 @@ function includePoint(
   };
 }
 
-/** Tight axis-aligned bbox in 0–1 artboard space (anchors, handles, sampled curves). */
-export function geometryBounds(
+function cubicExtremaOnAxis(
+  p0: number,
+  p1: number,
+  p2: number,
+  p3: number
+): [number, number] {
+  const a = -p0 + 3 * p1 - 3 * p2 + p3;
+  const b = 2 * (p0 - 2 * p1 + p2);
+  const c = p1 - p0;
+  let min = Math.min(p0, p3);
+  let max = Math.max(p0, p3);
+  if (Math.abs(a) < 1e-12) {
+    if (Math.abs(b) > 1e-12) {
+      const t = -c / b;
+      if (t > 0 && t < 1) {
+        const v = (1 - t) * (1 - t) * p0 + 2 * (1 - t) * t * p1 + t * t * p2;
+        min = Math.min(min, v);
+        max = Math.max(max, v);
+      }
+    }
+    return [min, max];
+  }
+  const disc = b * b - 4 * a * c;
+  if (disc >= 0) {
+    const sq = Math.sqrt(disc);
+    for (const t of [(-b - sq) / (2 * a), (-b + sq) / (2 * a)]) {
+      if (t > 0 && t < 1) {
+        const u = 1 - t;
+        const v = u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
+        min = Math.min(min, v);
+        max = Math.max(max, v);
+      }
+    }
+  }
+  return [min, max];
+}
+
+/** Tight bbox of visible path only (anchors + curve geometry, not control handles). */
+export function geometryPathBounds(
   geometry: TimelineGeometry,
-  padding = 0.01
+  padding = 0,
+  clipRectPx?: { width: number; height: number }
 ): GeometryBounds {
   const pts = geometry.points;
   if (pts.length === 0) {
@@ -44,17 +82,21 @@ export function geometryBounds(
 
   for (const pt of pts) {
     b = includePoint(b, pt.x, pt.y);
-    if (pt.handleIn) b = includePoint(b, pt.handleIn.x, pt.handleIn.y);
-    if (pt.handleOut) b = includePoint(b, pt.handleOut.x, pt.handleOut.y);
   }
 
   const segCount = geometry.closed ? pts.length : pts.length - 1;
   for (let i = 0; i < segCount; i++) {
     const a = pts[i];
     const bp = pts[(i + 1) % pts.length];
-    for (let s = 0; s <= 16; s++) {
-      const p = pointOnSegment(a, bp, s / 16);
-      b = includePoint(b, p.x, p.y);
+    if (a.handleOut && bp.handleIn) {
+      const [minX, maxX] = cubicExtremaOnAxis(a.x, a.handleOut.x, bp.handleIn.x, bp.x);
+      const [minY, maxY] = cubicExtremaOnAxis(a.y, a.handleOut.y, bp.handleIn.y, bp.y);
+      b = { minX: Math.min(b.minX, minX), minY: Math.min(b.minY, minY), maxX: Math.max(b.maxX, maxX), maxY: Math.max(b.maxY, maxY) };
+    } else {
+      for (let s = 0; s <= 32; s++) {
+        const p = pointOnSegment(a, bp, s / 32);
+        b = includePoint(b, p.x, p.y);
+      }
     }
   }
 
@@ -62,12 +104,28 @@ export function geometryBounds(
     return { minX: 0, minY: 0, maxX: 1, maxY: 1 };
   }
 
+  let pad = padding;
+  if (clipRectPx && geometry.stroke?.width) {
+    const scale = Math.min(clipRectPx.width, clipRectPx.height);
+    if (scale > 0) {
+      pad += geometry.stroke.width / 2 / scale;
+    }
+  }
+
   return {
-    minX: Math.max(0, b.minX - padding),
-    minY: Math.max(0, b.minY - padding),
-    maxX: Math.min(1, b.maxX + padding),
-    maxY: Math.min(1, b.maxY + padding),
+    minX: Math.max(0, b.minX - pad),
+    minY: Math.max(0, b.minY - pad),
+    maxX: Math.min(1, b.maxX + pad),
+    maxY: Math.min(1, b.maxY + pad),
   };
+}
+
+/** @deprecated Prefer geometryPathBounds for tight visible-path bounds. */
+export function geometryBounds(
+  geometry: TimelineGeometry,
+  padding = 0.01
+): GeometryBounds {
+  return geometryPathBounds(geometry, padding);
 }
 
 export function geometryBoundsToScreen(bounds: GeometryBounds, clipRect: ClipRect): ClipRect {
@@ -142,6 +200,40 @@ export function translateGeometryPoints(
     return next;
   });
   return { ...geometry, points };
+}
+
+/** Convert screen-pixel radius to artboard-normalized hit distance. */
+export function localHitRadius(px: number, clipRect: { width: number; height: number }): number {
+  const scale = Math.min(clipRect.width, clipRect.height);
+  return scale > 0 ? px / scale : px;
+}
+
+/** Bbox handle position offset outward (offsetNorm in 0–1 artboard units). */
+export function bboxHandlePositionOffset(
+  bounds: GeometryBounds,
+  handle: BboxHandleId,
+  offsetNorm: number
+): { x: number; y: number } {
+  const p = bboxHandlePosition(bounds, handle);
+  const o = offsetNorm;
+  switch (handle) {
+    case "nw":
+      return { x: p.x - o, y: p.y - o };
+    case "n":
+      return { x: p.x, y: p.y - o };
+    case "ne":
+      return { x: p.x + o, y: p.y - o };
+    case "w":
+      return { x: p.x - o, y: p.y };
+    case "e":
+      return { x: p.x + o, y: p.y };
+    case "sw":
+      return { x: p.x - o, y: p.y + o };
+    case "s":
+      return { x: p.x, y: p.y + o };
+    case "se":
+      return { x: p.x + o, y: p.y + o };
+  }
 }
 
 export function bboxHandlePosition(bounds: GeometryBounds, handle: BboxHandleId): { x: number; y: number } {
@@ -353,6 +445,23 @@ export function splitSegmentAt(
   };
   pts.splice(insertAt, 0, newPoint);
   return { geometry: { ...geometry, points: pts }, insertIndex: insertAt };
+}
+
+/** Click-to-insert: split segment and reset handles so sub-segments start straight. */
+export function splitSegmentAtClick(
+  geometry: TimelineGeometry,
+  segIndex: number,
+  t: number
+): { geometry: TimelineGeometry; insertIndex: number } {
+  const { geometry: split, insertIndex } = splitSegmentAt(geometry, segIndex, t);
+  const pts = split.points.map((p) => ({ ...p }));
+  pts[segIndex] = { ...pts[segIndex], handleOut: undefined };
+  pts[insertIndex] = { x: pts[insertIndex].x, y: pts[insertIndex].y };
+  const endIdx = insertIndex + 1;
+  if (endIdx < pts.length) {
+    pts[endIdx] = { ...pts[endIdx], handleIn: undefined };
+  }
+  return { geometry: { ...split, points: pts }, insertIndex };
 }
 
 /** Bend a segment by placing shared cubic control at midHandle. */

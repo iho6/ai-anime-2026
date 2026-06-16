@@ -419,7 +419,14 @@ export type HubTimeline = {
 
 export type TimelineClipType = "video" | "image" | "audio" | "geometry" | "text";
 
-export type GeometryTemplate = "rect" | "ellipse" | "line" | "polygon";
+export type GeometryTemplate = "rect" | "ellipse" | "line" | "polygon" | "custom";
+
+export type SavedGeometryShape = {
+  id: string;
+  name: string;
+  createdAt: number;
+  geometry: TimelineGeometry;
+};
 
 export type GeometryPoint = {
   x: number;
@@ -689,6 +696,47 @@ export async function apiTimelineAssetDelete(
 ): Promise<{ ok: boolean }> {
   const res = await fetch(
     `${API_BASE_URL}/timeline/${encodeURIComponent(timelineKey)}/assets/${encodeURIComponent(assetId)}`,
+    { method: "DELETE", credentials: "omit" }
+  );
+  return readJson<{ ok: boolean }>(res);
+}
+
+export type SavedShapesLayout = {
+  items: SavedGeometryShape[];
+};
+
+export async function apiTimelineSavedShapes(
+  timelineKey: string
+): Promise<SavedShapesLayout> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(timelineKey)}/shapes`,
+    { method: "GET", credentials: "omit" }
+  );
+  return readJson<SavedShapesLayout>(res);
+}
+
+export async function apiSaveTimelineShape(
+  timelineKey: string,
+  body: { name: string; geometry: TimelineGeometry }
+): Promise<{ item: SavedGeometryShape }> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(timelineKey)}/shapes`,
+    {
+      method: "POST",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }
+  );
+  return readJson<{ item: SavedGeometryShape }>(res);
+}
+
+export async function apiDeleteTimelineShape(
+  timelineKey: string,
+  shapeId: string
+): Promise<{ ok: boolean }> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(timelineKey)}/shapes/${encodeURIComponent(shapeId)}`,
     { method: "DELETE", credentials: "omit" }
   );
   return readJson<{ ok: boolean }>(res);
@@ -1048,15 +1096,26 @@ export type MotionRefManifest = {
   segments: MotionRefSegment[];
 };
 
-/** A saved rendered frame (PNG) from the 3D viewer at a specific camera angle. */
+/** A saved motion-ref shot bookmark (viewer capture at frame + camera). */
 export type MotionRefShot = {
-  /** Incremental index within this session (display order). */
-  shotIndex: number;
+  id: string;
+  motionKey: string;
   frameIndex: number;
-  azimuth: number;   // degrees
-  elevation: number; // degrees
-  /** Storage-relative path to the rendered PNG. */
+  azimuth: number;
+  elevation: number;
   relPath: string;
+  keypointId?: string | null;
+  cropBox?: { x: number; y: number; width: number; height: number };
+  imageWidth?: number;
+  imageHeight?: number;
+  createdAt?: number;
+};
+
+export type MotionShotsLayout = {
+  folders: KeypointFolder[];
+  rootOrder: string[];
+  folderOrder: Record<string, string[]>;
+  items: MotionRefShot[];
 };
 
 export type MotionRefListItem = {
@@ -1154,6 +1213,43 @@ export function runMotionRefGenerateWsJob(params: {
   });
 }
 
+/** Stream a reskin job for an existing skeleton-only motion. */
+export function runMotionRefSkinWsJob(
+  motionKey: string,
+  onLogLine: (line: string) => void,
+): Promise<WsDoneMessage<{ motionKey: string; hasMesh: boolean; vertexCount: number; faceCount: number }>> {
+  const url = wsUrlForPath(`/motion_ref/${encodeURIComponent(motionKey)}/skin/ws`);
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => ws.send("{}");
+    ws.onmessage = (ev) => {
+      let data: { type?: string; line?: string };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") onLogLine(data.line);
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(data as WsDoneMessage<{ motionKey: string; hasMesh: boolean; vertexCount: number; faceCount: number }>);
+      }
+    };
+  });
+}
+
 /** Fetch the gzipped joints JSON array for a motion (ArrayBuffer). */
 export async function apiMotionRefJoints(motionKey: string): Promise<ArrayBuffer> {
   const res = await fetch(
@@ -1220,6 +1316,184 @@ export async function apiMotionRefDelete(motionKey: string): Promise<void> {
     { method: "POST", credentials: "omit" }
   );
   await readJson<{ ok: boolean }>(res);
+}
+
+export async function apiMotionRefShotsLayout(): Promise<MotionShotsLayout> {
+  const res = await fetch(`${API_BASE_URL}/motion_ref/shots/layout`, {
+    method: "GET",
+    credentials: "omit",
+  });
+  return readJson<MotionShotsLayout>(res);
+}
+
+export async function apiMotionRefShotSave(params: {
+  motionKey: string;
+  pngBase64: string;
+  frameIndex: number;
+  azimuth: number;
+  elevation: number;
+  cropBox?: { x: number; y: number; width: number; height: number };
+  imageWidth?: number;
+  imageHeight?: number;
+}): Promise<MotionRefShot> {
+  const res = await fetch(`${API_BASE_URL}/motion_ref/shots`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(params),
+    credentials: "omit",
+  });
+  const data = await readJson<{ item: MotionRefShot }>(res);
+  return data.item;
+}
+
+export async function apiMotionRefShotDelete(shotId: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/shots/${encodeURIComponent(shotId)}`,
+    { method: "DELETE", credentials: "omit" }
+  );
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiMotionRefShotsReorderRoot(order: string[]): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/motion_ref/shots/reorder`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ scope: "root", order }),
+    credentials: "omit",
+  });
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiMotionRefShotsReorderFolder(
+  folderId: string,
+  order: string[]
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/motion_ref/shots/reorder`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ scope: "folder", folderId, order }),
+    credentials: "omit",
+  });
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiMotionRefShotFolderCreate(
+  name: string,
+  itemIds: string[],
+  parentFolderId?: string | null
+): Promise<KeypointFolder> {
+  const res = await fetch(`${API_BASE_URL}/motion_ref/shots/folders`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name,
+      itemIds,
+      parentFolderId: parentFolderId ?? null,
+    }),
+    credentials: "omit",
+  });
+  const data = await readJson<{ folder: KeypointFolder }>(res);
+  return data.folder;
+}
+
+export async function apiMotionRefShotFolderRename(
+  folderId: string,
+  name: string
+): Promise<KeypointFolder> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/shots/folders/${encodeURIComponent(folderId)}`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+      credentials: "omit",
+    }
+  );
+  const data = await readJson<{ folder: KeypointFolder }>(res);
+  return data.folder;
+}
+
+export async function apiMotionRefShotFolderDelete(folderId: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/shots/folders/${encodeURIComponent(folderId)}`,
+    { method: "DELETE", credentials: "omit" }
+  );
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiMotionRefShotFolderAssign(
+  folderId: string | null,
+  itemIds: string[]
+): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/motion_ref/shots/folders/assign`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ folderId, itemIds }),
+    credentials: "omit",
+  });
+  if (!res.ok) await readJson(res);
+}
+
+/** Run SDpose on a saved motion shot and add to pose ref (skips if already linked). */
+export function runMotionRefShotAddToPoseWsJob(params: {
+  shotId: string;
+  onLogLine: (line: string) => void;
+}): Promise<
+  WsDoneMessage<{
+    skipped?: boolean;
+    item: PoseReference;
+    shot?: MotionRefShot;
+  }>
+> {
+  const { shotId, onLogLine } = params;
+  const url = wsUrlForPath(
+    `/motion_ref/shots/${encodeURIComponent(shotId)}/add_to_pose/ws`
+  );
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    ws.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("WebSocket closed before completion"));
+    };
+    ws.onopen = () => ws.send(JSON.stringify({ type: "start" }));
+    ws.onmessage = (ev) => {
+      let data: {
+        type?: string;
+        line?: string;
+        ok?: boolean;
+        error?: string;
+        result?: {
+          skipped?: boolean;
+          item: PoseReference;
+          shot?: MotionRefShot;
+        };
+      };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") onLogLine(data.line);
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        resolve(
+          data as WsDoneMessage<{
+            skipped?: boolean;
+            item: PoseReference;
+            shot?: MotionRefShot;
+          }>
+        );
+      }
+    };
+  });
 }
 
 export type ShotLayerMeta = {

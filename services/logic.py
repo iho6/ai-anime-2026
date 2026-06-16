@@ -8473,6 +8473,10 @@ def make_reference_keypoint(
     rel_norm = str(image_rel_path).replace("\\", "/").lstrip("/")
     if rel_norm.lower().startswith("references/"):
         abs_path = str(reference_storage.resolve_rel(rel_norm))
+    elif rel_norm.lower().startswith("motion_refs/"):
+        from services.motion_shot_storage import resolve_shot_rel
+
+        abs_path = str(resolve_shot_rel(rel_norm))
     else:
         abs_path = str(resolve_storage_rel_path_to_abs(rel_norm))
     if not Path(abs_path).is_file():

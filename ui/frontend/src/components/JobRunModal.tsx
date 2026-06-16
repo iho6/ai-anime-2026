@@ -34,7 +34,7 @@ export function JobRunModal(props: {
         position: "fixed",
         inset: 0,
         background: "rgba(0,0,0,0.65)",
-        zIndex: 10050,
+        zIndex: 10400, // above MotionRefGenModal (10200) when jobs run inside it
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

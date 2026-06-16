@@ -15,7 +15,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
-from services import logic, timeline_asset_storage, timeline_storage
+from services import logic, timeline_asset_storage, timeline_saved_shapes, timeline_storage
 from services.character_storage import sanitize_for_folder
 from .storage_paths import (
     TIMELINES_STORAGE_ROOT,
@@ -171,6 +171,41 @@ def timeline_asset_delete(timeline_key: str, asset_id: str) -> dict[str, bool]:
     ok = timeline_asset_storage.delete_asset(timeline_key, asset_id)
     if not ok:
         raise HTTPException(404, "Asset not found.")
+    return {"ok": True}
+
+
+@router.get("/timeline/{timeline_key}/shapes")
+def timeline_saved_shapes_list(timeline_key: str) -> dict[str, Any]:
+    d = _timeline_dir(timeline_key)
+    if not d.is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    return {"items": timeline_saved_shapes.list_shapes(timeline_key)}
+
+
+@router.post("/timeline/{timeline_key}/shapes")
+async def timeline_saved_shapes_save(timeline_key: str, body: dict[str, Any]) -> dict[str, Any]:
+    d = _timeline_dir(timeline_key)
+    if not d.is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    name = str(body.get("name") or "")
+    geometry = body.get("geometry")
+    if not isinstance(geometry, dict):
+        raise HTTPException(400, "geometry is required.")
+    try:
+        item = timeline_saved_shapes.save_shape(timeline_key, name, geometry)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"item": item}
+
+
+@router.delete("/timeline/{timeline_key}/shapes/{shape_id}")
+def timeline_saved_shapes_delete(timeline_key: str, shape_id: str) -> dict[str, bool]:
+    d = _timeline_dir(timeline_key)
+    if not d.is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    ok = timeline_saved_shapes.delete_shape(timeline_key, shape_id)
+    if not ok:
+        raise HTTPException(404, "Shape not found.")
     return {"ok": True}
 
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { TimelineGeometry } from "../../lib/api";
 import type { GeometryStyleModal } from "./GeometryStyleBar";
@@ -28,6 +28,11 @@ export function GeometryPickerModals(props: {
   const strokeWidth = geometry.stroke?.width ?? 4;
   const [hex, setHex] = useState(open === "fill" ? fill : strokeColor);
   const [widthVal, setWidthVal] = useState(strokeWidth);
+  const openedAtRef = useRef(0);
+
+  useEffect(() => {
+    if (open) openedAtRef.current = Date.now();
+  }, [open]);
 
   useEffect(() => {
     if (open === "fill") setHex(fill);
@@ -48,6 +53,7 @@ export function GeometryPickerModals(props: {
 
   return createPortal(
     <div
+      data-geometry-picker-modal
       style={{
         position: "fixed",
         inset: 0,
@@ -57,8 +63,11 @@ export function GeometryPickerModals(props: {
         alignItems: "center",
         justifyContent: "center",
       }}
+      onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target !== e.currentTarget) return;
+        if (Date.now() - openedAtRef.current < 100) return;
+        onClose();
       }}
     >
       <div
@@ -70,7 +79,6 @@ export function GeometryPickerModals(props: {
           minWidth: 280,
           maxWidth: 420,
         }}
-        onPointerDown={(e) => e.stopPropagation()}
       >
         {open === "fill" || open === "stroke" ? (
           <>

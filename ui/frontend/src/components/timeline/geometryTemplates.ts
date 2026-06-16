@@ -22,7 +22,7 @@ export function defaultGeometryStyle(template: GeometryTemplate): Pick<TimelineG
   }
   return {
     fill: "#ffffff",
-    stroke: { color: "#000000", width: 4 },
+    stroke: { color: "#000000", width: 0 },
   };
 }
 
@@ -70,5 +70,44 @@ export function createGeometryData(template: GeometryTemplate): TimelineGeometry
         ],
         ...style,
       };
+    case "custom":
+      return {
+        template: "custom",
+        closed: true,
+        points: [],
+        fill: "#ffffff",
+        stroke: { color: "#000000", width: 0 },
+      };
   }
+}
+
+const CUSTOM_EPS = 1e-4;
+
+/** True when geometry has been modified beyond the builtin template defaults. */
+export function geometryIsCustomized(geometry: TimelineGeometry): boolean {
+  if (geometry.template === "custom") return true;
+  const base = createGeometryData(geometry.template);
+  if (geometry.points.length !== base.points.length) return true;
+  if (geometry.closed !== base.closed) return true;
+
+  for (let i = 0; i < geometry.points.length; i++) {
+    const a = geometry.points[i];
+    const b = base.points[i];
+    if (Math.abs(a.x - b.x) > CUSTOM_EPS || Math.abs(a.y - b.y) > CUSTOM_EPS) return true;
+    if (geometry.template !== "ellipse" && (a.handleIn || a.handleOut)) return true;
+  }
+  return false;
+}
+
+/** Deep-clone geometry for placing a saved shape on the timeline. */
+export function cloneTimelineGeometry(geometry: TimelineGeometry): TimelineGeometry {
+  return {
+    ...geometry,
+    stroke: geometry.stroke ? { ...geometry.stroke } : undefined,
+    points: geometry.points.map((p) => ({
+      ...p,
+      handleIn: p.handleIn ? { ...p.handleIn } : undefined,
+      handleOut: p.handleOut ? { ...p.handleOut } : undefined,
+    })),
+  };
 }

@@ -663,6 +663,83 @@ def rename_keypoint_folder(folder_id: str, name: str) -> dict[str, Any]:
     raise ValueError("Folder not found.")
 
 
+def find_keypoint_by_id(keypoint_id: str) -> dict[str, Any] | None:
+    kid = str(keypoint_id).strip()
+    return next((e for e in list_keypoints() if str(e.get("id")) == kid), None)
+
+
+def find_keypoint_folder_by_name(
+    name: str,
+    *,
+    parent_folder_id: str | None = None,
+) -> str | None:
+    label = (name or "").strip()
+    if not label:
+        return None
+    entries = list_keypoints()
+    layout = _sync_ui_layout_with_keypoints(entries)
+    parent = str(parent_folder_id).strip() if parent_folder_id else None
+    for f in layout["folders"]:
+        if str(f.get("name") or "") != label:
+            continue
+        if _parent_id_for_folder(f) == parent:
+            return str(f.get("id"))
+    return None
+
+
+def ensure_keypoint_folder_exists(
+    folder_id: str,
+    *,
+    name: str,
+    parent_folder_id: str | None = None,
+) -> str | None:
+    """Return ``folder_id`` if it still exists with matching parent, else ``None``."""
+    fid = str(folder_id).strip()
+    if not fid:
+        return None
+    entries = list_keypoints()
+    layout = _sync_ui_layout_with_keypoints(entries)
+    parent = str(parent_folder_id).strip() if parent_folder_id else None
+    for f in layout["folders"]:
+        if str(f.get("id")) == fid and _parent_id_for_folder(f) == parent:
+            return fid
+    return None
+
+
+def ensure_keypoint_folder_empty(
+    name: str,
+    *,
+    parent_folder_id: str | None = None,
+) -> str:
+    """Create an empty keypoint gallery folder and return its id."""
+    label = (name or "").strip() or "Folder"
+    entries = list_keypoints()
+    layout = _sync_ui_layout_with_keypoints(entries)
+    parent = str(parent_folder_id).strip() if parent_folder_id else None
+    if parent and not any(str(f.get("id")) == parent for f in layout["folders"]):
+        raise ValueError("Parent folder not found.")
+
+    existing = find_keypoint_folder_by_name(label, parent_folder_id=parent)
+    if existing:
+        return existing
+
+    fid = _new_id()
+    folder: dict[str, Any] = {"id": fid, "name": label}
+    if parent:
+        folder["parentId"] = parent
+    layout["folders"].append(folder)
+    layout["folderOrder"][fid] = []
+    tok = _folder_token(fid)
+    if parent:
+        parent_order = layout["folderOrder"].setdefault(parent, [])
+        if tok not in parent_order:
+            parent_order.append(tok)
+    elif tok not in layout["rootOrder"]:
+        layout["rootOrder"].append(tok)
+    _write_ui_layout(layout)
+    return fid
+
+
 def duplicate_keypoint(keypoint_id: str) -> dict[str, Any]:
     kid = str(keypoint_id).strip()
     entries = list_keypoints()
