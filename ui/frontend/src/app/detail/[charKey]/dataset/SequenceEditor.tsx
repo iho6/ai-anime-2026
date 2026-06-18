@@ -26,6 +26,7 @@ import {
   assetUrlFromRelPath,
   runDetailWsJob,
   runShotRemoveBgWsJob,
+  type RemoveBgImageRunOptions,
   type FrameSequencePayload,
   type FrameSequenceStripSlot,
   type SequenceFrameItem,
@@ -39,6 +40,7 @@ import {
 } from "./FrameSequenceModal";
 import { outputDirFromRelPath } from "../../../../components/frameSequenceStripUtils";
 import { AiEditModal } from "../../../../components/AiEditModal";
+import { RemoveBgImageModal } from "../../../../components/removeBg/RemoveBgImageModal";
 import {
   SEQUENCE_FLF_OUTPUT_LENGTHS,
   SEQUENCE_I2V_OUTPUT_LENGTHS,
@@ -666,6 +668,12 @@ export function SequenceEditor(props: {
   const [stripAiEditImageSrc, setStripAiEditImageSrc] = useState("");
   const stripAiEditResolveRef = useRef<((rel: string) => void) | null>(null);
   const stripAiEditRelRef = useRef<string | null>(null);
+  const [removeBgImageOpen, setRemoveBgImageOpen] = useState(false);
+  const removeBgStripPendingRef = useRef<{
+    relPaths: string[];
+    resolve: (paths: string[]) => void;
+    reject: (e: unknown) => void;
+  } | null>(null);
   const [timelineScale, setTimelineScale] = useState(1);
   const [timelineExportBusy, setTimelineExportBusy] = useState(false);
   /** When set, a gallery sequence-set MP4 export is in progress for that gallery item id. */
@@ -715,6 +723,38 @@ export function SequenceEditor(props: {
   useEffect(() => {
     manifestRef.current = manifest;
   }, [manifest]);
+
+  const runRemoveBgImage = useCallback(async (options: RemoveBgImageRunOptions) => {
+    const pending = removeBgStripPendingRef.current;
+    setRemoveBgImageOpen(false);
+    removeBgStripPendingRef.current = null;
+    if (!pending) return;
+    const jm = jobModal;
+    jm?.begin({ title: "Removing background", clearLog: true });
+    await Promise.resolve();
+    const out: string[] = [];
+    try {
+      for (const rel of pending.relPaths) {
+        jm?.log(`Removing background: ${rel.split("/").pop() ?? "frame"}…`);
+        const done = await runShotRemoveBgWsJob({
+          imageRelPath: rel,
+          inPlace: true,
+          engine: options.engine,
+          rmbg: options.rmbg,
+          animeSeg: options.animeSeg,
+          onLogLine: (line) => jm?.log(line),
+        });
+        const nextRel = done.result?.relPath;
+        if (!done.ok || !nextRel) throw new Error(done.error || "Remove background failed.");
+        out.push(nextRel);
+      }
+      jm?.end();
+      pending.resolve(out);
+    } catch (e) {
+      jm?.fail(e, "Remove background failed.");
+      pending.reject(e);
+    }
+  }, [jobModal]);
 
   useEffect(() => {
     const el = timelineShellRef.current;
@@ -1647,27 +1687,10 @@ export function SequenceEditor(props: {
     return {
       busy: false,
       onRemoveBackground: async (relPaths) => {
-        jm?.begin({ title: "Removing background", clearLog: true });
-        await Promise.resolve();
-        const out: string[] = [];
-        try {
-          for (const rel of relPaths) {
-            jm?.log(`Removing background: ${rel.split("/").pop() ?? "frame"}…`);
-            const done = await runShotRemoveBgWsJob({
-              imageRelPath: rel,
-              inPlace: true,
-              onLogLine: (line) => jm?.log(line),
-            });
-            const nextRel = done.result?.relPath;
-            if (!done.ok || !nextRel) throw new Error(done.error || "Remove background failed.");
-            out.push(nextRel);
-          }
-          jm?.end();
-          return out;
-        } catch (e) {
-          jm?.fail(e, "Remove background failed.");
-          throw e;
-        }
+        return new Promise<string[]>((resolve, reject) => {
+          removeBgStripPendingRef.current = { relPaths, resolve, reject };
+          setRemoveBgImageOpen(true);
+        });
       },
       onAiEdit: (relPath) =>
         new Promise<string>((resolve) => {
@@ -2546,6 +2569,17 @@ export function SequenceEditor(props: {
         onGenerate={(promptText, maskPngBase64) =>
           void runStripAiEdit(promptText, maskPngBase64)
         }
+      />
+      <RemoveBgImageModal
+        open={removeBgImageOpen}
+        busy={false}
+        onCancel={() => {
+          setRemoveBgImageOpen(false);
+          const pending = removeBgStripPendingRef.current;
+          removeBgStripPendingRef.current = null;
+          pending?.reject(new Error("Cancelled"));
+        }}
+        onRun={(options) => void runRemoveBgImage(options)}
       />
     </div>
   );

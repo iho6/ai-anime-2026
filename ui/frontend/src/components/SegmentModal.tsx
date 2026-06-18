@@ -493,6 +493,65 @@ export function SegmentModal(props: {
               Prompt: {appliedTextPrompt}
             </div>
           ) : null}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+              fontSize: 12,
+            }}
+          >
+            <label>
+              <div style={{ color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>
+                Detect threshold
+              </div>
+              <input
+                type="number"
+                min={0.1}
+                max={0.9}
+                step={0.05}
+                value={sam3Threshold}
+                disabled={busy || previewBusy}
+                style={{
+                  width: "100%",
+                  padding: "6px 8px",
+                  background: "#1a1a1a",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  color: "#eee",
+                  borderRadius: 4,
+                }}
+                onChange={(e) => {
+                  setSam3Threshold(Number(e.target.value));
+                  invalidateMask();
+                }}
+              />
+            </label>
+            <label>
+              <div style={{ color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>
+                Mask grow (px)
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={20}
+                step={1}
+                value={sam3MaskGrow}
+                disabled={busy || previewBusy}
+                style={{
+                  width: "100%",
+                  padding: "6px 8px",
+                  background: "#1a1a1a",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  color: "#eee",
+                  borderRadius: 4,
+                }}
+                onChange={(e) => {
+                  setSam3MaskGrow(Number(e.target.value));
+                  invalidateMask();
+                }}
+              />
+            </label>
+          </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <button
               type="button"
@@ -528,31 +587,6 @@ export function SegmentModal(props: {
                 fontSize: 12,
               }}
             >
-              <label>
-                <div style={{ color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>
-                  Detect threshold
-                </div>
-                <input
-                  type="number"
-                  min={0.1}
-                  max={0.9}
-                  step={0.05}
-                  value={sam3Threshold}
-                  disabled={busy || previewBusy}
-                  style={{
-                    width: "100%",
-                    padding: "6px 8px",
-                    background: "#1a1a1a",
-                    border: "1px solid rgba(255,255,255,0.2)",
-                    color: "#eee",
-                    borderRadius: 4,
-                  }}
-                  onChange={(e) => {
-                    setSam3Threshold(Number(e.target.value));
-                    invalidateMask();
-                  }}
-                />
-              </label>
               <label>
                 <div style={{ color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>
                   Refine iterations
@@ -599,31 +633,6 @@ export function SegmentModal(props: {
                   }}
                   onChange={(e) => {
                     setSam3DetectThresh(Number(e.target.value));
-                    invalidateMask();
-                  }}
-                />
-              </label>
-              <label>
-                <div style={{ color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>
-                  Mask grow (px)
-                </div>
-                <input
-                  type="number"
-                  min={0}
-                  max={20}
-                  step={1}
-                  value={sam3MaskGrow}
-                  disabled={busy || previewBusy}
-                  style={{
-                    width: "100%",
-                    padding: "6px 8px",
-                    background: "#1a1a1a",
-                    border: "1px solid rgba(255,255,255,0.2)",
-                    color: "#eee",
-                    borderRadius: 4,
-                  }}
-                  onChange={(e) => {
-                    setSam3MaskGrow(Number(e.target.value));
                     invalidateMask();
                   }}
                 />

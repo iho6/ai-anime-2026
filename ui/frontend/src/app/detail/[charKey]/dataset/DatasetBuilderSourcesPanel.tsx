@@ -55,6 +55,7 @@ type DatasetBuilderSourcesPanelProps = {
   beginRemoveBackgroundModal: () => void;
   endRemoveBackgroundModal: () => void;
   failRmbgJob: (err: unknown) => void;
+  onRemoveBackgroundRequest?: (tileId: string, sourceRel: string) => void;
 };
 
 export function DatasetBuilderSourcesPanel(props: DatasetBuilderSourcesPanelProps) {
@@ -86,6 +87,7 @@ export function DatasetBuilderSourcesPanel(props: DatasetBuilderSourcesPanelProp
     beginRemoveBackgroundModal,
     endRemoveBackgroundModal,
     failRmbgJob,
+    onRemoveBackgroundRequest,
   } = props;
 
   const poseDragIds = useMemo(
@@ -217,6 +219,7 @@ export function DatasetBuilderSourcesPanel(props: DatasetBuilderSourcesPanelProp
         beginRemoveBackgroundModal={beginRemoveBackgroundModal}
         endRemoveBackgroundModal={endRemoveBackgroundModal}
         failRmbgJob={failRmbgJob}
+        onRemoveBackgroundRequest={onRemoveBackgroundRequest}
       />
     );
   }

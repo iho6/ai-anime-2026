@@ -7981,6 +7981,48 @@ def remove_background_to_temp_file(
     return str(dest)
 
 
+def remove_anime_seg_to_temp_file(
+    local_image_path: str,
+    log_cb: Callable[[str], None] | None = None,
+    anime_seg_options: dict[str, Any] | None = None,
+) -> str:
+    """Run anime-segmentation on a local image; write RGBA PNG to a temp file."""
+    from services.anime_seg_ai_service.inference_core import (
+        options_from_dict,
+        segment_image_to_rgba,
+    )
+
+    if log_cb:
+        log_cb("Running anime segmentation…")
+    opts = options_from_dict(anime_seg_options)
+    dest = Path(tempfile.gettempdir()) / f"anime_seg_{unique_suffix()}.png"
+    segment_image_to_rgba(local_image_path, dest, **opts)
+    return str(dest)
+
+
+def remove_bg_to_temp_file(
+    local_image_path: str,
+    log_cb: Callable[[str], None] | None = None,
+    *,
+    engine: str = "rmbg",
+    rmbg_overrides: dict[str, Any] | None = None,
+    anime_seg_options: dict[str, Any] | None = None,
+) -> str:
+    """Dispatch image background removal to RMBG or anime segmentation."""
+    eng = str(engine or "rmbg").strip().lower()
+    if eng in ("anime_seg", "anime-seg", "animeseg"):
+        return remove_anime_seg_to_temp_file(
+            local_image_path,
+            log_cb=log_cb,
+            anime_seg_options=anime_seg_options,
+        )
+    return remove_background_to_temp_file(
+        local_image_path,
+        log_cb=log_cb,
+        rmbg_overrides=rmbg_overrides,
+    )
+
+
 def remove_video_background_to_temp_file(
     video_path: str,
     *,
@@ -8263,6 +8305,139 @@ def remove_video_background_rmbg(
             else:
                 if last_alpha is None:
                     raise RuntimeError("recycle_mask requires at least one RMBG keyframe.")
+                rgba = np.dstack([rgb, last_alpha])
+            rgba_out.append(rgba)
+
+        meta = encode_rgba_frames_to_webm(
+            rgba_out,
+            fps=source_fps,
+            width=src_w,
+            height=src_h,
+            output_path=out,
+            log_cb=log_cb,
+        )
+        meta["url"] = meta["absPath"]
+        return meta
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def remove_video_background_anime_seg(
+    video_path: str | Path,
+    output_path: str | Path,
+    *,
+    output_fps_24: bool = False,
+    recycle_mask: bool = False,
+    anime_seg_options: dict[str, Any] | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """
+    Per-frame anime-segmentation video background removal.
+
+    Same fps modes as :func:`remove_video_background_rmbg`.
+    """
+    import av
+    import numpy as np
+    import shutil
+    from PIL import Image
+
+    from services.utils import video_stream_fps, video_subsample_stride
+
+    def _log(msg: str) -> None:
+        logger.info(msg)
+        if log_cb:
+            log_cb(msg)
+
+    src = Path(video_path)
+    out = Path(output_path)
+    if not src.is_file():
+        raise ValueError(f"Video not found: {src}")
+
+    source_fps = video_stream_fps(str(src))
+    stride = video_subsample_stride(source_fps, 12.0)
+    tmp_dir = Path(tempfile.gettempdir()) / f"anime_seg_vid_{unique_suffix()}"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+
+    def _anime_rgba_from_rgb(rgb: Any, frame_path: Path) -> Any:
+        Image.fromarray(rgb).save(frame_path, format="PNG")
+        rgba_path = remove_anime_seg_to_temp_file(
+            str(frame_path),
+            log_cb=log_cb,
+            anime_seg_options=anime_seg_options,
+        )
+        with Image.open(rgba_path) as im:
+            return np.asarray(im.convert("RGBA"), dtype=np.uint8)
+
+    try:
+        in_container = av.open(str(src))
+        in_stream = in_container.streams.video[0]
+        src_w = int(in_stream.width)
+        src_h = int(in_stream.height)
+
+        if not output_fps_24:
+            _log(
+                f"Anime Seg mode: 12 fps output (source {source_fps:.2f} fps, stride {stride})"
+            )
+            rgba_out: list[Any] = []
+            frame_idx = 0
+            seg_count = 0
+            for packet in in_container.demux(in_stream):
+                for av_frame in packet.decode():
+                    if frame_idx % stride != 0:
+                        frame_idx += 1
+                        continue
+                    rgb = av_frame.to_ndarray(format="rgb24")
+                    fp = tmp_dir / f"in_{frame_idx:06d}.png"
+                    seg_count += 1
+                    _log(f"Anime Seg frame {seg_count} (source index {frame_idx})…")
+                    rgba_out.append(_anime_rgba_from_rgb(rgb, fp))
+                    frame_idx += 1
+            in_container.close()
+            if not rgba_out:
+                raise RuntimeError("No frames extracted for anime segmentation.")
+            meta = encode_rgba_frames_to_webm(
+                rgba_out,
+                fps=12.0,
+                width=src_w,
+                height=src_h,
+                output_path=out,
+                log_cb=log_cb,
+            )
+            meta["url"] = meta["absPath"]
+            return meta
+
+        all_rgb: list[Any] = []
+        for packet in in_container.demux(in_stream):
+            for av_frame in packet.decode():
+                all_rgb.append(av_frame.to_ndarray(format="rgb24"))
+        in_container.close()
+        if not all_rgb:
+            raise RuntimeError("Video decode produced zero frames.")
+
+        if recycle_mask:
+            _log(
+                f"Anime Seg mode: {source_fps:.2f} fps output, recycle mask "
+                f"(segment every {stride} frames)"
+            )
+        else:
+            _log(f"Anime Seg mode: {source_fps:.2f} fps output, every frame")
+
+        rgba_out = []
+        last_alpha: Any | None = None
+        seg_count = 0
+        for i, rgb in enumerate(all_rgb):
+            need_seg = (not recycle_mask) or (i % stride == 0)
+            if need_seg:
+                fp = tmp_dir / f"in_{i:06d}.png"
+                seg_count += 1
+                _log(f"Anime Seg frame {seg_count}/{len(all_rgb)}…")
+                rgba = _anime_rgba_from_rgb(rgb, fp)
+                last_alpha = rgba[:, :, 3]
+            else:
+                if last_alpha is None:
+                    raise RuntimeError(
+                        "recycle_mask requires at least one segmentation keyframe."
+                    )
                 rgba = np.dstack([rgb, last_alpha])
             rgba_out.append(rgba)
 
@@ -10530,6 +10705,10 @@ def _copy_frame_urls_to_dir(
 def remove_background_next_to_source(
     source_rel: str,
     log_cb: Callable[[str], None] | None = None,
+    *,
+    engine: str = "rmbg",
+    rmbg_overrides: dict[str, Any] | None = None,
+    anime_seg_options: dict[str, Any] | None = None,
 ) -> str:
     """Remove background and write a new PNG beside the source file (for strip frames)."""
     rel_norm = str(source_rel).replace("\\", "/").lstrip("/")
@@ -10541,7 +10720,13 @@ def remove_background_next_to_source(
         src_abs = resolve_storage_rel_path_to_abs(rel_norm)
     if not src_abs.is_file():
         raise ValueError(f"Source image not found: {source_rel}")
-    temp_path = remove_background_to_temp_file(str(src_abs), log_cb=log_cb)
+    temp_path = remove_bg_to_temp_file(
+        str(src_abs),
+        log_cb=log_cb,
+        engine=engine,
+        rmbg_overrides=rmbg_overrides,
+        anime_seg_options=anime_seg_options,
+    )
     try:
         dest = src_abs.parent / f"rembg_{unique_suffix(12)}.png"
         shutil.copy2(temp_path, dest)

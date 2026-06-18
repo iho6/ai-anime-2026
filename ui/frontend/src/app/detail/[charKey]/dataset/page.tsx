@@ -25,6 +25,7 @@ import {
   assetUrlFromRelPath,
   BuilderSourceItem,
   runDetailWsJob,
+  type RemoveBgImageRunOptions,
   type AngleGroup,
 } from "../../../../lib/api";
 import {
@@ -38,6 +39,7 @@ import { GalleryImageLightbox } from "../../../../components/GalleryImageLightbo
 import { ConnectedJobRunModal } from "../../../../components/ConnectedJobRunModal";
 import { useJobRunSession, type BeginSessionOpts } from "../../../../hooks/useJobRunSession";
 import { AiEditModal } from "../../../../components/AiEditModal";
+import { RemoveBgImageModal } from "../../../../components/removeBg/RemoveBgImageModal";
 import { BatchGenerateModal, type BatchGenerateSelection } from "../../../../components/BatchGenerateModal";
 import { CameraAngleModal } from "../../../../components/CameraAngleModal";
 import { useAppError } from "../../../../components/ErrorProvider";
@@ -146,6 +148,14 @@ export default function DatasetPage() {
   const [aiEditSourceRelPath, setAiEditSourceRelPath] = useState<string>("");
   const [aiEditBuilderCtx, setAiEditBuilderCtx] = useState<BuilderEntry | null>(null);
   const [aiEditSavedCtx, setAiEditSavedCtx] = useState<SavedEntry | null>(null);
+
+  const [removeBgImageOpen, setRemoveBgImageOpen] = useState(false);
+  const removeBgPendingRef = useRef<
+    | { kind: "builder_tile"; tileId: string; sourceRel: string }
+    | { kind: "builder_batch"; tileIds: string[] }
+    | { kind: "saved_tile"; tileId: string; sourceRel: string }
+    | null
+  >(null);
 
   const refreshStrip = useCallback(async () => {
     if (!charKey) return;
@@ -568,11 +578,20 @@ export default function DatasetPage() {
     endSession();
   }, [endSession]);
 
-  async function runRembgOnRel(sourceRel: string): Promise<string> {
+  async function runRembgOnRel(
+    sourceRel: string,
+    options: RemoveBgImageRunOptions
+  ): Promise<string> {
     const done = await runDetailWsJob<{ previewRelPath: string }>({
       charKey,
       pathSuffix: "/dataset/ws",
-      payload: { job: "remove_background", sourceRelPath: sourceRel },
+      payload: {
+        job: "remove_background",
+        sourceRelPath: sourceRel,
+        engine: options.engine,
+        rmbg: options.rmbg,
+        animeSeg: options.animeSeg,
+      },
       onLogLine: (line) => logRef.current?.pushLine(line),
     });
     if (!done.ok || !done.result?.previewRelPath) {
@@ -581,32 +600,92 @@ export default function DatasetPage() {
     return done.result.previewRelPath;
   }
 
-  async function batchRemoveBackground(ids: string[]) {
-    beginRemoveBackgroundModal();
-    let rembgBatchOk = true;
-    try {
-      for (const tid of ids) {
-        const e = entries.find((x) => x.tileId === tid);
-        if (!e || e.removed || e.builderHidden) continue;
-        const src = displayRelPath(e);
-        if (!src) continue;
-        const prev = await runRembgOnRel(src);
+  function openRemoveBgForBuilderTile(tileId: string, sourceRel: string) {
+    removeBgPendingRef.current = { kind: "builder_tile", tileId, sourceRel };
+    setRemoveBgImageOpen(true);
+  }
+
+  function openRemoveBgForSavedTile(tileId: string, sourceRel: string) {
+    removeBgPendingRef.current = { kind: "saved_tile", tileId, sourceRel };
+    setRemoveBgImageOpen(true);
+  }
+
+  async function runRemoveBgImage(options: RemoveBgImageRunOptions) {
+    const pending = removeBgPendingRef.current;
+    setRemoveBgImageOpen(false);
+    removeBgPendingRef.current = null;
+    if (!pending) return;
+
+    if (pending.kind === "builder_batch") {
+      beginRemoveBackgroundModal();
+      let rembgBatchOk = true;
+      try {
+        for (const tid of pending.tileIds) {
+          const e = entries.find((x) => x.tileId === tid);
+          if (!e || e.removed || e.builderHidden) continue;
+          const src = displayRelPath(e);
+          if (!src) continue;
+          const prev = await runRembgOnRel(src, options);
+          setEntries((list) =>
+            list.map((x) =>
+              x.tileId === tid
+                ? { ...x, previewRelPath: prev, beforeNoiseRelPath: null }
+                : x
+            )
+          );
+          setDirty(true);
+        }
+      } catch (err) {
+        rembgBatchOk = false;
+        failSession(err, "Remove background failed.");
+      } finally {
+        if (rembgBatchOk) endRemoveBackgroundModal();
+        setSelectedBuilder(new Set());
+      }
+      return;
+    }
+
+    if (pending.kind === "builder_tile") {
+      beginRemoveBackgroundModal();
+      try {
+        const prev = await runRembgOnRel(pending.sourceRel, options);
         setEntries((list) =>
           list.map((x) =>
-            x.tileId === tid
+            x.tileId === pending.tileId
               ? { ...x, previewRelPath: prev, beforeNoiseRelPath: null }
               : x
           )
         );
         setDirty(true);
+        endRemoveBackgroundModal();
+      } catch (err) {
+        failRmbgJob(err);
       }
-    } catch (err) {
-      rembgBatchOk = false;
-      failSession(err, "Remove background failed.");
-    } finally {
-      if (rembgBatchOk) endRemoveBackgroundModal();
-      setSelectedBuilder(new Set());
+      return;
     }
+
+    if (pending.kind === "saved_tile") {
+      beginRemoveBackgroundModal();
+      try {
+        const prev = await runRembgOnRel(pending.sourceRel, options);
+        setSavedEntries((list) =>
+          list.map((x) =>
+            x.tileId === pending.tileId
+              ? { ...x, previewRelPath: prev, beforeNoiseRelPath: null }
+              : x
+          )
+        );
+        endRemoveBackgroundModal();
+      } catch (err) {
+        failRmbgJob(err);
+      }
+    }
+  }
+
+  function batchRemoveBackground(ids: string[]) {
+    if (ids.length === 0) return;
+    removeBgPendingRef.current = { kind: "builder_batch", tileIds: ids };
+    setRemoveBgImageOpen(true);
   }
 
   async function batchAddNoise(ids: string[]) {
@@ -894,6 +973,7 @@ export default function DatasetPage() {
             beginRemoveBackgroundModal={beginRemoveBackgroundModal}
             endRemoveBackgroundModal={endRemoveBackgroundModal}
             failRmbgJob={failRmbgJob}
+            onRemoveBackgroundRequest={openRemoveBgForBuilderTile}
             folderClip={folderClip}
             setFolderClip={setFolderClip}
           />
@@ -913,6 +993,7 @@ export default function DatasetPage() {
             beginRemoveBackgroundModal={beginRemoveBackgroundModal}
             endRemoveBackgroundModal={endRemoveBackgroundModal}
             failRmbgJob={failRmbgJob}
+            onRemoveBackgroundRequest={openRemoveBgForSavedTile}
             downloadRel={downloadRel}
             refreshStrip={refreshStrip}
             setMenu={setMenu}
@@ -973,6 +1054,16 @@ export default function DatasetPage() {
           void onAiEditGenerate(promptText, maskPngBase64)
         }
       />
+
+      <RemoveBgImageModal
+        open={removeBgImageOpen}
+        busy={busy}
+        onCancel={() => {
+          setRemoveBgImageOpen(false);
+          removeBgPendingRef.current = null;
+        }}
+        onRun={(options) => void runRemoveBgImage(options)}
+      />
       {lightbox ? (
         <GalleryImageLightbox
           key={`${lightbox.paths.join("|")}-${lightbox.index}-${lightbox.title}`}
@@ -1000,6 +1091,7 @@ function SavedDatasetView(props: {
   beginRemoveBackgroundModal: () => void;
   endRemoveBackgroundModal: () => void;
   failRmbgJob: (err: unknown) => void;
+  onRemoveBackgroundRequest?: (tileId: string, sourceRel: string) => void;
   downloadRel: (rel: string) => void;
   refreshStrip: () => Promise<void>;
   setMenu: React.Dispatch<React.SetStateAction<DesktopContextMenuState>>;
@@ -1036,6 +1128,7 @@ function SavedDatasetView(props: {
     beginRemoveBackgroundModal,
     endRemoveBackgroundModal,
     failRmbgJob,
+    onRemoveBackgroundRequest,
     downloadRel,
     refreshStrip,
     setMenu,
@@ -1394,35 +1487,8 @@ function SavedDatasetView(props: {
                       },
                       {
                         key: "rembg",
-                        label: "Remove Background",
-                        onSelect: () => {
-                          void (async () => {
-                            beginRemoveBackgroundModal();
-                            try {
-                              const done = await runDetailWsJob<{ previewRelPath: string }>({
-                                charKey,
-                                pathSuffix: "/dataset/ws",
-                                payload: { job: "remove_background", sourceRelPath: rel },
-                                onLogLine: (line) => logRef.current?.pushLine(line),
-                              });
-                              if (!done.ok || !done.result?.previewRelPath) throw new Error(done.error);
-                              setSavedEntries((list) =>
-                                list.map((x) =>
-                                  x.tileId === e.tileId
-                                    ? {
-                                        ...x,
-                                        previewRelPath: done.result!.previewRelPath,
-                                        beforeNoiseRelPath: null,
-                                      }
-                                    : x
-                                )
-                              );
-                              endRemoveBackgroundModal();
-                            } catch (er) {
-                              failRmbgJob(er);
-                            }
-                          })();
-                        },
+                        label: "Remove Background…",
+                        onSelect: () => onRemoveBackgroundRequest?.(e.tileId, rel),
                       },
                       {
                         key: "noise",

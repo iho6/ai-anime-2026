@@ -13,6 +13,7 @@ import { SortableGrid, SortableItem } from "../dnd/SortableGrid";
 import { reorderInsertBeforeOrAfter } from "../dnd/reorder";
 import { parseFolderToken } from "../KeypointRefGrid";
 import { KeypointFolderTile, KeypointRefTile } from "../KeypointRefTile";
+import { MOTION_REF_ACCENT_BTN_BG } from "./theme";
 
 export function MotionShotGallery(props: {
   busy?: boolean;
@@ -377,7 +378,7 @@ export function MotionShotGallery(props: {
           type="button"
           disabled={busy || addableShots.length === 0}
           onClick={() => onAddToPose(addableShots)}
-          style={{ ...actionBtn, background: "rgba(255,209,102,0.12)" }}
+          style={{ ...actionBtn, background: MOTION_REF_ACCENT_BTN_BG }}
         >
           Add to Pose
         </button>

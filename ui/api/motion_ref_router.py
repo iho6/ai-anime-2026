@@ -157,6 +157,66 @@ def motion_ref_save_shot_image(
     return {"shotRelPath": storage_rel_from_abs(str(out_path))}
 
 
+# ── Camera trajectory (orbit keyframes per motion) ───────────────────────────
+
+
+class CameraKeyframeBody(BaseModel):
+    id: str | None = None
+    frameIndex: int
+    azimuth: float
+    elevation: float
+    distance: float
+
+
+def _serialize_camera_trajectory(data: dict) -> dict[str, Any]:
+    keyframes = data.get("keyframes") or []
+    out = []
+    for kf in keyframes:
+        out.append(
+            {
+                "id": str(kf.get("id", "")),
+                "frameIndex": int(kf.get("frameIndex", 0)),
+                "azimuth": float(kf.get("azimuth", 0)),
+                "elevation": float(kf.get("elevation", 0)),
+                "distance": float(kf.get("distance", 2.6)),
+            }
+        )
+    return {"keyframes": out}
+
+
+@router.get("/motion_ref/{motion_key}/camera_trajectory")
+def motion_ref_camera_trajectory_get(motion_key: str) -> dict[str, Any]:
+    if not _motion_dir(motion_key).is_dir():
+        raise HTTPException(404, "Motion not found.")
+    return _serialize_camera_trajectory(motion_ref_storage.read_camera_trajectory(motion_key))
+
+
+@router.post("/motion_ref/{motion_key}/camera_trajectory")
+def motion_ref_camera_trajectory_upsert(
+    motion_key: str, body: CameraKeyframeBody
+) -> dict[str, Any]:
+    try:
+        data = motion_ref_storage.upsert_camera_keyframe(
+            motion_key,
+            body.model_dump(),
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    return _serialize_camera_trajectory(data)
+
+
+@router.delete("/motion_ref/{motion_key}/camera_trajectory/{keyframe_id}")
+def motion_ref_camera_trajectory_delete(
+    motion_key: str, keyframe_id: str
+) -> dict[str, Any]:
+    if not _motion_dir(motion_key).is_dir():
+        raise HTTPException(404, "Motion not found.")
+    ok = motion_ref_storage.delete_camera_keyframe(motion_key, keyframe_id)
+    if not ok:
+        raise HTTPException(404, "Camera keyframe not found.")
+    return _serialize_camera_trajectory(motion_ref_storage.read_camera_trajectory(motion_key))
+
+
 # ── Global motion shots gallery ───────────────────────────────────────────────
 
 

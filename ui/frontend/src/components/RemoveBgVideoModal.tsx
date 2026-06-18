@@ -1,51 +1,74 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import type { RmbgBgOptions, RvmBgOptions } from "../lib/api";
+import type { AnimeSegBgOptions, RmbgBgOptions, RvmBgOptions } from "../lib/api";
+import {
+  AnimeSegFields,
+  DEFAULT_ANIME_SEG_OPTIONS,
+  DEFAULT_RMBG_OPTIONS,
+  RemoveBgNumberField,
+  RmbgFields,
+  removeBgInputStyle,
+  removeBgLabelStyle,
+} from "./removeBg/RemoveBgFields";
 
-type Tab = "rvm" | "rmbg";
+type Tab = "rvm" | "rmbg" | "anime_seg";
 
-const labelStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: "rgba(255,255,255,0.7)",
-  marginBottom: 4,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "6px 8px",
-  fontSize: 13,
-  background: "#1a1a1a",
-  border: "1px solid rgba(255,255,255,0.2)",
-  color: "#eee",
-  borderRadius: 4,
-  boxSizing: "border-box",
-};
-
-function NumberField(props: {
-  label: string;
-  value: number;
-  min?: number;
-  max?: number;
-  step?: number;
-  disabled?: boolean;
-  onChange: (v: number) => void;
+function FpsOptions(props: {
+  busy?: boolean;
+  outputFps24: boolean;
+  recycleMask: boolean;
+  onOutputFps24Change: (v: boolean) => void;
+  onRecycleMaskChange: (v: boolean) => void;
+  hint: string;
 }) {
-  const { label, value, min, max, step = 1, disabled, onChange } = props;
+  const {
+    busy,
+    outputFps24,
+    recycleMask,
+    onOutputFps24Change,
+    onRecycleMaskChange,
+    hint,
+  } = props;
   return (
-    <label style={{ display: "block" }}>
-      <div style={labelStyle}>{label}</div>
-      <input
-        type="number"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        disabled={disabled}
-        style={inputStyle}
-        onChange={(e) => onChange(Number(e.target.value))}
-      />
-    </label>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 13,
+          cursor: busy ? "not-allowed" : "pointer",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={outputFps24}
+          disabled={busy}
+          onChange={(e) => onOutputFps24Change(e.target.checked)}
+        />
+        24 fps output (process every frame)
+      </label>
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 13,
+          opacity: outputFps24 ? 1 : 0.45,
+          cursor: busy || !outputFps24 ? "not-allowed" : "pointer",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={recycleMask}
+          disabled={busy || !outputFps24}
+          onChange={(e) => onRecycleMaskChange(e.target.checked)}
+        />
+        Recycle mask (keyframes at 12 fps, hold alpha between)
+      </label>
+      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", margin: 0 }}>{hint}</p>
+    </div>
   );
 }
 
@@ -59,8 +82,13 @@ export function RemoveBgVideoModal(props: {
     recycleMask: boolean;
     rmbg: RmbgBgOptions;
   }) => void | Promise<void>;
+  onRunAnimeSeg: (options: {
+    outputFps24: boolean;
+    recycleMask: boolean;
+    animeSeg: AnimeSegBgOptions;
+  }) => void | Promise<void>;
 }) {
-  const { open, busy = false, onCancel, onRunRvm, onRunRmbg } = props;
+  const { open, busy = false, onCancel, onRunRvm, onRunRmbg, onRunAnimeSeg } = props;
 
   const [tab, setTab] = useState<Tab>("rvm");
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -73,13 +101,10 @@ export function RemoveBgVideoModal(props: {
   const [rvmAlphaGrow, setRvmAlphaGrow] = useState(0);
   const [rvmUseSourceRgb, setRvmUseSourceRgb] = useState(true);
 
-  const [rmbgOutputFps24, setRmbgOutputFps24] = useState(false);
-  const [rmbgRecycleMask, setRmbgRecycleMask] = useState(false);
-  const [rmbgMaskOffset, setRmbgMaskOffset] = useState(0);
-  const [rmbgRefineFg, setRmbgRefineFg] = useState(false);
-  const [rmbgMaskBlur, setRmbgMaskBlur] = useState(0);
-  const [rmbgSensitivity, setRmbgSensitivity] = useState(1);
-  const [rmbgProcessRes, setRmbgProcessRes] = useState(1024);
+  const [outputFps24, setOutputFps24] = useState(false);
+  const [recycleMask, setRecycleMask] = useState(false);
+  const [rmbg, setRmbg] = useState<RmbgBgOptions>(DEFAULT_RMBG_OPTIONS);
+  const [animeSeg, setAnimeSeg] = useState<AnimeSegBgOptions>(DEFAULT_ANIME_SEG_OPTIONS);
 
   useEffect(() => {
     if (!open) return;
@@ -90,13 +115,10 @@ export function RemoveBgVideoModal(props: {
     setRvmBackbone("mobilenetv3");
     setRvmAlphaGrow(0);
     setRvmUseSourceRgb(true);
-    setRmbgOutputFps24(false);
-    setRmbgRecycleMask(false);
-    setRmbgMaskOffset(0);
-    setRmbgRefineFg(false);
-    setRmbgMaskBlur(0);
-    setRmbgSensitivity(1);
-    setRmbgProcessRes(1024);
+    setOutputFps24(false);
+    setRecycleMask(false);
+    setRmbg({ ...DEFAULT_RMBG_OPTIONS });
+    setAnimeSeg({ ...DEFAULT_ANIME_SEG_OPTIONS });
   }, [open]);
 
   useEffect(() => {
@@ -110,18 +132,10 @@ export function RemoveBgVideoModal(props: {
   }, [rvmPreset]);
 
   useEffect(() => {
-    if (!rmbgOutputFps24) setRmbgRecycleMask(false);
-  }, [rmbgOutputFps24]);
+    if (!outputFps24) setRecycleMask(false);
+  }, [outputFps24]);
 
   if (!open) return null;
-
-  const rmbgPayload: RmbgBgOptions = {
-    mask_offset: rmbgMaskOffset,
-    refine_foreground: rmbgRefineFg,
-    mask_blur: rmbgMaskBlur,
-    sensitivity: rmbgSensitivity,
-    process_res: rmbgProcessRes,
-  };
 
   const run = () => {
     if (tab === "rvm") {
@@ -132,11 +146,17 @@ export function RemoveBgVideoModal(props: {
         alphaDilatePx: rvmAlphaGrow,
         useSourceRgb: rvmUseSourceRgb,
       });
-    } else {
+    } else if (tab === "rmbg") {
       void onRunRmbg({
-        outputFps24: rmbgOutputFps24,
-        recycleMask: rmbgRecycleMask,
-        rmbg: rmbgPayload,
+        outputFps24,
+        recycleMask,
+        rmbg,
+      });
+    } else {
+      void onRunAnimeSeg({
+        outputFps24,
+        recycleMask,
+        animeSeg,
       });
     }
   };
@@ -211,19 +231,20 @@ export function RemoveBgVideoModal(props: {
         </div>
 
         <div style={{ padding: 16, overflow: "auto", flex: 1 }}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            {tabBtn("rvm", "RVM", "Fast temporal matting")}
-            {tabBtn("rmbg", "RMBG", "Per-frame quality matte")}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+            {tabBtn("rvm", "RVM", "Fast temporal")}
+            {tabBtn("rmbg", "RMBG", "Per-frame matte")}
+            {tabBtn("anime_seg", "Anime Seg", "Anime characters")}
           </div>
 
           {tab === "rvm" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <label style={{ display: "block" }}>
-                <div style={labelStyle}>Quality preset</div>
+                <div style={removeBgLabelStyle}>Quality preset</div>
                 <select
                   value={rvmPreset}
                   disabled={busy}
-                  style={inputStyle}
+                  style={removeBgInputStyle}
                   onChange={(e) =>
                     setRvmPreset(e.target.value as "fast" | "quality")
                   }
@@ -237,49 +258,24 @@ export function RemoveBgVideoModal(props: {
                 First run loads the model (~15 s).
               </p>
             </div>
+          ) : tab === "rmbg" ? (
+            <FpsOptions
+              busy={busy}
+              outputFps24={outputFps24}
+              recycleMask={recycleMask}
+              onOutputFps24Change={setOutputFps24}
+              onRecycleMaskChange={setRecycleMask}
+              hint="Default: subsample to 12 fps, RMBG each kept frame, output at 12 fps."
+            />
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 13,
-                  cursor: busy ? "not-allowed" : "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={rmbgOutputFps24}
-                  disabled={busy}
-                  onChange={(e) => setRmbgOutputFps24(e.target.checked)}
-                />
-                24 fps output (process every frame)
-              </label>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 13,
-                  opacity: rmbgOutputFps24 ? 1 : 0.45,
-                  cursor:
-                    busy || !rmbgOutputFps24 ? "not-allowed" : "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={rmbgRecycleMask}
-                  disabled={busy || !rmbgOutputFps24}
-                  onChange={(e) => setRmbgRecycleMask(e.target.checked)}
-                />
-                Recycle mask (RMBG at 12 fps keyframes, hold alpha between)
-              </label>
-              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", margin: 0 }}>
-                Default: subsample to 12 fps, RMBG each kept frame, output at 12
-                fps. Slower but sharper than RVM.
-              </p>
-            </div>
+            <FpsOptions
+              busy={busy}
+              outputFps24={outputFps24}
+              recycleMask={recycleMask}
+              onOutputFps24Change={setOutputFps24}
+              onRecycleMaskChange={setRecycleMask}
+              hint="Default: 12 fps anime segmentation. Best for illustrated characters."
+            />
           )}
 
           <button
@@ -312,11 +308,11 @@ export function RemoveBgVideoModal(props: {
               {tab === "rvm" ? (
                 <>
                   <label style={{ display: "block", gridColumn: "1 / -1" }}>
-                    <div style={labelStyle}>Backbone</div>
+                    <div style={removeBgLabelStyle}>Backbone</div>
                     <select
                       value={rvmBackbone}
                       disabled={busy}
-                      style={inputStyle}
+                      style={removeBgInputStyle}
                       onChange={(e) =>
                         setRvmBackbone(
                           e.target.value as "mobilenetv3" | "resnet50"
@@ -327,7 +323,7 @@ export function RemoveBgVideoModal(props: {
                       <option value="resnet50">resnet50</option>
                     </select>
                   </label>
-                  <NumberField
+                  <RemoveBgNumberField
                     label="Downsample ratio"
                     value={rvmDownsample}
                     min={0.1}
@@ -336,7 +332,7 @@ export function RemoveBgVideoModal(props: {
                     disabled={busy}
                     onChange={setRvmDownsample}
                   />
-                  <NumberField
+                  <RemoveBgNumberField
                     label="Alpha grow (px)"
                     value={rvmAlphaGrow}
                     min={0}
@@ -362,60 +358,10 @@ export function RemoveBgVideoModal(props: {
                     Use original colors (source RGB + RVM alpha)
                   </label>
                 </>
+              ) : tab === "rmbg" ? (
+                <RmbgFields value={rmbg} disabled={busy} onChange={setRmbg} />
               ) : (
-                <>
-                  <NumberField
-                    label="Mask expand (px)"
-                    value={rmbgMaskOffset}
-                    min={0}
-                    max={64}
-                    disabled={busy}
-                    onChange={setRmbgMaskOffset}
-                  />
-                  <NumberField
-                    label="Mask blur"
-                    value={rmbgMaskBlur}
-                    min={0}
-                    max={20}
-                    disabled={busy}
-                    onChange={setRmbgMaskBlur}
-                  />
-                  <NumberField
-                    label="Sensitivity"
-                    value={rmbgSensitivity}
-                    min={0.5}
-                    max={1.5}
-                    step={0.05}
-                    disabled={busy}
-                    onChange={setRmbgSensitivity}
-                  />
-                  <NumberField
-                    label="Process resolution"
-                    value={rmbgProcessRes}
-                    min={512}
-                    max={2048}
-                    step={128}
-                    disabled={busy}
-                    onChange={setRmbgProcessRes}
-                  />
-                  <label
-                    style={{
-                      gridColumn: "1 / -1",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      fontSize: 13,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={rmbgRefineFg}
-                      disabled={busy}
-                      onChange={(e) => setRmbgRefineFg(e.target.checked)}
-                    />
-                    Refine foreground
-                  </label>
-                </>
+                <AnimeSegFields value={animeSeg} disabled={busy} onChange={setAnimeSeg} />
               )}
             </div>
           ) : null}

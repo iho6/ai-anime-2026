@@ -89,6 +89,7 @@ export type DatasetBuilderTabProps = {
   beginRemoveBackgroundModal: () => void;
   endRemoveBackgroundModal: () => void;
   failRmbgJob: (err: unknown) => void;
+  onRemoveBackgroundRequest?: (tileId: string, sourceRel: string) => void;
 };
 
 export function DatasetBuilderTab(props: DatasetBuilderTabProps) {
@@ -131,6 +132,7 @@ export function DatasetBuilderTab(props: DatasetBuilderTabProps) {
     beginRemoveBackgroundModal,
     endRemoveBackgroundModal,
     failRmbgJob,
+    onRemoveBackgroundRequest,
   } = props;
 
   return (
@@ -386,6 +388,7 @@ export function DatasetBuilderTab(props: DatasetBuilderTabProps) {
         beginRemoveBackgroundModal={beginRemoveBackgroundModal}
         endRemoveBackgroundModal={endRemoveBackgroundModal}
         failRmbgJob={failRmbgJob}
+        onRemoveBackgroundRequest={onRemoveBackgroundRequest}
       />
     </>
   );

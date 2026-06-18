@@ -340,8 +340,19 @@ async def dataset_job_ws(ws: WebSocket, char_key: str) -> None:
                 raise ValueError("sourceRelPath required")
             src_abs = str(resolve_storage_rel_file(rel))
 
+            engine = str(msg.get("engine") or "rmbg").strip().lower()
+            rmbg_overrides = msg.get("rmbg") if isinstance(msg.get("rmbg"), dict) else None
+            raw_anime = msg.get("animeSeg") or msg.get("anime_seg")
+            anime_seg_options = raw_anime if isinstance(raw_anime, dict) else None
+
             def work(log_cb):
-                temp_path = logic.remove_background_to_temp_file(src_abs, log_cb=log_cb)
+                temp_path = logic.remove_bg_to_temp_file(
+                    src_abs,
+                    log_cb=log_cb,
+                    engine=engine,
+                    rmbg_overrides=rmbg_overrides,
+                    anime_seg_options=anime_seg_options,
+                )
                 preview_rel = persist_preview_from_abs(temp_path, char_key)
                 return {"previewRelPath": preview_rel}
 

@@ -386,6 +386,65 @@ async def timeline_remove_video_bg_rmbg_ws(ws: WebSocket, timeline_key: str) -> 
         await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
 
 
+@router.websocket("/timeline/{timeline_key}/remove_video_bg_anime_seg/ws")
+async def timeline_remove_video_bg_anime_seg_ws(ws: WebSocket, timeline_key: str) -> None:
+    """Remove background from a video clip via per-frame anime segmentation. Outputs WebM+alpha."""
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+
+    try:
+        d = _timeline_dir(timeline_key)
+        if not d.is_dir():
+            raise ValueError("Timeline not found.")
+        rel = (msg.get("videoRelPath") or "").strip()
+        if not rel:
+            raise ValueError("videoRelPath is required.")
+        from .storage_paths import resolve_storage_rel_file
+
+        abs_src = str(resolve_storage_rel_file(rel))
+        output_fps_24 = bool(msg.get("outputFps24") or msg.get("output_fps_24"))
+        recycle_mask = bool(msg.get("recycleMask") or msg.get("recycle_mask"))
+        if recycle_mask and not output_fps_24:
+            recycle_mask = False
+        raw_anime = msg.get("animeSeg") or msg.get("anime_seg")
+        anime_seg_options = raw_anime if isinstance(raw_anime, dict) else None
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            clips_dir = timeline_storage.timeline_clips_dir(timeline_key)
+            stem = Path(abs_src).stem
+            out_path = str(Path(clips_dir) / f"{stem}_anime_seg_{int(time.time())}.webm")
+            result = logic.remove_video_background_anime_seg(
+                abs_src,
+                out_path,
+                output_fps_24=output_fps_24,
+                recycle_mask=recycle_mask,
+                anime_seg_options=anime_seg_options,
+                log_cb=log_cb,
+            )
+            out_abs = result.get("absPath") or result.get("url") or out_path
+            meta = logic.probe_video_meta(out_abs)
+            return {
+                "srcRelPath": storage_rel_from_abs(out_abs),
+                "width": result.get("width") or meta.get("width") or 0,
+                "height": result.get("height") or meta.get("height") or 0,
+                "durationSec": float(
+                    result.get("durationSec") or meta.get("durationSec") or 0
+                ),
+                "fps": float(result.get("fps") or meta.get("fps") or 0),
+            }
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
 @router.websocket("/timeline/{timeline_key}/import_sequence/ws")
 async def timeline_import_sequence_ws(ws: WebSocket, timeline_key: str) -> None:
     """Materialize a character sequence (or one gallery video item) to an mp4 in

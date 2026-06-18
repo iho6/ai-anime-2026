@@ -23,6 +23,7 @@ import {
   runTimelineImportSequenceWsJob,
   runTimelineVideoRemoveBgWsJob,
   runTimelineVideoRemoveBgRmbgWsJob,
+  runTimelineVideoRemoveBgAnimeSegWsJob,
   runTimelineSegmentPreviewWsJob,
   runTimelineSegmentWsJob,
   runTimelineT2iWsJob,
@@ -32,6 +33,8 @@ import {
   type Sam3SegmentOptions,
   type RvmBgOptions,
   type RmbgBgOptions,
+  type AnimeSegBgOptions,
+  type RemoveBgImageRunOptions,
   runShotCreateWsJob,
   runShotMakeAngleWsJob,
   runShotRemoveBgWsJob,
@@ -49,6 +52,7 @@ import {
 } from "../../../lib/api";
 import { AiEditModal } from "../../../components/AiEditModal";
 import { RemoveBgVideoModal } from "../../../components/RemoveBgVideoModal";
+import { RemoveBgImageModal } from "../../../components/removeBg/RemoveBgImageModal";
 import { SegmentModal } from "../../../components/SegmentModal";
 import { CameraAngleModal } from "../../../components/CameraAngleModal";
 import {
@@ -185,6 +189,14 @@ export default function TimelineEditorPage() {
     naturalH?: number;
     duration?: number;
     source?: TimelineClip["source"];
+  } | null>(null);
+  const [removeBgImageOpen, setRemoveBgImageOpen] = useState(false);
+  const removeBgImagePendingRef = useRef<{
+    clipId?: string;
+    relPaths: string[];
+    inPlace?: boolean;
+    stripResolve?: (paths: string[]) => void;
+    stripReject?: (e: unknown) => void;
   } | null>(null);
   const previewResizeRef = useRef<{ startY: number; orig: number } | null>(null);
 
@@ -1142,8 +1154,57 @@ export default function TimelineEditorPage() {
     }));
   }
 
-  async function removeClipBg(clipId: string) {
+  function openRemoveBgImageForClip(clipId: string) {
     const found = findClip(clipId);
+    if (!found || found.clip.type !== "image") return;
+    removeBgImagePendingRef.current = {
+      clipId,
+      relPaths: [found.clip.srcRelPath],
+    };
+    setRemoveBgImageOpen(true);
+    setClipMenu((s) => ({ ...s, open: false }));
+  }
+
+  async function runRemoveBgImage(options: RemoveBgImageRunOptions) {
+    const pending = removeBgImagePendingRef.current;
+    setRemoveBgImageOpen(false);
+    removeBgImagePendingRef.current = null;
+    if (!pending || pending.relPaths.length === 0) return;
+
+    const wsPayload = {
+      engine: options.engine,
+      rmbg: options.rmbg,
+      animeSeg: options.animeSeg,
+      onLogLine: (line: string) => pushLog(line),
+    };
+
+    if (pending.stripResolve) {
+      beginSession({ title: "Removing background", clearLog: true });
+      await Promise.resolve();
+      try {
+        const out: string[] = [];
+        for (const rel of pending.relPaths) {
+          pushLog(`Removing background: ${rel.split("/").pop() ?? "frame"}…`);
+          const done = await runShotRemoveBgWsJob({
+            imageRelPath: rel,
+            inPlace: pending.inPlace,
+            ...wsPayload,
+          });
+          const nextRel = done.result?.relPath;
+          if (!done.ok || !nextRel) throw new Error(done.error || "Remove background failed.");
+          out.push(nextRel);
+        }
+        endSession();
+        pending.stripResolve(out);
+      } catch (e) {
+        failSession(e, "Remove background failed.");
+        pending.stripReject?.(e);
+      }
+      return;
+    }
+
+    if (!pending.clipId) return;
+    const found = findClip(pending.clipId);
     if (!found || found.clip.type !== "image") return;
     beginSession({ title: "Removing background", clearLog: true });
     await Promise.resolve();
@@ -1151,7 +1212,7 @@ export default function TimelineEditorPage() {
     try {
       const done = await runShotRemoveBgWsJob({
         imageRelPath: found.clip.srcRelPath,
-        onLogLine: (line) => pushLog(line),
+        ...wsPayload,
       });
       const newRel = done.result?.relPath;
       if (!done.ok || !newRel) throw new Error(done.error || "Background removal failed.");
@@ -1176,6 +1237,10 @@ export default function TimelineEditorPage() {
     } catch (e) {
       failSession(e, "Background removal failed.");
     }
+  }
+
+  async function removeClipBg(clipId: string) {
+    openRemoveBgImageForClip(clipId);
   }
 
   function openRemoveBgVideo(clipId: string) {
@@ -1279,6 +1344,37 @@ export default function TimelineEditorPage() {
       endSession();
     } catch (e) {
       failSession(e, "RMBG video background removal failed.");
+    }
+  }
+
+  async function runRemoveBgAnimeSeg(options: {
+    outputFps24: boolean;
+    recycleMask: boolean;
+    animeSeg: AnimeSegBgOptions;
+  }) {
+    const tgt = removeBgVideoTargetRef.current;
+    setRemoveBgVideoOpen(false);
+    removeBgVideoTargetRef.current = null;
+    if (!tgt || !timelineKey) return;
+    beginSession({ title: "Removing video background (Anime Seg)", clearLog: true });
+    await Promise.resolve();
+    pushLog("Starting per-frame anime segmentation…");
+    try {
+      const done = await runTimelineVideoRemoveBgAnimeSegWsJob({
+        timelineKey,
+        videoRelPath: tgt.srcRelPath,
+        outputFps24: options.outputFps24,
+        recycleMask: options.recycleMask,
+        animeSeg: options.animeSeg,
+        onLogLine: (line) => pushLog(line),
+      });
+      if (!done.ok || !done.result?.srcRelPath) {
+        throw new Error(done.error || "Anime Seg video BG removal returned no output.");
+      }
+      insertVideoBgClip(done.result, tgt.start, tgt, "Remove Background (Anime Seg)");
+      endSession();
+    } catch (e) {
+      failSession(e, "Anime Seg video background removal failed.");
     }
   }
 
@@ -2021,27 +2117,15 @@ export default function TimelineEditorPage() {
     return {
       busy,
       onRemoveBackground: async (relPaths) => {
-        const out: string[] = [];
-        beginSession({ title: "Removing background", clearLog: true });
-        await Promise.resolve();
-        try {
-          for (const rel of relPaths) {
-            pushLog(`Removing background: ${rel.split("/").pop() ?? "frame"}…`);
-            const done = await runShotRemoveBgWsJob({
-              imageRelPath: rel,
-              inPlace: true,
-              onLogLine: (line) => pushLog(line),
-            });
-            const nextRel = done.result?.relPath;
-            if (!done.ok || !nextRel) throw new Error(done.error || "Remove background failed.");
-            out.push(nextRel);
-          }
-          endSession();
-          return out;
-        } catch (e) {
-          failSession(e, "Remove background failed.");
-          throw e;
-        }
+        return new Promise<string[]>((resolve, reject) => {
+          removeBgImagePendingRef.current = {
+            relPaths,
+            inPlace: true,
+            stripResolve: resolve,
+            stripReject: reject,
+          };
+          setRemoveBgImageOpen(true);
+        });
       },
       onAiEdit: (relPath) =>
         new Promise<string>((resolve) => {
@@ -2246,9 +2330,9 @@ export default function TimelineEditorPage() {
     if (isImage && !pair) {
       items.push({
         key: "removeBg",
-        label: "Remove Background",
+        label: "Remove Background…",
         disabled: busy,
-        onSelect: () => void removeClipBg(clipMenu.clipId),
+        onSelect: () => openRemoveBgImageForClip(clipMenu.clipId),
       });
     } else if (isVideo) {
       items.push({
@@ -2901,6 +2985,17 @@ export default function TimelineEditorPage() {
         }}
         onRunRvm={(options) => void runRemoveBgRvm(options)}
         onRunRmbg={(options) => void runRemoveBgRmbg(options)}
+        onRunAnimeSeg={(options) => void runRemoveBgAnimeSeg(options)}
+      />
+
+      <RemoveBgImageModal
+        open={removeBgImageOpen}
+        busy={busy}
+        onCancel={() => {
+          setRemoveBgImageOpen(false);
+          removeBgImagePendingRef.current = null;
+        }}
+        onRun={(options) => void runRemoveBgImage(options)}
       />
 
       {i2vDialog?.open ? (

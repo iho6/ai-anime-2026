@@ -657,7 +657,7 @@ export function FrameSequenceModal(props: {
     if (relPaths.length && activeStripActions?.onRemoveBackground) {
       items.push({
         key: "rembg",
-        label: relPaths.length > 1 ? "Remove Background" : "Remove Background",
+        label: "Remove Background…",
         disabled: busy,
         onSelect: () => {
           void (async () => {

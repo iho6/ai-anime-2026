@@ -31,6 +31,7 @@ import {
   runReferenceMakeKeypointVideoWsJob,
   runReferenceGenerateWsJob,
   runShotRemoveBgWsJob,
+  type RemoveBgImageRunOptions,
   runShotMakeAngleWsJob,
   apiSequenceFolderNames,
   apiSequenceFolderOrder,
@@ -66,6 +67,7 @@ import {
 import { AiEditModal } from "../../../../components/AiEditModal";
 import type { SharedLogStreamHandle } from "../../../../components/SharedLogStream";
 import { ConnectedJobRunModal } from "../../../../components/ConnectedJobRunModal";
+import { RemoveBgImageModal } from "../../../../components/removeBg/RemoveBgImageModal";
 import { useJobRunSession } from "../../../../hooks/useJobRunSession";
 import {
   ReferencePicker,
@@ -279,6 +281,9 @@ export default function CreatePage() {
   const [seqAngleOpen, setSeqAngleOpen] = useState(false);
   const [seqAngleImageUrl, setSeqAngleImageUrl] = useState<string | null>(null);
   const seqAngleCtxRef = useRef<{ seqName: string; galleryItemId: string; relPath: string } | null>(null);
+
+  const [removeBgImageOpen, setRemoveBgImageOpen] = useState(false);
+  const removeBgPendingRef = useRef<{ item: GallerySplitItem; type: GenType } | null>(null);
 
   const [activeReference, setActiveReference] = useState<ActiveReference | null>(null);
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
@@ -869,12 +874,25 @@ export default function CreatePage() {
     }
   }
 
-  async function removeBgForPoseItem(item: GallerySplitItem, type: GenType = genType) {
+  function openRemoveBgForPoseItem(item: GallerySplitItem, type: GenType = genType) {
     if (!charKey || !item.relPath) return;
+    removeBgPendingRef.current = { item, type };
+    setRemoveBgImageOpen(true);
+  }
+
+  async function runRemoveBgImage(options: RemoveBgImageRunOptions) {
+    const pending = removeBgPendingRef.current;
+    setRemoveBgImageOpen(false);
+    removeBgPendingRef.current = null;
+    if (!pending?.item.relPath || !charKey) return;
+    const { item, type } = pending;
     beginSession({ title: "Removing background", clearLog: true });
     try {
       const done = await runShotRemoveBgWsJob({
         imageRelPath: item.relPath,
+        engine: options.engine,
+        rmbg: options.rmbg,
+        animeSeg: options.animeSeg,
         onLogLine: (line) => logRef.current?.pushLine(line),
       });
       const newRel = done.result?.relPath;
@@ -887,6 +905,10 @@ export default function CreatePage() {
     } catch (e) {
       failSession(e, "Remove background failed.");
     }
+  }
+
+  async function removeBgForPoseItem(item: GallerySplitItem, type: GenType = genType) {
+    openRemoveBgForPoseItem(item, type);
   }
 
   function filterImageFiles(fileList: Iterable<File> | null | undefined): File[] {
@@ -955,8 +977,8 @@ export default function CreatePage() {
         });
         items.push({
           key: "removeBg",
-          label: "Remove Background",
-          onSelect: () => void removeBgForPoseItem(item, menuType),
+          label: "Remove Background…",
+          onSelect: () => openRemoveBgForPoseItem(item, menuType),
         });
       } else {
         items.push({
@@ -972,8 +994,8 @@ export default function CreatePage() {
         });
         items.push({
           key: "removeBg",
-          label: "Remove Background",
-          onSelect: () => void removeBgForPoseItem(item, menuType),
+          label: "Remove Background…",
+          onSelect: () => openRemoveBgForPoseItem(item, menuType),
         });
         items.push({
           key: "hide",
@@ -2425,6 +2447,16 @@ export default function CreatePage() {
       ) : null}
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
+
+      <RemoveBgImageModal
+        open={removeBgImageOpen}
+        busy={uiBusy}
+        onCancel={() => {
+          setRemoveBgImageOpen(false);
+          removeBgPendingRef.current = null;
+        }}
+        onRun={(options) => void runRemoveBgImage(options)}
+      />
 
       {seqPreview ? (
         <SequencePreviewLightbox

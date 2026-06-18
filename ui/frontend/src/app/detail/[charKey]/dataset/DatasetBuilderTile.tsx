@@ -74,6 +74,7 @@ export type DatasetBuilderTileProps = {
   beginRemoveBackgroundModal: () => void;
   endRemoveBackgroundModal: () => void;
   failRmbgJob: (err: unknown) => void;
+  onRemoveBackgroundRequest?: (tileId: string, sourceRel: string) => void;
 };
 
 function DatasetBuilderTileInner(props: DatasetBuilderTileProps) {
@@ -106,6 +107,7 @@ function DatasetBuilderTileInner(props: DatasetBuilderTileProps) {
     beginRemoveBackgroundModal,
     endRemoveBackgroundModal,
     failRmbgJob,
+    onRemoveBackgroundRequest,
   } = props;
 
   const rel = displayRelPath(e);
@@ -155,8 +157,12 @@ function DatasetBuilderTileInner(props: DatasetBuilderTileProps) {
               : []),
             {
               key: "rembg",
-              label: "Remove Background",
+              label: "Remove Background…",
               onSelect: () => {
+                if (onRemoveBackgroundRequest) {
+                  onRemoveBackgroundRequest(e.tileId, rel);
+                  return;
+                }
                 void (async () => {
                   beginRemoveBackgroundModal();
                   try {
@@ -364,7 +370,8 @@ function tilePropsEqual(prev: DatasetBuilderTileProps, next: DatasetBuilderTileP
     prev.setSelectedBuilder === next.setSelectedBuilder &&
     prev.beginRemoveBackgroundModal === next.beginRemoveBackgroundModal &&
     prev.endRemoveBackgroundModal === next.endRemoveBackgroundModal &&
-    prev.failRmbgJob === next.failRmbgJob
+    prev.failRmbgJob === next.failRmbgJob &&
+    prev.onRemoveBackgroundRequest === next.onRemoveBackgroundRequest
   );
 }
 

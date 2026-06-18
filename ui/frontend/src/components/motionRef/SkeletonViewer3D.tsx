@@ -6,6 +6,15 @@ import React, {
   useImperativeHandle,
   useRef,
 } from "react";
+import { orbitPosition } from "./cameraTrajectory";
+
+export type CameraGizmoKeyframe = {
+  id: string;
+  frameIndex: number;
+  azimuth: number;
+  elevation: number;
+  distance: number;
+};
 
 export type CameraState = {
   azimuth: number;   // degrees
@@ -39,8 +48,14 @@ export type SkeletonViewer3DHandle = {
   setFraming(groundY: number, centerY: number): void;
   /** Get current camera orbit state. */
   getCameraState(): CameraState;
-  /** Restore orbit angles (distance unchanged). */
-  setCameraState(state: Pick<CameraState, "azimuth" | "elevation">): void;
+  /** Restore orbit angles and optionally distance. */
+  setCameraState(
+    state: Pick<CameraState, "azimuth" | "elevation"> & Partial<Pick<CameraState, "distance">>
+  ): void;
+  /** Place camera-pose gizmo markers in the scene (hidden during capture). */
+  setCameraGizmos(keyframes: CameraGizmoKeyframe[], centerY: number): void;
+  setGizmosVisible(visible: boolean): void;
+  getViewerCenterY(): number;
   /** Reset the camera to defaults and hide geometry. */
   resetAll(): void;
   /** Capture the current canvas as a PNG data URL. */
@@ -53,6 +68,8 @@ type Props = {
   width?: number | string;
   height?: number | string;
   onCameraChange?: (state: CameraState) => void;
+  onUserOrbitChange?: (orbiting: boolean) => void;
+  onGizmoContextMenu?: (keyframeId: string, clientX: number, clientY: number) => void;
 };
 
 const DEFAULT_ORBIT = { azimuth: 20, elevation: 15, distance: 2.6 };
@@ -129,7 +146,7 @@ function padClampSquareFigureBbox(
 type ThreeModule = typeof import("three");
 
 const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
-  ({ width = "100%", height = 320, onCameraChange }, ref) => {
+  ({ width = "100%", height = 320, onCameraChange, onUserOrbitChange, onGizmoContextMenu }, ref) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
 
     const threeRef = useRef<{
@@ -142,8 +159,13 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       geometry: import("three").BufferGeometry;
       boneLines: import("three").LineSegments;
       boneGeometry: import("three").BufferGeometry;
+      gizmoGroup: import("three").Group;
+      gizmoPickables: import("three").Object3D[];
       animFrameId: number;
     } | null>(null);
+
+    const gizmosVisibleRef = useRef(true);
+    const gizmoKeyframesRef = useRef<CameraGizmoKeyframe[]>([]);
 
     const modeRef = useRef<ViewerMode>("mesh");
     const bonePairsRef = useRef<[number, number][]>([]);
@@ -159,6 +181,10 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
 
     const onCameraChangeRef = useRef(onCameraChange);
     onCameraChangeRef.current = onCameraChange;
+    const onUserOrbitChangeRef = useRef(onUserOrbitChange);
+    onUserOrbitChangeRef.current = onUserOrbitChange;
+    const onGizmoContextMenuRef = useRef(onGizmoContextMenu);
+    onGizmoContextMenuRef.current = onGizmoContextMenu;
 
     const pointerRef = useRef({ down: false, lastX: 0, lastY: 0 });
     const pendingFacesRef = useRef<Uint32Array | null>(null);
@@ -209,6 +235,74 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         distance * Math.sin(phi) * Math.cos(theta)
       );
       t.camera.lookAt(0, cy, 0);
+    }
+
+    function _rebuildGizmos(keyframes: CameraGizmoKeyframe[], centerY: number) {
+      const t = threeRef.current;
+      if (!t) return;
+      const { THREE, gizmoGroup } = t;
+      while (gizmoGroup.children.length > 0) {
+        const child = gizmoGroup.children[0];
+        gizmoGroup.remove(child);
+        if ("geometry" in child && child.geometry) {
+          (child.geometry as import("three").BufferGeometry).dispose();
+        }
+        if ("material" in child && child.material) {
+          const mat = child.material as import("three").Material | import("three").Material[];
+          if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+          else mat.dispose();
+        }
+      }
+      t.gizmoPickables = [];
+      const target = new THREE.Vector3(0, centerY, 0);
+      for (const kf of keyframes) {
+        const [x, y, z] = orbitPosition(kf.azimuth, kf.elevation, kf.distance, centerY);
+        const coneGeo = new THREE.ConeGeometry(0.06, 0.14, 8);
+        const coneMat = new THREE.MeshBasicMaterial({
+          color: 0x6eb5ff,
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false,
+        });
+        const cone = new THREE.Mesh(coneGeo, coneMat);
+        cone.position.set(x, y, z);
+        cone.lookAt(target);
+        cone.rotateX(Math.PI / 2);
+        cone.userData.keyframeId = kf.id;
+        gizmoGroup.add(cone);
+        t.gizmoPickables.push(cone);
+
+        const lineGeo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(x, y, z),
+          target.clone(),
+        ]);
+        const line = new THREE.Line(
+          lineGeo,
+          new THREE.LineBasicMaterial({
+            color: 0x6eb5ff,
+            transparent: true,
+            opacity: 0.35,
+            depthWrite: false,
+          })
+        );
+        gizmoGroup.add(line);
+      }
+      gizmoGroup.visible = gizmosVisibleRef.current;
+    }
+
+    function _pickGizmo(clientX: number, clientY: number): string | null {
+      const t = threeRef.current;
+      const container = containerRef.current;
+      if (!t || !container || t.gizmoPickables.length === 0) return null;
+      const rect = container.getBoundingClientRect();
+      const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
+      const raycaster = new t.THREE.Raycaster();
+      raycaster.setFromCamera(new t.THREE.Vector2(ndcX, ndcY), t.camera);
+      const hits = raycaster.intersectObjects(t.gizmoPickables, false);
+      if (hits.length === 0) return null;
+      const id = hits[0].object.userData?.keyframeId;
+      return typeof id === "string" ? id : null;
     }
 
     function _updateBoneLines(positions: Float32Array) {
@@ -300,6 +394,9 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         boneLines.visible = false;
         scene.add(boneLines);
 
+        const gizmoGroup = new THREE.Group();
+        scene.add(gizmoGroup);
+
         const camera = new THREE.PerspectiveCamera(45, w0 / h0, 0.01, 50);
 
         threeRef.current = {
@@ -312,6 +409,8 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           geometry,
           boneLines,
           boneGeometry,
+          gizmoGroup,
+          gizmoPickables: [],
           animFrameId: 0,
         };
         _applyCameraToThree();
@@ -330,6 +429,9 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           );
           geometry.computeVertexNormals();
           _applyVisibility();
+        }
+        if (gizmoKeyframesRef.current.length > 0) {
+          _rebuildGizmos(gizmoKeyframesRef.current, centerYRef.current);
         }
 
         const ro = new ResizeObserver(() => {
@@ -366,6 +468,9 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           cancelAnimationFrame(t.animFrameId);
           t.geometry.dispose();
           t.boneGeometry.dispose();
+          for (const child of [...t.gizmoGroup.children]) {
+            t.gizmoGroup.remove(child);
+          }
           (t.mesh.material as import("three").Material).dispose();
           (t.boneLines.material as import("three").Material).dispose();
           t.renderer.dispose();
@@ -418,11 +523,28 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       getCameraState() {
         return { ...orbitRef.current };
       },
-      setCameraState(state: Pick<CameraState, "azimuth" | "elevation">) {
+      setCameraState(
+        state: Pick<CameraState, "azimuth" | "elevation"> & Partial<Pick<CameraState, "distance">>
+      ) {
         orbitRef.current.azimuth = state.azimuth;
         orbitRef.current.elevation = state.elevation;
+        if (state.distance != null && Number.isFinite(state.distance)) {
+          orbitRef.current.distance = state.distance;
+        }
         _applyCameraToThree();
         onCameraChange?.({ ...orbitRef.current });
+      },
+      setCameraGizmos(keyframes: CameraGizmoKeyframe[], centerY: number) {
+        gizmoKeyframesRef.current = keyframes;
+        _rebuildGizmos(keyframes, centerY);
+      },
+      setGizmosVisible(visible: boolean) {
+        gizmosVisibleRef.current = visible;
+        const t = threeRef.current;
+        if (t) t.gizmoGroup.visible = visible;
+      },
+      getViewerCenterY() {
+        return centerYRef.current;
       },
       resetAll() {
         orbitRef.current = { ...DEFAULT_ORBIT };
@@ -448,8 +570,12 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         const t = threeRef.current;
         if (!t) return null;
         try {
+          const wasGizmoVisible = t.gizmoGroup.visible;
+          t.gizmoGroup.visible = false;
           t.renderer.render(t.scene, t.camera);
-          return t.renderer.domElement.toDataURL("image/png");
+          const dataUrl = t.renderer.domElement.toDataURL("image/png");
+          t.gizmoGroup.visible = wasGizmoVisible && gizmosVisibleRef.current;
+          return dataUrl;
         } catch {
           return null;
         }
@@ -485,8 +611,10 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
     }));
 
     function onPointerDown(e: React.PointerEvent) {
+      if (e.button !== 0) return;
       (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
       pointerRef.current = { down: true, lastX: e.clientX, lastY: e.clientY };
+      onUserOrbitChangeRef.current?.(true);
     }
     function onPointerMove(e: React.PointerEvent) {
       const p = pointerRef.current;
@@ -503,6 +631,14 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
     function onPointerUp(e: React.PointerEvent) {
       (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
       pointerRef.current.down = false;
+      onUserOrbitChangeRef.current?.(false);
+    }
+    function onContextMenu(e: React.MouseEvent) {
+      const id = _pickGizmo(e.clientX, e.clientY);
+      if (!id) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onGizmoContextMenuRef.current?.(id, e.clientX, e.clientY);
     }
 
     return (
@@ -524,7 +660,8 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        title="Drag to orbit · Scroll to zoom · Drag corner to resize"
+        onContextMenu={onContextMenu}
+        title="Drag to orbit · Scroll to zoom · Right-click camera gizmo to delete"
       />
     );
   }

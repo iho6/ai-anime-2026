@@ -878,6 +878,23 @@ export type RmbgBgOptions = {
   process_res?: number;
 };
 
+export type RemoveBgEngine = "rmbg" | "anime_seg";
+
+export type AnimeSegBgOptions = {
+  net?: string;
+  img_size?: number;
+  mask_threshold?: number;
+  mask_grow_px?: number;
+  mask_blur_px?: number;
+  fp32?: boolean;
+};
+
+export type RemoveBgImageRunOptions = {
+  engine: RemoveBgEngine;
+  rmbg?: RmbgBgOptions;
+  animeSeg?: AnimeSegBgOptions;
+};
+
 type TimelineSegmentClipResult = {
   type: "image" | "video";
   srcRelPath: string;
@@ -1153,6 +1170,23 @@ export function runTimelineVideoRemoveBgRmbgWsJob(params: {
   );
 }
 
+/** Remove background from a video clip via per-frame anime segmentation → WebM + alpha. */
+export function runTimelineVideoRemoveBgAnimeSegWsJob(params: {
+  timelineKey: string;
+  videoRelPath: string;
+  outputFps24?: boolean;
+  recycleMask?: boolean;
+  animeSeg?: AnimeSegBgOptions;
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<TimelineVideoClipResult>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<TimelineVideoClipResult>(
+    `/timeline/${encodeURIComponent(timelineKey)}/remove_video_bg_anime_seg/ws`,
+    payload,
+    onLogLine
+  );
+}
+
 /** Export the full timeline as a single concatenated MP4. */
 export function runTimelineExportMp4WsJob(params: {
   timelineKey: string;
@@ -1206,6 +1240,19 @@ export type MotionRefShot = {
   imageWidth?: number;
   imageHeight?: number;
   createdAt?: number;
+};
+
+/** A saved orbit camera pose at a specific animation frame. */
+export type CameraKeyframe = {
+  id: string;
+  frameIndex: number;
+  azimuth: number;
+  elevation: number;
+  distance: number;
+};
+
+export type CameraTrajectory = {
+  keyframes: CameraKeyframe[];
 };
 
 export type MotionShotsLayout = {
@@ -1451,6 +1498,43 @@ export async function apiMotionRefShotDelete(shotId: string): Promise<void> {
   if (!res.ok) await readJson(res);
 }
 
+export async function apiMotionRefCameraTrajectoryGet(
+  motionKey: string
+): Promise<CameraTrajectory> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/camera_trajectory`,
+    { method: "GET", credentials: "omit" }
+  );
+  return readJson<CameraTrajectory>(res);
+}
+
+export async function apiMotionRefCameraTrajectorySave(
+  motionKey: string,
+  keyframe: Omit<CameraKeyframe, "id"> & { id?: string }
+): Promise<CameraTrajectory> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/camera_trajectory`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(keyframe),
+      credentials: "omit",
+    }
+  );
+  return readJson<CameraTrajectory>(res);
+}
+
+export async function apiMotionRefCameraTrajectoryDelete(
+  motionKey: string,
+  keyframeId: string
+): Promise<CameraTrajectory> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/camera_trajectory/${encodeURIComponent(keyframeId)}`,
+    { method: "DELETE", credentials: "omit" }
+  );
+  return readJson<CameraTrajectory>(res);
+}
+
 export async function apiMotionRefShotsReorderRoot(order: string[]): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/motion_ref/shots/reorder`, {
     method: "POST",
@@ -1663,12 +1747,15 @@ export function runShotCreateWsJob(params: {
 }
 
 /**
- * Remove a character layer's background (RMBG-2.0). Streams log lines and
- * resolves with the rel path of a transparent PNG in the shots scratch dir.
+ * Remove a character layer's background (RMBG or anime segmentation).
+ * Streams log lines and resolves with the rel path of a transparent PNG.
  */
 export function runShotRemoveBgWsJob(params: {
   imageRelPath: string;
   inPlace?: boolean;
+  engine?: RemoveBgEngine;
+  rmbg?: RmbgBgOptions;
+  animeSeg?: AnimeSegBgOptions;
   onLogLine: (line: string) => void;
 }): Promise<WsDoneMessage<{ relPath: string }>> {
   const url = wsUrlForPath("/shot/remove_bg/ws");

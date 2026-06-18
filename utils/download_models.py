@@ -264,6 +264,15 @@ SAM3_MODELS = [
     },
 ]
 
+# SkyTNT anime-segmentation — anime_seg_ai_service.
+ANIME_SEG_MODELS = [
+    {
+        "name": "isnetis.ckpt (anime segmentation)",
+        "url": "https://huggingface.co/skytnt/anime-seg/resolve/main/isnetis.ckpt",
+        "path": "models/anime_seg/isnetis.ckpt",
+    },
+]
+
 
 SERVICE_MODEL_MAP = {
     "multi_angle": MULTI_ANGLE_MODELS,
@@ -276,6 +285,7 @@ SERVICE_MODEL_MAP = {
     "sound_gen": SOUND_GEN_MODELS,
     "music_gen": MUSIC_GEN_MODELS,
     "sam3": SAM3_MODELS,
+    "anime_seg": ANIME_SEG_MODELS,
 }
 
 
@@ -493,6 +503,8 @@ def _collect_selected_models(args) -> list[dict]:
             selected_keys.append("music_gen")
         if args.sam3:
             selected_keys.append("sam3")
+        if args.anime_seg:
+            selected_keys.append("anime_seg")
 
     selected_models: list[dict] = []
     for key in selected_keys:
@@ -575,6 +587,7 @@ def main():
             "  python utils/download_models.py --sound-gen\n"
             "  python utils/download_models.py --music-gen\n"
             "  python utils/download_models.py --sam3\n"
+            "  python utils/download_models.py --anime-seg\n"
             "  python utils/download_models.py --all"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -660,6 +673,14 @@ def main():
         ),
     )
     parser.add_argument(
+        "--anime-seg",
+        action="store_true",
+        help=(
+            "Download isnetis.ckpt for anime_seg_ai_service "
+            "(anime character background removal)"
+        ),
+    )
+    parser.add_argument(
         "--all",
         action="store_true",
         help="Download all service model stacks with deduplication by destination path",
@@ -692,6 +713,7 @@ def main():
         and not args.sound_gen
         and not args.music_gen
         and not args.sam3
+        and not args.anime_seg
         and not args.all
     ):
         parser.print_help()
