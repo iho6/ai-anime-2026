@@ -23,12 +23,18 @@ import {
   apiMotionRefCameraTrajectoryGet,
   apiMotionRefCameraTrajectorySave,
   apiMotionRefCameraTrajectoryDelete,
+  apiMotionRefCameraKeyframePatch,
+  apiMotionRefPlaybackRangeSave,
+  apiMotionRefV2PoseSeqStart,
+  apiMotionRefV2PoseSeqFrame,
   MotionRefManifest,
   MotionRefListItem,
   MotionRefSegment,
   MotionRefShot,
   CameraKeyframe,
   MotionShotsLayout,
+  V2PoseSeqSampleFps,
+  V2PoseSeqFrameCapture,
   assetUrlFromRelPath,
   runMotionRefGenerateWsJob,
   runMotionRefSkinWsJob,
@@ -39,9 +45,12 @@ import { useJobRunSession } from "../hooks/useJobRunSession";
 import type { SharedLogStreamHandle } from "./SharedLogStream";
 import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 import { useAppError } from "./ErrorProvider";
+import { PauseBarsIcon, SquareIconButton, TimelinePlayIcon, TriangleIcon } from "./IconPrimitives";
 import { SkeletonViewer3D, SkeletonViewer3DHandle, CameraState, ViewerMode } from "./motionRef/SkeletonViewer3D";
 import { MotionTimeline } from "./motionRef/MotionTimeline";
 import { MotionShotGallery } from "./motionRef/MotionShotGallery";
+import { MotionPlaybackScrubber } from "./motionRef/MotionPlaybackScrubber";
+import { CameraKeyframeContextMenu } from "./motionRef/CameraKeyframeContextMenu";
 import { SMPLX22_BONES } from "./motionRef/smplx22Bones";
 import {
   MOTION_REF_ACCENT,
@@ -49,10 +58,10 @@ import {
   MOTION_REF_ACCENT_BG,
   MOTION_REF_ACCENT_BTN_BG,
 } from "./motionRef/theme";
-import { interpolateCameraAtFrame } from "./motionRef/cameraTrajectory";
+import { interpolateWorldPoseAtFrame, keyframeWorldPose, DEFAULT_BLEND_EASE } from "./motionRef/cameraTrajectory";
 
 const DEFAULT_SEGMENTS: MotionRefSegment[] = [
-  { text: "", duration: 3.0 },
+  { text: "A person is ", duration: 3.0 },
 ];
 
 export function MotionRefGenModal(props: {
@@ -100,12 +109,15 @@ export function MotionRefGenModal(props: {
   // ── In-place preview ───────────────────────────────────────────────────────
   // Viewer-only: strips per-frame horizontal root translation so the figure
   // stays centered during playback. Does not modify stored motion files.
-  const [inPlace, setInPlace] = useState(false);
+  const [inPlace, setInPlace] = useState(true);
   const inPlaceRef = useRef(false);
+  const [trajectoryEnabled, setTrajectoryEnabled] = useState(true);
+  const trajectoryEnabledRef = useRef(true);
   // Root XZ per frame for mesh mode: Float32Array [x0,z0, x1,z1, ...].
   // Fetched from joints alongside the mesh; used to lock hips horizontally.
   const rootXZRef = useRef<Float32Array | null>(null);
   useEffect(() => { inPlaceRef.current = inPlace; }, [inPlace]);
+  useEffect(() => { trajectoryEnabledRef.current = trajectoryEnabled; }, [trajectoryEnabled]);
 
   // ── Motion gallery (persisted motions) ────────────────────────────────────
   const [motions, setMotions] = useState<MotionRefListItem[]>([]);
@@ -120,6 +132,9 @@ export function MotionRefGenModal(props: {
     y: number;
   } | null>(null);
   const [cameraKeyframes, setCameraKeyframes] = useState<CameraKeyframe[]>([]);
+  const [playbackStart, setPlaybackStart] = useState(0);
+  const [playbackEnd, setPlaybackEnd] = useState(0);
+  const playbackSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userOrbitingRef = useRef(false);
   const viewerCenterYRef = useRef(0.9);
 
@@ -141,6 +156,13 @@ export function MotionRefGenModal(props: {
     }
   }, []);
 
+  const [v2poseDialog, setV2poseDialog] = useState<{
+    motionKey: string;
+    label: string;
+    sampleFps: V2PoseSeqSampleFps;
+    folderName: string;
+  } | null>(null);
+
   // ── Playback ───────────────────────────────────────────────────────────────
   const [frameIndex, setFrameIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -152,10 +174,74 @@ export function MotionRefGenModal(props: {
     azimuth: 20,
     elevation: 15,
     distance: 3,
+    slideX: 0,
+    slideY: 0,
   });
 
   const totalFrames =
     meshData?.frameCount ?? jointsData?.frameCount ?? manifest?.frameCount ?? 0;
+
+  useEffect(() => {
+    if (totalFrames <= 0) return;
+    const max = Math.max(0, totalFrames - 1);
+    setPlaybackEnd((e) => Math.min(Math.max(e, 1), max));
+    setPlaybackStart((s) => Math.min(s, max));
+  }, [totalFrames]);
+
+  function repushCurrentFrame() {
+    if (displayMode === "mesh" && meshData) {
+      pushMeshFrame(meshData, frameIndex);
+      return;
+    }
+    if (displayMode === "bones" && jointsData) {
+      const frame = jointsData.frames[frameIndex];
+      if (!frame) return;
+      const rootX = inPlace ? (frame[0]?.[0] ?? 0) : 0;
+      const rootZ = inPlace ? (frame[0]?.[2] ?? 0) : 0;
+      const flat = new Float32Array(jointsData.jointCount * 3);
+      for (let j = 0; j < jointsData.jointCount; j++) {
+        flat[j * 3] = frame[j][0] - rootX;
+        flat[j * 3 + 1] = frame[j][1];
+        flat[j * 3 + 2] = frame[j][2] - rootZ;
+      }
+      skeletonRef.current?.setJointFrame(flat);
+    }
+  }
+
+  function applyTrajectoryAtFrame(frame: number, keyframes: CameraKeyframe[] = cameraKeyframes) {
+    if (keyframes.length === 0 || !trajectoryEnabledRef.current || userOrbitingRef.current) {
+      return;
+    }
+    const centerY = skeletonRef.current?.getViewerCenterY() ?? viewerCenterYRef.current;
+    const pose = interpolateWorldPoseAtFrame(frame, keyframes, centerY);
+    if (!pose) return;
+    skeletonRef.current?.setCameraWorldPose(pose.position, pose.target);
+    const cam = skeletonRef.current?.getCameraState();
+    if (cam) setCameraState(cam);
+  }
+
+  function handleResetCamera() {
+    skeletonRef.current?.resetCamera();
+    const cam = skeletonRef.current?.getCameraState();
+    if (cam) setCameraState(cam);
+    repushCurrentFrame();
+  }
+
+  function persistPlaybackRange(start: number, end: number) {
+    if (!manifest?.motionKey) return;
+    if (playbackSaveRef.current) clearTimeout(playbackSaveRef.current);
+    playbackSaveRef.current = setTimeout(() => {
+      apiMotionRefPlaybackRangeSave(manifest.motionKey, start, end).catch(() => {});
+    }, 400);
+  }
+
+  function handlePlaybackRangeChange(start: number, end: number) {
+    setPlaying(false);
+    setPlaybackStart(start);
+    setPlaybackEnd(end);
+    setFrameIndex((f) => Math.min(Math.max(f, start), end));
+    persistPlaybackRange(start, end);
+  }
 
   function pushMeshFrame(
     md: { frames: Float32Array; vertexCount: number; frameCount: number },
@@ -201,13 +287,17 @@ export function MotionRefGenModal(props: {
       return;
     }
     const fps = manifest?.fps ?? 30;
+    const start = playbackStart;
+    const end = Math.min(playbackEnd, totalFrames - 1);
+    const span = Math.max(1, end - start + 1);
     anchorRef.current = { wall: performance.now(), head: frameIndex, fps };
     const tick = () => {
       const a = anchorRef.current;
       if (!a) return;
       const elapsed = (performance.now() - a.wall) / 1000;
-      const nextHead = a.head + elapsed * a.fps;
-      const clamped = Math.floor(nextHead) % totalFrames;
+      const offset = Math.floor(a.head - start + elapsed * a.fps);
+      const wrapped = ((offset % span) + span) % span;
+      const clamped = start + wrapped;
       setFrameIndex(clamped);
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -216,7 +306,7 @@ export function MotionRefGenModal(props: {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, totalFrames]);
+  }, [playing, totalFrames, playbackStart, playbackEnd]);
 
   // Push the current frame into the viewer (mesh or skeleton).
   useEffect(() => {
@@ -241,14 +331,17 @@ export function MotionRefGenModal(props: {
   // the effect re-runs when the toggle changes, updating the current mesh frame.
   }, [frameIndex, meshData, jointsData, displayMode, inPlace]);
 
-  // Playback-only camera trajectory (skip while user drags to adjust shots).
+  // Apply camera trajectory when paused (scrub) or during playback.
   useEffect(() => {
-    if (!playing || cameraKeyframes.length === 0 || userOrbitingRef.current) return;
-    const cam = interpolateCameraAtFrame(frameIndex, cameraKeyframes);
-    if (!cam) return;
-    skeletonRef.current?.setCameraState(cam);
-    setCameraState(cam);
-  }, [playing, frameIndex, cameraKeyframes]);
+    if (cameraKeyframes.length === 0 || !trajectoryEnabled) return;
+    if (playing && userOrbitingRef.current) return;
+    applyTrajectoryAtFrame(frameIndex);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, frameIndex, cameraKeyframes, trajectoryEnabled]);
+
+  useEffect(() => {
+    skeletonRef.current?.setGizmosVisible(!playing);
+  }, [playing]);
 
   useEffect(() => {
     skeletonRef.current?.setCameraGizmos(
@@ -413,7 +506,25 @@ export function MotionRefGenModal(props: {
       // skinning failed — stay on skeleton, no error surfaced to user
     }
 
+    pushBonesFrame(jd, initialFrame);
     return { frameCount: jd.frameCount, mode: "bones" };
+  }
+
+  function pushBonesFrame(
+    jd: { frames: number[][][]; jointCount: number },
+    frameIdx: number,
+  ) {
+    const frame = jd.frames[frameIdx];
+    if (!frame) return;
+    const rootX = inPlaceRef.current ? (frame[0]?.[0] ?? 0) : 0;
+    const rootZ = inPlaceRef.current ? (frame[0]?.[2] ?? 0) : 0;
+    const flat = new Float32Array(jd.jointCount * 3);
+    for (let j = 0; j < jd.jointCount; j++) {
+      flat[j * 3] = frame[j][0] - rootX;
+      flat[j * 3 + 1] = frame[j][1];
+      flat[j * 3 + 2] = frame[j][2] - rootZ;
+    }
+    skeletonRef.current?.setJointFrame(flat);
   }
 
   // ── Generation (fresh — no starting pose conditioning) ────────────────────
@@ -428,6 +539,10 @@ export function MotionRefGenModal(props: {
     setJointsData(null);
     setDisplayMode("mesh");
     setFrameIndex(0);
+    setCameraKeyframes([]);
+    setPlaybackStart(0);
+    setPlaybackEnd(0);
+    setTrajectoryEnabled(true);
     skeletonRef.current?.resetAll();
 
     beginSession({ title: "Generating motion (KiMoD)", clearLog: true });
@@ -450,6 +565,9 @@ export function MotionRefGenModal(props: {
 
       const { frameCount, mode } = await loadMotionDisplay(mf, "Loading");
       setFrameIndex(0);
+      await loadCameraTrajectory(mf.motionKey, frameCount);
+      setTrajectoryEnabled(true);
+      applyTrajectoryAtFrame(0);
       pushLog(
         mode === "mesh"
           ? `Ready — ${frameCount} frames @ ${mf.fps} fps (mesh).`
@@ -479,11 +597,22 @@ export function MotionRefGenModal(props: {
   // ── Load a saved motion into the viewer ───────────────────────────────────
   async function loadMotion(
     item: MotionRefListItem,
-    opts?: { initialFrame?: number; camera?: Pick<CameraState, "azimuth" | "elevation"> },
-  ) {
-    if (busy) return;
+    opts?: {
+      initialFrame?: number;
+      camera?: Pick<CameraState, "azimuth" | "elevation">;
+      quiet?: boolean;
+    },
+  ): Promise<{
+    frameCount: number;
+    playbackStart: number;
+    playbackEnd: number;
+    fps: number;
+    keyframes: CameraKeyframe[];
+  } | void> {
+    if (busy && !opts?.quiet) return;
     setPlaying(false);
     rootXZRef.current = null;
+    setTrajectoryEnabled(true);
     setCameraKeyframes([]);
     setManifest({
       motionKey: item.motionKey,
@@ -497,8 +626,10 @@ export function MotionRefGenModal(props: {
       displayMode: item.displayMode,
       segments: item.segments ?? [],
     });
-    beginSession({ title: "Loading motion…", clearLog: false });
-    await Promise.resolve();
+    if (!opts?.quiet) {
+      beginSession({ title: "Loading motion…", clearLog: false });
+      await Promise.resolve();
+    }
     try {
       const fi = opts?.initialFrame ?? 0;
       const { frameCount, mode } = await loadMotionDisplay(
@@ -519,18 +650,30 @@ export function MotionRefGenModal(props: {
       );
       const clamped = Math.min(Math.max(0, fi), Math.max(0, frameCount - 1));
       setFrameIndex(clamped);
-      await loadCameraTrajectory(item.motionKey);
+      const trim = await loadCameraTrajectory(item.motionKey, frameCount);
       if (opts?.camera) {
         skeletonRef.current?.setCameraState(opts.camera);
         setCameraState((prev) => ({ ...prev, ...opts.camera }));
+      } else {
+        applyTrajectoryAtFrame(clamped, trim.keyframes);
       }
-      pushLog(
-        mode === "mesh"
-          ? `Loaded — ${frameCount} frames @ ${item.fps} fps (mesh).`
-          : `Loaded — ${frameCount} frames @ ${item.fps} fps (skeleton preview).`,
-      );
-      endSession();
+      if (!opts?.quiet) {
+        pushLog(
+          mode === "mesh"
+            ? `Loaded — ${frameCount} frames @ ${item.fps} fps (mesh).`
+            : `Loaded — ${frameCount} frames @ ${item.fps} fps (skeleton preview).`,
+        );
+        endSession();
+      }
+      return {
+        frameCount,
+        playbackStart: trim.start,
+        playbackEnd: trim.end,
+        fps: item.fps,
+        keyframes: trim.keyframes,
+      };
     } catch (e) {
+      if (opts?.quiet) throw e;
       failSession(e, "Could not load motion.");
     }
   }
@@ -555,23 +698,36 @@ export function MotionRefGenModal(props: {
     }
   }
 
-  async function loadCameraTrajectory(motionKey: string) {
+  async function loadCameraTrajectory(motionKey: string, frameCount?: number) {
+    const max = Math.max(0, (frameCount ?? totalFrames) - 1);
     try {
       const data = await apiMotionRefCameraTrajectoryGet(motionKey);
-      setCameraKeyframes(data.keyframes ?? []);
+      const keyframes = data.keyframes ?? [];
+      setCameraKeyframes(keyframes);
+      const pr = data.playbackRange;
+      let start = 0;
+      let end = max;
+      if (pr && max > 0) {
+        start = Math.max(0, Math.min(pr.startFrame, max));
+        end = Math.max(start, Math.min(pr.endFrame, max));
+      }
+      setPlaybackStart(start);
+      setPlaybackEnd(end);
+      return { start, end, keyframes };
     } catch {
       setCameraKeyframes([]);
+      setPlaybackStart(0);
+      setPlaybackEnd(max);
+      return { start: 0, end: max, keyframes: [] as CameraKeyframe[] };
     }
   }
 
   function applyCameraKeyframe(kf: CameraKeyframe) {
-    const cam = {
-      azimuth: kf.azimuth,
-      elevation: kf.elevation,
-      distance: kf.distance,
-    };
-    skeletonRef.current?.setCameraState(cam);
-    setCameraState((prev) => ({ ...prev, ...cam }));
+    const centerY = skeletonRef.current?.getViewerCenterY() ?? viewerCenterYRef.current;
+    const pose = keyframeWorldPose(kf, centerY);
+    skeletonRef.current?.setCameraWorldPose(pose.position, pose.target);
+    const cam = skeletonRef.current?.getCameraState();
+    if (cam) setCameraState(cam);
   }
 
   async function saveTrajectoryKeyframe() {
@@ -579,12 +735,28 @@ export function MotionRefGenModal(props: {
       showError({ message: "Load an animation before saving a camera pose." });
       return;
     }
+    const bbox = skeletonRef.current?.getFigureScreenBbox();
+    if (!bbox) {
+      showError({
+        message:
+          "Figure not visible in frame — enable In place, reset camera, or adjust the view before adding a trajectory keyframe.",
+      });
+      return;
+    }
+    const cam = skeletonRef.current?.getCameraState();
+    if (!cam) return;
+    const pose = skeletonRef.current?.getCameraWorldPose();
+    if (!pose) return;
     try {
       const data = await apiMotionRefCameraTrajectorySave(manifest.motionKey, {
         frameIndex,
-        azimuth: cameraState.azimuth,
-        elevation: cameraState.elevation,
-        distance: cameraState.distance,
+        azimuth: cam.azimuth,
+        elevation: cam.elevation,
+        distance: cam.distance,
+        slideX: cam.slideX,
+        slideY: cam.slideY,
+        cameraPosition: pose.position,
+        lookAtTarget: pose.target,
       });
       setCameraKeyframes(data.keyframes ?? []);
     } catch {
@@ -601,6 +773,34 @@ export function MotionRefGenModal(props: {
     } catch {
       showError({ message: "Could not delete camera pose." });
     }
+  }
+
+  async function saveCameraKeyframePatch(
+    keyframeId: string,
+    patch: { holdFrames: number; blendEase: number },
+  ) {
+    if (!manifest) return;
+    const existing = cameraKeyframes.find((k) => k.id === keyframeId);
+    if (!existing) return;
+    try {
+      const data = await apiMotionRefCameraKeyframePatch(
+        manifest.motionKey,
+        keyframeId,
+        patch,
+        existing,
+      );
+      setCameraKeyframes(data.keyframes ?? []);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not save camera keyframe.";
+      showError({ message: msg });
+    }
+  }
+
+  function maxHoldForKeyframe(keyframeId: string): number {
+    const sorted = [...cameraKeyframes].sort((a, b) => a.frameIndex - b.frameIndex);
+    const idx = sorted.findIndex((k) => k.id === keyframeId);
+    if (idx < 0 || idx >= sorted.length - 1) return 999;
+    return Math.max(0, sorted[idx + 1].frameIndex - sorted[idx].frameIndex - 1);
   }
 
   function jumpToCameraKeyframe(kf: CameraKeyframe) {
@@ -772,13 +972,139 @@ export function MotionRefGenModal(props: {
     }
   }
 
+  function computeV2PoseFrameList(
+    start: number,
+    end: number,
+    sourceFps: number,
+    sampleFps: V2PoseSeqSampleFps
+  ): number[] {
+    const out: number[] = [];
+    if (end < start) return out;
+    if (sampleFps === "source") {
+      for (let f = start; f <= end; f++) out.push(f);
+      return out;
+    }
+    const step = Math.max(1, Math.round(sourceFps / sampleFps));
+    for (let f = start; f <= end; f += step) out.push(f);
+    return out;
+  }
+
+  async function waitViewerFrame() {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+  }
+
+  function applyFrameCameraForCapture(frame: number, keyframes: CameraKeyframe[]) {
+    const centerY = skeletonRef.current?.getViewerCenterY() ?? viewerCenterYRef.current;
+    const pose = interpolateWorldPoseAtFrame(frame, keyframes, centerY);
+    if (pose) {
+      skeletonRef.current?.setCameraWorldPose(pose.position, pose.target);
+      const cam = skeletonRef.current?.getCameraState();
+      if (cam) setCameraState((prev) => ({ ...prev, ...cam }));
+      return;
+    }
+    skeletonRef.current?.setCameraState({ ...cameraState, slideX: 0, slideY: 0 });
+    setCameraState((prev) => ({ ...prev, slideX: 0, slideY: 0 }));
+  }
+
+  async function runV2PoseSeq(
+    motionKey: string,
+    item: MotionRefListItem,
+    folderName: string,
+    sampleFps: V2PoseSeqSampleFps
+  ) {
+    setV2poseDialog(null);
+    beginSession({ title: "V2Pose Seq", clearLog: true });
+    await Promise.resolve();
+    try {
+      let start = playbackStart;
+      let end = playbackEnd;
+      let fps = manifest?.fps ?? item.fps ?? 30;
+      let motionFrameCount = totalFrames;
+      let trajKeyframes = cameraKeyframes;
+
+      if (manifest?.motionKey !== motionKey) {
+        pushLog(`Loading ${motionKey}…`);
+        const loaded = await loadMotion(item, { quiet: true });
+        if (!loaded) throw new Error("Could not load motion.");
+        start = loaded.playbackStart;
+        end = loaded.playbackEnd;
+        fps = loaded.fps;
+        motionFrameCount = loaded.frameCount;
+        trajKeyframes = loaded.keyframes;
+      }
+
+      end = Math.min(end, Math.max(0, motionFrameCount - 1));
+      const frames = computeV2PoseFrameList(start, end, fps, sampleFps);
+      if (!frames.length) {
+        throw new Error("Trim range is empty — adjust in/out handles.");
+      }
+      pushLog(`Capturing ${frames.length} frames (trim f${start}–f${end}, ${String(sampleFps)} fps)…`);
+      setPlaying(false);
+
+      const captures: V2PoseSeqFrameCapture[] = [];
+      for (let i = 0; i < frames.length; i++) {
+        const f = frames[i];
+        setFrameIndex(f);
+        applyFrameCameraForCapture(f, trajKeyframes);
+        await waitViewerFrame();
+        const dataUrl = skeletonRef.current?.captureFrame();
+        if (!dataUrl) throw new Error(`Capture failed at frame ${f}.`);
+        const screenBbox = skeletonRef.current?.getFigureScreenBbox();
+        const cam = skeletonRef.current?.getCameraState() ?? cameraState;
+        captures.push({
+          frameIndex: f,
+          pngBase64: dataUrl,
+          azimuth: cam.azimuth,
+          elevation: cam.elevation,
+          ...(screenBbox
+            ? {
+                cropBox: {
+                  x: screenBbox.x,
+                  y: screenBbox.y,
+                  width: screenBbox.width,
+                  height: screenBbox.height,
+                },
+                imageWidth: screenBbox.imageWidth,
+                imageHeight: screenBbox.imageHeight,
+              }
+            : {}),
+        });
+        pushLog(`Captured f${f} (${i + 1}/${frames.length})`);
+      }
+
+      pushLog("Running SDPose…");
+      const { folderId, folderName: folder } = await apiMotionRefV2PoseSeqStart(
+        motionKey,
+        folderName
+      );
+      const items: PoseReference[] = [];
+      for (let i = 0; i < captures.length; i++) {
+        const c = captures[i];
+        pushLog(`SDPose f${c.frameIndex} (${i + 1}/${captures.length})…`);
+        const { item } = await apiMotionRefV2PoseSeqFrame(motionKey, folderId, c);
+        items.push(item);
+      }
+      for (const kp of items) {
+        onKeypointsMade?.(kp);
+      }
+      pushLog(`Done — ${items.length} poses in folder ${folder}.`);
+      endSession();
+    } catch (e) {
+      failSession(e, "V2Pose Seq failed.");
+    }
+  }
+
   const timeLabel = useMemo(() => {
     if (totalFrames === 0) return "— / —";
     const fps = manifest?.fps ?? 30;
+    const rel = frameIndex - playbackStart;
+    const span = Math.max(1, playbackEnd - playbackStart + 1);
     const cur = (frameIndex / fps).toFixed(1);
     const tot = (totalFrames / fps).toFixed(1);
-    return `${frameIndex} / ${totalFrames - 1}  (${cur}s / ${tot}s)`;
-  }, [frameIndex, totalFrames, manifest]);
+    return `f${frameIndex} (${rel + 1}/${span})  ${cur}s / ${tot}s`;
+  }, [frameIndex, totalFrames, manifest, playbackStart, playbackEnd]);
 
   if (!open) return null;
 
@@ -861,75 +1187,108 @@ export function MotionRefGenModal(props: {
           />
           <div style={{ fontSize: 10, color: "#555", marginTop: 4 }}>
             {displayMode === "mesh" ? "Mesh preview" : "Skeleton preview"}
-            {" · "}Drag to orbit · Scroll to zoom · Drag corner to resize
+            {" · "}Drag to slide · Shift+drag to orbit · Scroll to zoom · Drag corner to resize
           </div>
         </div>
 
         {/* Playback controls */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-          <button type="button" onClick={() => { setPlaying(false); setFrameIndex(0); }} style={controlBtn} title="Go to start">◀◀</button>
-          <button type="button" onClick={() => setPlaying((p) => !p)} style={controlBtn} disabled={totalFrames === 0}>
-            {playing ? "⏸" : "▶"}
-          </button>
-          <button type="button" onClick={() => setFrameIndex((i) => Math.min(totalFrames - 1, i + 1))} style={controlBtn} disabled={totalFrames === 0} title="Step forward">▶▶</button>
-          <span style={{ fontSize: 11, color: "#aaa", fontVariantNumeric: "tabular-nums", minWidth: 130 }}>{timeLabel}</span>
-          <div style={{ position: "relative", flex: 1, minWidth: 120, height: 28, display: "flex", alignItems: "center" }}>
-            {totalFrames > 1 && cameraKeyframes.map((kf) => {
-              const pct = (kf.frameIndex / Math.max(1, totalFrames - 1)) * 100;
-              return (
-                <button
-                  key={kf.id}
-                  type="button"
-                  title={`Camera f${kf.frameIndex}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    jumpToCameraKeyframe(kf);
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setCameraCtxMenu({ id: kf.id, x: e.clientX, y: e.clientY });
-                  }}
-                  style={{
-                    position: "absolute",
-                    left: `calc(${pct}% - 6px)`,
-                    top: 2,
-                    width: 12,
-                    height: 12,
-                    padding: 0,
-                    border: `1px solid ${MOTION_REF_ACCENT_BORDER}`,
-                    borderRadius: 2,
-                    background: MOTION_REF_ACCENT_BG,
-                    color: MOTION_REF_ACCENT,
-                    fontSize: 8,
-                    lineHeight: 1,
-                    cursor: "pointer",
-                    zIndex: 2,
-                  }}
-                >
-                  📷
-                </button>
-              );
-            })}
-            <input
-              type="range" min={0} max={Math.max(0, totalFrames - 1)} value={frameIndex}
-              onChange={(e) => { setPlaying(false); setFrameIndex(Number(e.target.value)); }}
-              disabled={totalFrames === 0}
-              style={{ width: "100%", position: "relative", zIndex: 1 }}
-            />
+          <SquareIconButton
+            size={32}
+            aria-label="Go to trim start"
+            title="Go to trim start"
+            disabled={totalFrames === 0}
+            icon={<TriangleIcon direction="left" size={12} />}
+            onClick={() => { setPlaying(false); setFrameIndex(playbackStart); }}
+          />
+          <SquareIconButton
+            size={32}
+            aria-label={playing ? "Pause" : "Play"}
+            title={playing ? "Pause" : "Play"}
+            disabled={totalFrames === 0}
+            icon={playing ? <PauseBarsIcon /> : <TimelinePlayIcon />}
+            onClick={() => setPlaying((p) => !p)}
+          />
+          <SquareIconButton
+            size={32}
+            aria-label="Step forward"
+            title="Step forward"
+            disabled={totalFrames === 0}
+            icon={<TriangleIcon direction="right" size={12} />}
+            onClick={() => setFrameIndex((i) => Math.min(playbackEnd, i + 1))}
+          />
+          <span style={{ fontSize: 11, color: "#aaa", fontVariantNumeric: "tabular-nums", minWidth: 160 }}>{timeLabel}</span>
+          <MotionPlaybackScrubber
+            totalFrames={totalFrames}
+            frameIndex={frameIndex}
+            playbackStart={playbackStart}
+            playbackEnd={playbackEnd}
+            cameraKeyframes={cameraKeyframes}
+            disabled={busy || totalFrames === 0}
+            onFrameChange={(f) => { setPlaying(false); setFrameIndex(f); }}
+            onRangeChange={handlePlaybackRangeChange}
+            onCameraKeyframeClick={jumpToCameraKeyframe}
+            onCameraKeyframeContextMenu={(kf, x, y) => setCameraCtxMenu({ id: kf.id, x, y })}
+          />
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <label
+              style={{
+                fontSize: 11,
+                color:
+                  cameraKeyframes.length === 0
+                    ? "#555"
+                    : trajectoryEnabled
+                      ? MOTION_REF_ACCENT
+                      : "#888",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                cursor: cameraKeyframes.length === 0 ? "default" : "pointer",
+                userSelect: "none",
+                whiteSpace: "nowrap",
+              }}
+              title="Follow saved camera keyframes during playback and scrubbing"
+            >
+              <input
+                type="checkbox"
+                checked={trajectoryEnabled}
+                disabled={cameraKeyframes.length === 0}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setTrajectoryEnabled(next);
+                  if (next) applyTrajectoryAtFrame(frameIndex);
+                }}
+                style={{ accentColor: MOTION_REF_ACCENT }}
+              />
+              Trajectory
+            </label>
+            <label
+              style={{ fontSize: 11, color: inPlace ? MOTION_REF_ACCENT : "#888", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+              title="Remove horizontal root translation so the figure stays centered during playback (recommended for trajectory and shots)"
+            >
+              <input
+                type="checkbox"
+                checked={inPlace}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  if (!next && cameraKeyframes.length > 0) {
+                    void confirmAction({
+                      title: "Disable In place?",
+                      message:
+                        "Camera trajectory and shots assume the figure stays centered. Turning off In place may move the figure out of view during playback.",
+                      confirmText: "Disable",
+                    }).then((ok) => {
+                      if (ok) setInPlace(false);
+                    });
+                    return;
+                  }
+                  setInPlace(next);
+                }}
+                style={{ accentColor: MOTION_REF_ACCENT }}
+              />
+              In place
+            </label>
           </div>
-          <label
-            style={{ fontSize: 11, color: inPlace ? MOTION_REF_ACCENT : "#888", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
-            title="Remove horizontal root translation so the figure stays centered during playback"
-          >
-            <input
-              type="checkbox"
-              checked={inPlace}
-              onChange={(e) => setInPlace(e.target.checked)}
-              style={{ accentColor: MOTION_REF_ACCENT }}
-            />
-            In place
-          </label>
         </div>
 
         {/* Motion segments */}
@@ -937,7 +1296,7 @@ export function MotionRefGenModal(props: {
           <MotionTimeline segments={segments} onChange={setSegments} disabled={busy} />
         </div>
 
-        {/* Actions: Generate · Reset · Save Shot · Save Trajectory */}
+        {/* Actions: Generate · Reset · Save Shot · Add Trajectory */}
         <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 16px", flexWrap: "wrap", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
           <button
             type="button" onClick={() => void runGenerate()} disabled={busy}
@@ -947,7 +1306,7 @@ export function MotionRefGenModal(props: {
             Generate
           </button>
           <button
-            type="button" onClick={() => skeletonRef.current?.resetAll()} disabled={busy}
+            type="button" onClick={handleResetCamera} disabled={busy}
             title="Reset the camera to defaults" style={actionBtn}
           >
             Reset
@@ -961,10 +1320,10 @@ export function MotionRefGenModal(props: {
           </button>
           <button
             type="button" onClick={() => void saveTrajectoryKeyframe()} disabled={busy || !manifest}
-            title="Save the current camera pose at this frame for playback trajectory"
-            style={{ ...actionBtn, background: MOTION_REF_ACCENT_BTN_BG }}
+            title="Add the current camera pose at this frame to the playback trajectory"
+            style={actionBtn}
           >
-            Save Trajectory
+            Add Trajectory
           </button>
         </div>
 
@@ -1057,66 +1416,132 @@ export function MotionRefGenModal(props: {
             background: "#1e1e1e",
             border: "1px solid rgba(255,255,255,0.2)",
             zIndex: 10300,
-            minWidth: 120,
+            minWidth: 140,
           }}
           onClick={(e) => e.stopPropagation()}
           onMouseLeave={() => setMotionCtxMenu(null)}
         >
           <button
             type="button"
-            onClick={() => void deleteMotion(motionCtxMenu.motionKey)}
-            style={{
-              display: "block",
-              width: "100%",
-              padding: "8px 14px",
-              background: "transparent",
-              color: "#eee",
-              border: "none",
-              textAlign: "left",
-              cursor: "pointer",
-              font: "inherit",
-              fontSize: 13,
+            disabled={busy}
+            onClick={() => {
+              const item = motions.find((m) => m.motionKey === motionCtxMenu.motionKey);
+              if (!item) return;
+              const label = item.segments?.[0]?.text?.slice(0, 24) || item.motionKey.slice(0, 20);
+              setMotionCtxMenu(null);
+              setV2poseDialog({
+                motionKey: item.motionKey,
+                label,
+                sampleFps: "source",
+                folderName: `v2pose_${item.motionKey.slice(0, 20)}_${Date.now()}`,
+              });
             }}
+            style={ctxMenuBtn}
+          >
+            V2Pose Seq
+          </button>
+          <button
+            type="button"
+            onClick={() => void deleteMotion(motionCtxMenu.motionKey)}
+            style={ctxMenuBtn}
           >
             Delete motion
           </button>
         </div>
       )}
 
-      {cameraCtxMenu && (
+      {v2poseDialog && (
         <div
           style={{
             position: "fixed",
-            top: cameraCtxMenu.y,
-            left: cameraCtxMenu.x,
-            background: "#1e1e1e",
-            border: "1px solid rgba(255,255,255,0.2)",
-            zIndex: 10300,
-            minWidth: 140,
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            zIndex: 10400,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
-          onClick={(e) => e.stopPropagation()}
-          onMouseLeave={() => setCameraCtxMenu(null)}
+          onClick={() => setV2poseDialog(null)}
         >
-          <button
-            type="button"
-            onClick={() => void deleteCameraKeyframe(cameraCtxMenu.id)}
+          <div
+            onClick={(e) => e.stopPropagation()}
             style={{
-              display: "block",
-              width: "100%",
-              padding: "8px 14px",
-              background: "transparent",
+              background: "#1a1a1a",
+              border: "1px solid rgba(255,255,255,0.2)",
+              padding: 20,
+              minWidth: 320,
               color: "#eee",
-              border: "none",
-              textAlign: "left",
-              cursor: "pointer",
-              font: "inherit",
-              fontSize: 13,
             }}
           >
-            Delete camera pose
-          </button>
+            <div style={{ fontSize: 14, marginBottom: 12 }}>V2Pose Seq</div>
+            <div style={{ fontSize: 11, color: "#888", marginBottom: 12 }}>
+              {v2poseDialog.label} · trim f{playbackStart}–f{playbackEnd}
+              {cameraKeyframes.length === 0 ? " · no trajectory (uses current camera)" : ""}
+            </div>
+            <label style={{ display: "block", fontSize: 11, marginBottom: 6 }}>Pose folder name</label>
+            <input
+              value={v2poseDialog.folderName}
+              onChange={(e) =>
+                setV2poseDialog((d) => (d ? { ...d, folderName: e.target.value } : d))
+              }
+              style={{ width: "100%", marginBottom: 12, padding: 8, background: "#111", border: "1px solid #444", color: "#eee" }}
+            />
+            <label style={{ display: "block", fontSize: 11, marginBottom: 6 }}>Sample rate</label>
+            <select
+              value={String(v2poseDialog.sampleFps)}
+              onChange={(e) => {
+                const v = e.target.value;
+                const sampleFps: V2PoseSeqSampleFps =
+                  v === "12" ? 12 : v === "24" ? 24 : "source";
+                setV2poseDialog((d) => (d ? { ...d, sampleFps } : d));
+              }}
+              style={{ width: "100%", marginBottom: 16, padding: 8, background: "#111", border: "1px solid #444", color: "#eee" }}
+            >
+              <option value="source">Source fps (every frame in trim)</option>
+              <option value="12">12 fps</option>
+              <option value="24">24 fps</option>
+            </select>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => setV2poseDialog(null)} style={actionBtn}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy || !v2poseDialog.folderName.trim()}
+                onClick={() => {
+                  const item = motions.find((m) => m.motionKey === v2poseDialog.motionKey);
+                  if (!item) return;
+                  void runV2PoseSeq(
+                    v2poseDialog.motionKey,
+                    item,
+                    v2poseDialog.folderName.trim(),
+                    v2poseDialog.sampleFps
+                  );
+                }}
+                style={{ ...actionBtn, background: MOTION_REF_ACCENT_BTN_BG }}
+              >
+                Run
+              </button>
+            </div>
+          </div>
         </div>
       )}
+
+      {cameraCtxMenu && (() => {
+        const kf = cameraKeyframes.find((k) => k.id === cameraCtxMenu.id);
+        return (
+          <CameraKeyframeContextMenu
+            x={cameraCtxMenu.x}
+            y={cameraCtxMenu.y}
+            holdFrames={kf?.holdFrames ?? 0}
+            blendEase={kf?.blendEase ?? DEFAULT_BLEND_EASE}
+            maxHold={maxHoldForKeyframe(cameraCtxMenu.id)}
+            onPatchSave={(patch) => saveCameraKeyframePatch(cameraCtxMenu.id, patch)}
+            onDelete={() => void deleteCameraKeyframe(cameraCtxMenu.id)}
+            onClose={() => setCameraCtxMenu(null)}
+          />
+        );
+      })()}
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
     </div>
@@ -1167,16 +1592,6 @@ function halfToFloat(h: number): number {
   return sign ? -val : val;
 }
 
-const controlBtn: React.CSSProperties = {
-  background: "transparent",
-  color: "#eee",
-  border: "1px solid rgba(255,255,255,0.3)",
-  padding: "4px 10px",
-  cursor: "pointer",
-  font: "inherit",
-  fontSize: 13,
-};
-
 const actionBtn: React.CSSProperties = {
   background: "transparent",
   color: "#eee",
@@ -1184,6 +1599,19 @@ const actionBtn: React.CSSProperties = {
   padding: "7px 14px",
   cursor: "pointer",
   font: "inherit",
+};
+
+const ctxMenuBtn: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  padding: "8px 14px",
+  background: "transparent",
+  color: "#eee",
+  border: "none",
+  textAlign: "left",
+  cursor: "pointer",
+  font: "inherit",
+  fontSize: 13,
 };
 
 const headerBtn: React.CSSProperties = {

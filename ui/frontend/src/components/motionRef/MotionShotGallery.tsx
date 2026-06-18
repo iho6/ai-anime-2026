@@ -189,25 +189,37 @@ export function MotionShotGallery(props: {
   const openFolderMenu = useCallback(
     (e: React.MouseEvent, folderId: string, folderName: string) => {
       e.preventDefault();
+      const order = layout.folderOrder[folderId] ?? [];
+      const folderShots = order
+        .map((id) => layout.items.find((s) => s.id === id))
+        .filter((s): s is MotionRefShot => Boolean(s));
+      const addable = folderShots.filter((s) => !s.keypointId);
+      const items: ContextMenuItem[] = [
+        {
+          key: "add",
+          label: "Add to Pose",
+          disabled: busy || addable.length === 0,
+          onSelect: () => onAddToPose(addable),
+        },
+        {
+          key: "rename",
+          label: "Rename",
+          onSelect: () => onRenameFolder(folderId, folderName),
+        },
+        {
+          key: "ungroup",
+          label: "Ungroup",
+          onSelect: () => onDeleteFolder(folderId),
+        },
+      ];
       setMenu({
         open: true,
         x: e.clientX,
         y: e.clientY,
-        items: [
-          {
-            key: "rename",
-            label: "Rename",
-            onSelect: () => onRenameFolder(folderId, folderName),
-          },
-          {
-            key: "ungroup",
-            label: "Ungroup",
-            onSelect: () => onDeleteFolder(folderId),
-          },
-        ],
+        items,
       });
     },
-    [onDeleteFolder, onRenameFolder]
+    [busy, layout.folderOrder, layout.items, onAddToPose, onDeleteFolder, onRenameFolder]
   );
 
   if (layout.items.length === 0 && layout.folders.length === 0) {

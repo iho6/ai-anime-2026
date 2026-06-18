@@ -1249,10 +1249,31 @@ export type CameraKeyframe = {
   azimuth: number;
   elevation: number;
   distance: number;
+  slideX?: number;
+  slideY?: number;
+  cameraPosition?: [number, number, number];
+  lookAtTarget?: [number, number, number];
+  /** Animation frames to hold this pose before blending to the next keyframe. */
+  holdFrames?: number;
+  /** Glide ease 0–100 (linear → smoothstep). Default 100 when missing. */
+  blendEase?: number;
 };
 
 export type CameraTrajectory = {
   keyframes: CameraKeyframe[];
+  playbackRange?: { startFrame: number; endFrame: number };
+};
+
+export type V2PoseSeqSampleFps = "source" | 12 | 24;
+
+export type V2PoseSeqFrameCapture = {
+  frameIndex: number;
+  pngBase64: string;
+  cropBox?: { x: number; y: number; width: number; height: number };
+  imageWidth?: number;
+  imageHeight?: number;
+  azimuth?: number;
+  elevation?: number;
 };
 
 export type MotionShotsLayout = {
@@ -1533,6 +1554,188 @@ export async function apiMotionRefCameraTrajectoryDelete(
     { method: "DELETE", credentials: "omit" }
   );
   return readJson<CameraTrajectory>(res);
+}
+
+export type CameraKeyframePatch = {
+  holdFrames?: number;
+  blendEase?: number;
+};
+
+export async function apiMotionRefCameraKeyframePatch(
+  motionKey: string,
+  keyframeId: string,
+  patch: CameraKeyframePatch,
+  existingKeyframe?: CameraKeyframe
+): Promise<CameraTrajectory> {
+  const body: CameraKeyframePatch = {};
+  if (patch.holdFrames != null) {
+    body.holdFrames = Math.max(0, Math.round(patch.holdFrames));
+  }
+  if (patch.blendEase != null) {
+    body.blendEase = Math.max(0, Math.min(100, Math.round(patch.blendEase)));
+  }
+  const url = `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/camera_trajectory/${encodeURIComponent(keyframeId)}`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    credentials: "omit",
+  });
+  if (res.status === 405 && existingKeyframe) {
+    return apiMotionRefCameraTrajectorySave(motionKey, {
+      ...existingKeyframe,
+      id: existingKeyframe.id,
+      holdFrames: body.holdFrames ?? existingKeyframe.holdFrames ?? 0,
+      blendEase: body.blendEase ?? existingKeyframe.blendEase ?? 100,
+    });
+  }
+  return readJson<CameraTrajectory>(res);
+}
+
+/** @deprecated Use apiMotionRefCameraKeyframePatch */
+export async function apiMotionRefCameraKeyframeHoldSave(
+  motionKey: string,
+  keyframeId: string,
+  holdFrames: number,
+  existingKeyframe?: CameraKeyframe
+): Promise<CameraTrajectory> {
+  return apiMotionRefCameraKeyframePatch(
+    motionKey,
+    keyframeId,
+    { holdFrames },
+    existingKeyframe
+  );
+}
+
+export async function apiMotionRefPlaybackRangeSave(
+  motionKey: string,
+  startFrame: number,
+  endFrame: number
+): Promise<CameraTrajectory> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/playback_range`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ startFrame, endFrame }),
+      credentials: "omit",
+    }
+  );
+  return readJson<CameraTrajectory>(res);
+}
+
+export async function apiMotionRefV2PoseSeqStart(
+  motionKey: string,
+  folderName: string
+): Promise<{ folderId: string; folderName: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/v2pose_seq/start`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ folderName }),
+      credentials: "omit",
+    }
+  );
+  return readJson(res);
+}
+
+export async function apiMotionRefV2PoseSeqFrame(
+  motionKey: string,
+  folderId: string,
+  capture: V2PoseSeqFrameCapture
+): Promise<{ item: PoseReference }> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/v2pose_seq/${encodeURIComponent(folderId)}/frame`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(capture),
+      credentials: "omit",
+    }
+  );
+  return readJson(res);
+}
+
+const V2POSE_WS_FRAME_CHUNK = 10;
+
+export function runMotionRefV2PoseSeqWsJob(params: {
+  motionKey: string;
+  folderName: string;
+  frames: V2PoseSeqFrameCapture[];
+  onLogLine: (line: string) => void;
+  onUploadProgress?: (sent: number, total: number) => void;
+}): Promise<WsDoneMessage<{ folderId: string; folderName: string; items: PoseReference[] }>> {
+  const { motionKey, folderName, frames, onLogLine, onUploadProgress } = params;
+  const url = wsUrlForPath(
+    `/motion_ref/${encodeURIComponent(motionKey)}/v2pose_seq/ws`
+  );
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    let settled = false;
+    const settleReject = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    };
+    const settleResolve = (
+      data: WsDoneMessage<{ folderId: string; folderName: string; items: PoseReference[] }>
+    ) => {
+      if (settled) return;
+      settled = true;
+      resolve(data);
+    };
+    ws.onerror = () => {
+      settleReject(new Error("WebSocket connection failed"));
+    };
+    ws.onclose = (ev) => {
+      if (settled) return;
+      const reason = ev.reason?.trim();
+      settleReject(
+        new Error(
+          `WebSocket closed before completion (${ev.code}${reason ? `: ${reason}` : ""})`
+        )
+      );
+    };
+    ws.onopen = () => {
+      void (async () => {
+        try {
+          ws.send(JSON.stringify({ type: "init", folderName }));
+          const total = frames.length;
+          for (let i = 0; i < total; i += V2POSE_WS_FRAME_CHUNK) {
+            const chunk = frames.slice(i, i + V2POSE_WS_FRAME_CHUNK);
+            ws.send(JSON.stringify({ type: "frames", frames: chunk }));
+            onUploadProgress?.(Math.min(i + chunk.length, total), total);
+            await new Promise<void>((r) => setTimeout(r, 0));
+          }
+          ws.send(JSON.stringify({ type: "start" }));
+        } catch (e) {
+          settleReject(e instanceof Error ? e : new Error(String(e)));
+          ws.close();
+        }
+      })();
+    };
+    ws.onmessage = (ev) => {
+      let data: { type?: string; line?: string; ok?: boolean; result?: unknown; error?: string };
+      try {
+        data = JSON.parse(String(ev.data));
+      } catch {
+        return;
+      }
+      if (data.type === "log" && typeof data.line === "string") onLogLine(data.line);
+      if (data.type === "done") {
+        settled = true;
+        ws.close();
+        if (data.ok === false) {
+          reject(new Error(data.error || "V2Pose Seq failed."));
+          return;
+        }
+        settleResolve(
+          data as WsDoneMessage<{ folderId: string; folderName: string; items: PoseReference[] }>
+        );
+      }
+    };
+  });
 }
 
 export async function apiMotionRefShotsReorderRoot(order: string[]): Promise<void> {

@@ -40,6 +40,8 @@ transparent-background
 #non essential dependencies:
 smplx>=0.1.28
 kornia>=0.7.1
+pytorch-lightning>=2.0
+timm>=0.9
 spandrel
 pydantic~=2.0
 pydantic-settings~=2.0

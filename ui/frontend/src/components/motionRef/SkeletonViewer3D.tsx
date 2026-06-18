@@ -6,7 +6,8 @@ import React, {
   useImperativeHandle,
   useRef,
 } from "react";
-import { orbitPosition } from "./cameraTrajectory";
+import { keyframeWorldPose, orbitStateFromWorldPose, worldPoseFromOrbitState } from "./cameraTrajectory";
+import type { CameraWorldPose } from "./cameraTrajectory";
 
 export type CameraGizmoKeyframe = {
   id: string;
@@ -14,12 +15,20 @@ export type CameraGizmoKeyframe = {
   azimuth: number;
   elevation: number;
   distance: number;
+  slideX?: number;
+  slideY?: number;
+  cameraPosition?: [number, number, number];
+  lookAtTarget?: [number, number, number];
 };
 
 export type CameraState = {
   azimuth: number;   // degrees
   elevation: number; // degrees
   distance: number;  // world units (metres)
+  /** Screen-slide offset along camera right (world units). */
+  slideX: number;
+  /** Screen-slide offset along camera up (world units). */
+  slideY: number;
 };
 
 export type ViewerMode = "mesh" | "bones";
@@ -50,12 +59,18 @@ export type SkeletonViewer3DHandle = {
   getCameraState(): CameraState;
   /** Restore orbit angles and optionally distance. */
   setCameraState(
-    state: Pick<CameraState, "azimuth" | "elevation"> & Partial<Pick<CameraState, "distance">>
+    state: Partial<CameraState> & Pick<CameraState, "azimuth" | "elevation">
   ): void;
   /** Place camera-pose gizmo markers in the scene (hidden during capture). */
   setCameraGizmos(keyframes: CameraGizmoKeyframe[], centerY: number): void;
   setGizmosVisible(visible: boolean): void;
   getViewerCenterY(): number;
+  /** Current world-space camera position and look-at target. */
+  getCameraWorldPose(): CameraWorldPose;
+  /** Apply world pose directly; syncs orbitRef for getCameraState(). */
+  setCameraWorldPose(position: [number, number, number], target: [number, number, number]): void;
+  /** Reset orbit camera to defaults without clearing mesh geometry. */
+  resetCamera(): void;
   /** Reset the camera to defaults and hide geometry. */
   resetAll(): void;
   /** Capture the current canvas as a PNG data URL. */
@@ -72,7 +87,14 @@ type Props = {
   onGizmoContextMenu?: (keyframeId: string, clientX: number, clientY: number) => void;
 };
 
-const DEFAULT_ORBIT = { azimuth: 20, elevation: 15, distance: 2.6 };
+const DEFAULT_ORBIT: CameraState = {
+  azimuth: 20,
+  elevation: 15,
+  distance: 2.6,
+  slideX: 0,
+  slideY: 0,
+};
+const SLIDE_SCALE = 0.003;
 const FALLBACK_W = 380;
 const FALLBACK_H = 320;
 const FIGURE_CROP_PAD_FRAC = 0.15;
@@ -173,6 +195,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
 
     const orbitRef = useRef({ ...DEFAULT_ORBIT });
     const centerYRef = useRef(0.9);
+    const lastLookAtRef = useRef<[number, number, number]>([0, 0.9, 0]);
     const sizeRef = useRef({
       w: typeof width === "number" ? width : FALLBACK_W,
       h: typeof height === "number" ? height : FALLBACK_H,
@@ -186,7 +209,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
     const onGizmoContextMenuRef = useRef(onGizmoContextMenu);
     onGizmoContextMenuRef.current = onGizmoContextMenu;
 
-    const pointerRef = useRef({ down: false, lastX: 0, lastY: 0 });
+    const pointerRef = useRef({ down: false, lastX: 0, lastY: 0, orbiting: false });
     const pendingFacesRef = useRef<Uint32Array | null>(null);
     const pendingFramingRef = useRef<{ groundY: number; centerY: number } | null>(null);
 
@@ -225,7 +248,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
     function _applyCameraToThree() {
       const t = threeRef.current;
       if (!t) return;
-      const { azimuth, elevation, distance } = orbitRef.current;
+      const { azimuth, elevation, distance, slideX, slideY } = orbitRef.current;
       const phi = (90 - elevation) * (Math.PI / 180);
       const theta = azimuth * (Math.PI / 180);
       const cy = centerYRef.current;
@@ -235,6 +258,98 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         distance * Math.sin(phi) * Math.cos(theta)
       );
       t.camera.lookAt(0, cy, 0);
+      t.camera.updateMatrixWorld(true);
+      const right = new t.THREE.Vector3();
+      const up = new t.THREE.Vector3();
+      right.setFromMatrixColumn(t.camera.matrix, 0);
+      up.setFromMatrixColumn(t.camera.matrix, 1);
+      const target = new t.THREE.Vector3(0, cy, 0);
+      target.addScaledVector(right, slideX);
+      target.addScaledVector(up, slideY);
+      t.camera.position.addScaledVector(right, slideX);
+      t.camera.position.addScaledVector(up, slideY);
+      t.camera.lookAt(target);
+      lastLookAtRef.current = [target.x, target.y, target.z];
+    }
+
+    function _addFrustumGizmo(
+      THREE: ThreeModule,
+      gizmoGroup: import("three").Group,
+      gizmoPickables: import("three").Object3D[],
+      camPos: import("three").Vector3,
+      target: import("three").Vector3,
+      keyframeId: string,
+    ) {
+      const forward = target.clone().sub(camPos);
+      const dist = forward.length();
+      if (dist < 1e-6) return;
+      forward.normalize();
+      const worldUp = new THREE.Vector3(0, 1, 0);
+      let right = new THREE.Vector3().crossVectors(forward, worldUp);
+      if (right.lengthSq() < 1e-8) {
+        right.set(1, 0, 0);
+      } else {
+        right.normalize();
+      }
+      const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+      const halfW = 0.09;
+      const halfH = 0.065;
+      const corners = [
+        camPos.clone().addScaledVector(right, -halfW).addScaledVector(up, halfH),
+        camPos.clone().addScaledVector(right, halfW).addScaledVector(up, halfH),
+        camPos.clone().addScaledVector(right, halfW).addScaledVector(up, -halfH),
+        camPos.clone().addScaledVector(right, -halfW).addScaledVector(up, -halfH),
+      ];
+      const planeGeo = new THREE.BufferGeometry();
+      const planeVerts = new Float32Array([
+        corners[0].x, corners[0].y, corners[0].z,
+        corners[1].x, corners[1].y, corners[1].z,
+        corners[2].x, corners[2].y, corners[2].z,
+        corners[0].x, corners[0].y, corners[0].z,
+        corners[2].x, corners[2].y, corners[2].z,
+        corners[3].x, corners[3].y, corners[3].z,
+      ]);
+      planeGeo.setAttribute("position", new THREE.BufferAttribute(planeVerts, 3));
+      const planeMat = new THREE.MeshBasicMaterial({
+        color: 0x6eb5ff,
+        transparent: true,
+        opacity: 0.55,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const plane = new THREE.Mesh(planeGeo, planeMat);
+      plane.userData.keyframeId = keyframeId;
+      gizmoGroup.add(plane);
+      gizmoPickables.push(plane);
+
+      const edgeMat = new THREE.LineBasicMaterial({
+        color: 0x6eb5ff,
+        transparent: true,
+        opacity: 0.75,
+        depthWrite: false,
+      });
+      for (const c of corners) {
+        const edgeGeo = new THREE.BufferGeometry().setFromPoints([c, target]);
+        gizmoGroup.add(new THREE.Line(edgeGeo, edgeMat));
+      }
+      const rectLoop = new THREE.BufferGeometry().setFromPoints([
+        ...corners,
+        corners[0],
+      ]);
+      gizmoGroup.add(new THREE.Line(rectLoop, edgeMat));
+
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([camPos, target]);
+      gizmoGroup.add(
+        new THREE.Line(
+          lineGeo,
+          new THREE.LineBasicMaterial({
+            color: 0x6eb5ff,
+            transparent: true,
+            opacity: 0.35,
+            depthWrite: false,
+          })
+        )
+      );
     }
 
     function _rebuildGizmos(keyframes: CameraGizmoKeyframe[], centerY: number) {
@@ -254,38 +369,19 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         }
       }
       t.gizmoPickables = [];
-      const target = new THREE.Vector3(0, centerY, 0);
       for (const kf of keyframes) {
-        const [x, y, z] = orbitPosition(kf.azimuth, kf.elevation, kf.distance, centerY);
-        const coneGeo = new THREE.ConeGeometry(0.06, 0.14, 8);
-        const coneMat = new THREE.MeshBasicMaterial({
-          color: 0x6eb5ff,
-          transparent: true,
-          opacity: 0.85,
-          depthWrite: false,
-        });
-        const cone = new THREE.Mesh(coneGeo, coneMat);
-        cone.position.set(x, y, z);
-        cone.lookAt(target);
-        cone.rotateX(Math.PI / 2);
-        cone.userData.keyframeId = kf.id;
-        gizmoGroup.add(cone);
-        t.gizmoPickables.push(cone);
-
-        const lineGeo = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(x, y, z),
-          target.clone(),
-        ]);
-        const line = new THREE.Line(
-          lineGeo,
-          new THREE.LineBasicMaterial({
-            color: 0x6eb5ff,
-            transparent: true,
-            opacity: 0.35,
-            depthWrite: false,
-          })
+        const pose = keyframeWorldPose(kf, centerY);
+        const camPos = new THREE.Vector3(
+          pose.position[0],
+          pose.position[1],
+          pose.position[2],
         );
-        gizmoGroup.add(line);
+        const target = new THREE.Vector3(
+          pose.target[0],
+          pose.target[1],
+          pose.target[2],
+        );
+        _addFrustumGizmo(THREE, gizmoGroup, t.gizmoPickables, camPos, target, kf.id);
       }
       gizmoGroup.visible = gizmosVisibleRef.current;
     }
@@ -332,6 +428,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         (existing.array as Float32Array).set(verts);
         existing.needsUpdate = true;
       }
+      geo.computeBoundingSphere();
       t.boneLines.visible = modeRef.current === "bones";
     }
 
@@ -428,6 +525,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
             new THREE.BufferAttribute(pos, 3)
           );
           geometry.computeVertexNormals();
+          geometry.computeBoundingSphere();
           _applyVisibility();
         }
         if (gizmoKeyframesRef.current.length > 0) {
@@ -511,6 +609,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           existing.needsUpdate = true;
         }
         geo.computeVertexNormals();
+        geo.computeBoundingSphere();
         _applyVisibility();
       },
       setJointFrame(positions: Float32Array) {
@@ -524,12 +623,18 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         return { ...orbitRef.current };
       },
       setCameraState(
-        state: Pick<CameraState, "azimuth" | "elevation"> & Partial<Pick<CameraState, "distance">>
+        state: Partial<CameraState> & Pick<CameraState, "azimuth" | "elevation">
       ) {
         orbitRef.current.azimuth = state.azimuth;
         orbitRef.current.elevation = state.elevation;
         if (state.distance != null && Number.isFinite(state.distance)) {
           orbitRef.current.distance = state.distance;
+        }
+        if (state.slideX != null && Number.isFinite(state.slideX)) {
+          orbitRef.current.slideX = state.slideX;
+        }
+        if (state.slideY != null && Number.isFinite(state.slideY)) {
+          orbitRef.current.slideY = state.slideY;
         }
         _applyCameraToThree();
         onCameraChange?.({ ...orbitRef.current });
@@ -545,6 +650,37 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       },
       getViewerCenterY() {
         return centerYRef.current;
+      },
+      getCameraWorldPose(): CameraWorldPose {
+        const t = threeRef.current;
+        if (!t) {
+          const cy = centerYRef.current;
+          return worldPoseFromOrbitState(orbitRef.current, cy);
+        }
+        const p = t.camera.position;
+        const tgt = lastLookAtRef.current;
+        return {
+          position: [p.x, p.y, p.z],
+          target: [tgt[0], tgt[1], tgt[2]],
+        };
+      },
+      setCameraWorldPose(position: [number, number, number], target: [number, number, number]) {
+        const t = threeRef.current;
+        lastLookAtRef.current = target;
+        if (!t) return;
+        t.camera.position.set(position[0], position[1], position[2]);
+        t.camera.lookAt(target[0], target[1], target[2]);
+        orbitRef.current = orbitStateFromWorldPose(
+          position,
+          target,
+          centerYRef.current,
+        );
+        onCameraChange?.({ ...orbitRef.current });
+      },
+      resetCamera() {
+        orbitRef.current = { ...DEFAULT_ORBIT };
+        _applyCameraToThree();
+        onCameraChange?.({ ...DEFAULT_ORBIT });
       },
       resetAll() {
         orbitRef.current = { ...DEFAULT_ORBIT };
@@ -613,8 +749,16 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
     function onPointerDown(e: React.PointerEvent) {
       if (e.button !== 0) return;
       (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-      pointerRef.current = { down: true, lastX: e.clientX, lastY: e.clientY };
-      onUserOrbitChangeRef.current?.(true);
+      const orbiting = e.shiftKey;
+      pointerRef.current = {
+        down: true,
+        lastX: e.clientX,
+        lastY: e.clientY,
+        orbiting,
+      };
+      if (orbiting) {
+        onUserOrbitChangeRef.current?.(true);
+      }
     }
     function onPointerMove(e: React.PointerEvent) {
       const p = pointerRef.current;
@@ -623,15 +767,27 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       const dy = e.clientY - p.lastY;
       p.lastX = e.clientX;
       p.lastY = e.clientY;
-      orbitRef.current.azimuth = (orbitRef.current.azimuth + dx * 0.5) % 360;
-      orbitRef.current.elevation = Math.max(-89, Math.min(89, orbitRef.current.elevation - dy * 0.4));
+      if (p.orbiting) {
+        orbitRef.current.azimuth = (orbitRef.current.azimuth + dx * 0.5) % 360;
+        orbitRef.current.elevation = Math.max(
+          -89,
+          Math.min(89, orbitRef.current.elevation - dy * 0.4)
+        );
+      } else {
+        const scale = Math.max(0.25, orbitRef.current.distance) * SLIDE_SCALE;
+        orbitRef.current.slideX -= dx * scale;
+        orbitRef.current.slideY += dy * scale;
+      }
       _applyCameraToThree();
       onCameraChange?.({ ...orbitRef.current });
     }
     function onPointerUp(e: React.PointerEvent) {
       (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+      if (pointerRef.current.orbiting) {
+        onUserOrbitChangeRef.current?.(false);
+      }
       pointerRef.current.down = false;
-      onUserOrbitChangeRef.current?.(false);
+      pointerRef.current.orbiting = false;
     }
     function onContextMenu(e: React.MouseEvent) {
       const id = _pickGizmo(e.clientX, e.clientY);
@@ -661,7 +817,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onContextMenu={onContextMenu}
-        title="Drag to orbit · Scroll to zoom · Right-click camera gizmo to delete"
+        title="Drag to slide view · Shift+drag to orbit · Scroll to zoom · Right-click camera gizmo to delete"
       />
     );
   }

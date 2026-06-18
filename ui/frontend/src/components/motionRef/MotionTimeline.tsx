@@ -43,7 +43,7 @@ export function MotionTimeline(props: {
             value={seg.text}
             onChange={(e) => update(i, { text: e.target.value })}
             disabled={disabled}
-            placeholder="Describe the motion (e.g. 'walking forward at a steady pace')"
+            placeholder="A person is walking forward at a steady pace"
             rows={2}
             style={{
               flex: 1,

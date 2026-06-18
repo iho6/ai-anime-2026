@@ -1,0 +1,32 @@
+{
+  "keyframes": [
+    {
+      "id": "7815af7bc99644e6b32dda8aa499327f",
+      "frameIndex": 0,
+      "azimuth": 93.55377197265625,
+      "elevation": 6.074389648437484,
+      "distance": 3.224999980295986
+    },
+    {
+      "id": "974aa87bd8a74347ad7fb5fe3e162bb0",
+      "frameIndex": 11,
+      "azimuth": 76.19845581054688,
+      "elevation": 10.702465820312485,
+      "distance": 2.6000000000000005
+    },
+    {
+      "id": "348b14378a2440fbbf6096be3f83b7af",
+      "frameIndex": 20,
+      "azimuth": 39.008392333984375,
+      "elevation": 18.305761718749984,
+      "distance": 4.474999940887957
+    },
+    {
+      "id": "4fdfee16386443cf999428b8b6d54cfe",
+      "frameIndex": 40,
+      "azimuth": -4.380035400390625,
+      "elevation": 23.925610351562483,
+      "distance": 4.474999940887957
+    }
+  ]
+}

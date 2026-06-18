@@ -2,6 +2,14 @@
 
 Standalone PyTorch background removal for **anime characters**, using vendored [SkyTNT/anime-segmentation](https://github.com/SkyTNT/anime-segmentation) (Apache-2.0).
 
+## Dependencies
+
+Inference imports vendored `train.AnimeSegmentation`, which requires **pytorch-lightning** and **timm**. They are listed in the repo root `requirements.txt` and are auto-installed on first anime-seg use via `services.anime_seg_setup.ensure_anime_seg_deps`. If you are offline, install manually:
+
+```bash
+pip install pytorch-lightning>=2.0 timm>=0.9
+```
+
 ## Model
 
 Download the default checkpoint (`isnetis.ckpt`):

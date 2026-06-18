@@ -97,6 +97,19 @@ export function GearIcon(props: { size?: number }) {
   );
 }
 
+/** Videocam silhouette (trajectory keyframe markers, etc.). */
+export function CameraIcon(props: { size?: number }) {
+  const size = props.size ?? 14;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden style={{ display: "block" }}>
+      <path
+        fill="currentColor"
+        d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"
+      />
+    </svg>
+  );
+}
+
 export function SquareIconButton(
   props: React.ButtonHTMLAttributes<HTMLButtonElement> & {
     size?: number;

@@ -166,6 +166,17 @@ class CameraKeyframeBody(BaseModel):
     azimuth: float
     elevation: float
     distance: float
+    slideX: float | None = None
+    slideY: float | None = None
+    cameraPosition: list[float] | None = None
+    lookAtTarget: list[float] | None = None
+    holdFrames: int | None = None
+    blendEase: int | None = None
+
+
+class CameraKeyframePatchBody(BaseModel):
+    holdFrames: int | None = None
+    blendEase: int | None = None
 
 
 def _serialize_camera_trajectory(data: dict) -> dict[str, Any]:
@@ -179,9 +190,80 @@ def _serialize_camera_trajectory(data: dict) -> dict[str, Any]:
                 "azimuth": float(kf.get("azimuth", 0)),
                 "elevation": float(kf.get("elevation", 0)),
                 "distance": float(kf.get("distance", 2.6)),
+                "slideX": float(kf.get("slideX", 0)),
+                "slideY": float(kf.get("slideY", 0)),
+                "cameraPosition": kf.get("cameraPosition"),
+                "lookAtTarget": kf.get("lookAtTarget"),
+                "holdFrames": int(kf.get("holdFrames", 0)),
+                "blendEase": int(kf.get("blendEase", 100)),
             }
         )
-    return {"keyframes": out}
+    result: dict[str, Any] = {"keyframes": out}
+    pr = data.get("playbackRange")
+    if isinstance(pr, dict):
+        result["playbackRange"] = {
+            "startFrame": int(pr.get("startFrame", 0)),
+            "endFrame": int(pr.get("endFrame", 0)),
+        }
+    return result
+
+
+class PlaybackRangeBody(BaseModel):
+    startFrame: int
+    endFrame: int
+
+
+class V2PoseSeqBody(BaseModel):
+    folderName: str
+    frames: list[dict[str, Any]]
+
+
+class V2PoseSeqStartBody(BaseModel):
+    folderName: str
+
+
+class V2PoseSeqFrameBody(BaseModel):
+    frameIndex: int
+    pngBase64: str
+    cropBox: dict[str, int] | None = None
+    imageWidth: int | None = None
+    imageHeight: int | None = None
+    azimuth: float | None = None
+    elevation: float | None = None
+
+
+@router.post("/motion_ref/{motion_key}/v2pose_seq/start")
+def motion_ref_v2pose_seq_start(
+    motion_key: str, body: V2PoseSeqStartBody
+) -> dict[str, Any]:
+    if not _motion_dir(motion_key).is_dir():
+        raise HTTPException(404, "Motion not found.")
+    from services.motion_ref_pose_batch import create_v2pose_folder
+
+    try:
+        return create_v2pose_folder(body.folderName, motion_key=motion_key)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/motion_ref/{motion_key}/v2pose_seq/{folder_id}/frame")
+def motion_ref_v2pose_seq_frame(
+    motion_key: str, folder_id: str, body: V2PoseSeqFrameBody
+) -> dict[str, Any]:
+    if not _motion_dir(motion_key).is_dir():
+        raise HTTPException(404, "Motion not found.")
+    from services.motion_ref_pose_batch import process_v2pose_frame
+
+    try:
+        item = process_v2pose_frame(
+            folder_id,
+            body.model_dump(),
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    return {"item": item}
 
 
 @router.get("/motion_ref/{motion_key}/camera_trajectory")
@@ -215,6 +297,39 @@ def motion_ref_camera_trajectory_delete(
     if not ok:
         raise HTTPException(404, "Camera keyframe not found.")
     return _serialize_camera_trajectory(motion_ref_storage.read_camera_trajectory(motion_key))
+
+
+@router.patch("/motion_ref/{motion_key}/camera_trajectory/{keyframe_id}")
+def motion_ref_camera_trajectory_patch(
+    motion_key: str, keyframe_id: str, body: CameraKeyframePatchBody
+) -> dict[str, Any]:
+    if body.holdFrames is None and body.blendEase is None:
+        raise HTTPException(400, "holdFrames or blendEase required")
+    try:
+        data = motion_ref_storage.patch_camera_keyframe(
+            motion_key,
+            keyframe_id,
+            hold_frames=body.holdFrames,
+            blend_ease=body.blendEase,
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return _serialize_camera_trajectory(data)
+
+
+@router.post("/motion_ref/{motion_key}/playback_range")
+def motion_ref_playback_range_update(
+    motion_key: str, body: PlaybackRangeBody
+) -> dict[str, Any]:
+    try:
+        data = motion_ref_storage.update_playback_range(
+            motion_key, body.startFrame, body.endFrame
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    return _serialize_camera_trajectory(data)
 
 
 # ── Global motion shots gallery ───────────────────────────────────────────────
@@ -343,6 +458,64 @@ async def motion_ref_shot_add_to_pose_ws(ws: WebSocket, shot_id: str) -> None:
 
         def work(log_cb: Any) -> dict[str, Any]:
             return motion_shot_storage.add_shot_to_pose_ref(shot_id, log_cb=log_cb)
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
+@router.websocket("/motion_ref/{motion_key}/v2pose_seq/ws")
+async def motion_ref_v2pose_seq_ws(ws: WebSocket, motion_key: str) -> None:
+    """Batch SDPose from client-captured frames into a new pose keypoint folder."""
+    await ws.accept()
+    try:
+        accumulated: list[dict[str, Any]] = []
+        folder_name = ""
+        while True:
+            try:
+                msg = await ws.receive_json()
+            except WebSocketDisconnect:
+                return
+            t = msg.get("type")
+            if t == "init":
+                folder_name = str(msg.get("folderName") or msg.get("folder_name") or "").strip()
+            elif t == "frames":
+                batch = msg.get("frames")
+                if isinstance(batch, list):
+                    accumulated.extend(batch)
+            elif t == "start":
+                break
+            else:
+                # backward compat: legacy single-shot { folderName, frames }
+                folder_name = str(
+                    msg.get("folderName") or msg.get("folder_name") or folder_name
+                ).strip()
+                legacy = msg.get("frames")
+                if isinstance(legacy, list):
+                    accumulated.extend(legacy)
+                break
+
+        if not accumulated:
+            await safe_send_json(
+                ws, {"type": "done", "ok": False, "error": "frames array required"}
+            )
+            return
+        if not folder_name:
+            folder_name = f"v2pose_{motion_key}"
+
+        from services.motion_ref_pose_batch import batch_v2pose_from_frames
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            return batch_v2pose_from_frames(
+                motion_key,
+                folder_name,
+                accumulated,
+                log_cb=log_cb,
+            )
 
         result, err = await run_with_log_stream(ws, work)
         if err:

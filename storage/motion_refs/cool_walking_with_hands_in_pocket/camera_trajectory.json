@@ -1,0 +1,35 @@
+{
+  "keyframes": [
+    {
+      "id": "9dac3bdd5ef8400085fe9940d087a0ae",
+      "frameIndex": 0,
+      "azimuth": -81.65289306640625,
+      "elevation": 29.21488037109378,
+      "distance": 3.624999901479929,
+      "slideX": -4.461881188500545,
+      "slideY": 0.41838843747903576
+    },
+    {
+      "id": "bd407cfebef047999461e36ac269560e",
+      "frameIndex": 60,
+      "azimuth": -81.65289306640625,
+      "elevation": 29.21488037109378,
+      "distance": 3.624999901479929,
+      "slideX": -0.3904974185371811,
+      "slideY": 0.10382223432786136
+    },
+    {
+      "id": "c8a26b36faf149c68c438f5dd951e23c",
+      "frameIndex": 100,
+      "azimuth": -81.65289306640625,
+      "elevation": 29.21488037109378,
+      "distance": 3.624999901479929,
+      "slideX": 1.24524617409162,
+      "slideY": 0.31053716782720453
+    }
+  ],
+  "playbackRange": {
+    "startFrame": 0,
+    "endFrame": 299
+  }
+}

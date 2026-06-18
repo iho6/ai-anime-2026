@@ -4,6 +4,12 @@
   "previewAspect": "16:9",
   "tracks": [
     {
+      "id": "trk_mqjompp3_4",
+      "name": "Remove Background",
+      "kind": "video",
+      "clips": []
+    },
+    {
       "id": "trk_mqgqoiqx_22",
       "name": "FLF",
       "kind": "video",
@@ -12,11 +18,11 @@
           "id": "clip_mqgqoiqx_20",
           "type": "video",
           "srcRelPath": "timelines/Timeline/clips/clip_15a3016f77a44ee18302d1ca044e6102.mp4",
-          "start": 13.368300466826465,
-          "inPoint": 0,
+          "start": 11.864091259995316,
+          "inPoint": 0.3983566233606073,
           "outPoint": 1.375,
           "speed": 1,
-          "duration": 1.375,
+          "duration": 0.9766433766393927,
           "srcDuration": 1.375,
           "naturalW": 1280,
           "naturalH": 1280
@@ -33,7 +39,48 @@
       "id": "trk_mqgqdf19_16",
       "name": "AI Edit",
       "kind": "video",
-      "clips": []
+      "clips": [
+        {
+          "id": "clip_mqjokohb_1",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_93267a913597465791f0e5f11bfe51e9.png",
+          "start": 3.786665498074782,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "luka"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        },
+        {
+          "id": "clip_mqjompp2_2",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline/clips/clip_3cb73c919d3f4860b2873f43492792d5.png",
+          "start": 0.5165290832519531,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 0.7747938156127929,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "luka"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        }
+      ]
     },
     {
       "id": "trk_mqgq6sn6_12",
@@ -47,8 +94,8 @@
           "start": 0,
           "inPoint": 0,
           "outPoint": 2,
-          "speed": 0.3,
-          "duration": 6.666666666666667,
+          "speed": 0.45,
+          "duration": 4.444444444444445,
           "srcDuration": 2,
           "naturalW": 1920,
           "naturalH": 1080,
@@ -78,11 +125,113 @@
           "start": 0,
           "inPoint": 0,
           "outPoint": 0.9466663745186955,
-          "speed": 0.2,
-          "duration": 4.733331872593477,
+          "speed": 0.25,
+          "duration": 3.786665498074782,
           "srcDuration": 1.375,
           "naturalW": 1280,
-          "naturalH": 1280
+          "naturalH": 1280,
+          "reversed": true,
+          "frameSequence": {
+            "sequenceGroupId": "clip_mqgq6sn5_10",
+            "strip": [
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000001.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000002.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000003.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000004.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000005.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000006.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000007.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000008.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000009.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000010.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000011.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000012.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000013.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000014.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000015.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000016.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000017.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000018.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000019.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000020.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000021.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000022.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline/frames/clip_mqgq6sn5_10/frame_000023.png"
+              }
+            ],
+            "hidden": []
+          },
+          "frameEdit": {
+            "framesDirRel": "timelines/Timeline/frames/clip_mqgq6sn5_10"
+          }
         },
         {
           "id": "clip_mqgq3gin_7",

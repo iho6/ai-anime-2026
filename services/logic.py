@@ -929,35 +929,11 @@ def run_startup_setup_and_launch(
     if log_cb and gpu_detail:
         log_cb(f"GPU preflight OK: {gpu_detail}")
 
-    # Build deps for kimodo's MotionCorrection C extension (CMake + Python dev headers).
-    py_tag = f"{sys.version_info.major}.{sys.version_info.minor}"
-    _run_command_logged(
-        ["apt-get", "install", "-y", "cmake", "build-essential", f"python{py_tag}-dev"],
-        cwd=_REPO_ROOT,
-        log_cb=log_cb,
-    )
+    # Build deps + editable kimodo install (MotionCorrection C extension).
+    from services.kimodo_setup import ensure_kimodo_build_deps, ensure_kimodo_installed
 
-    # Install kimodo (nv-tlabs/kimodo) if not already present — clone then editable-install.
-    kimodo_dir = _REPO_ROOT / "kimodo"
-    if not (kimodo_dir / "setup.py").is_file() and not (kimodo_dir / "pyproject.toml").is_file():
-        if log_cb:
-            log_cb("Cloning nv-tlabs/kimodo…")
-        _run_command_logged(
-            ["git", "clone", "https://github.com/nv-tlabs/kimodo.git", str(kimodo_dir)],
-            cwd=_REPO_ROOT,
-            log_cb=log_cb,
-        )
-    try:
-        import motion_correction  # noqa: F401 — C extension built by kimodo setup
-        import kimodo  # noqa: F401
-    except ImportError:
-        if log_cb:
-            log_cb("Installing kimodo (editable, with MotionCorrection C extension)…")
-        _run_command_logged(
-            [sys.executable, "-m", "pip", "install", "-e", str(kimodo_dir)],
-            cwd=_REPO_ROOT,
-            log_cb=log_cb,
-        )
+    ensure_kimodo_build_deps(run_command=_run_command_logged, log_cb=log_cb)
+    ensure_kimodo_installed(run_command=_run_command_logged, log_cb=log_cb)
 
     # smplx: skins the kimodo SMPL-X motion into a white body mesh for the viewer.
     # Requires the SMPL-X body model staged at $SMPLX_MODEL_DIR/smplx/SMPLX_NEUTRAL.npz
@@ -7987,6 +7963,9 @@ def remove_anime_seg_to_temp_file(
     anime_seg_options: dict[str, Any] | None = None,
 ) -> str:
     """Run anime-segmentation on a local image; write RGBA PNG to a temp file."""
+    from services.anime_seg_setup import ensure_anime_seg_deps
+
+    ensure_anime_seg_deps(log_cb=log_cb)
     from services.anime_seg_ai_service.inference_core import (
         options_from_dict,
         segment_image_to_rgba,
@@ -10470,7 +10449,7 @@ def timeline_video_to_frame_sequence(
     if not video_abs.is_file():
         raise ValueError(f"Video not found: {video_rel}")
 
-    fps, total = probe_video_fps_and_frame_count(video_abs)
+    fps, total = probe_video_fps_and_frame_count(video_abs, log_cb=log_cb)
     if total <= 0:
         raise ValueError("Could not determine video frame count.")
     start_idx = max(0, int(round(float(in_point_sec) * fps)))
@@ -10974,17 +10953,46 @@ def mask_to_rgba_cutout(*, image_abs_path: str, mask_abs_path: str) -> str:
     return str(dest)
 
 
-def probe_video_fps_and_frame_count(video_path: str | Path) -> tuple[float, int]:
+def probe_video_fps_and_frame_count(
+    video_path: str | Path,
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> tuple[float, int]:
+    """Return (fps, frame_count) with metadata and decode fallbacks for WebM VP9+alpha."""
     import av
 
+    from services.utils import video_stream_fps
+
     p = Path(video_path)
+    fps = 0.0
+    total = 0
+
     with av.open(str(p)) as container:
-        stream = container.streams.video[0]
-        fps = float(stream.average_rate or stream.base_rate or 24)
+        stream = next((s for s in container.streams if s.type == "video"), None)
+        if stream is None:
+            return 24.0, 0
+
+        rate = stream.average_rate or stream.base_rate
+        if rate is not None:
+            fps = float(rate)
+        if fps <= 0:
+            fps = video_stream_fps(str(p))
+
         total = int(stream.frames or 0)
-        if total <= 0 and stream.duration and stream.time_base:
+        if total <= 0 and stream.duration is not None and stream.time_base is not None:
             dur_sec = float(stream.duration * stream.time_base)
             total = max(0, int(round(dur_sec * fps)))
+
+        if total <= 0 and container.duration:
+            dur_sec = float(container.duration) / float(av.time_base)
+            total = max(0, int(round(dur_sec * fps)))
+
+        if total <= 0:
+            if log_cb:
+                log_cb("Counting frames by decode (metadata missing)…")
+            stream.thread_type = "AUTO"
+            total = sum(1 for _ in container.decode(stream))
+
     return fps, total
 
 
