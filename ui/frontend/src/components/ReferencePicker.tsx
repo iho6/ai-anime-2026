@@ -27,6 +27,12 @@ import { GalleryImageLightbox } from "./GalleryImageLightbox";
 import { KeypointRefGrid, parseFolderToken } from "./KeypointRefGrid";
 import { KeypointVideoSequenceModal } from "./KeypointVideoSequenceModal";
 import { SquareButton } from "./SquareButton";
+import {
+  collectFolderIdsPostOrder,
+  collectFolderLeafIds,
+  folderContainsFolderId,
+  isKeypointGridLeaf,
+} from "../lib/folderSelection";
 
 export type ReferencePickerSelection = {
   singles: PoseReference[];
@@ -338,6 +344,10 @@ function ReferencePickerOpen(props: {
   const openFolderMenu = useCallback(
     (e: React.MouseEvent, folderId: string, folderName: string) => {
       e.preventDefault();
+      const itemIds = new Set(layout.items.map((x) => x.id));
+      const videoIds = new Set((layout.videoItems ?? []).map((x) => x.id));
+      const isLeaf = (tok: string) => isKeypointGridLeaf(tok, itemIds, videoIds);
+      const leaves = collectFolderLeafIds(folderId, layout, isLeaf);
       setMenu({
         open: true,
         x: e.clientX,
@@ -371,10 +381,47 @@ function ReferencePickerOpen(props: {
                 }
               })(),
           },
+          {
+            key: "delete",
+            label: "Delete",
+            onSelect: () =>
+              void (async () => {
+                const n = leaves.length;
+                const ok = await confirmAction({
+                  title: "Delete folder",
+                  message: `Delete folder "${folderName}" and all ${n} item${n === 1 ? "" : "s"} inside? This cannot be undone.`,
+                  confirmText: "Delete",
+                });
+                if (!ok) return;
+                try {
+                  for (const tok of leaves) {
+                    if (tok.startsWith("video:")) {
+                      await apiReferenceKeypointVideoDelete(tok.slice("video:".length));
+                    } else {
+                      await apiReferenceKeypointDelete(tok);
+                    }
+                  }
+                  for (const fid of collectFolderIdsPostOrder(folderId, layout)) {
+                    await apiReferenceKeypointFolderDelete(fid);
+                  }
+                  setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    for (const tok of leaves) next.delete(tok);
+                    return next;
+                  });
+                  if (folderContainsFolderId(folderId, viewFolderId, layout)) {
+                    setViewFolderId(null);
+                  }
+                  await loadLayout();
+                } catch {
+                  /* ignore */
+                }
+              })(),
+          },
         ],
       });
     },
-    [confirmAction, loadLayout, renameFolder, viewFolderId]
+    [confirmAction, layout, loadLayout, renameFolder, viewFolderId]
   );
 
   const openVideoMenu = useCallback(

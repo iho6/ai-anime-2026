@@ -99,6 +99,21 @@ def test_paste_square_working_onto_canvas_full_size() -> None:
     assert plate.getpixel((0, 0)) == (255, 255, 255)
 
 
+def test_composite_qwen_output_on_white_plate() -> None:
+    from services.figure_crop import composite_qwen_output_on_white_plate
+
+    patch = Image.new("RGB", (80, 120), color=(200, 50, 50))
+    placed = {
+        "canvas": {"width": 400, "height": 300},
+        "placement": {"x": 120, "y": 80, "width": 60, "height": 90},
+    }
+    plate = composite_qwen_output_on_white_plate(patch, placed)
+    assert plate.size == (400, 300)
+    assert plate.getpixel((0, 0)) == (255, 255, 255)
+    assert plate.getpixel((399, 299)) == (255, 255, 255)
+    assert plate.getpixel((150, 120)) == (200, 50, 50)
+
+
 def test_composite_rgba_on_white_plate() -> None:
     rgba = Image.new("RGBA", (40, 60), color=(0, 128, 0, 200))
     plate = composite_rgba_on_white_plate(

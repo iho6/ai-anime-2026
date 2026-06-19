@@ -156,6 +156,19 @@ def build_shot_prompt(user_text: str | None) -> str:
 # ============================================================================
 
 
+SOLO_CHARACTER_EDIT_CONSTRAINTS = (
+    "only one character in the output image, solo, no additional people, no crowd, "
+    "no duplicate characters, no second copy of the subject, "
+    "do not show the input reference image as a separate figure beside the result, "
+    "exactly one full-body person only"
+)
+
+NO_TEXT_IN_IMAGE_CONSTRAINT = (
+    "no text, letters, numbers, watermarks, logos, captions, signatures, or typography "
+    "anywhere in the image"
+)
+
+
 def build_pose_prompt_from_label(short_desc: str) -> str:
     """Convert a short pose checklist label into the inline image-edit prompt."""
     desc = (short_desc or "").strip()
@@ -179,21 +192,24 @@ def compose_keypoint_pose_edit_prompt(
     u = (user_description or "").strip()
     if with_closeup_sheet:
         role = (
-            "Return a single full-body image of the same character as in the first input "
-            "reference (starting image), in the same pose as the keypoint skeleton (third image). "
-            "Return only the full-body image, no close-up inset. Keep facial features consistent."
+            "Replace the scene with exactly one full-body image of the same character as in "
+            "the first input reference (starting image), in the same pose as the keypoint "
+            "skeleton (third image). Use the closeup auxiliary only for facial identity; "
+            "still output exactly one full-body figure, no close-up inset. "
+            "Keep facial features consistent."
         )
     else:
         role = (
-            "Return a single full-body image of the same character as in the first input "
-            "reference (starting image), in the same pose as the keypoint image. "
-            "Return only the full-body image."
+            "Replace the scene with exactly one full-body image of the same character as in "
+            "the first input reference (starting image), in the same pose as the keypoint image."
         )
     constraints = (
+        f"{SOLO_CHARACTER_EDIT_CONSTRAINTS} "
+        f"{NO_TEXT_IN_IMAGE_CONSTRAINT} "
         "Match the reference body pose and skeleton; preserve the subject's identity, "
         "proportions, and clothing unless impossible. "
         "No objects in the hands; keep the hand pose exactly the same as the keypoint reference. "
-        "No background scenery; use a flat pure white background only (#ffffff)."
+        "No background scenery; use a flat plain white background only."
     )
     body = f"{constraints} {role}"
     if not u:

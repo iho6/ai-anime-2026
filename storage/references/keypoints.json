@@ -17,7 +17,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_aeda12b8d2e3_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_aeda12b8d2e3_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_aeda12b8d2e3_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_aeda12b8d2e3_square.png",
+      "figurePlateRelPath": "references/placed/pf_aeda12b8d2e3_plate.png"
     }
   },
   {
@@ -38,7 +40,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_37bb830115bd_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_37bb830115bd_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_37bb830115bd_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_37bb830115bd_square.png",
+      "figurePlateRelPath": "references/placed/pf_37bb830115bd_plate.png"
     }
   },
   {
@@ -59,7 +63,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_2b7174606dc7_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_2b7174606dc7_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_2b7174606dc7_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_2b7174606dc7_square.png",
+      "figurePlateRelPath": "references/placed/pf_2b7174606dc7_plate.png"
     }
   },
   {
@@ -80,7 +86,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_70e741bb4231_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_70e741bb4231_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_70e741bb4231_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_70e741bb4231_square.png",
+      "figurePlateRelPath": "references/placed/pf_70e741bb4231_plate.png"
     }
   },
   {
@@ -101,7 +109,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_fc0c9499af89_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_fc0c9499af89_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_fc0c9499af89_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_fc0c9499af89_square.png",
+      "figurePlateRelPath": "references/placed/pf_fc0c9499af89_plate.png"
     }
   },
   {
@@ -122,7 +132,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_db8fc15e6d19_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_db8fc15e6d19_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_db8fc15e6d19_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_db8fc15e6d19_square.png",
+      "figurePlateRelPath": "references/placed/pf_db8fc15e6d19_plate.png"
     }
   },
   {
@@ -143,7 +155,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_3192e2fef407_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_3192e2fef407_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_3192e2fef407_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_3192e2fef407_square.png",
+      "figurePlateRelPath": "references/placed/pf_3192e2fef407_plate.png"
     }
   },
   {
@@ -164,7 +178,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_ccdeeb6518ea_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_ccdeeb6518ea_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_ccdeeb6518ea_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_ccdeeb6518ea_square.png",
+      "figurePlateRelPath": "references/placed/pf_ccdeeb6518ea_plate.png"
     }
   },
   {
@@ -185,7 +201,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_e5b7d333893d_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_e5b7d333893d_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_e5b7d333893d_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_e5b7d333893d_square.png",
+      "figurePlateRelPath": "references/placed/pf_e5b7d333893d_plate.png"
     }
   },
   {
@@ -206,7 +224,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_c384139236d1_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_c384139236d1_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_c384139236d1_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_c384139236d1_square.png",
+      "figurePlateRelPath": "references/placed/pf_c384139236d1_plate.png"
     }
   },
   {
@@ -227,7 +247,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_8bebe5d7d76c_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_8bebe5d7d76c_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_8bebe5d7d76c_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_8bebe5d7d76c_square.png",
+      "figurePlateRelPath": "references/placed/pf_8bebe5d7d76c_plate.png"
     }
   },
   {
@@ -248,7 +270,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_e54e14eb2df2_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_e54e14eb2df2_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_e54e14eb2df2_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_e54e14eb2df2_square.png",
+      "figurePlateRelPath": "references/placed/pf_e54e14eb2df2_plate.png"
     }
   },
   {
@@ -269,7 +293,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_8487297e7dff_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_8487297e7dff_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_8487297e7dff_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_8487297e7dff_square.png",
+      "figurePlateRelPath": "references/placed/pf_8487297e7dff_plate.png"
     }
   },
   {
@@ -290,7 +316,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_3c418c94d172_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_3c418c94d172_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_3c418c94d172_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_3c418c94d172_square.png",
+      "figurePlateRelPath": "references/placed/pf_3c418c94d172_plate.png"
     }
   },
   {
@@ -311,7 +339,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_514a54e819b1_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_514a54e819b1_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_514a54e819b1_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_514a54e819b1_square.png",
+      "figurePlateRelPath": "references/placed/pf_514a54e819b1_plate.png"
     }
   },
   {
@@ -332,7 +362,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_ba510aa519ca_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_ba510aa519ca_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_ba510aa519ca_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_ba510aa519ca_square.png",
+      "figurePlateRelPath": "references/placed/pf_ba510aa519ca_plate.png"
     }
   },
   {
@@ -353,7 +385,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_840c10baf002_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_840c10baf002_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_840c10baf002_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_840c10baf002_square.png",
+      "figurePlateRelPath": "references/placed/pf_840c10baf002_plate.png"
     }
   },
   {
@@ -374,7 +408,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_2fb456f0e0a1_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_2fb456f0e0a1_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_2fb456f0e0a1_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_2fb456f0e0a1_square.png",
+      "figurePlateRelPath": "references/placed/pf_2fb456f0e0a1_plate.png"
     }
   },
   {
@@ -395,7 +431,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_97e95c38b5d8_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_97e95c38b5d8_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_97e95c38b5d8_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_97e95c38b5d8_square.png",
+      "figurePlateRelPath": "references/placed/pf_97e95c38b5d8_plate.png"
     }
   },
   {
@@ -416,7 +454,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_3de49e965f5f_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_3de49e965f5f_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_3de49e965f5f_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_3de49e965f5f_square.png",
+      "figurePlateRelPath": "references/placed/pf_3de49e965f5f_plate.png"
     }
   },
   {
@@ -437,7 +477,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_88ff7fc75a1d_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_88ff7fc75a1d_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_88ff7fc75a1d_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_88ff7fc75a1d_square.png",
+      "figurePlateRelPath": "references/placed/pf_88ff7fc75a1d_plate.png"
     }
   },
   {
@@ -458,7 +500,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_75022663a8f6_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_75022663a8f6_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_75022663a8f6_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_75022663a8f6_square.png",
+      "figurePlateRelPath": "references/placed/pf_75022663a8f6_plate.png"
     }
   },
   {
@@ -479,7 +523,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_b8d90745f138_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_b8d90745f138_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_b8d90745f138_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_b8d90745f138_square.png",
+      "figurePlateRelPath": "references/placed/pf_b8d90745f138_plate.png"
     }
   },
   {
@@ -500,7 +546,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_156e2b7a864d_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_156e2b7a864d_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_156e2b7a864d_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_156e2b7a864d_square.png",
+      "figurePlateRelPath": "references/placed/pf_156e2b7a864d_plate.png"
     }
   },
   {
@@ -521,7 +569,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_9acc077261dc_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_9acc077261dc_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_9acc077261dc_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_9acc077261dc_square.png",
+      "figurePlateRelPath": "references/placed/pf_9acc077261dc_plate.png"
     }
   },
   {
@@ -542,7 +592,9 @@
       },
       "workingSquareSize": 1024,
       "squareRefCropRelPath": "references/placed/pf_23b037a1ef16_ref_square.png",
-      "squareKeypointCropRelPath": "references/placed/pf_23b037a1ef16_kp_square.png"
+      "squareKeypointCropRelPath": "references/placed/pf_23b037a1ef16_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_23b037a1ef16_square.png",
+      "figurePlateRelPath": "references/placed/pf_23b037a1ef16_plate.png"
     }
   },
   {

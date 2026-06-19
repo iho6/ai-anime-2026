@@ -1,10 +1,16 @@
 """
 Figure crop / placement helpers for motion-ref keypoint and Qwen generation.
 
-A ``placedFigure`` stores the universal **layout contract** (canvas size, pixel
-placement, working square size) so SDPose and Qwen run at 1024² and outputs graft
-back onto the same backdrop. ``squareRefCropRelPath`` caches the SDPose input crop
-only; Qwen primary identity always comes from the current character starting image.
+A ``placedFigure`` stores the layout contract (canvas size, pixel placement,
+working square size):
+
+- **SDPose** (``run_pose_keypoint_for_image``): 1024² square crops; skeleton pasted
+  on a full-size black canvas. ``squareRefCropRelPath`` / ``squareKeypointCropRelPath``
+  cache those crops.
+- **Qwen primary**: full base identity image (character starting portrait) — no crop.
+- **Qwen keypoint aux**: 1024² crop at ``placement`` (enlarged pose, less whitespace).
+- **Qwen output**: only the model result is pasted onto a fresh white plate at
+  ``placedFigure`` coordinates (never the identity input).
 """
 
 from __future__ import annotations
@@ -289,3 +295,14 @@ def composite_rgba_on_white_plate(
     return paste_patch_on_canvas(
         rgba_crop, canvas_w, canvas_h, box, background=(255, 255, 255), feather_px=4
     ).convert("RGB")
+
+
+def composite_qwen_output_on_white_plate(
+    qwen_output: Image.Image,
+    placed_figure: dict[str, Any],
+) -> Image.Image:
+    """Paste Qwen edit output onto a fresh white canvas at ``placedFigure`` placement."""
+    canvas = placed_figure["canvas"]
+    placement = placed_figure["placement"]
+    c_w, c_h = int(canvas["width"]), int(canvas["height"])
+    return paste_on_white_canvas(qwen_output, c_w, c_h, placement)

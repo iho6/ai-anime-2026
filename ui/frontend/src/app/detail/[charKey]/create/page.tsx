@@ -57,6 +57,7 @@ import { reorderInsertBeforeOrAfter } from "../../../../components/dnd/reorder";
 
 type GenType = "pose" | "expression";
 import { buildFlatGalleryLightboxPaths } from "../../../../lib/galleryLightboxOrder";
+import { batchRefPreviewFramePaths } from "../../../../lib/batchRefPreview";
 import { CameraAngleModal } from "../../../../components/CameraAngleModal";
 import { DesktopContextMenu, ContextMenuItem } from "../../../../components/DesktopContextMenu";
 import { DetailSubpageChrome } from "../../../../components/DetailSubpageChrome";
@@ -1102,13 +1103,19 @@ export default function CreatePage() {
   }
 
   async function runOneGenerateStep(
-    entry?: BatchRefEntry
+    entry?: BatchRefEntry,
+    batchCtx?: { index: number; total: number }
   ): Promise<boolean> {
     if (!charKey) return false;
     if (!activeStartingRel) {
       showError({ message: "Please choose an input image first." });
       return false;
     }
+    const onLog =
+      batchCtx && batchCtx.total > 1
+        ? (line: string) =>
+            onJobLogLine(`[${batchCtx.index}/${batchCtx.total}] ${line}`)
+        : onJobLogLine;
     const videoRef =
       entry?.kind === "video"
         ? entry.ref
@@ -1142,7 +1149,7 @@ export default function CreatePage() {
           baseRelPath: activeStartingRel,
           prompts: promptTextsForGeneration,
         },
-        onLogLine: onJobLogLine,
+        onLogLine: onLog,
       });
       if (!done.ok) {
         failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
@@ -1165,7 +1172,7 @@ export default function CreatePage() {
         prompts: promptTextsForGeneration,
         ...(keypointRelPath ? { keypointRelPath } : {}),
       },
-      onLogLine: onJobLogLine,
+      onLogLine: onLog,
     });
     if (!done.ok) {
       failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
@@ -1201,22 +1208,27 @@ export default function CreatePage() {
       await runGenerate();
       return;
     }
+    const total = batchRefQueue.length;
     beginSession({
       title: "Batch ref generation",
       clearLog: true,
-      runningStatus: `Starting 1/${batchRefQueue.length}…`,
+      runningStatus: `Starting 1/${total}…`,
     });
     let ok = true;
     try {
-      for (let i = 0; i < batchRefQueue.length; i++) {
+      for (let i = 0; i < total; i++) {
         const entry = batchRefQueue[i];
-        setRunningStatus(`Batch ref generation ${i + 1}/${batchRefQueue.length}…`);
-        pushLog(`Generating reference ${i + 1}/${batchRefQueue.length}…`);
+        const index = i + 1;
+        onJobLogLine(`[${index}/${total}] Starting reference…`);
         setActiveReference(activeRefFromBatchEntry(entry));
-        ok = await runOneGenerateStep(entry);
+        ok = await runOneGenerateStep(entry, { index, total });
         if (!ok) break;
+        onJobLogLine(`[${index}/${total}] Reference complete`);
       }
-      if (ok) setBatchRefQueue([]);
+      if (ok) {
+        onJobLogLine(`Batch complete: ${total}/${total} references`);
+        setBatchRefQueue([]);
+      }
     } catch (e) {
       failSession(e, "Batch ref generation failed.");
       ok = false;
@@ -1913,7 +1925,11 @@ export default function CreatePage() {
                 </div>
               ) : null}
             </div>
-            {activeReference && activeReferenceKeypointFramePaths(activeReference).length > 0 ? (
+            {activeReference &&
+            (batchRefQueue.length > 1
+              ? batchRefPreviewFramePaths(batchRefQueue)
+              : activeReferenceKeypointFramePaths(activeReference)
+            ).length > 0 ? (
               <div
                 style={{ position: "relative" }}
                 onContextMenu={(e) => {
@@ -1936,7 +1952,11 @@ export default function CreatePage() {
                 }}
               >
                 <PoseRefFramePreview
-                  frameRelPaths={activeReferenceKeypointFramePaths(activeReference)}
+                  frameRelPaths={
+                    batchRefQueue.length > 1
+                      ? batchRefPreviewFramePaths(batchRefQueue)
+                      : activeReferenceKeypointFramePaths(activeReference)
+                  }
                   fps={activeReferencePreviewFps(activeReference)}
                   maxWidth={STARTING_PREVIEW_MAX_W}
                   maxHeight={STARTING_PREVIEW_MAX_H}

@@ -3586,46 +3586,19 @@ def _image_edit_aux_cropped_keypoint_cli_args(
     return ["--auxiliary-image-urls-json", json.dumps(urls)]
 
 
-def _run_keypoint_image_edit_with_crop(
-    character_name: str,
-    primary_abs: str,
+def _keypoint_crop_abs_for_placed_figure(
     keypoint_abs: str,
     placed_figure: dict[str, Any],
-    prompt_text: str,
-    log_cb: Callable[[str], None] | None = None,
-    *,
-    keypoint_id: str | None = None,
-) -> str:
-    """
-    Run Qwen image-edit on 1024×1024 square RGB crops, then paste the result back
-    onto the full-size canvas (same dimensions as the starting image).
-    """
-    from PIL import Image
-
+    dest_dir: Path,
+) -> tuple[Path, str]:
+    """Build or copy the 1024² keypoint placement crop for Qwen auxiliary input."""
     from services import reference_storage
-    from services.figure_crop import (
-        MIN_SQUARE_WORKING_SIZE,
-        centered_square_placement,
-        extract_square_working_crop_path,
-        paste_square_working_onto_canvas,
-        upscale_to_working_square,
-    )
+    from services.figure_crop import MIN_SQUARE_WORKING_SIZE, extract_square_working_crop_path
 
     placement = placed_figure["placement"]
-    canvas = placed_figure["canvas"]
-    c_w, c_h = int(canvas["width"]), int(canvas["height"])
     min_side = int(placed_figure.get("workingSquareSize") or MIN_SQUARE_WORKING_SIZE)
-
-    tmp_dir = Path(tempfile.gettempdir()) / f"placed_{unique_suffix()}"
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-    primary_crop = tmp_dir / "primary_square.png"
-    kp_crop = tmp_dir / "kp_square.png"
-
-    with Image.open(primary_abs) as primary_im:
-        char_placement = centered_square_placement(primary_im.width, primary_im.height)
-    extract_square_working_crop_path(
-        primary_abs, char_placement, primary_crop, min_side=min_side
-    )
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    kp_crop = dest_dir / "kp_square.png"
 
     square_kp_rel = placed_figure.get("squareKeypointCropRelPath")
     kp_source = "extracted"
@@ -3638,14 +3611,61 @@ def _run_keypoint_image_edit_with_crop(
         extract_square_working_crop_path(
             keypoint_abs, placement, kp_crop, min_side=min_side
         )
+    return kp_crop, kp_source
+
+
+def _log_composed_prompt_snippet(
+    prompt_text: str,
+    log_cb: Callable[[str], None] | None,
+    *,
+    label: str = "keypoint_pose prompt (composed)",
+) -> None:
+    if not log_cb:
+        return
+    snip = prompt_text.replace("\n", " ").replace("\r", "")
+    if len(snip) > 200:
+        snip = snip[:197] + "..."
+    log_cb(f"{label}: {snip}")
+
+
+def _run_keypoint_image_edit_with_plate(
+    character_name: str,
+    primary_abs: str,
+    keypoint_abs: str,
+    placed_figure: dict[str, Any],
+    prompt_text: str,
+    log_cb: Callable[[str], None] | None = None,
+    *,
+    keypoint_id: str | None = None,
+) -> str:
+    """
+    Run Qwen image-edit on the full base identity image with a cropped keypoint aux,
+    then composite only the model output onto a fresh white plate at ``placement``.
+    """
+    from PIL import Image
+
+    from services import reference_storage
+    from services.figure_crop import (
+        MIN_SQUARE_WORKING_SIZE,
+        composite_qwen_output_on_white_plate,
+    )
+
+    placement = placed_figure["placement"]
+    canvas = placed_figure["canvas"]
+    c_w, c_h = int(canvas["width"]), int(canvas["height"])
+    min_side = int(placed_figure.get("workingSquareSize") or MIN_SQUARE_WORKING_SIZE)
+
+    tmp_dir = Path(tempfile.gettempdir()) / f"placed_{unique_suffix()}"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    kp_crop, kp_source = _keypoint_crop_abs_for_placed_figure(
+        keypoint_abs, placed_figure, tmp_dir
+    )
 
     if log_cb:
-        log_cb(
-            f"Qwen primary: {primary_abs} centered square → {min_side}×{min_side}"
-        )
-        log_cb(f"Qwen keypoint aux: {kp_source} → {kp_crop}")
-        log_cb(f"Output plate: {c_w}×{c_h} placement {placement}")
-        log_cb(f"Qwen edit on {min_side}×{min_side} square crops…")
+        log_cb(f"Qwen primary: {primary_abs} (full base image, no crop)")
+        log_cb(f"Qwen keypoint aux: {kp_source} → {kp_crop} ({min_side}×{min_side})")
+
+    _log_composed_prompt_snippet(prompt_text, log_cb)
 
     body = _run_service_testmode(
         "services.image_edit_ai_service.serverless",
@@ -3655,7 +3675,7 @@ def _run_keypoint_image_edit_with_crop(
             "--default-port",
             str(COMFY_PORT),
             "--image-url",
-            str(primary_crop),
+            str(primary_abs),
             "--prompt-source",
             "inline",
             "--prompts-json",
@@ -3674,26 +3694,88 @@ def _run_keypoint_image_edit_with_crop(
     if not isinstance(url, str) or not url.strip():
         raise RuntimeError("Image-edit result missing url.")
 
-    qwen_out = tmp_dir / "qwen_square.png"
+    qwen_out = tmp_dir / "qwen_output.png"
     download_url_to_file(url.strip(), qwen_out)
     with Image.open(qwen_out) as qwen_im:
-        working = upscale_to_working_square(qwen_im, min_side=min_side)
-    working_path = tmp_dir / "working_square.png"
-    working.save(working_path)
-    plate = paste_square_working_onto_canvas(working, c_w, c_h, placement)
+        plate = composite_qwen_output_on_white_plate(qwen_im, placed_figure)
     plate_path = tmp_dir / "plate.png"
     plate.save(plate_path)
 
+    if log_cb:
+        log_cb(
+            f"Qwen full-frame edit → white plate {c_w}×{c_h} at placement {placement}"
+        )
+
     if keypoint_id:
+        px, py, pw, ph = (
+            int(placement["x"]),
+            int(placement["y"]),
+            int(placement["width"]),
+            int(placement["height"]),
+        )
+        patch_path = tmp_dir / "patch.png"
+        with Image.open(qwen_out) as qwen_im:
+            qwen_im.convert("RGB").resize((pw, ph), Image.Resampling.LANCZOS).save(
+                patch_path
+            )
         reference_storage.update_placed_figure_outputs(
             keypoint_id,
-            figure_square_crop_abs=str(working_path),
+            figure_square_crop_abs=str(patch_path),
             figure_plate_abs=str(plate_path),
         )
         if log_cb:
-            log_cb("Saved square RGB crop + full-size plate preview.")
+            log_cb("Saved placement patch + full-size plate preview.")
 
     return str(plate_path.resolve())
+
+
+def _pose_gallery_save_from_local(
+    character_name: str,
+    local_abs: str,
+    stem_tag: str,
+) -> tuple[str, str]:
+    """Copy a local image into the pose gallery (``pose_NNN`` flat bucket)."""
+    _ = stem_tag
+    character = get_character_paths(character_name)
+    ensure_dirs(character.poses_dir)
+    src = Path(local_abs)
+    ext = src.suffix.lower() if src.suffix else ".png"
+    pid = _next_pose_tile_index_for_new_tile(character.poses_dir)
+    dest = character.poses_dir / f"pose_{pid:03d}{ext}"
+    shutil.copy2(src, dest)
+    rel = _append_pose_gallery_file_to_order(character_name, dest)
+    return str(dest), rel
+
+
+def _finalize_qwen_pose_result(
+    character_name: str,
+    result_ref: str,
+    stem_tag: str,
+    *,
+    placed_figure: dict[str, Any] | None,
+    work_dir: Path,
+    index: int,
+) -> tuple[str, str]:
+    """Download Qwen output; optionally composite onto white plate; save to gallery."""
+    from PIL import Image
+
+    from services.figure_crop import composite_qwen_output_on_white_plate
+
+    work_dir.mkdir(parents=True, exist_ok=True)
+    qwen_out = work_dir / f"qwen_{index}.png"
+    download_url_to_file(result_ref.strip(), qwen_out)
+    out_abs = qwen_out
+    if (
+        placed_figure
+        and isinstance(placed_figure.get("placement"), dict)
+        and isinstance(placed_figure.get("canvas"), dict)
+    ):
+        with Image.open(qwen_out) as qwen_im:
+            plate = composite_qwen_output_on_white_plate(qwen_im, placed_figure)
+        plate_path = work_dir / f"plate_{index}.png"
+        plate.save(plate_path)
+        out_abs = plate_path
+    return _pose_gallery_save_from_local(character_name, str(out_abs), stem_tag)
 
 
 def generate_pose_starting_image(
@@ -3901,6 +3983,8 @@ def generate_pose_starting_images_from_prompts(
 
     if log_cb and len(prompts) > 1:
         log_cb(f"Batch generating {len(prompts)} poses with Qwen…")
+    if kp and prompts:
+        _log_composed_prompt_snippet(prompts[0], log_cb)
 
     from services import reference_storage
 
@@ -3910,39 +3994,40 @@ def generate_pose_starting_images_from_prompts(
         if kp_entry and isinstance(kp_entry.get("placedFigure"), dict)
         else None
     )
-    use_placed_crop = bool(
+    has_placed = bool(
         placed and placed.get("placement") and placed.get("canvas")
     )
-    if use_placed_crop:
-        if kp_entry and log_cb:
-            ref_rel = str(kp_entry.get("referenceRelPath") or "").strip()
-            if ref_rel:
-                try:
-                    ref_abs = str(reference_storage.resolve_rel(ref_rel).resolve())
-                    if ref_abs == str(Path(base_image_path).resolve()):
-                        log_cb(
-                            "Warning: starting image matches the motion-ref capture — "
-                            "select the character portrait for identity, not the mesh frame."
-                        )
-                except Exception:
-                    pass
-        created: list[tuple[str, str]] = []
-        total = len(prompts)
-        placed_items = nonempty_prompts if nonempty_prompts else ([""] if kp else [])
-        for i, raw_prompt in enumerate(placed_items):
-            if log_cb:
-                log_cb(f"Generating pose {i + 1}/{len(placed_items)}…")
-            out_ref = _generate_pose_image_edit_url(
-                character_name,
-                base_image_path,
-                raw_prompt,
-                keypoint_image_path=kp,
-                log_cb=log_cb,
+    if has_placed and kp_entry and log_cb:
+        ref_rel = str(kp_entry.get("referenceRelPath") or "").strip()
+        if ref_rel:
+            try:
+                ref_abs = str(reference_storage.resolve_rel(ref_rel).resolve())
+                if ref_abs == str(Path(base_image_path).resolve()):
+                    log_cb(
+                        "Warning: starting image matches the motion-ref capture — "
+                        "select the character portrait for identity, not the mesh frame."
+                    )
+            except Exception:
+                pass
+
+    batch_work = Path(tempfile.gettempdir()) / f"pose_batch_{unique_suffix()}"
+    aux_args: list[str] = []
+    if kp:
+        if has_placed:
+            kp_crop, kp_source = _keypoint_crop_abs_for_placed_figure(
+                kp, placed, batch_work
             )
-            stem = sanitize_for_folder(raw_prompt) or f"prompt_{i}"
-            abs_path, rel = _download_url_to_pose_gallery(character_name, out_ref, stem)
-            created.append((abs_path, rel))
-        return created
+            min_side = int(placed.get("workingSquareSize") or 1024)
+            if log_cb:
+                log_cb(f"Qwen primary: {base_image_path} (full base image, no crop)")
+                log_cb(
+                    f"Qwen keypoint aux: {kp_source} → {kp_crop} ({min_side}×{min_side})"
+                )
+            aux_args = _image_edit_aux_cropped_keypoint_cli_args(
+                character_name, str(kp_crop)
+            )
+        else:
+            aux_args = _image_edit_aux_keypoint_cli_args(character_name, keypoint_image_path)
 
     body = _run_service_testmode(
         "services.image_edit_ai_service.serverless",
@@ -3957,7 +4042,7 @@ def generate_pose_starting_images_from_prompts(
             "inline",
             "--prompts-json",
             json.dumps(prompts),
-            *_image_edit_aux_keypoint_cli_args(character_name, keypoint_image_path),
+            *aux_args,
             "--convert-local-to-url",
         ],
         log_cb=log_cb,
@@ -3973,6 +4058,7 @@ def generate_pose_starting_images_from_prompts(
 
     created: list[tuple[str, str]] = []
     total = len(prompts)
+    placed_figure_for_save = placed if has_placed else None
     for i, prompt in enumerate(prompts):
         if log_cb:
             log_cb(f"Saving pose {i + 1}/{total}…")
@@ -3980,7 +4066,14 @@ def generate_pose_starting_images_from_prompts(
         url = results[i].get("url")
         if not isinstance(url, str) or not url:
             raise RuntimeError(f"Missing url for prompt index {i}.")
-        abs_path, rel = _download_url_to_pose_gallery(character_name, url, stem)
+        abs_path, rel = _finalize_qwen_pose_result(
+            character_name,
+            url.strip(),
+            stem,
+            placed_figure=placed_figure_for_save,
+            work_dir=batch_work,
+            index=i,
+        )
         created.append((abs_path, rel))
 
     return created
@@ -4002,6 +4095,7 @@ def _generate_pose_image_edit_url(
         effective = compose_keypoint_pose_edit_prompt(
             effective, with_closeup_sheet=use_closeup_sheet
         )
+        _log_composed_prompt_snippet(effective, log_cb)
     elif not effective:
         raise ValueError("No prompt text provided.")
 
@@ -4014,7 +4108,7 @@ def _generate_pose_image_edit_url(
         else None
     )
     if placed and placed.get("placement") and placed.get("canvas"):
-        return _run_keypoint_image_edit_with_crop(
+        return _run_keypoint_image_edit_with_plate(
             character_name,
             base_image_path,
             kp,
