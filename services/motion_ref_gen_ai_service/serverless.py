@@ -24,10 +24,17 @@ python -m services.motion_ref_gen_ai_service.serverless \\
 
 Environment variables
 ─────────────────────
-TEXT_ENCODER_DEVICE=cpu   (default) → text encoder runs on CPU; GPU VRAM <3 GB
-TEXT_ENCODER_DEVICE=cuda  → faster text encoding, requires ~17 GB VRAM total
+TEXT_ENCODER_DEVICE=cuda  (default when GPU available) — text encoder VRAM on GPU
+TEXT_ENCODER_DEVICE=cpu   — lower VRAM (~3 GB motion-only) but slower encoding
+TEXT_ENCODER_MODE=api     — set automatically on motion worker (do not use local Llama)
+KIMODO_TEXT_ENCODER_PORT=9550
+KIMODO_TEXT_ENCODER_READY_TIMEOUT=600  — first Llama load (seconds)
+KIMODO_MOTION_WORKER_READY_TIMEOUT=300 — motion diffusion model load (seconds)
 KIMODO_MODEL=kimodo-smplx-rp  (default model name — SMPL-X checkpoint for mesh skinning)
 SMPLX_MODEL_DIR=storage/body_models  (parent of the smplx/ body-model folder)
+
+Text encoder auto-starts on first motion-gen request (headless Gradio on port 9550).
+Manual: python -m kimodo.scripts.run_text_encoder_server --headless
 """
 
 from __future__ import annotations
@@ -175,9 +182,11 @@ def _load_kimodo_model(model_name: str = _DEFAULT_MODEL) -> Any:
     if model_name in _MODEL_CACHE:
         return _MODEL_CACHE[model_name]
 
-    # Ensure text encoder runs on CPU unless explicitly overridden
+    # Default text encoder device when API fallback is needed.
     if "TEXT_ENCODER_DEVICE" not in os.environ:
-        os.environ["TEXT_ENCODER_DEVICE"] = "cpu"
+        import torch as _torch
+
+        os.environ["TEXT_ENCODER_DEVICE"] = "cuda" if _torch.cuda.is_available() else "cpu"
 
     # The repo root is prepended to sys.path by our startup code, which causes
     # Python to find ./kimodo/ as a bare namespace package instead of the
@@ -611,9 +620,15 @@ def _server_is_up(port: int) -> bool:
 def _wait_for_server(
     proc: subprocess.Popen,  # type: ignore[type-arg]
     port: int,
-    timeout: float = 180.0,
+    timeout: float | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> None:
+    from services.motion_ref_gen_ai_service.text_encoder_worker import (
+        motion_worker_ready_timeout,
+    )
+
+    if timeout is None:
+        timeout = motion_worker_ready_timeout()
     deadline = time.monotonic() + timeout
     ready_event = threading.Event()
     stderr_lines: list[str] = []
@@ -657,6 +672,12 @@ def ensure_worker(
     log_cb: Callable[[str], None] | None = None,
 ) -> str:
     """Start the persistent motion-ref worker if not already running. Thread-safe."""
+    from services.motion_ref_gen_ai_service.text_encoder_worker import (
+        ensure_text_encoder,
+        motion_worker_child_env,
+        text_encoder_port,
+    )
+
     global _worker_proc, _worker_port
 
     with _worker_lock:
@@ -669,10 +690,12 @@ def ensure_worker(
             _wait_for_server(_worker_proc, port, log_cb=log_cb)
             return f"http://127.0.0.1:{port}"
 
+        ensure_text_encoder(log_cb=log_cb, port=text_encoder_port())
+
         if log_cb:
             log_cb(
-                f"Starting KiMoD worker (model={model_name}, port={port}). "
-                "Model weights will download on first run (~few GB)…"
+                f"Starting KiMoD motion worker (model={model_name}, port={port}). "
+                "Loading diffusion model only…"
             )
         cmd = [
             sys.executable, "-m",
@@ -684,6 +707,7 @@ def ensure_worker(
         _worker_proc = subprocess.Popen(
             cmd,
             cwd=str(_REPO_ROOT),
+            env=motion_worker_child_env(text_encoder_port()),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

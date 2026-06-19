@@ -286,6 +286,12 @@ def _shot_item_for_api(e: dict[str, Any]) -> dict[str, Any]:
     }
     if e.get("keypointId"):
         item["keypointId"] = str(e["keypointId"])
+    if e.get("distance") is not None:
+        item["distance"] = float(e["distance"])
+    if e.get("slideX") is not None:
+        item["slideX"] = float(e["slideX"])
+    if e.get("slideY") is not None:
+        item["slideY"] = float(e["slideY"])
     crop = e.get("cropBox")
     if isinstance(crop, dict):
         item["cropBox"] = crop
@@ -314,6 +320,9 @@ def save_shot(
     frame_index: int,
     azimuth: float,
     elevation: float,
+    distance: float | None = None,
+    slide_x: float | None = None,
+    slide_y: float | None = None,
     crop_box: dict[str, Any] | None = None,
     image_width: int | None = None,
     image_height: int | None = None,
@@ -346,6 +355,12 @@ def save_shot(
         "relPath": _abs_to_storage_rel(out_path),
         "createdAt": time.time(),
     }
+    if distance is not None:
+        entry["distance"] = float(distance)
+    if slide_x is not None:
+        entry["slideX"] = float(slide_x)
+    if slide_y is not None:
+        entry["slideY"] = float(slide_y)
     if isinstance(crop_box, dict) and crop_box.get("width") and crop_box.get("height"):
         entry["cropBox"] = {
             "x": int(crop_box["x"]),

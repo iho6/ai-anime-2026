@@ -341,6 +341,9 @@ class MotionShotSaveBody(BaseModel):
     frameIndex: int
     azimuth: float
     elevation: float
+    distance: float | None = None
+    slideX: float | None = None
+    slideY: float | None = None
     cropBox: dict[str, int] | None = None
     imageWidth: int | None = None
     imageHeight: int | None = None
@@ -376,6 +379,9 @@ def motion_ref_shots_save(body: MotionShotSaveBody) -> dict[str, Any]:
             frame_index=body.frameIndex,
             azimuth=body.azimuth,
             elevation=body.elevation,
+            distance=body.distance,
+            slide_x=body.slideX,
+            slide_y=body.slideY,
             crop_box=body.cropBox,
             image_width=body.imageWidth,
             image_height=body.imageHeight,

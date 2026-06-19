@@ -18,6 +18,7 @@ type Props = {
   open: boolean;
   charKey: string;
   title?: string;
+  mode?: "initial" | "resume";
   onClose: () => void | Promise<void>;
   onDone?: () => void | Promise<void>;
 };
@@ -32,7 +33,7 @@ const STEP_LABEL: Record<StepKey, string> = {
 };
 
 export function BaseCloseupWizardModal(props: Props) {
-  const { open, charKey, title = "Closeup Wizard", onClose, onDone } = props;
+  const { open, charKey, title = "Closeup Wizard", mode = "initial", onClose, onDone } = props;
   const [sessionId, setSessionId] = useState("");
   const [steps, setSteps] = useState<CloseupWizardStep[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
@@ -96,17 +97,23 @@ export function BaseCloseupWizardModal(props: Props) {
     setLastLoadedPreviewUrl("");
     (async () => {
       try {
-        const started = await apiHubCloseupWizardStart(charKey, logLine);
+        const started = await apiHubCloseupWizardStart(
+          charKey,
+          logLine,
+          mode === "resume" ? { resume: true } : undefined
+        );
         if (cancelled) return;
         if (started.sessionId) setSessionId(started.sessionId);
         applyState(started);
-        const generated = await apiHubCloseupWizardGenerateCurrent(
-          charKey,
-          String(started.sessionId || ""),
-          logLine
-        );
-        if (cancelled) return;
-        applyState(generated);
+        if (mode === "initial") {
+          const generated = await apiHubCloseupWizardGenerateCurrent(
+            charKey,
+            String(started.sessionId || ""),
+            logLine
+          );
+          if (cancelled) return;
+          applyState(generated);
+        }
       } catch (e) {
         if (!cancelled) {
           pushErrorLine(e instanceof Error ? e.message : String(e));
@@ -121,7 +128,7 @@ export function BaseCloseupWizardModal(props: Props) {
     return () => {
       cancelled = true;
     };
-  }, [open, charKey, logLine, applyState, pushErrorLine]);
+  }, [open, charKey, mode, logLine, applyState, pushErrorLine]);
 
   async function closeWizard() {
     if (busy) return;

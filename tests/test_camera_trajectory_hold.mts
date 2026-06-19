@@ -72,4 +72,15 @@ assert.ok(
   "should blend after hold window ends",
 );
 
+// At exact keyframe frame, interpolation must match stored keyframe pose (no double-apply drift).
+const exactKf = kf(42, 35, 5, 50);
+const exactPose = keyframeWorldPose(exactKf, centerY);
+const interpolatedExact = interpolateWorldPoseAtFrame(42, [exactKf], centerY)!;
+assert.equal(interpolatedExact.position[0], exactPose.position[0]);
+assert.equal(interpolatedExact.position[1], exactPose.position[1]);
+assert.equal(interpolatedExact.position[2], exactPose.position[2]);
+assert.equal(interpolatedExact.target[0], exactPose.target[0]);
+assert.equal(interpolatedExact.target[1], exactPose.target[1]);
+assert.equal(interpolatedExact.target[2], exactPose.target[2]);
+
 console.log("test_camera_trajectory_hold: OK");

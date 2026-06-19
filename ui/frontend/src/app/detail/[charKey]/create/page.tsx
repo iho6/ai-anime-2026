@@ -80,6 +80,7 @@ import { GalleryImageLightbox } from "../../../../components/GalleryImageLightbo
 import { SquareButton } from "../../../../components/SquareButton";
 import { useAppError } from "../../../../components/ErrorProvider";
 import { ResizableScrollGallery } from "../../../../components/ResizableScrollGallery";
+import { truncateJobModalStatusLine } from "../../../../lib/jobModalStatus";
 /** Server bucket key for the flat pose gallery (see ``POSE_FLAT_BUCKET`` in logic). */
 const POSE_FLAT_FOLDER_KEY = "flat";
 
@@ -196,17 +197,6 @@ function detectGenTypeFromRel(rel: string): GenType | null {
   return null;
 }
 
-/** Single-line status for ``JobRunModal`` next to the spinner (WS log lines can be long). */
-function truncateJobModalStatusLine(raw: string, maxLen = 120): string {
-  const s = raw
-    .replace(/\r\n/g, "\n")
-    .replace(/\n/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (s.length <= maxLen) return s;
-  return `${s.slice(0, maxLen - 1)}…`;
-}
-
 export default function CreatePage() {
   const router = useRouter();
   const { showError, askText, confirmAction } = useAppError();
@@ -267,6 +257,7 @@ export default function CreatePage() {
     failSession,
     setTitle,
     pushLog,
+    onJobLogLine,
     setRunningStatus,
     modalProps: jobModalProps,
   } = useJobRunSession(logRef);
@@ -1084,7 +1075,7 @@ export default function CreatePage() {
       showError({ message: "Enter a prompt (or load a reference keypoint) first." });
       return;
     }
-    beginSession({ title: "Generating", clearLog: true });
+    beginSession({ title: "Generating", clearLog: true, runningStatus: "Starting…" });
     let poseSessionEndOk = false;
     try {
       if (videoRef) {
@@ -1100,7 +1091,7 @@ export default function CreatePage() {
             baseRelPath: activeStartingRel,
             prompts: promptTextsForGeneration,
           },
-          onLogLine: (line) => logRef.current?.pushLine(line),
+          onLogLine: onJobLogLine,
         });
         if (!done.ok) {
           failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
@@ -1123,7 +1114,7 @@ export default function CreatePage() {
             prompts: promptTextsForGeneration,
             ...(keypointRelPath ? { keypointRelPath } : {}),
           },
-          onLogLine: (line) => logRef.current?.pushLine(line),
+          onLogLine: onJobLogLine,
         });
         if (!done.ok) {
           failSession(new Error(done.error ?? "Generation failed"), "Generation failed");

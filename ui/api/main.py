@@ -419,7 +419,8 @@ async def hub_closeup_wizard_ws(ws: WebSocket, char_key: str) -> None:
         job = (msg.get("job") or "").strip()
         session_id = (msg.get("sessionId") or "").strip()
         if job == "start":
-            result = logic.start_closeup_wizard(char_key)
+            resume = bool(msg.get("resume"))
+            result = logic.start_closeup_wizard(char_key, resume=resume)
             await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
             return
         if not session_id:

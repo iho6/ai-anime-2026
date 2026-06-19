@@ -1,8 +1,10 @@
 """
 Figure crop / placement helpers for motion-ref keypoint and Qwen generation.
 
-A ``placedFigure`` stores canvas size + pixel placement so SDPose and Qwen can run
-on a tight square crop while outputs are composited back to the original frame.
+A ``placedFigure`` stores the universal **layout contract** (canvas size, pixel
+placement, working square size) so SDPose and Qwen run at 1024² and outputs graft
+back onto the same backdrop. ``squareRefCropRelPath`` caches the SDPose input crop
+only; Qwen primary identity always comes from the current character starting image.
 """
 
 from __future__ import annotations
@@ -119,6 +121,16 @@ def square_bbox_from_box(box: dict[str, int], img_w: int, img_h: int) -> dict[st
 
 def placement_box(box: dict[str, int]) -> tuple[int, int, int, int]:
     return int(box["x"]), int(box["y"]), int(box["width"]), int(box["height"])
+
+
+def centered_square_placement(img_w: int, img_h: int) -> dict[str, int]:
+    """Largest axis-aligned square centered in an image (for character primary crops)."""
+    if img_w < 1 or img_h < 1:
+        raise ValueError("Image dimensions must be positive.")
+    side = min(img_w, img_h)
+    x = (img_w - side) // 2
+    y = (img_h - side) // 2
+    return {"x": x, "y": y, "width": side, "height": side}
 
 
 def build_placed_figure_meta(

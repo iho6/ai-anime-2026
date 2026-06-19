@@ -301,6 +301,9 @@ elif [[ "${SKIP_PYTHON_INSTALL}" != "1" ]]; then
   meta_log "Installing Python requirements into venv..."
   "${VENV_PYTHON}" -m pip install -r "${REQUIREMENTS_PY}"
   meta_log "Python requirements installation completed"
+  meta_log "Installing kimodo (editable, MotionCorrection C extension)..."
+  "${VENV_PYTHON}" -c "from services.kimodo_setup import pip_install_kimodo_editable; pip_install_kimodo_editable()"
+  meta_log "Kimodo installation completed"
 else
   meta_log "Skipping Python package install (--skip-python-install)"
 fi

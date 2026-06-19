@@ -1003,6 +1003,7 @@ def update_placed_figure_outputs(
             shutil.copy2(figure_plate_abs, dest)
             pf["figurePlateRelPath"] = _abs_to_storage_rel(dest)
         if square_ref_crop_abs:
+            # SDPose input crop only (motion-ref mesh square); not Qwen character primary.
             dest = placed_dir() / f"pf_{keypoint_id}_ref_square.png"
             shutil.copy2(square_ref_crop_abs, dest)
             pf["squareRefCropRelPath"] = _abs_to_storage_rel(dest)

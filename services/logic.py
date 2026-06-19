@@ -929,10 +929,9 @@ def run_startup_setup_and_launch(
     if log_cb and gpu_detail:
         log_cb(f"GPU preflight OK: {gpu_detail}")
 
-    # Build deps + editable kimodo install (MotionCorrection C extension).
-    from services.kimodo_setup import ensure_kimodo_build_deps, ensure_kimodo_installed
+    # Editable kimodo install (MotionCorrection C extension + apt build deps).
+    from services.kimodo_setup import ensure_kimodo_installed
 
-    ensure_kimodo_build_deps(run_command=_run_command_logged, log_cb=log_cb)
     ensure_kimodo_installed(run_command=_run_command_logged, log_cb=log_cb)
 
     # smplx: skins the kimodo SMPL-X motion into a white body mesh for the viewer.
@@ -2419,6 +2418,16 @@ _closeup_wizard_lock = threading.Lock()
 _closeup_wizard_sessions: dict[str, dict[str, Any]] = {}
 
 
+def _load_closeup_saved_from_disk(char_key: str) -> dict[str, str]:
+    character = get_character_paths(char_key)
+    saved: dict[str, str] = {}
+    for step_key, stem in _CLOSEUP_STEM_BY_STEP.items():
+        p = _find_first_matching_image(character.base_dir, stem)
+        if p and p.is_file():
+            saved[step_key] = _abs_to_storage_rel(p)
+    return saved
+
+
 def closeup_wizard_steps() -> list[dict[str, Any]]:
     return [
         {"stepKey": key, "angleId": angle_id, "label": label}
@@ -2619,24 +2628,72 @@ def make_angle_to_temp_file(
     return str(out_abs)
 
 
-def start_closeup_wizard(char_key: str) -> dict[str, Any]:
+def start_closeup_wizard(char_key: str, *, resume: bool = False) -> dict[str, Any]:
     base_abs = character_base_source_image_path(char_key)
     if not base_abs:
         raise ValueError("No base image found for closeup generation.")
     session_id = f"cw_{unique_suffix(12)}"
+
+    saved: dict[str, str] = {}
+    failed: dict[str, str] = {}
+    seen: list[str] = []
+    step_index = 0
+    preview_rel: str | None = None
+    candidate_rel: str | None = None
+
+    if resume:
+        saved = _load_closeup_saved_from_disk(char_key)
+        seen = sorted(saved.keys())
+        if len(saved) >= len(_CLOSEUP_STEPS):
+            step_index = len(_CLOSEUP_STEPS) - 1
+        else:
+            for i, (step_key, _aid, _label) in enumerate(_CLOSEUP_STEPS):
+                if step_key not in saved:
+                    step_index = i
+                    break
+        step_key, _angle_id, label = _CLOSEUP_STEPS[step_index]
+        preview_rel = _compose_closeup_quadrant_preview(
+            char_key,
+            saved,
+            failed,
+            set(seen),
+            step_key,
+            unsaved_generated_abs_by_step={},
+        )
+        if saved:
+            _flush_closeup_composites_from_session_saved(char_key, saved)
+        candidate_rel = saved.get(step_key)
+
     with _closeup_wizard_lock:
         _closeup_wizard_sessions[session_id] = {
             "charKey": char_key,
             "baseAbs": base_abs,
-            "stepIndex": 0,
-            "saved": {},
-            "failed": {},
-            "seen": [],
+            "stepIndex": step_index,
+            "saved": dict(saved),
+            "failed": dict(failed),
+            "seen": list(seen),
             "candidateAbs": None,
             "candidateStepKey": None,
             "tempFiles": [],
             "generatedAbsByStep": {},
         }
+
+    if resume:
+        step_key, _angle_id, label = _CLOSEUP_STEPS[step_index]
+        out: dict[str, Any] = {
+            "sessionId": session_id,
+            "steps": closeup_wizard_steps(),
+            "currentStepIndex": step_index,
+            "stepKey": step_key,
+            "stepLabel": label,
+            "saved": dict(saved),
+            "failed": dict(failed),
+            "compositePreviewRelPath": preview_rel,
+        }
+        if candidate_rel:
+            out["candidateRelPath"] = candidate_rel
+        return out
+
     return {
         "sessionId": session_id,
         "steps": closeup_wizard_steps(),
@@ -2873,7 +2930,7 @@ def go_last_closeup_wizard(session_id: str) -> dict[str, Any]:
         step_key,
         unsaved_generated_abs_by_step=_closeup_unsaved_preview_paths(session),
     )
-    return {
+    out: dict[str, Any] = {
         "currentStepIndex": idx,
         "stepKey": step_key,
         "stepLabel": label,
@@ -2881,6 +2938,9 @@ def go_last_closeup_wizard(session_id: str) -> dict[str, Any]:
         "failed": failed,
         "compositePreviewRelPath": preview_rel,
     }
+    if saved.get(step_key):
+        out["candidateRelPath"] = saved[step_key]
+    return out
 
 
 def go_next_closeup_wizard(session_id: str) -> dict[str, Any]:
@@ -2902,7 +2962,7 @@ def go_next_closeup_wizard(session_id: str) -> dict[str, Any]:
         step_key,
         unsaved_generated_abs_by_step=_closeup_unsaved_preview_paths(session),
     )
-    return {
+    out: dict[str, Any] = {
         "currentStepIndex": idx,
         "stepKey": step_key,
         "stepLabel": label,
@@ -2910,6 +2970,9 @@ def go_next_closeup_wizard(session_id: str) -> dict[str, Any]:
         "failed": failed,
         "compositePreviewRelPath": preview_rel,
     }
+    if saved.get(step_key):
+        out["candidateRelPath"] = saved[step_key]
+    return out
 
 
 _CLOSEUP_QUADRANT_SLOTS: dict[str, tuple[int, int]] = {
@@ -3548,6 +3611,7 @@ def _run_keypoint_image_edit_with_crop(
     from services import reference_storage
     from services.figure_crop import (
         MIN_SQUARE_WORKING_SIZE,
+        centered_square_placement,
         extract_square_working_crop_path,
         paste_square_working_onto_canvas,
         upscale_to_working_square,
@@ -3563,31 +3627,30 @@ def _run_keypoint_image_edit_with_crop(
     primary_crop = tmp_dir / "primary_square.png"
     kp_crop = tmp_dir / "kp_square.png"
 
-    pf = placed_figure
-    square_ref_rel = pf.get("squareRefCropRelPath")
-    square_kp_rel = pf.get("squareKeypointCropRelPath")
-    if square_ref_rel and square_kp_rel:
-        ref_src = reference_storage.resolve_rel(str(square_ref_rel))
+    with Image.open(primary_abs) as primary_im:
+        char_placement = centered_square_placement(primary_im.width, primary_im.height)
+    extract_square_working_crop_path(
+        primary_abs, char_placement, primary_crop, min_side=min_side
+    )
+
+    square_kp_rel = placed_figure.get("squareKeypointCropRelPath")
+    kp_source = "extracted"
+    if square_kp_rel:
         kp_src = reference_storage.resolve_rel(str(square_kp_rel))
-        if ref_src.is_file() and kp_src.is_file():
-            shutil.copy2(ref_src, primary_crop)
+        if kp_src.is_file():
             shutil.copy2(kp_src, kp_crop)
-        else:
-            extract_square_working_crop_path(
-                primary_abs, placement, primary_crop, min_side=min_side
-            )
-            extract_square_working_crop_path(
-                keypoint_abs, placement, kp_crop, min_side=min_side
-            )
-    else:
-        extract_square_working_crop_path(
-            primary_abs, placement, primary_crop, min_side=min_side
-        )
+            kp_source = "cached"
+    if kp_source == "extracted":
         extract_square_working_crop_path(
             keypoint_abs, placement, kp_crop, min_side=min_side
         )
 
     if log_cb:
+        log_cb(
+            f"Qwen primary: {primary_abs} centered square → {min_side}×{min_side}"
+        )
+        log_cb(f"Qwen keypoint aux: {kp_source} → {kp_crop}")
+        log_cb(f"Output plate: {c_w}×{c_h} placement {placement}")
         log_cb(f"Qwen edit on {min_side}×{min_side} square crops…")
 
     body = _run_service_testmode(
@@ -3836,6 +3899,9 @@ def generate_pose_starting_images_from_prompts(
         else:
             prompts = [_append_keypoint_only_pose_hint(p) for p in prompts]
 
+    if log_cb and len(prompts) > 1:
+        log_cb(f"Batch generating {len(prompts)} poses with Qwen…")
+
     from services import reference_storage
 
     kp_entry = reference_storage.find_keypoint_by_keypoint_abs(kp) if kp else None
@@ -3848,8 +3914,23 @@ def generate_pose_starting_images_from_prompts(
         placed and placed.get("placement") and placed.get("canvas")
     )
     if use_placed_crop:
+        if kp_entry and log_cb:
+            ref_rel = str(kp_entry.get("referenceRelPath") or "").strip()
+            if ref_rel:
+                try:
+                    ref_abs = str(reference_storage.resolve_rel(ref_rel).resolve())
+                    if ref_abs == str(Path(base_image_path).resolve()):
+                        log_cb(
+                            "Warning: starting image matches the motion-ref capture — "
+                            "select the character portrait for identity, not the mesh frame."
+                        )
+                except Exception:
+                    pass
         created: list[tuple[str, str]] = []
+        total = len(prompts)
         for i, prompt in enumerate(prompts):
+            if log_cb:
+                log_cb(f"Generating pose {i + 1}/{total}…")
             out_ref = _generate_pose_image_edit_url(
                 character_name,
                 base_image_path,
@@ -3890,7 +3971,10 @@ def generate_pose_starting_images_from_prompts(
         )
 
     created: list[tuple[str, str]] = []
+    total = len(prompts)
     for i, prompt in enumerate(prompts):
+        if log_cb:
+            log_cb(f"Saving pose {i + 1}/{total}…")
         stem = sanitize_for_folder(prompt) or f"prompt_{i}"
         url = results[i].get("url")
         if not isinstance(url, str) or not url:
@@ -8714,6 +8798,25 @@ def run_pose_keypoint_for_image(
     return str(kp_crop_path)
 
 
+def _resolve_reference_image_abs(image_path: str) -> Path:
+    """Resolve references/, motion_refs/, storage-relative, or absolute filesystem paths."""
+    from services import reference_storage
+    from services.motion_shot_storage import resolve_shot_rel
+
+    raw = str(image_path).strip()
+    if not raw:
+        raise ValueError("Reference image path is empty")
+    p = Path(raw)
+    if p.is_file():
+        return p.resolve()
+    rel_norm = raw.replace("\\", "/").lstrip("/")
+    if rel_norm.lower().startswith("references/"):
+        return Path(reference_storage.resolve_rel(rel_norm))
+    if rel_norm.lower().startswith("motion_refs/"):
+        return Path(resolve_shot_rel(rel_norm))
+    return resolve_storage_rel_path_to_abs(rel_norm)
+
+
 def make_reference_keypoint(
     image_rel_path: str,
     log_cb: Callable[[str], None] | None = None,
@@ -8726,15 +8829,7 @@ def make_reference_keypoint(
     from services.figure_crop import build_placed_figure_meta
     from PIL import Image
 
-    rel_norm = str(image_rel_path).replace("\\", "/").lstrip("/")
-    if rel_norm.lower().startswith("references/"):
-        abs_path = str(reference_storage.resolve_rel(rel_norm))
-    elif rel_norm.lower().startswith("motion_refs/"):
-        from services.motion_shot_storage import resolve_shot_rel
-
-        abs_path = str(resolve_shot_rel(rel_norm))
-    else:
-        abs_path = str(resolve_storage_rel_path_to_abs(rel_norm))
+    abs_path = str(_resolve_reference_image_abs(image_rel_path))
     if not Path(abs_path).is_file():
         raise ValueError(f"Reference image not found: {image_rel_path}")
 
@@ -8925,11 +9020,7 @@ def make_reference_angle(
     result as a new reference image."""
     from services import reference_storage
 
-    rel_norm = str(image_rel_path).replace("\\", "/").lstrip("/")
-    if rel_norm.lower().startswith("references/"):
-        abs_path = str(reference_storage.resolve_rel(rel_norm))
-    else:
-        abs_path = str(resolve_storage_rel_path_to_abs(rel_norm))
+    abs_path = str(_resolve_reference_image_abs(image_rel_path))
     if not Path(abs_path).is_file():
         raise ValueError(f"Reference image not found: {image_rel_path}")
     out_abs = _run_single_multi_angle_from_image(Path(abs_path), int(angle_id), log_cb=log_cb)

@@ -1234,6 +1234,9 @@ export type MotionRefShot = {
   frameIndex: number;
   azimuth: number;
   elevation: number;
+  distance?: number;
+  slideX?: number;
+  slideY?: number;
   relPath: string;
   keypointId?: string | null;
   cropBox?: { x: number; y: number; width: number; height: number };
@@ -1497,6 +1500,9 @@ export async function apiMotionRefShotSave(params: {
   frameIndex: number;
   azimuth: number;
   elevation: number;
+  distance?: number;
+  slideX?: number;
+  slideY?: number;
   cropBox?: { x: number; y: number; width: number; height: number };
   imageWidth?: number;
   imageHeight?: number;
@@ -1655,87 +1661,6 @@ export async function apiMotionRefV2PoseSeqFrame(
     }
   );
   return readJson(res);
-}
-
-const V2POSE_WS_FRAME_CHUNK = 10;
-
-export function runMotionRefV2PoseSeqWsJob(params: {
-  motionKey: string;
-  folderName: string;
-  frames: V2PoseSeqFrameCapture[];
-  onLogLine: (line: string) => void;
-  onUploadProgress?: (sent: number, total: number) => void;
-}): Promise<WsDoneMessage<{ folderId: string; folderName: string; items: PoseReference[] }>> {
-  const { motionKey, folderName, frames, onLogLine, onUploadProgress } = params;
-  const url = wsUrlForPath(
-    `/motion_ref/${encodeURIComponent(motionKey)}/v2pose_seq/ws`
-  );
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(url);
-    let settled = false;
-    const settleReject = (err: Error) => {
-      if (settled) return;
-      settled = true;
-      reject(err);
-    };
-    const settleResolve = (
-      data: WsDoneMessage<{ folderId: string; folderName: string; items: PoseReference[] }>
-    ) => {
-      if (settled) return;
-      settled = true;
-      resolve(data);
-    };
-    ws.onerror = () => {
-      settleReject(new Error("WebSocket connection failed"));
-    };
-    ws.onclose = (ev) => {
-      if (settled) return;
-      const reason = ev.reason?.trim();
-      settleReject(
-        new Error(
-          `WebSocket closed before completion (${ev.code}${reason ? `: ${reason}` : ""})`
-        )
-      );
-    };
-    ws.onopen = () => {
-      void (async () => {
-        try {
-          ws.send(JSON.stringify({ type: "init", folderName }));
-          const total = frames.length;
-          for (let i = 0; i < total; i += V2POSE_WS_FRAME_CHUNK) {
-            const chunk = frames.slice(i, i + V2POSE_WS_FRAME_CHUNK);
-            ws.send(JSON.stringify({ type: "frames", frames: chunk }));
-            onUploadProgress?.(Math.min(i + chunk.length, total), total);
-            await new Promise<void>((r) => setTimeout(r, 0));
-          }
-          ws.send(JSON.stringify({ type: "start" }));
-        } catch (e) {
-          settleReject(e instanceof Error ? e : new Error(String(e)));
-          ws.close();
-        }
-      })();
-    };
-    ws.onmessage = (ev) => {
-      let data: { type?: string; line?: string; ok?: boolean; result?: unknown; error?: string };
-      try {
-        data = JSON.parse(String(ev.data));
-      } catch {
-        return;
-      }
-      if (data.type === "log" && typeof data.line === "string") onLogLine(data.line);
-      if (data.type === "done") {
-        settled = true;
-        ws.close();
-        if (data.ok === false) {
-          reject(new Error(data.error || "V2Pose Seq failed."));
-          return;
-        }
-        settleResolve(
-          data as WsDoneMessage<{ folderId: string; folderName: string; items: PoseReference[] }>
-        );
-      }
-    };
-  });
 }
 
 export async function apiMotionRefShotsReorderRoot(order: string[]): Promise<void> {
@@ -2166,11 +2091,12 @@ export type CloseupWizardState = {
 
 export async function apiHubCloseupWizardStart(
   charKey: string,
-  onLogLine: (line: string) => void
+  onLogLine: (line: string) => void,
+  options?: { resume?: boolean }
 ): Promise<CloseupWizardState> {
   const done = await runHubWsJob<CloseupWizardState>({
     charKey,
-    payload: { job: "start" },
+    payload: { job: "start", resume: Boolean(options?.resume) },
     onLogLine,
   });
   if (!done.ok || !done.result) throw new Error(done.error ?? "Failed to start wizard");

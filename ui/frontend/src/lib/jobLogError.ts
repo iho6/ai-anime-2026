@@ -1,6 +1,22 @@
 import type { RefObject } from "react";
 import type { SharedLogStreamHandle } from "../components/SharedLogStream";
 import { normalizeAppError } from "./api";
+import { truncateJobModalStatusLine } from "./jobModalStatus";
+
+export { truncateJobModalStatusLine } from "./jobModalStatus";
+
+/** Push a WS log line and mirror it as the modal status line (for batch N/M progress). */
+export function pushJobLogLine(
+  logRef: RefObject<SharedLogStreamHandle | null> | undefined,
+  line: string,
+  setRunningStatus?: (status: string) => void
+): void {
+  logRef?.current?.pushLine(line);
+  if (setRunningStatus) {
+    const status = truncateJobModalStatusLine(line);
+    if (status) setRunningStatus(status);
+  }
+}
 
 /** Push normalized error (same shape as AppErrorModal) into the job log, one line per segment so newlines are preserved. */
 export function appendNormalizedErrorToLog(

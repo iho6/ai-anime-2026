@@ -3,6 +3,7 @@
 import React, { useCallback, useRef, useState } from "react";
 import type { CameraKeyframe } from "../../lib/api";
 import { CameraIcon } from "../IconPrimitives";
+import { DEFAULT_BLEND_EASE } from "./cameraTrajectory";
 
 type Props = {
   totalFrames: number;
@@ -20,6 +21,15 @@ type Props = {
 function frameToPct(frame: number, maxFrame: number): number {
   if (maxFrame <= 0) return 0;
   return (frame / maxFrame) * 100;
+}
+
+function cameraKeyframeTitle(kf: CameraKeyframe): string {
+  const hold = kf.holdFrames != null && kf.holdFrames > 0 ? kf.holdFrames : 0;
+  const ease = kf.blendEase ?? DEFAULT_BLEND_EASE;
+  const parts = [`Camera f${kf.frameIndex}`];
+  if (hold > 0) parts.push(`hold ${hold}f`);
+  if (ease !== DEFAULT_BLEND_EASE) parts.push(`glide ${ease}%`);
+  return parts.join(" · ");
 }
 
 function CameraKeyframeMarker(props: {
@@ -42,16 +52,10 @@ function CameraKeyframeMarker(props: {
       : "rgba(255,255,255,0.55)";
   const scale = hovered && !pressed ? 1.12 : 1;
 
-  const hold = kf.holdFrames != null && kf.holdFrames > 0 ? kf.holdFrames : 0;
-  const title =
-    hold > 0
-      ? `Camera f${kf.frameIndex} · hold ${hold}f`
-      : `Camera f${kf.frameIndex}`;
-
   return (
     <button
       type="button"
-      title={title}
+      title={cameraKeyframeTitle(kf)}
       disabled={disabled}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => {
@@ -136,6 +140,7 @@ export function MotionPlaybackScrubber(props: Props) {
 
   const trackRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<"in" | "out" | "playhead" | null>(null);
+  const captureTargetRef = useRef<HTMLElement | null>(null);
 
   const maxFrame = Math.max(0, totalFrames - 1);
   const startPct = frameToPct(playbackStart, maxFrame);
@@ -159,12 +164,18 @@ export function MotionPlaybackScrubber(props: Props) {
     [playbackStart, playbackEnd]
   );
 
+  const beginPointerCapture = (e: React.PointerEvent) => {
+    const el = e.currentTarget as HTMLElement;
+    captureTargetRef.current = el;
+    el.setPointerCapture(e.pointerId);
+  };
+
   const startPlayheadDrag = useCallback(
     (e: React.PointerEvent) => {
       if (disabled || totalFrames === 0 || e.button !== 0) return;
       e.preventDefault();
       dragRef.current = "playhead";
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      beginPointerCapture(e);
       onFrameChange(clampPlayheadFrame(frameFromClientX(e.clientX)));
     },
     [clampPlayheadFrame, disabled, frameFromClientX, onFrameChange, totalFrames]
@@ -178,7 +189,7 @@ export function MotionPlaybackScrubber(props: Props) {
     e.preventDefault();
     e.stopPropagation();
     dragRef.current = kind;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    beginPointerCapture(e);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -198,10 +209,14 @@ export function MotionPlaybackScrubber(props: Props) {
     onRangeChange(playbackStart, Math.min(maxFrame, nextEnd));
   };
 
-  const onPointerUp = (e: React.PointerEvent) => {
+  const endPointerDrag = (e: React.PointerEvent) => {
     if (!dragRef.current) return;
     dragRef.current = null;
-    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    const target = captureTargetRef.current;
+    if (target?.hasPointerCapture(e.pointerId)) {
+      target.releasePointerCapture(e.pointerId);
+    }
+    captureTargetRef.current = null;
   };
 
   if (totalFrames <= 0) {
@@ -222,8 +237,8 @@ export function MotionPlaybackScrubber(props: Props) {
         touchAction: "none",
       }}
       onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerUp={endPointerDrag}
+      onPointerCancel={endPointerDrag}
     >
       {totalFrames > 1 &&
         cameraKeyframes.map((kf) => {
@@ -286,6 +301,9 @@ export function MotionPlaybackScrubber(props: Props) {
         <div
           role="slider"
           aria-label="Playhead"
+          aria-valuemin={playbackStart}
+          aria-valuemax={playbackEnd}
+          aria-valuenow={frameIndex}
           onPointerDown={(e) => {
             e.stopPropagation();
             startPlayheadDrag(e);
@@ -309,6 +327,9 @@ export function MotionPlaybackScrubber(props: Props) {
       <div
         role="slider"
         aria-label="Trim in"
+        aria-valuemin={0}
+        aria-valuemax={Math.max(0, playbackEnd - 1)}
+        aria-valuenow={playbackStart}
         onPointerDown={(e) => onPointerDownHandle(e, "in")}
         style={{
           ...HANDLE_STYLE,
@@ -321,6 +342,9 @@ export function MotionPlaybackScrubber(props: Props) {
       <div
         role="slider"
         aria-label="Trim out"
+        aria-valuemin={Math.min(maxFrame, playbackStart + 1)}
+        aria-valuemax={maxFrame}
+        aria-valuenow={playbackEnd}
         onPointerDown={(e) => onPointerDownHandle(e, "out")}
         style={{
           ...HANDLE_STYLE,

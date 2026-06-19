@@ -9,6 +9,7 @@ from PIL import Image
 from services.figure_crop import (
     MIN_SQUARE_WORKING_SIZE,
     build_placed_figure_meta,
+    centered_square_placement,
     composite_rgba_on_white_plate,
     crop_image,
     extract_square_working_crop,
@@ -40,6 +41,16 @@ def test_pad_clamp_square_bbox_is_square() -> None:
     assert y >= 0
     assert x + w <= 400
     assert y + h <= 400
+
+
+def test_centered_square_placement() -> None:
+    box = centered_square_placement(800, 600)
+    x, y, w, h = placement_box(box)
+    assert w == h == 600
+    assert x == 100
+    assert y == 0
+    assert x + w <= 800
+    assert y + h <= 600
 
 
 def test_build_placed_figure_meta_squares_placement() -> None:

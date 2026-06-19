@@ -58,7 +58,7 @@ import {
   MOTION_REF_ACCENT_BG,
   MOTION_REF_ACCENT_BTN_BG,
 } from "./motionRef/theme";
-import { interpolateWorldPoseAtFrame, keyframeWorldPose, DEFAULT_BLEND_EASE } from "./motionRef/cameraTrajectory";
+import { interpolateWorldPoseAtFrame, DEFAULT_BLEND_EASE } from "./motionRef/cameraTrajectory";
 
 const DEFAULT_SEGMENTS: MotionRefSegment[] = [
   { text: "A person is ", duration: 3.0 },
@@ -83,7 +83,9 @@ export function MotionRefGenModal(props: {
     endSession,
     failSession,
     pushLog,
+    onJobLogLine,
     resetSession,
+    setRunningStatus,
     modalProps: jobModalProps,
   } = useJobRunSession(logRef);
 
@@ -109,10 +111,12 @@ export function MotionRefGenModal(props: {
   // ── In-place preview ───────────────────────────────────────────────────────
   // Viewer-only: strips per-frame horizontal root translation so the figure
   // stays centered during playback. Does not modify stored motion files.
-  const [inPlace, setInPlace] = useState(true);
+  const [inPlace, setInPlace] = useState(false);
   const inPlaceRef = useRef(false);
   const [trajectoryEnabled, setTrajectoryEnabled] = useState(true);
   const trajectoryEnabledRef = useRef(true);
+  // Show the crop-frame overlay (the square fed to SDPose) in the viewer.
+  const [showCropFrame, setShowCropFrame] = useState(true);
   // Root XZ per frame for mesh mode: Float32Array [x0,z0, x1,z1, ...].
   // Fetched from joints alongside the mesh; used to lock hips horizontally.
   const rootXZRef = useRef<Float32Array | null>(null);
@@ -136,6 +140,7 @@ export function MotionRefGenModal(props: {
   const [playbackEnd, setPlaybackEnd] = useState(0);
   const playbackSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userOrbitingRef = useRef(false);
+  const userCameraOverrideRef = useRef(false);
   const viewerCenterYRef = useRef(0.9);
 
   // ── Shots gallery ─────────────────────────────────────────────────────────
@@ -208,8 +213,18 @@ export function MotionRefGenModal(props: {
     }
   }
 
-  function applyTrajectoryAtFrame(frame: number, keyframes: CameraKeyframe[] = cameraKeyframes) {
-    if (keyframes.length === 0 || !trajectoryEnabledRef.current || userOrbitingRef.current) {
+  function applyTrajectoryAtFrame(
+    frame: number,
+    keyframes: CameraKeyframe[] = cameraKeyframes,
+    opts?: { forCapture?: boolean },
+  ) {
+    if (keyframes.length === 0 || !trajectoryEnabledRef.current) {
+      return;
+    }
+    if (
+      !opts?.forCapture &&
+      (userOrbitingRef.current || userCameraOverrideRef.current)
+    ) {
       return;
     }
     const centerY = skeletonRef.current?.getViewerCenterY() ?? viewerCenterYRef.current;
@@ -256,19 +271,17 @@ export function MotionRefGenModal(props: {
     skeletonRef.current?.setMode("mesh");
 
     const slice = md.frames.subarray(start, start + stride);
+    const verts = new Float32Array(stride);
+    verts.set(slice);
     if (inPlaceRef.current && rootXZRef.current && fi * 2 + 1 < rootXZRef.current.length) {
       const rx = rootXZRef.current[fi * 2];
       const rz = rootXZRef.current[fi * 2 + 1];
-      const shifted = new Float32Array(stride);
       for (let i = 0; i < stride; i += 3) {
-        shifted[i]     = slice[i]     - rx;
-        shifted[i + 1] = slice[i + 1];   // Y unchanged
-        shifted[i + 2] = slice[i + 2] - rz;
+        verts[i] -= rx;
+        verts[i + 2] -= rz;
       }
-      skeletonRef.current?.setFrame(shifted);
-    } else {
-      skeletonRef.current?.setFrame(slice);
     }
+    skeletonRef.current?.setFrame(verts);
   }
 
   // ── Load saved motions on open ─────────────────────────────────────────────
@@ -331,10 +344,11 @@ export function MotionRefGenModal(props: {
   // the effect re-runs when the toggle changes, updating the current mesh frame.
   }, [frameIndex, meshData, jointsData, displayMode, inPlace]);
 
-  // Apply camera trajectory when paused (scrub) or during playback.
+  // Apply camera trajectory during playback only.
   useEffect(() => {
+    if (!playing) return;
     if (cameraKeyframes.length === 0 || !trajectoryEnabled) return;
-    if (playing && userOrbitingRef.current) return;
+    if (userCameraOverrideRef.current) return;
     applyTrajectoryAtFrame(frameIndex);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, frameIndex, cameraKeyframes, trajectoryEnabled]);
@@ -342,6 +356,10 @@ export function MotionRefGenModal(props: {
   useEffect(() => {
     skeletonRef.current?.setGizmosVisible(!playing);
   }, [playing]);
+
+  useEffect(() => {
+    skeletonRef.current?.setCropOverlayVisible(showCropFrame);
+  }, [showCropFrame, meshData, jointsData]);
 
   useEffect(() => {
     skeletonRef.current?.setCameraGizmos(
@@ -371,10 +389,15 @@ export function MotionRefGenModal(props: {
     const facesText = await decompressGzipToText(facesBuf);
     const faces: number[][] = JSON.parse(facesText);
     const idx = new Uint32Array(faces.length * 3);
+    let maxFaceIndex = 0;
     for (let i = 0; i < faces.length; i++) {
-      idx[i * 3] = faces[i][0];
-      idx[i * 3 + 1] = faces[i][1];
-      idx[i * 3 + 2] = faces[i][2];
+      const a = faces[i][0];
+      const b = faces[i][1];
+      const c = faces[i][2];
+      idx[i * 3] = a;
+      idx[i * 3 + 1] = b;
+      idx[i * 3 + 2] = c;
+      maxFaceIndex = Math.max(maxFaceIndex, a, b, c);
     }
     skeletonRef.current?.setFaces(idx);
 
@@ -400,8 +423,25 @@ export function MotionRefGenModal(props: {
       skeletonRef.current?.setFraming(minY, centerY);
     }
 
-    const stride = vertexCount * 3;
-    const frameCount = stride > 0 ? Math.floor(frames.length / stride) : 0;
+    const vertsFromFaces = maxFaceIndex + 1;
+    let resolvedVertexCount = vertexCount > 0 ? vertexCount : vertsFromFaces;
+    if (vertsFromFaces > 0 && resolvedVertexCount !== vertsFromFaces) {
+      console.warn(
+        `Mesh vertex count mismatch for ${motionKey}: manifest=${resolvedVertexCount}, ` +
+          `faces imply ${vertsFromFaces}. Using ${vertsFromFaces}.`,
+      );
+      resolvedVertexCount = vertsFromFaces;
+    }
+
+    const stride = resolvedVertexCount * 3;
+    let frameCount = stride > 0 ? Math.floor(frames.length / stride) : 0;
+    if (stride > 0 && frames.length % stride !== 0) {
+      console.warn(
+        `Mesh buffer length ${frames.length} is not a multiple of stride ${stride} ` +
+          `for ${motionKey}; ignoring partial tail frame.`,
+      );
+      frameCount = Math.floor(frames.length / stride);
+    }
 
     // Fetch joints in the background to extract per-frame root XZ for in-place preview.
     try {
@@ -418,7 +458,7 @@ export function MotionRefGenModal(props: {
       rootXZRef.current = null;
     }
 
-    return { frames, vertexCount, frameCount };
+    return { frames, vertexCount: resolvedVertexCount, frameCount };
   }
 
   function resolveBones(
@@ -567,7 +607,6 @@ export function MotionRefGenModal(props: {
       setFrameIndex(0);
       await loadCameraTrajectory(mf.motionKey, frameCount);
       setTrajectoryEnabled(true);
-      applyTrajectoryAtFrame(0);
       pushLog(
         mode === "mesh"
           ? `Ready — ${frameCount} frames @ ${mf.fps} fps (mesh).`
@@ -599,7 +638,7 @@ export function MotionRefGenModal(props: {
     item: MotionRefListItem,
     opts?: {
       initialFrame?: number;
-      camera?: Pick<CameraState, "azimuth" | "elevation">;
+      camera?: Partial<CameraState> & Pick<CameraState, "azimuth" | "elevation">;
       quiet?: boolean;
     },
   ): Promise<{
@@ -654,8 +693,6 @@ export function MotionRefGenModal(props: {
       if (opts?.camera) {
         skeletonRef.current?.setCameraState(opts.camera);
         setCameraState((prev) => ({ ...prev, ...opts.camera }));
-      } else {
-        applyTrajectoryAtFrame(clamped, trim.keyframes);
       }
       if (!opts?.quiet) {
         pushLog(
@@ -720,14 +757,6 @@ export function MotionRefGenModal(props: {
       setPlaybackEnd(max);
       return { start: 0, end: max, keyframes: [] as CameraKeyframe[] };
     }
-  }
-
-  function applyCameraKeyframe(kf: CameraKeyframe) {
-    const centerY = skeletonRef.current?.getViewerCenterY() ?? viewerCenterYRef.current;
-    const pose = keyframeWorldPose(kf, centerY);
-    skeletonRef.current?.setCameraWorldPose(pose.position, pose.target);
-    const cam = skeletonRef.current?.getCameraState();
-    if (cam) setCameraState(cam);
   }
 
   async function saveTrajectoryKeyframe() {
@@ -807,7 +836,6 @@ export function MotionRefGenModal(props: {
     setPlaying(false);
     const maxFrame = Math.max(0, totalFrames - 1);
     setFrameIndex(Math.min(Math.max(0, kf.frameIndex), maxFrame));
-    applyCameraKeyframe(kf);
   }
 
   async function saveShot() {
@@ -821,6 +849,12 @@ export function MotionRefGenModal(props: {
       return;
     }
     const screenBbox = skeletonRef.current?.getFigureScreenBbox();
+    if (!screenBbox) {
+      showError({
+        message:
+          "Figure not in frame — the shot will be saved, but SDPose will run on the full frame. Recenter the camera for a tight crop.",
+      });
+    }
     try {
       await apiMotionRefShotSave({
         motionKey: manifest.motionKey,
@@ -828,6 +862,9 @@ export function MotionRefGenModal(props: {
         frameIndex,
         azimuth: cameraState.azimuth,
         elevation: cameraState.elevation,
+        distance: cameraState.distance,
+        slideX: cameraState.slideX,
+        slideY: cameraState.slideY,
         ...(screenBbox
           ? {
               cropBox: {
@@ -870,7 +907,13 @@ export function MotionRefGenModal(props: {
       return;
     }
     setPlaying(false);
-    const camera = { azimuth: shot.azimuth, elevation: shot.elevation };
+    const camera: Partial<CameraState> & Pick<CameraState, "azimuth" | "elevation"> = {
+      azimuth: shot.azimuth,
+      elevation: shot.elevation,
+      ...(shot.distance != null ? { distance: shot.distance } : {}),
+      ...(shot.slideX != null ? { slideX: shot.slideX } : {}),
+      ...(shot.slideY != null ? { slideY: shot.slideY } : {}),
+    };
     if (manifest?.motionKey === shot.motionKey) {
       const maxFrame = Math.max(0, totalFrames - 1);
       setFrameIndex(Math.min(shot.frameIndex, maxFrame));
@@ -884,14 +927,18 @@ export function MotionRefGenModal(props: {
   async function addShotsToPose(shots: MotionRefShot[]) {
     const pending = shots.filter((s) => !s.keypointId);
     if (!pending.length) return;
-    beginSession({ title: "Add to Pose", clearLog: false });
+    beginSession({ title: "Add to Pose", clearLog: false, runningStatus: `0/${pending.length} complete` });
     await Promise.resolve();
     try {
+      let doneCount = 0;
       for (const shot of pending) {
-        pushLog(`Shot f${shot.frameIndex}…`);
+        doneCount += 1;
+        const status = `Add to Pose ${doneCount}/${pending.length}…`;
+        setRunningStatus(status);
+        pushLog(`Shot f${shot.frameIndex} (${doneCount}/${pending.length})…`);
         const done = await runMotionRefShotAddToPoseWsJob({
           shotId: shot.id,
-          onLogLine: (line) => pushLog(line),
+          onLogLine: onJobLogLine,
         });
         if (!done.ok || !done.result?.item) {
           throw new Error(done.error || "Add to Pose failed.");
@@ -995,19 +1042,6 @@ export function MotionRefGenModal(props: {
     });
   }
 
-  function applyFrameCameraForCapture(frame: number, keyframes: CameraKeyframe[]) {
-    const centerY = skeletonRef.current?.getViewerCenterY() ?? viewerCenterYRef.current;
-    const pose = interpolateWorldPoseAtFrame(frame, keyframes, centerY);
-    if (pose) {
-      skeletonRef.current?.setCameraWorldPose(pose.position, pose.target);
-      const cam = skeletonRef.current?.getCameraState();
-      if (cam) setCameraState((prev) => ({ ...prev, ...cam }));
-      return;
-    }
-    skeletonRef.current?.setCameraState({ ...cameraState, slideX: 0, slideY: 0 });
-    setCameraState((prev) => ({ ...prev, slideX: 0, slideY: 0 }));
-  }
-
   async function runV2PoseSeq(
     motionKey: string,
     item: MotionRefListItem,
@@ -1015,14 +1049,19 @@ export function MotionRefGenModal(props: {
     sampleFps: V2PoseSeqSampleFps
   ) {
     setV2poseDialog(null);
-    beginSession({ title: "V2Pose Seq", clearLog: true });
+    beginSession({
+      title: "V2Pose Seq",
+      clearLog: true,
+      runningStatus: "Capturing frames…",
+    });
     await Promise.resolve();
     try {
       let start = playbackStart;
       let end = playbackEnd;
       let fps = manifest?.fps ?? item.fps ?? 30;
       let motionFrameCount = totalFrames;
-      let trajKeyframes = cameraKeyframes;
+
+      let captureKeyframes = cameraKeyframes;
 
       if (manifest?.motionKey !== motionKey) {
         pushLog(`Loading ${motionKey}…`);
@@ -1032,7 +1071,7 @@ export function MotionRefGenModal(props: {
         end = loaded.playbackEnd;
         fps = loaded.fps;
         motionFrameCount = loaded.frameCount;
-        trajKeyframes = loaded.keyframes;
+        captureKeyframes = loaded.keyframes;
       }
 
       end = Math.min(end, Math.max(0, motionFrameCount - 1));
@@ -1040,41 +1079,77 @@ export function MotionRefGenModal(props: {
       if (!frames.length) {
         throw new Error("Trim range is empty — adjust in/out handles.");
       }
-      pushLog(`Capturing ${frames.length} frames (trim f${start}–f${end}, ${String(sampleFps)} fps)…`);
+      const trajectoryCapture =
+        trajectoryEnabledRef.current && captureKeyframes.length > 0;
+      pushLog(
+        `Capturing ${frames.length} frames (trim f${start}–f${end}, ${String(sampleFps)} fps` +
+          `${trajectoryCapture ? ", trajectory camera" : ", fixed camera"})…`,
+      );
       setPlaying(false);
+      await waitViewerFrame();
 
       const captures: V2PoseSeqFrameCapture[] = [];
+      const skippedFrames: number[] = [];
+      const clippedFrames: number[] = [];
       for (let i = 0; i < frames.length; i++) {
         const f = frames[i];
+        setRunningStatus(`Capturing frame ${i + 1}/${frames.length}…`);
         setFrameIndex(f);
-        applyFrameCameraForCapture(f, trajKeyframes);
+        await waitViewerFrame();
+        applyTrajectoryAtFrame(f, captureKeyframes, { forCapture: true });
         await waitViewerFrame();
         const dataUrl = skeletonRef.current?.captureFrame();
         if (!dataUrl) throw new Error(`Capture failed at frame ${f}.`);
         const screenBbox = skeletonRef.current?.getFigureScreenBbox();
+        if (!screenBbox) {
+          skippedFrames.push(f);
+          pushLog(`Skipped f${f}: figure out of frame.`);
+          continue;
+        }
+        const edgeClipped =
+          screenBbox.x <= 0 ||
+          screenBbox.y <= 0 ||
+          screenBbox.x + screenBbox.width >= screenBbox.imageWidth ||
+          screenBbox.y + screenBbox.height >= screenBbox.imageHeight;
+        if (edgeClipped) clippedFrames.push(f);
         const cam = skeletonRef.current?.getCameraState() ?? cameraState;
         captures.push({
           frameIndex: f,
           pngBase64: dataUrl,
           azimuth: cam.azimuth,
           elevation: cam.elevation,
-          ...(screenBbox
-            ? {
-                cropBox: {
-                  x: screenBbox.x,
-                  y: screenBbox.y,
-                  width: screenBbox.width,
-                  height: screenBbox.height,
-                },
-                imageWidth: screenBbox.imageWidth,
-                imageHeight: screenBbox.imageHeight,
-              }
-            : {}),
+          cropBox: {
+            x: screenBbox.x,
+            y: screenBbox.y,
+            width: screenBbox.width,
+            height: screenBbox.height,
+          },
+          imageWidth: screenBbox.imageWidth,
+          imageHeight: screenBbox.imageHeight,
         });
         pushLog(`Captured f${f} (${i + 1}/${frames.length})`);
       }
 
+      if (skippedFrames.length) {
+        pushLog(
+          `Skipped ${skippedFrames.length} frame(s) with the figure out of frame. ` +
+            `Adjust the camera/zoom (or enable In place) so the capture frame stays on the figure.`,
+        );
+      }
+      if (clippedFrames.length) {
+        pushLog(
+          `Warning: ${clippedFrames.length} frame(s) had the capture frame touching the viewer edge — ` +
+            `the figure may be cut off. Zoom out or recenter for best keypoints.`,
+        );
+      }
+      if (!captures.length) {
+        throw new Error(
+          "No frames captured — the figure was out of frame for the whole range. Recenter the camera and try again.",
+        );
+      }
+
       pushLog("Running SDPose…");
+      setRunningStatus("Starting SDPose batch…");
       const { folderId, folderName: folder } = await apiMotionRefV2PoseSeqStart(
         motionKey,
         folderName
@@ -1082,6 +1157,7 @@ export function MotionRefGenModal(props: {
       const items: PoseReference[] = [];
       for (let i = 0; i < captures.length; i++) {
         const c = captures[i];
+        setRunningStatus(`SDPose ${i + 1}/${captures.length}…`);
         pushLog(`SDPose f${c.frameIndex} (${i + 1}/${captures.length})…`);
         const { item } = await apiMotionRefV2PoseSeqFrame(motionKey, folderId, c);
         items.push(item);
@@ -1183,11 +1259,28 @@ export function MotionRefGenModal(props: {
             height={320}
             onCameraChange={(s) => setCameraState(s)}
             onUserOrbitChange={(orbiting) => { userOrbitingRef.current = orbiting; }}
+            onUserCameraInteract={(active) => {
+              if (active) userCameraOverrideRef.current = true;
+            }}
             onGizmoContextMenu={(id, x, y) => setCameraCtxMenu({ id, x, y })}
           />
-          <div style={{ fontSize: 10, color: "#555", marginTop: 4 }}>
-            {displayMode === "mesh" ? "Mesh preview" : "Skeleton preview"}
-            {" · "}Drag to slide · Shift+drag to orbit · Scroll to zoom · Drag corner to resize
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
+            <div style={{ fontSize: 10, color: "#555" }}>
+              {displayMode === "mesh" ? "Mesh preview" : "Skeleton preview"}
+              {" · "}Drag to slide · Shift+drag to orbit · Scroll to zoom · Drag corner to resize
+            </div>
+            <label
+              style={{ fontSize: 10, color: showCropFrame ? "#6eb5ff" : "#888", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+              title="Show the square region captured and sent to SDPose for this frame"
+            >
+              <input
+                type="checkbox"
+                checked={showCropFrame}
+                onChange={(e) => setShowCropFrame(e.target.checked)}
+                style={{ accentColor: "#6eb5ff" }}
+              />
+              Capture frame
+            </label>
           </div>
         </div>
 
@@ -1199,7 +1292,10 @@ export function MotionRefGenModal(props: {
             title="Go to trim start"
             disabled={totalFrames === 0}
             icon={<TriangleIcon direction="left" size={12} />}
-            onClick={() => { setPlaying(false); setFrameIndex(playbackStart); }}
+            onClick={() => {
+              setPlaying(false);
+              setFrameIndex(playbackStart);
+            }}
           />
           <SquareIconButton
             size={32}
@@ -1207,7 +1303,12 @@ export function MotionRefGenModal(props: {
             title={playing ? "Pause" : "Play"}
             disabled={totalFrames === 0}
             icon={playing ? <PauseBarsIcon /> : <TimelinePlayIcon />}
-            onClick={() => setPlaying((p) => !p)}
+            onClick={() => {
+              setPlaying((p) => {
+                if (!p) userCameraOverrideRef.current = false;
+                return !p;
+              });
+            }}
           />
           <SquareIconButton
             size={32}
@@ -1225,7 +1326,10 @@ export function MotionRefGenModal(props: {
             playbackEnd={playbackEnd}
             cameraKeyframes={cameraKeyframes}
             disabled={busy || totalFrames === 0}
-            onFrameChange={(f) => { setPlaying(false); setFrameIndex(f); }}
+            onFrameChange={(f) => {
+              setPlaying(false);
+              setFrameIndex(f);
+            }}
             onRangeChange={handlePlaybackRangeChange}
             onCameraKeyframeClick={jumpToCameraKeyframe}
             onCameraKeyframeContextMenu={(kf, x, y) => setCameraCtxMenu({ id: kf.id, x, y })}
@@ -1247,17 +1351,13 @@ export function MotionRefGenModal(props: {
                 userSelect: "none",
                 whiteSpace: "nowrap",
               }}
-              title="Follow saved camera keyframes during playback and scrubbing"
+              title="Follow saved camera keyframes during playback"
             >
               <input
                 type="checkbox"
                 checked={trajectoryEnabled}
                 disabled={cameraKeyframes.length === 0}
-                onChange={(e) => {
-                  const next = e.target.checked;
-                  setTrajectoryEnabled(next);
-                  if (next) applyTrajectoryAtFrame(frameIndex);
-                }}
+                onChange={(e) => setTrajectoryEnabled(e.target.checked)}
                 style={{ accentColor: MOTION_REF_ACCENT }}
               />
               Trajectory

@@ -333,6 +333,7 @@ export default function DetailGatePage() {
       <BaseCloseupWizardModal
         open={closeupWizardOpen}
         charKey={charKey}
+        mode="resume"
         title="Regenerate Closeup Angles"
         onClose={async () => {
           setCloseupWizardOpen(false);

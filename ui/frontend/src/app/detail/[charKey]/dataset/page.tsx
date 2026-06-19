@@ -103,6 +103,7 @@ export default function DatasetPage() {
     beginSession,
     endSession,
     pushLog,
+    onJobLogLine,
     failSession,
     setRunningStatus,
     modalProps: jobModalProps,
@@ -406,7 +407,7 @@ export default function DatasetPage() {
             charKey,
             pathSuffix: g.kind === "pose" ? "/pose/ws" : "/expression/ws",
             payload,
-            onLogLine: (line) => logRef.current?.pushLine(line),
+            onLogLine: onJobLogLine,
           });
           if (!done.ok) {
             failSession(new Error(done.error ?? "Angle generation failed."), "Angle generation failed.");
@@ -422,13 +423,17 @@ export default function DatasetPage() {
         items: { catalogId: number; label: string }[],
         prompts: string[]
       ) => {
-        for (const e of tilesWithRel) {
+        for (let tileIdx = 0; tileIdx < tilesWithRel.length; tileIdx++) {
+          const e = tilesWithRel[tileIdx];
           if (items.length) {
+            setRunningStatus(
+              `Tile ${tileIdx + 1}/${tilesWithRel.length}: catalog (${items.length} items)…`
+            );
             const done = await runDetailWsJob({
               charKey,
               pathSuffix: suffix,
               payload: { job: "generate_catalog", baseRelPath: e.sourceRelPath, items },
-              onLogLine: (line) => logRef.current?.pushLine(line),
+              onLogLine: onJobLogLine,
             });
             if (!done.ok) {
               failSession(new Error(done.error ?? "Generation failed."), "Batch generate failed.");
@@ -436,11 +441,14 @@ export default function DatasetPage() {
             }
           }
           if (prompts.length) {
+            setRunningStatus(
+              `Tile ${tileIdx + 1}/${tilesWithRel.length}: prompts (${prompts.length})…`
+            );
             const done = await runDetailWsJob({
               charKey,
               pathSuffix: suffix,
               payload: { job: "generate_prompts", baseRelPath: e.sourceRelPath, prompts },
-              onLogLine: (line) => logRef.current?.pushLine(line),
+              onLogLine: onJobLogLine,
             });
             if (!done.ok) {
               failSession(new Error(done.error ?? "Generation failed."), "Batch generate failed.");

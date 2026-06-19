@@ -77,6 +77,8 @@ export type SkeletonViewer3DHandle = {
   captureFrame(): string | null;
   /** Screen-space figure AABB for crop placement (motion-ref keypoint pipeline). */
   getFigureScreenBbox(): FigureScreenBbox | null;
+  /** Toggle the live crop-frame overlay (square fed to SDPose). */
+  setCropOverlayVisible(visible: boolean): void;
 };
 
 type Props = {
@@ -84,6 +86,7 @@ type Props = {
   height?: number | string;
   onCameraChange?: (state: CameraState) => void;
   onUserOrbitChange?: (orbiting: boolean) => void;
+  onUserCameraInteract?: (active: boolean) => void;
   onGizmoContextMenu?: (keyframeId: string, clientX: number, clientY: number) => void;
 };
 
@@ -168,7 +171,7 @@ function padClampSquareFigureBbox(
 type ThreeModule = typeof import("three");
 
 const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
-  ({ width = "100%", height = 320, onCameraChange, onUserOrbitChange, onGizmoContextMenu }, ref) => {
+  ({ width = "100%", height = 320, onCameraChange, onUserOrbitChange, onUserCameraInteract, onGizmoContextMenu }, ref) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
 
     const threeRef = useRef<{
@@ -188,6 +191,8 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
 
     const gizmosVisibleRef = useRef(true);
     const gizmoKeyframesRef = useRef<CameraGizmoKeyframe[]>([]);
+    const cropOverlayRef = useRef<HTMLDivElement | null>(null);
+    const showCropOverlayRef = useRef(true);
 
     const modeRef = useRef<ViewerMode>("mesh");
     const bonePairsRef = useRef<[number, number][]>([]);
@@ -206,6 +211,8 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
     onCameraChangeRef.current = onCameraChange;
     const onUserOrbitChangeRef = useRef(onUserOrbitChange);
     onUserOrbitChangeRef.current = onUserOrbitChange;
+    const onUserCameraInteractRef = useRef(onUserCameraInteract);
+    onUserCameraInteractRef.current = onUserCameraInteract;
     const onGizmoContextMenuRef = useRef(onGizmoContextMenu);
     onGizmoContextMenuRef.current = onGizmoContextMenu;
 
@@ -270,6 +277,56 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       t.camera.position.addScaledVector(up, slideY);
       t.camera.lookAt(target);
       lastLookAtRef.current = [target.x, target.y, target.z];
+    }
+
+    function _computeFigureScreenBbox(): FigureScreenBbox | null {
+      const t = threeRef.current;
+      const positions = positionsRef.current;
+      if (!t || !positions || positions.length < 3) return null;
+      const { THREE, camera, renderer } = t;
+      const imgW = renderer.domElement.width;
+      const imgH = renderer.domElement.height;
+      if (imgW < 1 || imgH < 1) return null;
+      const vec = new THREE.Vector3();
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (let i = 0; i < positions.length; i += 3) {
+        vec.set(positions[i], positions[i + 1], positions[i + 2]);
+        vec.project(camera);
+        if (vec.z < -1 || vec.z > 1) continue;
+        const px = (vec.x * 0.5 + 0.5) * imgW;
+        const py = (-vec.y * 0.5 + 0.5) * imgH;
+        minX = Math.min(minX, px);
+        minY = Math.min(minY, py);
+        maxX = Math.max(maxX, px);
+        maxY = Math.max(maxY, py);
+      }
+      if (!Number.isFinite(minX)) return null;
+      const box = padClampSquareFigureBbox(minX, minY, maxX, maxY, imgW, imgH);
+      return { ...box, imageWidth: imgW, imageHeight: imgH };
+    }
+
+    function _updateCropOverlay() {
+      const el = cropOverlayRef.current;
+      if (!el) return;
+      const visible = showCropOverlayRef.current && gizmosVisibleRef.current;
+      if (!visible) {
+        el.style.display = "none";
+        return;
+      }
+      const box = _computeFigureScreenBbox();
+      if (!box) {
+        el.style.display = "none";
+        return;
+      }
+      el.style.display = "block";
+      el.style.left = `${(box.x / box.imageWidth) * 100}%`;
+      el.style.top = `${(box.y / box.imageHeight) * 100}%`;
+      el.style.width = `${(box.width / box.imageWidth) * 100}%`;
+      el.style.height = `${(box.height / box.imageHeight) * 100}%`;
+      el.style.borderColor = "rgba(110,181,255,0.9)";
     }
 
     function _addFrustumGizmo(
@@ -461,6 +518,16 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         renderer.setClearColor(0x1a1a1a);
         container.appendChild(renderer.domElement);
 
+        const cropOverlay = document.createElement("div");
+        cropOverlay.style.position = "absolute";
+        cropOverlay.style.boxSizing = "border-box";
+        cropOverlay.style.border = "1px solid rgba(110,181,255,0.9)";
+        cropOverlay.style.pointerEvents = "none";
+        cropOverlay.style.display = "none";
+        cropOverlay.style.zIndex = "2";
+        container.appendChild(cropOverlay);
+        cropOverlayRef.current = cropOverlay;
+
         const scene = new THREE.Scene();
         scene.add(new THREE.AmbientLight(0xffffff, 0.7));
         const key = new THREE.DirectionalLight(0xffffff, 0.9);
@@ -550,6 +617,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           if (cancelled) return;
           threeRef.current!.animFrameId = requestAnimationFrame(animate);
           renderer.render(scene, camera);
+          _updateCropOverlay();
         };
         animate();
       });
@@ -576,6 +644,10 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
             container.removeChild(t.renderer.domElement);
           }
         }
+        if (cropOverlayRef.current && container.contains(cropOverlayRef.current)) {
+          container.removeChild(cropOverlayRef.current);
+        }
+        cropOverlayRef.current = null;
         threeRef.current = null;
       };
     }, []);
@@ -717,32 +789,11 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         }
       },
       getFigureScreenBbox(): FigureScreenBbox | null {
-        const t = threeRef.current;
-        const positions = positionsRef.current;
-        if (!t || !positions || positions.length < 3) return null;
-        const { THREE, camera, renderer } = t;
-        const imgW = renderer.domElement.width;
-        const imgH = renderer.domElement.height;
-        if (imgW < 1 || imgH < 1) return null;
-        const vec = new THREE.Vector3();
-        let minX = Infinity;
-        let minY = Infinity;
-        let maxX = -Infinity;
-        let maxY = -Infinity;
-        for (let i = 0; i < positions.length; i += 3) {
-          vec.set(positions[i], positions[i + 1], positions[i + 2]);
-          vec.project(camera);
-          if (vec.z < -1 || vec.z > 1) continue;
-          const px = (vec.x * 0.5 + 0.5) * imgW;
-          const py = (-vec.y * 0.5 + 0.5) * imgH;
-          minX = Math.min(minX, px);
-          minY = Math.min(minY, py);
-          maxX = Math.max(maxX, px);
-          maxY = Math.max(maxY, py);
-        }
-        if (!Number.isFinite(minX)) return null;
-        const box = padClampSquareFigureBbox(minX, minY, maxX, maxY, imgW, imgH);
-        return { ...box, imageWidth: imgW, imageHeight: imgH };
+        return _computeFigureScreenBbox();
+      },
+      setCropOverlayVisible(visible: boolean) {
+        showCropOverlayRef.current = visible;
+        _updateCropOverlay();
       },
     }));
 
@@ -756,6 +807,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         lastY: e.clientY,
         orbiting,
       };
+      onUserCameraInteractRef.current?.(true);
       if (orbiting) {
         onUserOrbitChangeRef.current?.(true);
       }

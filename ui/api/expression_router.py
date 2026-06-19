@@ -255,7 +255,10 @@ async def expression_job_ws(ws: WebSocket, char_key: str) -> None:
             def work2(log_cb):
                 results: list[dict[str, Any]] = []
                 last_path = input_abs
-                for it in items:
+                total = len(items)
+                for idx, it in enumerate(items):
+                    if log_cb:
+                        log_cb(f"Generating expression {idx + 1}/{total}…")
                     pid = int(it.get("catalogId"))
                     if pid not in logic.EXPRESSION_BY_ID:
                         raise ValueError(f"Unknown expression id: {pid}")

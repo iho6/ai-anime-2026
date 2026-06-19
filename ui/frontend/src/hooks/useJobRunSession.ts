@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState, type RefObject } from "react";
 import type { SharedLogStreamHandle } from "../components/SharedLogStream";
 import { appendNormalizedErrorToLog } from "../lib/jobLogError";
+import { truncateJobModalStatusLine } from "../lib/jobModalStatus";
 
 export type JobRunSessionOutcome = "success" | "error" | null;
 
@@ -62,6 +63,15 @@ export function useJobRunSession(logRef?: RefObject<SharedLogStreamHandle | null
     [logRef]
   );
 
+  const onJobLogLine = useCallback(
+    (line: string) => {
+      pushLog(line);
+      const status = truncateJobModalStatusLine(line);
+      if (status) setRunningStatus(status);
+    },
+    [pushLog]
+  );
+
   const failSession = useCallback(
     (err: unknown, userMessage: string) => {
       appendNormalizedErrorToLog(logRef, err, userMessage);
@@ -115,6 +125,7 @@ export function useJobRunSession(logRef?: RefObject<SharedLogStreamHandle | null
     beginSession,
     endSession,
     pushLog,
+    onJobLogLine,
     failSession,
     requestClose,
     resetSession,
