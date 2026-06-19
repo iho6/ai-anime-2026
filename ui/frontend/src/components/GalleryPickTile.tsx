@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { TimelinePlayIcon } from "./IconPrimitives";
 
 export type GalleryPickTileProps = {
   src: string;
@@ -9,6 +10,7 @@ export type GalleryPickTileProps = {
   disabled?: boolean;
   onToggle: (checked: boolean, e: React.ChangeEvent<HTMLInputElement>) => void;
   onPrimaryClick: () => void;
+  onPlayClick?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   footer?: React.ReactNode;
 };
@@ -21,6 +23,7 @@ export function GalleryPickTile(props: GalleryPickTileProps) {
     disabled = false,
     onToggle,
     onPrimaryClick,
+    onPlayClick,
     onContextMenu,
     footer,
   } = props;
@@ -61,6 +64,38 @@ export function GalleryPickTile(props: GalleryPickTileProps) {
             draggable={false}
           />
         </button>
+
+        {onPlayClick ? (
+          <button
+            type="button"
+            disabled={disabled}
+            aria-label="Play preview"
+            title="Play preview"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlayClick();
+            }}
+            style={{
+              position: "absolute",
+              top: 4,
+              right: 4,
+              zIndex: 2,
+              width: 22,
+              height: 22,
+              display: "grid",
+              placeItems: "center",
+              padding: 0,
+              border: "1px solid rgba(0,0,0,0.35)",
+              borderRadius: 0,
+              background: "rgba(140,140,140,0.35)",
+              color: "rgba(255,255,255,0.9)",
+              cursor: disabled ? "not-allowed" : "pointer",
+            }}
+          >
+            <TimelinePlayIcon size={12} />
+          </button>
+        ) : null}
 
         <label
           style={{

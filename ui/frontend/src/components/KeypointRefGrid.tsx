@@ -12,6 +12,12 @@ import {
 import { SortableGrid, SortableItem } from "./dnd/SortableGrid";
 import { reorderInsertBeforeOrAfter } from "./dnd/reorder";
 import { KeypointFolderTile, KeypointRefTile, KeypointVideoTile } from "./KeypointRefTile";
+import {
+  collectFolderLeafIds,
+  folderSelectionState,
+  isKeypointGridLeaf,
+  toggleFolderSelection,
+} from "../lib/folderSelection";
 
 const FOLDER_PREFIX = "folder:";
 const VIDEO_PREFIX = "video:";
@@ -94,6 +100,25 @@ export function KeypointRefGrid(props: {
   const keypointOrderInView = useMemo(
     () => gridIds.filter((id) => !parseFolderToken(id) && itemById.has(id)),
     [gridIds, itemById]
+  );
+
+  const itemIdSet = useMemo(() => new Set(layout.items.map((x) => x.id)), [layout.items]);
+  const videoIdSet = useMemo(
+    () => new Set((layout.videoItems ?? []).map((x) => x.id)),
+    [layout.videoItems]
+  );
+  const isLeaf = useCallback(
+    (token: string) => isKeypointGridLeaf(token, itemIdSet, videoIdSet),
+    [itemIdSet, videoIdSet]
+  );
+
+  const onFolderCheckboxChange = useCallback(
+    (folderId: string, targetChecked: boolean) => {
+      onSelectedIdsChange(
+        toggleFolderSelection(folderId, layout, selectedIds, targetChecked, isLeaf)
+      );
+    },
+    [layout, onSelectedIdsChange, selectedIds, isLeaf]
   );
 
   const onCheckboxChange = useCallback(
@@ -258,6 +283,12 @@ export function KeypointRefGrid(props: {
             const count = (video.frameSequence?.strip ?? []).filter(
               (s) => s.kind === "image"
             ).length;
+            const firstFrame = (video.frameSequence?.strip ?? []).find(
+              (s) => s.kind === "image" && !s.hidden && s.relPath
+            );
+            const thumbSrc = firstFrame?.relPath
+              ? assetUrlFromRelPath(firstFrame.relPath)
+              : undefined;
             return (
               <SortableItem id={id} style={{ width: tile }}>
                 <div
@@ -270,10 +301,12 @@ export function KeypointRefGrid(props: {
                   <KeypointVideoTile
                     tile={tile}
                     count={count}
+                    thumbSrc={thumbSrc}
                     checked={selectedIds.has(id)}
                     disabled={busy}
                     onToggle={(on, e) => onCheckboxChange(id, on, e)}
                     onOpen={() => onOpenVideo(video)}
+                    onPlay={() => onOpenVideo(video)}
                   />
                 </div>
               </SortableItem>
@@ -283,7 +316,8 @@ export function KeypointRefGrid(props: {
           if (fid) {
             const folder = folderById.get(fid);
             if (!folder) return null;
-            const count = (layout.folderOrder[fid] ?? []).length;
+            const leafCount = collectFolderLeafIds(fid, layout, isLeaf).length;
+            const folderSel = folderSelectionState(fid, layout, selectedIds, isLeaf);
             return (
               <SortableItem id={id} style={{ width: tile }}>
                 <div
@@ -296,8 +330,14 @@ export function KeypointRefGrid(props: {
                   <KeypointFolderTile
                     tile={tile}
                     name={folder.name}
-                    count={count}
+                    count={leafCount}
                     disabled={busy}
+                    checked={folderSel.checked}
+                    indeterminate={folderSel.indeterminate}
+                    onToggle={(_on, e) => {
+                      e.stopPropagation();
+                      onFolderCheckboxChange(fid, _on);
+                    }}
                     onOpen={() => onViewFolderIdChange(fid)}
                   />
                 </div>

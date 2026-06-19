@@ -35,6 +35,7 @@ import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 import { useJobRunSession } from "../hooks/useJobRunSession";
 import { useAppError } from "./ErrorProvider";
 import { BaseCloseupWizardModal } from "./BaseCloseupWizardModal";
+import { SequencePreviewLightbox } from "../app/detail/[charKey]/dataset/SequencePreviewLightbox";
 import {
   NewCharacterCreatePanel,
   type NewCharacterCreatePanelHandle,
@@ -79,6 +80,10 @@ export function TimelineCharacterPicker(props: {
     paths: string[];
     index: number;
     title: string;
+  } | null>(null);
+  const [seqPreview, setSeqPreview] = useState<{
+    name: string;
+    manifest: SequenceManifest;
   } | null>(null);
 
   // Image right-click context menu (New Angle / New Pose)
@@ -380,6 +385,19 @@ export function TimelineCharacterPicker(props: {
     [sequences, selectedKey]
   );
 
+  const openSequencePlayPreview = useCallback(
+    async (seqName: string) => {
+      if (!selectedKey) return;
+      try {
+        const m = await apiSequenceGet(selectedKey, seqName);
+        setSeqPreview({ name: seqName, manifest: m });
+      } catch (e) {
+        showError({ message: "Could not load sequence.", error: e });
+      }
+    },
+    [selectedKey, showError]
+  );
+
   if (!open) return null;
 
   const showBackButton =
@@ -593,6 +611,7 @@ export function TimelineCharacterPicker(props: {
                                   );
                                 }}
                                 onPrimaryClick={() => openSequencePreview(seq)}
+                                onPlayClick={() => void openSequencePlayPreview(seq.name)}
                                 onContextMenu={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
@@ -961,6 +980,19 @@ export function TimelineCharacterPicker(props: {
           index={lightbox.index}
           title={lightbox.title}
           onClose={() => setLightbox(null)}
+        />
+      ) : null}
+
+      {seqPreview ? (
+        <SequencePreviewLightbox
+          manifest={seqPreview.manifest}
+          scope="timeline"
+          initialIndex={0}
+          title={`${selectedKey ?? ""} — ${seqPreview.name}`}
+          onClose={() => setSeqPreview(null)}
+          onCommitManifest={(next) => {
+            setSeqPreview((cur) => (cur ? { ...cur, manifest: next } : cur));
+          }}
         />
       ) : null}
     </>

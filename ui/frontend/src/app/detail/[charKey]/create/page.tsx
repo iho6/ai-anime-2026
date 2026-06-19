@@ -75,7 +75,7 @@ import {
 } from "../../../../components/ReferencePicker";
 import { MotionRefGenModal } from "../../../../components/MotionRefGenModal";
 import { StartingImagePreview } from "../../../../components/StartingImagePreview";
-import { ZoomableImage } from "../../../../components/ZoomableImage";
+import { PoseRefFramePreview } from "../../../../components/PoseRefFramePreview";
 import { GalleryImageLightbox } from "../../../../components/GalleryImageLightbox";
 import { SquareButton } from "../../../../components/SquareButton";
 import { useAppError } from "../../../../components/ErrorProvider";
@@ -85,6 +85,10 @@ import { truncateJobModalStatusLine } from "../../../../lib/jobModalStatus";
 const POSE_FLAT_FOLDER_KEY = "flat";
 
 type StartingImageState = { stack: string[]; index: number };
+
+type BatchRefEntry =
+  | { kind: "single"; ref: PoseReference }
+  | { kind: "video"; ref: KeypointVideoReference };
 
 type ActiveReference =
   | { kind: "single"; ref: PoseReference }
@@ -105,6 +109,23 @@ function activeReferenceKeypointPreview(ar: ActiveReference | null): string | nu
   if (visible?.relPath) return visible.relPath;
   const any = strip.find((s) => s.kind === "image" && s.relPath);
   return any?.relPath ?? null;
+}
+
+function activeReferenceKeypointFramePaths(ar: ActiveReference | null): string[] {
+  if (!ar) return [];
+  if (ar.kind === "single") {
+    const kp = (ar.ref.keypointRelPath || "").trim();
+    return kp ? [kp] : [];
+  }
+  const strip = ar.ref.frameSequence?.strip ?? [];
+  return strip
+    .filter((s) => s.kind === "image" && !s.hidden && (s.relPath || "").trim())
+    .map((s) => String(s.relPath));
+}
+
+function activeReferencePreviewFps(ar: ActiveReference | null): number {
+  if (!ar || ar.kind !== "video") return 24;
+  return ar.ref.fps || 24;
 }
 
 function activeReferenceThumbPreview(ar: ActiveReference | null): string | null {
@@ -277,6 +298,7 @@ export default function CreatePage() {
   const removeBgPendingRef = useRef<{ item: GallerySplitItem; type: GenType } | null>(null);
 
   const [activeReference, setActiveReference] = useState<ActiveReference | null>(null);
+  const [batchRefQueue, setBatchRefQueue] = useState<BatchRefEntry[]>([]);
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
   const [motionRefOpen, setMotionRefOpen] = useState(false);
   // Single shared file-import input (routes into genType gallery).
@@ -688,29 +710,47 @@ export default function CreatePage() {
 
   const onReferencePickSaved = useCallback((ref: PoseReference) => {
     setActiveReference({ kind: "single", ref });
+    setBatchRefQueue([]);
     if ((ref.keypointRelPath || "").trim()) {
       clearPosePromptUiForKeypointReference();
     }
   }, [clearPosePromptUiForKeypointReference]);
 
+  function buildBatchQueueFromSelection(
+    singles: PoseReference[],
+    videos: KeypointVideoReference[]
+  ): BatchRefEntry[] {
+    const out: BatchRefEntry[] = [];
+    for (const ref of singles) out.push({ kind: "single", ref });
+    for (const ref of videos) out.push({ kind: "video", ref });
+    return out;
+  }
+
+  function activeRefFromBatchEntry(entry: BatchRefEntry): ActiveReference {
+    return entry.kind === "video"
+      ? { kind: "video", ref: entry.ref }
+      : { kind: "single", ref: entry.ref };
+  }
+
   async function onReferenceUseSelected(sel: ReferencePickerSelection) {
     const { singles, videos } = sel;
     if (!singles.length && !videos.length) return;
     setReferencePickerOpen(false);
-    if (videos.length === 1 && singles.length === 0) {
-      setActiveReference({ kind: "video", ref: videos[0] });
-      clearPosePromptUiForKeypointReference();
-      return;
-    }
-    if (singles.length === 1 && videos.length === 0) {
+    const total = singles.length + videos.length;
+    if (total === 1) {
+      setBatchRefQueue([]);
+      if (videos.length === 1) {
+        setActiveReference({ kind: "video", ref: videos[0] });
+        clearPosePromptUiForKeypointReference();
+        return;
+      }
       onReferencePickSaved(singles[0]);
       return;
     }
-    for (const ref of singles) {
-      setActiveReference({ kind: "single", ref });
-      clearPosePromptUiForKeypointReference();
-      await runGenerate({ keypointRelPath: ref.keypointRelPath });
-    }
+    const queue = buildBatchQueueFromSelection(singles, videos);
+    setBatchRefQueue(queue);
+    setActiveReference(activeRefFromBatchEntry(queue[0]));
+    clearPosePromptUiForKeypointReference();
   }
 
   const onReferenceGenerateBase = useCallback(
@@ -1061,76 +1101,127 @@ export default function CreatePage() {
     }
   }
 
-  async function runGenerate(opts?: { keypointRelPath?: string }) {
-    if (!charKey) return;
+  async function runOneGenerateStep(
+    entry?: BatchRefEntry
+  ): Promise<boolean> {
+    if (!charKey) return false;
     if (!activeStartingRel) {
       showError({ message: "Please choose an input image first." });
-      return;
+      return false;
     }
-    const videoRef = activeReference?.kind === "video" ? activeReference.ref : null;
+    const videoRef =
+      entry?.kind === "video"
+        ? entry.ref
+        : entry
+          ? null
+          : activeReference?.kind === "video"
+            ? activeReference.ref
+            : null;
     const keypointRelPath =
-      opts?.keypointRelPath ??
-      (activeReference?.kind === "single" ? activeReference.ref.keypointRelPath : undefined);
+      entry?.kind === "single"
+        ? entry.ref.keypointRelPath
+        : entry
+          ? undefined
+          : activeReference?.kind === "single"
+            ? activeReference.ref.keypointRelPath
+            : undefined;
     if (!promptTextsForGeneration.length && !keypointRelPath && !videoRef) {
       showError({ message: "Enter a prompt (or load a reference keypoint) first." });
+      return false;
+    }
+    if (videoRef) {
+      const done = await runDetailWsJob<{
+        sequenceName: string;
+        galleryItemId: string;
+      }>({
+        charKey,
+        pathSuffix: wsSuffix,
+        payload: {
+          job: "generate_video_ref_sequence",
+          videoRefId: videoRef.id,
+          baseRelPath: activeStartingRel,
+          prompts: promptTextsForGeneration,
+        },
+        onLogLine: onJobLogLine,
+      });
+      if (!done.ok) {
+        failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
+        return false;
+      }
+      const r = done.result!;
+      await loadSequences();
+      if (r.sequenceName) setActiveSequence(r.sequenceName);
+      return true;
+    }
+    const done = await runDetailWsJob<{
+      firstPoseKey: string | null;
+      lastInputRelPath: string;
+    }>({
+      charKey,
+      pathSuffix: wsSuffix,
+      payload: {
+        job: "generate_prompts",
+        baseRelPath: activeStartingRel,
+        prompts: promptTextsForGeneration,
+        ...(keypointRelPath ? { keypointRelPath } : {}),
+      },
+      onLogLine: onJobLogLine,
+    });
+    if (!done.ok) {
+      failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
+      return false;
+    }
+    const r = done.result!;
+    if (r.lastInputRelPath) {
+      setStarting((prev) => mergeStackAfterGeneration(prev, r.lastInputRelPath));
+    }
+    await refreshGallery();
+    return true;
+  }
+
+  async function runGenerate() {
+    if (batchRefQueue.length > 1) {
+      await runBatchRefGeneration();
       return;
     }
     beginSession({ title: "Generating", clearLog: true, runningStatus: "Starting…" });
     let poseSessionEndOk = false;
     try {
-      if (videoRef) {
-        const done = await runDetailWsJob<{
-          sequenceName: string;
-          galleryItemId: string;
-        }>({
-          charKey,
-          pathSuffix: wsSuffix,
-          payload: {
-            job: "generate_video_ref_sequence",
-            videoRefId: videoRef.id,
-            baseRelPath: activeStartingRel,
-            prompts: promptTextsForGeneration,
-          },
-          onLogLine: onJobLogLine,
-        });
-        if (!done.ok) {
-          failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
-          return;
-        }
-        const r = done.result!;
-        await loadSequences();
-        if (r.sequenceName) setActiveSequence(r.sequenceName);
-        poseSessionEndOk = true;
-      } else {
-        const done = await runDetailWsJob<{
-          firstPoseKey: string | null;
-          lastInputRelPath: string;
-        }>({
-          charKey,
-          pathSuffix: wsSuffix,
-          payload: {
-            job: "generate_prompts",
-            baseRelPath: activeStartingRel,
-            prompts: promptTextsForGeneration,
-            ...(keypointRelPath ? { keypointRelPath } : {}),
-          },
-          onLogLine: onJobLogLine,
-        });
-        if (!done.ok) {
-          failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
-          return;
-        }
-        const r = done.result!;
-        if (r.lastInputRelPath) {
-          setStarting((prev) => mergeStackAfterGeneration(prev, r.lastInputRelPath));
-        }
-        await refreshGallery();
-        poseSessionEndOk = true;
-      }
+      poseSessionEndOk = await runOneGenerateStep();
     } catch (e) {
       failSession(e, "Generation failed");
     } finally {
       if (poseSessionEndOk) endSession();
+      setSelectedPose(new Set());
+    }
+  }
+
+  async function runBatchRefGeneration() {
+    if (!batchRefQueue.length) {
+      await runGenerate();
+      return;
+    }
+    beginSession({
+      title: "Batch ref generation",
+      clearLog: true,
+      runningStatus: `Starting 1/${batchRefQueue.length}…`,
+    });
+    let ok = true;
+    try {
+      for (let i = 0; i < batchRefQueue.length; i++) {
+        const entry = batchRefQueue[i];
+        setRunningStatus(`Batch ref generation ${i + 1}/${batchRefQueue.length}…`);
+        pushLog(`Generating reference ${i + 1}/${batchRefQueue.length}…`);
+        setActiveReference(activeRefFromBatchEntry(entry));
+        ok = await runOneGenerateStep(entry);
+        if (!ok) break;
+      }
+      if (ok) setBatchRefQueue([]);
+    } catch (e) {
+      failSession(e, "Batch ref generation failed.");
+      ok = false;
+    } finally {
+      if (ok) endSession();
       setSelectedPose(new Set());
     }
   }
@@ -1822,7 +1913,7 @@ export default function CreatePage() {
                 </div>
               ) : null}
             </div>
-            {activeReference && activeReferenceKeypointPreview(activeReference) ? (
+            {activeReference && activeReferenceKeypointFramePaths(activeReference).length > 0 ? (
               <div
                 style={{ position: "relative" }}
                 onContextMenu={(e) => {
@@ -1835,18 +1926,26 @@ export default function CreatePage() {
                       {
                         key: "clear-ref",
                         label: "Clear reference",
-                        onSelect: () => setActiveReference(null),
+                        onSelect: () => {
+                          setActiveReference(null);
+                          setBatchRefQueue([]);
+                        },
                       },
                     ],
                   });
                 }}
               >
-                <ZoomableImage
-                  src={assetUrlFromRelPath(activeReferenceKeypointPreview(activeReference)!)}
-                  alt="Keypoint preview"
-                  fitMaxWidth={STARTING_PREVIEW_MAX_W}
-                  fitMaxHeight={STARTING_PREVIEW_MAX_H}
+                <PoseRefFramePreview
+                  frameRelPaths={activeReferenceKeypointFramePaths(activeReference)}
+                  fps={activeReferencePreviewFps(activeReference)}
+                  maxWidth={STARTING_PREVIEW_MAX_W}
+                  maxHeight={STARTING_PREVIEW_MAX_H}
                 />
+                {batchRefQueue.length > 1 ? (
+                  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                    {batchRefQueue.length} references queued
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div
@@ -1925,7 +2024,9 @@ export default function CreatePage() {
               opacity: uiBusy ? 0.5 : 1,
             }}
           >
-            Generate
+            {batchRefQueue.length > 1
+              ? `Batch Ref Generation (${batchRefQueue.length})`
+              : "Generate"}
           </button>
         </div>
 

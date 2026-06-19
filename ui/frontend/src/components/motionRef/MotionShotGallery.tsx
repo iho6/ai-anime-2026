@@ -13,6 +13,12 @@ import { SortableGrid, SortableItem } from "../dnd/SortableGrid";
 import { reorderInsertBeforeOrAfter } from "../dnd/reorder";
 import { parseFolderToken } from "../KeypointRefGrid";
 import { KeypointFolderTile, KeypointRefTile } from "../KeypointRefTile";
+import {
+  collectFolderLeafIds,
+  folderSelectionState,
+  isShotGridLeaf,
+  toggleFolderSelection,
+} from "../../lib/folderSelection";
 import { MOTION_REF_ACCENT_BTN_BG } from "./theme";
 
 export function MotionShotGallery(props: {
@@ -69,6 +75,21 @@ export function MotionShotGallery(props: {
   const shotOrderInView = useMemo(
     () => gridIds.filter((id) => !parseFolderToken(id) && itemById.has(id)),
     [gridIds, itemById]
+  );
+
+  const shotIdSet = useMemo(() => new Set(layout.items.map((x) => x.id)), [layout.items]);
+  const isLeaf = useCallback(
+    (token: string) => isShotGridLeaf(token, shotIdSet),
+    [shotIdSet]
+  );
+
+  const onFolderCheckboxChange = useCallback(
+    (folderId: string, targetChecked: boolean) => {
+      onSelectedIdsChange(
+        toggleFolderSelection(folderId, layout, selectedIds, targetChecked, isLeaf)
+      );
+    },
+    [layout, onSelectedIdsChange, selectedIds, isLeaf]
   );
 
   const selectedShots = useMemo(
@@ -284,9 +305,8 @@ export function MotionShotGallery(props: {
           if (fid) {
             const folder = folderById.get(fid);
             if (!folder) return null;
-            const count = (layout.folderOrder[fid] ?? []).filter(
-              (tok) => !parseFolderToken(tok) && itemById.has(tok)
-            ).length;
+            const leafCount = collectFolderLeafIds(fid, layout, isLeaf).length;
+            const folderSel = folderSelectionState(fid, layout, selectedIds, isLeaf);
             return (
               <SortableItem id={id} style={{ width: tile }}>
                 <div
@@ -295,8 +315,14 @@ export function MotionShotGallery(props: {
                   <KeypointFolderTile
                     tile={tile}
                     name={folder.name}
-                    count={count}
+                    count={leafCount}
                     disabled={busy}
+                    checked={folderSel.checked}
+                    indeterminate={folderSel.indeterminate}
+                    onToggle={(_on, e) => {
+                      e.stopPropagation();
+                      onFolderCheckboxChange(fid, _on);
+                    }}
                     onOpen={() => {
                       setViewFolderId(fid);
                       onSelectedIdsChange(new Set());

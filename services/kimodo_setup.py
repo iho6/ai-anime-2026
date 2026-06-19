@@ -7,16 +7,39 @@ active interpreter. CMake must build against the venv Python, not system python.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
 import sys
-import sysconfig
 from pathlib import Path
 from typing import Callable
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _KIMODO_DIR = _REPO_ROOT / "kimodo"
+_BUILD_CMAKE_PATH = _KIMODO_DIR / "build_cmake.py"
+
+
+def _load_build_cmake():
+    spec = importlib.util.spec_from_file_location("kimodo_build_cmake", _BUILD_CMAKE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"kimodo build helper not found: {_BUILD_CMAKE_PATH}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_build_cmake = _load_build_cmake()
+
+kimodo_build_packages = _build_cmake.kimodo_build_packages
+python_dev_headers_ready = _build_cmake.python_dev_headers_ready
+require_python_dev_headers = _build_cmake.require_python_dev_headers
+python_cmake_args = _build_cmake.python_cmake_args
+
+
+def kimodo_cmake_args() -> list[str]:
+    """Backward-compatible alias for python_cmake_args()."""
+    return python_cmake_args()
 
 
 def kimodo_importable() -> bool:
@@ -28,32 +51,11 @@ def kimodo_importable() -> bool:
         return False
 
 
-def kimodo_build_packages() -> list[str]:
-    py_tag = f"{sys.version_info.major}.{sys.version_info.minor}"
-    return ["cmake", "build-essential", f"python{py_tag}-dev"]
-
-
-def python_dev_headers_ready() -> bool:
-    """True when Python.h is available for the active interpreter."""
-    include = sysconfig.get_path("include")
-    if not include:
-        return False
-    return (Path(include) / "Python.h").is_file()
-
-
-def kimodo_cmake_args() -> list[str]:
-    """CMake -D flags matching kimodo/setup.py MotionCorrection build."""
-    py_include = sysconfig.get_path("include")
-    args = [
-        f"-DPYTHON_EXECUTABLE={sys.executable}",
-        f"-DPython3_EXECUTABLE={sys.executable}",
-        f"-DPython3_INCLUDE_DIR={py_include}",
-        "-DPython3_FIND_UNVERSIONED_NAMES=OFF",
-    ]
-    py_lib = sysconfig.get_config_var("LIBRARY")
-    if py_lib:
-        args.append(f"-DPython3_LIBRARY={py_lib}")
-    return args
+def _kimodo_pip_install_env() -> dict[str, str]:
+    env = os.environ.copy()
+    # Belt-and-suspenders: setup.py also reads python_cmake_args() directly.
+    env["KIMODO_CMAKE_ARGS"] = " ".join(python_cmake_args())
+    return env
 
 
 def _kimodo_pip_install_cmd(kimodo_dir: Path) -> list[str]:
@@ -104,18 +106,6 @@ def _run_apt_build_deps(*, log_cb: Callable[[str], None] | None = None) -> None:
             log_cb(line)
 
 
-def _require_python_dev_headers() -> None:
-    if python_dev_headers_ready():
-        return
-    packages = " ".join(kimodo_build_packages())
-    include = sysconfig.get_path("include") or "(unknown)"
-    raise RuntimeError(
-        f"Python development headers missing for {sys.executable} "
-        f"(expected Python.h under {include}). "
-        f"Install: sudo apt-get install -y {packages}"
-    )
-
-
 def ensure_kimodo_build_deps(
     *,
     run_command: Callable[..., None],
@@ -136,7 +126,7 @@ def ensure_kimodo_build_deps(
             "Failed to install kimodo build dependencies. "
             f"Install manually: sudo apt-get install -y {' '.join(packages)}"
         ) from exc
-    _require_python_dev_headers()
+    require_python_dev_headers()
 
 
 def _ensure_kimodo_repo(
@@ -158,6 +148,15 @@ def _ensure_kimodo_repo(
     return kimodo_dir
 
 
+def _kimodo_install_failure_message(err: str) -> str:
+    packages = " ".join(kimodo_build_packages())
+    return (
+        f"{err}\n"
+        f"Kimodo builds MotionCorrection against {sys.executable} (not system python). "
+        f"Ensure build deps are installed: sudo apt-get install -y {packages}"
+    )
+
+
 def ensure_kimodo_installed(
     *,
     run_command: Callable[..., None],
@@ -177,6 +176,7 @@ def ensure_kimodo_installed(
         _kimodo_pip_install_cmd(kimodo_dir),
         cwd=_REPO_ROOT,
         log_cb=log_cb,
+        env=_kimodo_pip_install_env(),
     )
     if not kimodo_importable():
         packages = " ".join(kimodo_build_packages())
@@ -197,11 +197,12 @@ def pip_install_kimodo_editable() -> None:
 
     if not python_dev_headers_ready():
         _run_apt_build_deps()
-    _require_python_dev_headers()
+    require_python_dev_headers()
 
     proc = subprocess.run(
         _kimodo_pip_install_cmd(kimodo_dir),
         cwd=str(_REPO_ROOT),
+        env=_kimodo_pip_install_env(),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -209,11 +210,7 @@ def pip_install_kimodo_editable() -> None:
     )
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "pip install failed").strip()
-        packages = " ".join(kimodo_build_packages())
-        raise RuntimeError(
-            f"kimodo editable install failed: {err}\n"
-            f"Try: sudo apt-get install -y {packages}"
-        )
+        raise RuntimeError(_kimodo_install_failure_message(err))
     if not kimodo_importable():
         packages = " ".join(kimodo_build_packages())
         raise RuntimeError(

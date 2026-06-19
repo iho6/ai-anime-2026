@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { assetUrlFromRelPath } from "../lib/api";
+import { TimelinePlayIcon } from "./IconPrimitives";
 
 export function KeypointRefTile(props: {
   tile: number;
@@ -77,12 +77,14 @@ export function KeypointRefTile(props: {
 export function KeypointVideoTile(props: {
   tile: number;
   count: number;
+  thumbSrc?: string;
   checked: boolean;
   disabled: boolean;
   onToggle: (on: boolean, e: React.ChangeEvent<HTMLInputElement>) => void;
   onOpen: () => void;
+  onPlay?: () => void;
 }) {
-  const { tile, count, checked, disabled, onToggle, onOpen } = props;
+  const { tile, count, thumbSrc, checked, disabled, onToggle, onOpen, onPlay } = props;
   return (
     <div style={{ width: tile, height: tile, position: "relative" }}>
       <button
@@ -92,9 +94,9 @@ export function KeypointVideoTile(props: {
         style={{
           width: tile,
           height: tile,
-          padding: 8,
+          padding: thumbSrc ? 0 : 8,
           border: "1px solid rgba(255,255,255,0.25)",
-          background: "rgba(80,120,200,0.12)",
+          background: thumbSrc ? "rgba(0,0,0,0.2)" : "rgba(80,120,200,0.12)",
           color: "#eee",
           cursor: disabled ? "not-allowed" : "pointer",
           display: "flex",
@@ -105,21 +107,82 @@ export function KeypointVideoTile(props: {
           textAlign: "center",
           fontSize: 12,
           lineHeight: 1.2,
+          overflow: "hidden",
+          position: "relative",
         }}
         title="Open video keypoint sequence editor"
       >
-        <span
+        {thumbSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={thumbSrc}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none" }}
+            draggable={false}
+          />
+        ) : (
+          <>
+            <span
+              style={{
+                fontSize: 10,
+                padding: "1px 4px",
+                background: "rgba(0,0,0,0.55)",
+                color: "#fff",
+              }}
+            >
+              Video
+            </span>
+            <span style={{ opacity: 0.85 }}>{count} frames</span>
+          </>
+        )}
+        {thumbSrc ? (
+          <span
+            style={{
+              position: "absolute",
+              top: 4,
+              left: 4,
+              fontSize: 9,
+              padding: "1px 4px",
+              background: "rgba(0,0,0,0.65)",
+              color: "#fff",
+              pointerEvents: "none",
+            }}
+          >
+            Video
+          </span>
+        ) : null}
+      </button>
+      {thumbSrc && onPlay ? (
+        <button
+          type="button"
+          disabled={disabled}
+          aria-label="Play preview"
+          title="Play preview"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPlay();
+          }}
           style={{
-            fontSize: 10,
-            padding: "1px 4px",
-            background: "rgba(0,0,0,0.55)",
-            color: "#fff",
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 28,
+            height: 28,
+            display: "grid",
+            placeItems: "center",
+            padding: 0,
+            border: "none",
+            borderRadius: 0,
+            background: "rgba(120,120,120,0.35)",
+            color: "rgba(255,255,255,0.9)",
+            cursor: disabled ? "not-allowed" : "pointer",
+            zIndex: 1,
           }}
         >
-          Video
-        </span>
-        <span style={{ opacity: 0.85 }}>{count} frames</span>
-      </button>
+          <TimelinePlayIcon size={14} />
+        </button>
+      ) : null}
       <label
         style={{
           position: "absolute",
@@ -149,44 +212,74 @@ export function KeypointFolderTile(props: {
   count: number;
   disabled: boolean;
   onOpen: () => void;
+  checked?: boolean;
+  indeterminate?: boolean;
+  onToggle?: (on: boolean, e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
-  const { tile, name, count, disabled, onOpen } = props;
+  const { tile, name, count, disabled, onOpen, checked, indeterminate, onToggle } = props;
+  const showCheckbox = typeof onToggle === "function";
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onOpen}
-      style={{
-        width: tile,
-        height: tile,
-        padding: 8,
-        border: "1px solid rgba(255,255,255,0.25)",
-        background: "rgba(255,255,255,0.06)",
-        color: "#eee",
-        cursor: disabled ? "not-allowed" : "pointer",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 4,
-        textAlign: "center",
-        fontSize: 12,
-        lineHeight: 1.2,
-      }}
-      title={`Open folder: ${name}`}
-    >
-      <span
+    <div style={{ width: tile, height: tile, position: "relative" }}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onOpen}
         style={{
-          fontSize: 10,
-          padding: "1px 4px",
-          background: "rgba(0,0,0,0.55)",
-          color: "#fff",
+          width: tile,
+          height: tile,
+          padding: 8,
+          border: "1px solid rgba(255,255,255,0.25)",
+          background: "rgba(255,255,255,0.06)",
+          color: "#eee",
+          cursor: disabled ? "not-allowed" : "pointer",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 4,
+          textAlign: "center",
+          fontSize: 12,
+          lineHeight: 1.2,
         }}
+        title={`Open folder: ${name}`}
       >
-        Folder
-      </span>
-      <span style={{ fontWeight: 400, wordBreak: "break-word" }}>{name}</span>
-      <span style={{ opacity: 0.65 }}>{count}</span>
-    </button>
+        <span
+          style={{
+            fontSize: 10,
+            padding: "1px 4px",
+            background: "rgba(0,0,0,0.55)",
+            color: "#fff",
+          }}
+        >
+          Folder
+        </span>
+        <span style={{ fontWeight: 400, wordBreak: "break-word" }}>{name}</span>
+        <span style={{ opacity: 0.65 }}>{count}</span>
+      </button>
+      {showCheckbox ? (
+        <label
+          style={{
+            position: "absolute",
+            top: 4,
+            left: 6,
+            zIndex: 2,
+            cursor: disabled ? "not-allowed" : "pointer",
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            disabled={disabled}
+            checked={Boolean(checked)}
+            ref={(el) => {
+              if (el) el.indeterminate = Boolean(indeterminate);
+            }}
+            onChange={(e) => onToggle!(e.target.checked, e)}
+            style={{ margin: 0 }}
+          />
+        </label>
+      ) : null}
+    </div>
   );
 }
