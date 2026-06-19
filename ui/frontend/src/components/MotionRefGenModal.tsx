@@ -36,6 +36,7 @@ import {
   V2PoseSeqSampleFps,
   V2PoseSeqFrameCapture,
   assetUrlFromRelPath,
+  type SequencePreviewAspect,
   runMotionRefGenerateWsJob,
   runMotionRefSkinWsJob,
   runMotionRefShotAddToPoseWsJob,
@@ -51,6 +52,8 @@ import { MotionTimeline } from "./motionRef/MotionTimeline";
 import { MotionShotGallery } from "./motionRef/MotionShotGallery";
 import { MotionPlaybackScrubber } from "./motionRef/MotionPlaybackScrubber";
 import { CameraKeyframeContextMenu } from "./motionRef/CameraKeyframeContextMenu";
+import { SEQUENCE_PREVIEW_ASPECT_OPTIONS } from "../lib/sequenceAspect";
+import { CaptureAspectButton } from "./motionRef/captureAspectButton";
 import { SMPLX22_BONES } from "./motionRef/smplx22Bones";
 import {
   MOTION_REF_ACCENT,
@@ -117,6 +120,8 @@ export function MotionRefGenModal(props: {
   const trajectoryEnabledRef = useRef(true);
   // Show the crop-frame overlay (the square fed to SDPose) in the viewer.
   const [showCropFrame, setShowCropFrame] = useState(true);
+  const [showOutputFrame, setShowOutputFrame] = useState(true);
+  const [captureAspect, setCaptureAspect] = useState<SequencePreviewAspect>("16:9");
   // Root XZ per frame for mesh mode: Float32Array [x0,z0, x1,z1, ...].
   // Fetched from joints alongside the mesh; used to lock hips horizontally.
   const rootXZRef = useRef<Float32Array | null>(null);
@@ -360,6 +365,10 @@ export function MotionRefGenModal(props: {
   useEffect(() => {
     skeletonRef.current?.setCropOverlayVisible(showCropFrame);
   }, [showCropFrame, meshData, jointsData]);
+
+  useEffect(() => {
+    skeletonRef.current?.setOutputFrameOverlayVisible(showOutputFrame);
+  }, [showOutputFrame, meshData, jointsData]);
 
   useEffect(() => {
     skeletonRef.current?.setCameraGizmos(
@@ -1133,12 +1142,12 @@ export function MotionRefGenModal(props: {
       if (skippedFrames.length) {
         pushLog(
           `Skipped ${skippedFrames.length} frame(s) with the figure out of frame. ` +
-            `Adjust the camera/zoom (or enable In place) so the capture frame stays on the figure.`,
+            `Adjust the camera/zoom (or enable In place) so the output frame stays on the figure.`,
         );
       }
       if (clippedFrames.length) {
         pushLog(
-          `Warning: ${clippedFrames.length} frame(s) had the capture frame touching the viewer edge — ` +
+          `Warning: ${clippedFrames.length} frame(s) had the SDPose crop touching the output frame edge — ` +
             `the figure may be cut off. Zoom out or recenter for best keypoints.`,
         );
       }
@@ -1257,6 +1266,7 @@ export function MotionRefGenModal(props: {
           <SkeletonViewer3D
             ref={skeletonRef}
             height={320}
+            captureAspect={captureAspect}
             onCameraChange={(s) => setCameraState(s)}
             onUserOrbitChange={(orbiting) => { userOrbitingRef.current = orbiting; }}
             onUserCameraInteract={(active) => {
@@ -1264,23 +1274,50 @@ export function MotionRefGenModal(props: {
             }}
             onGizmoContextMenu={(id, x, y) => setCameraCtxMenu({ id, x, y })}
           />
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
             <div style={{ fontSize: 10, color: "#555" }}>
               {displayMode === "mesh" ? "Mesh preview" : "Skeleton preview"}
               {" · "}Drag to slide · Shift+drag to orbit · Scroll to zoom · Drag corner to resize
             </div>
-            <label
-              style={{ fontSize: 10, color: showCropFrame ? "#6eb5ff" : "#888", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
-              title="Show the square region captured and sent to SDPose for this frame"
-            >
-              <input
-                type="checkbox"
-                checked={showCropFrame}
-                onChange={(e) => setShowCropFrame(e.target.checked)}
-                style={{ accentColor: "#6eb5ff" }}
-              />
-              Capture frame
-            </label>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 10, color: "#888" }}>Aspect</span>
+                {SEQUENCE_PREVIEW_ASPECT_OPTIONS.map((opt) => (
+                  <CaptureAspectButton
+                    key={opt.id}
+                    w={opt.w}
+                    h={opt.h}
+                    label={opt.label}
+                    selected={captureAspect === opt.id}
+                    onSelect={() => setCaptureAspect(opt.id)}
+                  />
+                ))}
+              </div>
+              <label
+                style={{ fontSize: 10, color: showOutputFrame ? "#ddd" : "#888", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                title="Show fixed-aspect shot boundary (saved PNG matches this frame)"
+              >
+                <input
+                  type="checkbox"
+                  checked={showOutputFrame}
+                  onChange={(e) => setShowOutputFrame(e.target.checked)}
+                  style={{ accentColor: "#ccc" }}
+                />
+                Output frame
+              </label>
+              <label
+                style={{ fontSize: 10, color: showCropFrame ? "#6eb5ff" : "#888", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                title="Show figure crop sent to SDPose for this frame"
+              >
+                <input
+                  type="checkbox"
+                  checked={showCropFrame}
+                  onChange={(e) => setShowCropFrame(e.target.checked)}
+                  style={{ accentColor: "#6eb5ff" }}
+                />
+                SDPose crop
+              </label>
+            </div>
           </div>
         </div>
 

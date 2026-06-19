@@ -2,9 +2,9 @@
   "fps": 30,
   "frame_count": 390,
   "joint_count": 22,
-  "has_mesh": false,
-  "vertex_count": 0,
-  "face_count": 0,
+  "has_mesh": true,
+  "vertex_count": 10475,
+  "face_count": 20908,
   "bones": [
     [
       1,
@@ -91,7 +91,7 @@
       19
     ]
   ],
-  "display_mode": "skeleton",
+  "display_mode": "mesh",
   "segments": [
     {
       "text": "A person is jumping left and right",

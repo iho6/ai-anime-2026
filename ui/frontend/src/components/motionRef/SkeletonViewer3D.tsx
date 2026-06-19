@@ -8,6 +8,9 @@ import React, {
 } from "react";
 import { keyframeWorldPose, orbitStateFromWorldPose, worldPoseFromOrbitState } from "./cameraTrajectory";
 import type { CameraWorldPose } from "./cameraTrajectory";
+import { computeCaptureViewportLayout } from "./captureViewportLayout";
+import type { SequencePreviewAspect } from "../../lib/api";
+import { normalizeSequencePreviewAspect } from "../../lib/sequenceAspect";
 
 export type CameraGizmoKeyframe = {
   id: string;
@@ -79,11 +82,16 @@ export type SkeletonViewer3DHandle = {
   getFigureScreenBbox(): FigureScreenBbox | null;
   /** Toggle the live crop-frame overlay (square fed to SDPose). */
   setCropOverlayVisible(visible: boolean): void;
+  /** Toggle the fixed-aspect output frame overlay (red border + outside dim). */
+  setOutputFrameOverlayVisible(visible: boolean): void;
+  /** Update capture aspect ratio (16:9, 9:16, 1:1, 4:3). */
+  setCaptureAspect(aspect: SequencePreviewAspect): void;
 };
 
 type Props = {
   width?: number | string;
   height?: number | string;
+  captureAspect?: SequencePreviewAspect;
   onCameraChange?: (state: CameraState) => void;
   onUserOrbitChange?: (orbiting: boolean) => void;
   onUserCameraInteract?: (active: boolean) => void;
@@ -171,8 +179,19 @@ function padClampSquareFigureBbox(
 type ThreeModule = typeof import("three");
 
 const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
-  ({ width = "100%", height = 320, onCameraChange, onUserOrbitChange, onUserCameraInteract, onGizmoContextMenu }, ref) => {
+  ({
+    width = "100%",
+    height = 320,
+    captureAspect = "16:9",
+    onCameraChange,
+    onUserOrbitChange,
+    onUserCameraInteract,
+    onGizmoContextMenu,
+  }, ref) => {
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const viewportHostRef = useRef<HTMLDivElement | null>(null);
+    const outputFrameOverlayRef = useRef<HTMLDivElement | null>(null);
+    const cropOverlayRef = useRef<HTMLDivElement | null>(null);
 
     const threeRef = useRef<{
       THREE: ThreeModule;
@@ -191,8 +210,9 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
 
     const gizmosVisibleRef = useRef(true);
     const gizmoKeyframesRef = useRef<CameraGizmoKeyframe[]>([]);
-    const cropOverlayRef = useRef<HTMLDivElement | null>(null);
     const showCropOverlayRef = useRef(true);
+    const showOutputFrameOverlayRef = useRef(true);
+    const captureAspectRef = useRef<SequencePreviewAspect>(normalizeSequencePreviewAspect(captureAspect));
 
     const modeRef = useRef<ViewerMode>("mesh");
     const bonePairsRef = useRef<[number, number][]>([]);
@@ -306,6 +326,45 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       if (!Number.isFinite(minX)) return null;
       const box = padClampSquareFigureBbox(minX, minY, maxX, maxY, imgW, imgH);
       return { ...box, imageWidth: imgW, imageHeight: imgH };
+    }
+
+    function _applyViewportLayout() {
+      const container = containerRef.current;
+      const viewportHost = viewportHostRef.current;
+      const outputOverlay = outputFrameOverlayRef.current;
+      const t = threeRef.current;
+      if (!container || !viewportHost) return;
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      if (cw < 1 || ch < 1) return;
+      const layout = computeCaptureViewportLayout(cw, ch, captureAspectRef.current);
+      viewportHost.style.left = `${layout.x}px`;
+      viewportHost.style.top = `${layout.y}px`;
+      viewportHost.style.width = `${layout.width}px`;
+      viewportHost.style.height = `${layout.height}px`;
+      if (outputOverlay) {
+        outputOverlay.style.left = `${layout.x}px`;
+        outputOverlay.style.top = `${layout.y}px`;
+        outputOverlay.style.width = `${layout.width}px`;
+        outputOverlay.style.height = `${layout.height}px`;
+      }
+      sizeRef.current = { w: layout.width, h: layout.height };
+      if (t) {
+        t.renderer.setSize(layout.width, layout.height);
+        t.camera.aspect = layout.width / layout.height;
+        t.camera.updateProjectionMatrix();
+      }
+      _updateOutputFrameOverlay();
+    }
+
+    function _updateOutputFrameOverlay() {
+      const el = outputFrameOverlayRef.current;
+      if (!el) return;
+      if (!showOutputFrameOverlayRef.current) {
+        el.style.display = "none";
+        return;
+      }
+      el.style.display = "block";
     }
 
     function _updateCropOverlay() {
@@ -445,9 +504,10 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
 
     function _pickGizmo(clientX: number, clientY: number): string | null {
       const t = threeRef.current;
-      const container = containerRef.current;
-      if (!t || !container || t.gizmoPickables.length === 0) return null;
-      const rect = container.getBoundingClientRect();
+      const viewportHost = viewportHostRef.current;
+      if (!t || !viewportHost || t.gizmoPickables.length === 0) return null;
+      const rect = viewportHost.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return null;
       const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
       const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
       const raycaster = new t.THREE.Raycaster();
@@ -490,8 +550,14 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
     }
 
     useEffect(() => {
+      captureAspectRef.current = normalizeSequencePreviewAspect(captureAspect);
+      _applyViewportLayout();
+    }, [captureAspect]);
+
+    useEffect(() => {
       const container = containerRef.current;
-      if (!container) return;
+      const viewportHost = viewportHostRef.current;
+      if (!container || !viewportHost) return;
       let cancelled = false;
 
       const onWheelNative = (e: WheelEvent) => {
@@ -506,27 +572,16 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       container.addEventListener("wheel", onWheelNative, { passive: false });
 
       import("three").then((THREE) => {
-        if (cancelled || !container) return;
+        if (cancelled || !container || !viewportHost) return;
 
-        const w0 = container.clientWidth || sizeRef.current.w || FALLBACK_W;
-        const h0 = container.clientHeight || sizeRef.current.h || FALLBACK_H;
-        sizeRef.current = { w: w0, h: h0 };
+        _applyViewportLayout();
+        const { w: vw, h: vh } = sizeRef.current;
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-        renderer.setSize(w0, h0);
+        renderer.setSize(vw, vh);
         renderer.setPixelRatio(Math.min(2, Math.max(1, window.devicePixelRatio)));
         renderer.setClearColor(0x1a1a1a);
-        container.appendChild(renderer.domElement);
-
-        const cropOverlay = document.createElement("div");
-        cropOverlay.style.position = "absolute";
-        cropOverlay.style.boxSizing = "border-box";
-        cropOverlay.style.border = "1px solid rgba(110,181,255,0.9)";
-        cropOverlay.style.pointerEvents = "none";
-        cropOverlay.style.display = "none";
-        cropOverlay.style.zIndex = "2";
-        container.appendChild(cropOverlay);
-        cropOverlayRef.current = cropOverlay;
+        viewportHost.appendChild(renderer.domElement);
 
         const scene = new THREE.Scene();
         scene.add(new THREE.AmbientLight(0xffffff, 0.7));
@@ -561,7 +616,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         const gizmoGroup = new THREE.Group();
         scene.add(gizmoGroup);
 
-        const camera = new THREE.PerspectiveCamera(45, w0 / h0, 0.01, 50);
+        const camera = new THREE.PerspectiveCamera(45, vw / vh, 0.01, 50);
 
         threeRef.current = {
           THREE,
@@ -600,18 +655,13 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         }
 
         const ro = new ResizeObserver(() => {
-          const t = threeRef.current;
-          if (!t) return;
-          const w = container.clientWidth || sizeRef.current.w;
-          const h = container.clientHeight || sizeRef.current.h;
-          if (w < 1 || h < 1) return;
-          sizeRef.current = { w, h };
-          t.renderer.setSize(w, h);
-          t.camera.aspect = w / h;
-          t.camera.updateProjectionMatrix();
+          _applyViewportLayout();
         });
         ro.observe(container);
         resizeObsRef.current = ro;
+
+        _updateOutputFrameOverlay();
+        _updateCropOverlay();
 
         const animate = () => {
           if (cancelled) return;
@@ -640,14 +690,10 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           (t.mesh.material as import("three").Material).dispose();
           (t.boneLines.material as import("three").Material).dispose();
           t.renderer.dispose();
-          if (container.contains(t.renderer.domElement)) {
-            container.removeChild(t.renderer.domElement);
+          if (viewportHost.contains(t.renderer.domElement)) {
+            viewportHost.removeChild(t.renderer.domElement);
           }
         }
-        if (cropOverlayRef.current && container.contains(cropOverlayRef.current)) {
-          container.removeChild(cropOverlayRef.current);
-        }
-        cropOverlayRef.current = null;
         threeRef.current = null;
       };
     }, []);
@@ -795,6 +841,14 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         showCropOverlayRef.current = visible;
         _updateCropOverlay();
       },
+      setOutputFrameOverlayVisible(visible: boolean) {
+        showOutputFrameOverlayRef.current = visible;
+        _updateOutputFrameOverlay();
+      },
+      setCaptureAspect(aspect: SequencePreviewAspect) {
+        captureAspectRef.current = normalizeSequencePreviewAspect(aspect);
+        _applyViewportLayout();
+      },
     }));
 
     function onPointerDown(e: React.PointerEvent) {
@@ -863,6 +917,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           borderRadius: 2,
           overflow: "hidden",
           position: "relative",
+          background: "#111",
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -870,7 +925,40 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         onPointerCancel={onPointerUp}
         onContextMenu={onContextMenu}
         title="Drag to slide view · Shift+drag to orbit · Scroll to zoom · Right-click camera gizmo to delete"
-      />
+      >
+        <div
+          ref={outputFrameOverlayRef}
+          style={{
+            position: "absolute",
+            display: "none",
+            pointerEvents: "none",
+            boxSizing: "border-box",
+            border: "1px solid rgba(255, 255, 255, 0.9)",
+            boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.18)",
+            zIndex: 1,
+          }}
+        />
+        <div
+          ref={viewportHostRef}
+          style={{
+            position: "absolute",
+            overflow: "hidden",
+            zIndex: 0,
+          }}
+        >
+          <div
+            ref={cropOverlayRef}
+            style={{
+              position: "absolute",
+              boxSizing: "border-box",
+              border: "1px solid rgba(110,181,255,0.9)",
+              pointerEvents: "none",
+              display: "none",
+              zIndex: 2,
+            }}
+          />
+        </div>
+      </div>
     );
   }
 );
