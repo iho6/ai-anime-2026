@@ -1,5 +1,5 @@
 /**
- * Unit tests for kimodo/build_cmake.py (run: npx --yes tsx tests/test_kimodo_build_cmake.mts)
+ * Unit tests for services/kimodo_build_cmake.py (run: npx --yes tsx tests/test_kimodo_build_cmake.mts)
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -10,8 +10,8 @@ const py = process.env.PYTHON ?? "python3";
 
 const snippet = `
 import sys
-sys.path.insert(0, ${JSON.stringify(path.join(repoRoot, "kimodo"))})
-from build_cmake import python_cmake_args, python_dev_headers_ready, kimodo_build_packages
+sys.path.insert(0, ${JSON.stringify(repoRoot)})
+from services.kimodo_build_cmake import python_cmake_args, python_dev_headers_ready, kimodo_build_packages
 args = python_cmake_args()
 assert any(a.startswith("-DPython3_INCLUDE_DIR=") and len(a) > len("-DPython3_INCLUDE_DIR=") for a in args)
 assert f"-DPython3_EXECUTABLE={sys.executable}" in args

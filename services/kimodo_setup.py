@@ -7,7 +7,6 @@ active interpreter. CMake must build against the venv Python, not system python.
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import shutil
 import subprocess
@@ -15,31 +14,45 @@ import sys
 from pathlib import Path
 from typing import Callable
 
+from services.kimodo_build_cmake import (
+    kimodo_build_packages,
+    python_cmake_args,
+    python_dev_headers_ready,
+    require_python_dev_headers,
+)
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _KIMODO_DIR = _REPO_ROOT / "kimodo"
-_BUILD_CMAKE_PATH = _KIMODO_DIR / "build_cmake.py"
+_PATCHES_DIR = _REPO_ROOT / "patches" / "kimodo"
 
-
-def _load_build_cmake():
-    spec = importlib.util.spec_from_file_location("kimodo_build_cmake", _BUILD_CMAKE_PATH)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"kimodo build helper not found: {_BUILD_CMAKE_PATH}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-_build_cmake = _load_build_cmake()
-
-kimodo_build_packages = _build_cmake.kimodo_build_packages
-python_dev_headers_ready = _build_cmake.python_dev_headers_ready
-require_python_dev_headers = _build_cmake.require_python_dev_headers
-python_cmake_args = _build_cmake.python_cmake_args
+_KIMODO_OVERLAY_FILES = (
+    "build_cmake.py",
+    "setup.py",
+    "MANIFEST.in",
+    "MotionCorrection/setup.py",
+)
 
 
 def kimodo_cmake_args() -> list[str]:
     """Backward-compatible alias for python_cmake_args()."""
     return python_cmake_args()
+
+
+def apply_kimodo_cmake_patches(
+    kimodo_dir: Path,
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> None:
+    """Copy parent-repo overlays into kimodo submodule before editable install."""
+    for rel in _KIMODO_OVERLAY_FILES:
+        src = _PATCHES_DIR / rel
+        dst = kimodo_dir / rel
+        if not src.is_file():
+            raise RuntimeError(f"Missing kimodo overlay: {src}")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        if log_cb:
+            log_cb(f"Applied kimodo overlay: {rel}")
 
 
 def kimodo_importable() -> bool:
@@ -53,7 +66,6 @@ def kimodo_importable() -> bool:
 
 def _kimodo_pip_install_env() -> dict[str, str]:
     env = os.environ.copy()
-    # Belt-and-suspenders: setup.py also reads python_cmake_args() directly.
     env["KIMODO_CMAKE_ARGS"] = " ".join(python_cmake_args())
     return env
 
@@ -170,6 +182,7 @@ def ensure_kimodo_installed(
 
     ensure_kimodo_build_deps(run_command=run_command, log_cb=log_cb)
     kimodo_dir = _ensure_kimodo_repo(run_command=run_command, log_cb=log_cb)
+    apply_kimodo_cmake_patches(kimodo_dir, log_cb=log_cb)
     if log_cb:
         log_cb("Installing kimodo (editable, with MotionCorrection C extension)…")
     run_command(
@@ -198,6 +211,7 @@ def pip_install_kimodo_editable() -> None:
     if not python_dev_headers_ready():
         _run_apt_build_deps()
     require_python_dev_headers()
+    apply_kimodo_cmake_patches(kimodo_dir)
 
     proc = subprocess.run(
         _kimodo_pip_install_cmd(kimodo_dir),
