@@ -46,24 +46,18 @@ from services import prompts
 from services.prompts import (
     ANIME_DEFAULT_STYLE_PREFIX,
     NEW_CHARACTER_POSITIVE_LEAD,
-    POSE_KEYPOINT_CLOSEUP_PROMPT_SUFFIX,
-    POSE_KEYPOINT_ONLY_ROLE_HINT,
-    DEFAULT_KEYPOINT_ONLY_POSE_PROMPT,
     SHOT_PROMPT_PREFIX,
     SHOT_PROMPT_SCENE_JOINER,
     build_expression_prompt_from_label,
     build_pose_prompt_from_label,
     build_positive_prompt,
     build_shot_prompt,
+    compose_keypoint_pose_edit_prompt,
     compose_new_character_positive_prompt,
     compose_new_location_positive_prompt,
+    compose_reference_base_t2i_prompt,
     load_catalog as _load_catalog,
 )
-from services.sequence_gallery_strip import gallery_item_from_frame_urls
-
-# Backward-compat private aliases for the keypoint-hint appenders (now centralized).
-_append_closeup_keypoint_pose_hint = prompts.append_closeup_keypoint_pose_hint
-_append_keypoint_only_pose_hint = prompts.append_keypoint_only_pose_hint
 
 COMFY_PORT = int(os.environ.get("COMFY_PORT", 8188))
 
@@ -3720,7 +3714,9 @@ def generate_pose_starting_image(
     close_abs = character_base_closeup_composite_abs_path(character_name) if kp else None
 
     if kp and close_abs:
-        prompt_inline = _append_closeup_keypoint_pose_hint(pose_opt.prompt_text)
+        prompt_inline = compose_keypoint_pose_edit_prompt(
+            pose_opt.prompt_text, with_closeup_sheet=True
+        )
         argv = [
             "--test-mode",
             "--enable-default",
@@ -3736,7 +3732,9 @@ def generate_pose_starting_image(
             "--convert-local-to-url",
         ]
     elif kp:
-        prompt_inline = _append_keypoint_only_pose_hint(pose_opt.prompt_text)
+        prompt_inline = compose_keypoint_pose_edit_prompt(
+            pose_opt.prompt_text, with_closeup_sheet=False
+        )
         argv = [
             "--test-mode",
             "--enable-default",
@@ -3809,10 +3807,11 @@ def generate_pose_starting_image_from_prompt(
     if not effective:
         effective = pose_opt.prompt_text
     kp = (keypoint_image_path or "").strip()
-    if kp and character_base_closeup_composite_abs_path(character_name):
-        effective = _append_closeup_keypoint_pose_hint(effective)
-    elif kp:
-        effective = _append_keypoint_only_pose_hint(effective)
+    use_closeup_sheet = bool(kp and character_base_closeup_composite_abs_path(character_name))
+    if kp:
+        effective = compose_keypoint_pose_edit_prompt(
+            effective, with_closeup_sheet=use_closeup_sheet
+        )
 
     body = _run_service_testmode(
         "services.image_edit_ai_service.serverless",
@@ -3879,25 +3878,26 @@ def generate_pose_starting_images_from_prompts(
     """
     if base_image_path is None or not Path(base_image_path).is_file():
         raise ValueError("Base image is missing or not a file.")
-    prompts = [(p or "").strip() for p in prompt_texts]
-    prompts = [p for p in prompts if p]
+    raw_prompts = [(p or "").strip() for p in prompt_texts]
+    nonempty_prompts = [p for p in raw_prompts if p]
     kp = (keypoint_image_path or "").strip()
-    use_closeup_hint = bool(kp and character_base_closeup_composite_abs_path(character_name))
-    if not prompts:
+    use_closeup_sheet = bool(kp and character_base_closeup_composite_abs_path(character_name))
+
+    def _composed_for_batch(user_prompts: list[str]) -> list[str]:
+        if not user_prompts:
+            if not kp:
+                raise ValueError("No prompt text provided.")
+            return [
+                compose_keypoint_pose_edit_prompt("", with_closeup_sheet=use_closeup_sheet)
+            ]
         if kp:
-            base_p = DEFAULT_KEYPOINT_ONLY_POSE_PROMPT
-            prompts = (
-                [_append_closeup_keypoint_pose_hint(base_p)]
-                if use_closeup_hint
-                else [_append_keypoint_only_pose_hint(base_p)]
-            )
-        else:
-            raise ValueError("No prompt text provided.")
-    elif kp:
-        if use_closeup_hint:
-            prompts = [_append_closeup_keypoint_pose_hint(p) for p in prompts]
-        else:
-            prompts = [_append_keypoint_only_pose_hint(p) for p in prompts]
+            return [
+                compose_keypoint_pose_edit_prompt(p, with_closeup_sheet=use_closeup_sheet)
+                for p in user_prompts
+            ]
+        return user_prompts
+
+    prompts = _composed_for_batch(nonempty_prompts)
 
     if log_cb and len(prompts) > 1:
         log_cb(f"Batch generating {len(prompts)} poses with Qwen…")
@@ -3928,17 +3928,18 @@ def generate_pose_starting_images_from_prompts(
                     pass
         created: list[tuple[str, str]] = []
         total = len(prompts)
-        for i, prompt in enumerate(prompts):
+        placed_items = nonempty_prompts if nonempty_prompts else ([""] if kp else [])
+        for i, raw_prompt in enumerate(placed_items):
             if log_cb:
-                log_cb(f"Generating pose {i + 1}/{total}…")
+                log_cb(f"Generating pose {i + 1}/{len(placed_items)}…")
             out_ref = _generate_pose_image_edit_url(
                 character_name,
                 base_image_path,
-                prompt,
+                raw_prompt,
                 keypoint_image_path=kp,
                 log_cb=log_cb,
             )
-            stem = sanitize_for_folder(prompt) or f"prompt_{i}"
+            stem = sanitize_for_folder(raw_prompt) or f"prompt_{i}"
             abs_path, rel = _download_url_to_pose_gallery(character_name, out_ref, stem)
             created.append((abs_path, rel))
         return created
@@ -3996,23 +3997,13 @@ def _generate_pose_image_edit_url(
     """Run image-edit pose generation and return the result URL (no pose gallery save)."""
     effective = (prompt_text or "").strip()
     kp = (keypoint_image_path or "").strip()
-    use_closeup_hint = bool(kp and character_base_closeup_composite_abs_path(character_name))
-    if not effective:
-        if kp:
-            base_p = DEFAULT_KEYPOINT_ONLY_POSE_PROMPT
-            effective = (
-                _append_closeup_keypoint_pose_hint(base_p)
-                if use_closeup_hint
-                else _append_keypoint_only_pose_hint(base_p)
-            )
-        else:
-            raise ValueError("No prompt text provided.")
-    elif kp:
-        effective = (
-            _append_closeup_keypoint_pose_hint(effective)
-            if use_closeup_hint
-            else _append_keypoint_only_pose_hint(effective)
+    use_closeup_sheet = bool(kp and character_base_closeup_composite_abs_path(character_name))
+    if kp:
+        effective = compose_keypoint_pose_edit_prompt(
+            effective, with_closeup_sheet=use_closeup_sheet
         )
+    elif not effective:
+        raise ValueError("No prompt text provided.")
 
     from services import reference_storage
 
@@ -8958,8 +8949,15 @@ def generate_reference_preview(
     """
     from services import reference_storage
 
+    full_prompt = compose_reference_base_t2i_prompt(prompt_text)
+    if log_cb:
+        snip = full_prompt.replace("\n", " ").replace("\r", "")
+        if len(snip) > 200:
+            snip = snip[:197] + "..."
+        log_cb(f"reference_base prompt (composed): {snip}")
+
     ref = run_qwen_t2i(
-        prompt_text=prompt_text, width=width, height=height, log_cb=log_cb
+        prompt_text=full_prompt, width=width, height=height, log_cb=log_cb
     )
     local = _reference_ref_to_local(ref, log_cb=log_cb)
     preview_rel = reference_storage.add_preview(local)

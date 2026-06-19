@@ -87,6 +87,17 @@ def compose_new_character_positive_prompt(user_description: str) -> str:
 
 
 # ============================================================================
+# REFERENCE GENERATION
+#   services/logic.generate_reference_preview (Qwen T2I, ReferencePicker / library)
+# ============================================================================
+
+
+def compose_reference_base_t2i_prompt(user_description: str) -> str:
+    """Full Qwen T2I prompt for ReferencePicker / global reference library."""
+    return compose_new_character_positive_prompt(user_description)
+
+
+# ============================================================================
 # LOCATION GENERATION
 #   services/logic.generate_location_base_draft_to_temp (new-location, location gallery)
 # ============================================================================
@@ -144,23 +155,6 @@ def build_shot_prompt(user_text: str | None) -> str:
 #   services/image_edit_ai_service (pose catalog)
 # ============================================================================
 
-POSE_KEYPOINT_CLOSEUP_PROMPT_SUFFIX = (
-    "Return a single full body image of the same character as in the first input reference (starting image), "
-    "in the same pose as the keypoint skeleton (3rd image)."
-    "Return only a the full body image, no close-up reference."
-    "Keep facial features consistent."
-)
-
-POSE_KEYPOINT_ONLY_ROLE_HINT = (
-    "Return a single full body image of the same character as in the first input reference (starting image), "
-    "in the same pose as the keypoint image. Return only a the full body image, no close-up reference."
-)
-
-DEFAULT_KEYPOINT_ONLY_POSE_PROMPT = (
-    "Match the reference body pose and skeleton; preserve the subject's identity, proportions, "
-    "and clothing unless impossible."
-)
-
 
 def build_pose_prompt_from_label(short_desc: str) -> str:
     """Convert a short pose checklist label into the inline image-edit prompt."""
@@ -172,22 +166,39 @@ def build_pose_prompt_from_label(short_desc: str) -> str:
     )
 
 
-def append_closeup_keypoint_pose_hint(user_prompt: str) -> str:
-    """Append backend hint when using starting image + closeup composite + keypoint auxiliaries."""
-    u = (user_prompt or "").strip()
-    s = POSE_KEYPOINT_CLOSEUP_PROMPT_SUFFIX.strip()
-    if not u:
-        return s
-    return f"{u} {s}"
+def compose_keypoint_pose_edit_prompt(
+    user_description: str,
+    *,
+    with_closeup_sheet: bool,
+) -> str:
+    """
+    Full Qwen image-edit prompt for starting-image + keypoint auxiliary generation.
 
-
-def append_keypoint_only_pose_hint(user_prompt: str) -> str:
-    """Append backend hint when using starting image + keypoint auxiliary only (no closeup sheet)."""
-    u = (user_prompt or "").strip()
-    s = POSE_KEYPOINT_ONLY_ROLE_HINT.strip()
+    ``with_closeup_sheet`` is True when a closeup composite is passed as an extra auxiliary.
+    """
+    u = (user_description or "").strip()
+    if with_closeup_sheet:
+        role = (
+            "Return a single full-body image of the same character as in the first input "
+            "reference (starting image), in the same pose as the keypoint skeleton (third image). "
+            "Return only the full-body image, no close-up inset. Keep facial features consistent."
+        )
+    else:
+        role = (
+            "Return a single full-body image of the same character as in the first input "
+            "reference (starting image), in the same pose as the keypoint image. "
+            "Return only the full-body image."
+        )
+    constraints = (
+        "Match the reference body pose and skeleton; preserve the subject's identity, "
+        "proportions, and clothing unless impossible. "
+        "No objects in the hands; keep the hand pose exactly the same as the keypoint reference. "
+        "No background scenery; use a flat pure white background only (#ffffff)."
+    )
+    body = f"{constraints} {role}"
     if not u:
-        return s
-    return f"{u} {s}"
+        return body
+    return f"{u}. {body}"
 
 
 # ============================================================================
