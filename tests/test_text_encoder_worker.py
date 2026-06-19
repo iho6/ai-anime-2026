@@ -42,6 +42,25 @@ class TextEncoderWorkerTests(unittest.TestCase):
         env = tew.motion_worker_child_env(9550)
         self.assertIn("/kimodo", env["PYTHONPATH"])
 
+    @mock.patch.object(tew, "_text_encoder_is_up", return_value=False)
+    @mock.patch("services.kimodo_setup.apply_kimodo_patches")
+    @mock.patch.object(tew, "subprocess")
+    def test_ensure_text_encoder_applies_patches_before_spawn(
+        self,
+        sp: mock.MagicMock,
+        apply_patches: mock.MagicMock,
+        _is_up: mock.MagicMock,
+    ) -> None:
+        proc = mock.MagicMock()
+        proc.poll.return_value = None
+        proc.stdout = iter(["READY:9550\n"])
+        proc.stderr = iter([])
+        sp.Popen.return_value = proc
+        with mock.patch.object(tew, "_wait_for_text_encoder"):
+            tew.ensure_text_encoder()
+        apply_patches.assert_called_once()
+        sp.Popen.assert_called_once()
+
     @mock.patch.object(tew, "_text_encoder_is_up", return_value=True)
     def test_ensure_text_encoder_skips_spawn_when_up(self, _is_up: mock.MagicMock) -> None:
         with mock.patch.object(tew, "subprocess") as sp:

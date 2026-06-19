@@ -23,9 +23,12 @@ so ``SMPLX_MODEL_DIR`` is the parent that *contains* the ``smplx/`` folder.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Repo root = two levels up from this service package.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -62,6 +65,192 @@ def _is_git_lfs_pointer(path: Path) -> bool:
 
 
 _KIMODO_SMPLX_SKIN_CACHE: dict[str, Any] = {}
+
+_DEFAULT_SKIN_CHUNK_FRAMES = 32
+_SKIN_CHUNK_FRAMES_ENV = "MOTION_REF_SKIN_CHUNK_FRAMES"
+_SKIN_DEVICE_ENV = "MOTION_REF_SKIN_DEVICE"
+_MIN_SKIN_CHUNK_FRAMES = 8
+
+
+def _skin_chunk_frames() -> int:
+    raw = os.environ.get(_SKIN_CHUNK_FRAMES_ENV, "").strip()
+    if raw:
+        try:
+            value = int(raw)
+            if value > 0:
+                return max(value, _MIN_SKIN_CHUNK_FRAMES)
+        except ValueError:
+            pass
+    return _DEFAULT_SKIN_CHUNK_FRAMES
+
+
+def _preferred_skin_device(skeleton: Any):
+    import torch
+
+    override = os.environ.get(_SKIN_DEVICE_ENV, "auto").strip().lower()
+    if override == "cpu":
+        return torch.device("cpu")
+    if override == "cuda":
+        if not torch.cuda.is_available():
+            raise RuntimeError(f"{_SKIN_DEVICE_ENV}=cuda but CUDA is not available")
+        return torch.device("cuda")
+    return skeleton.neutral_joints.device
+
+
+class _SkeletonDeviceView:
+    """Skeleton buffers on a specific device for SMPLXSkin without mutating the model."""
+
+    def __init__(self, skeleton: Any, device) -> None:
+        self.folder = skeleton.folder
+        self.bone_order_names = skeleton.bone_order_names
+        self.bone_index = skeleton.bone_index
+        self.root_idx = skeleton.root_idx
+        self.neutral_joints = skeleton.neutral_joints.to(device=device)
+        self.joint_parents = skeleton.joint_parents.to(device=device)
+        self._skeleton = skeleton
+
+    def global_rots_to_local_rots(self, global_joint_rots):
+        return self._skeleton.global_rots_to_local_rots(global_joint_rots.to(self.neutral_joints.device))
+
+
+def _skeleton_view_for_device(skeleton: Any, device) -> Any:
+    if skeleton.neutral_joints.device == device:
+        return skeleton
+    return _SkeletonDeviceView(skeleton, device)
+
+
+def _get_kimodo_smplx_skin(skeleton: Any, device) -> Any:
+    ensure_kimodo_smplx_npz(skeleton)
+    SMPLXSkin = _load_kimodo_smplx_skin_class()
+    cache_key = f"{Path(skeleton.folder).resolve()}:{device.type}"
+    skin = _KIMODO_SMPLX_SKIN_CACHE.get(cache_key)
+    if skin is None:
+        skin = SMPLXSkin(_skeleton_view_for_device(skeleton, device))
+        _KIMODO_SMPLX_SKIN_CACHE[cache_key] = skin
+    return skin
+
+
+def _skin_frames_kimodo_native(
+    rot_np: Any,
+    pos_np: Any,
+    skeleton: Any,
+    device,
+    chunk_frames: int | None,
+) -> tuple[Any, Any]:
+    """Skin rotation/position arrays via KiMoD SMPLXSkin, optionally in frame chunks."""
+    import numpy as np
+    import torch
+
+    skin = _get_kimodo_smplx_skin(skeleton, device)
+    T = int(rot_np.shape[0])
+    if chunk_frames is None or T <= chunk_frames:
+        rot_t = torch.tensor(rot_np, dtype=torch.float32, device=device)
+        pos_t = torch.tensor(pos_np, dtype=torch.float32, device=device)
+        with torch.no_grad():
+            verts = skin.skin(rot_t, pos_t, rot_is_global=True)
+        v = verts.detach().cpu().numpy().astype(np.float32)
+    else:
+        chunks: list[np.ndarray] = []
+        for start in range(0, T, chunk_frames):
+            end = min(start + chunk_frames, T)
+            rot_t = torch.tensor(rot_np[start:end], dtype=torch.float32, device=device)
+            pos_t = torch.tensor(pos_np[start:end], dtype=torch.float32, device=device)
+            with torch.no_grad():
+                chunk_verts = skin.skin(rot_t, pos_t, rot_is_global=True)
+            chunks.append(chunk_verts.detach().cpu().numpy().astype(np.float32))
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+        v = np.concatenate(chunks, axis=0)
+
+    faces = skin.faces.detach().cpu().numpy().astype(np.int32)
+    return v, faces
+
+
+def _skin_chunked_with_halving(
+    rot_np: Any,
+    pos_np: Any,
+    skeleton: Any,
+    device,
+    chunk_frames: int,
+) -> tuple[Any, Any]:
+    """Try chunked skinning on device, halving chunk size on CUDA OOM."""
+    import torch
+
+    chunk = max(chunk_frames, _MIN_SKIN_CHUNK_FRAMES)
+    while chunk >= _MIN_SKIN_CHUNK_FRAMES:
+        try:
+            logger.info(
+                "SMPL-X skinning: chunked %s (chunk=%d, T=%d)",
+                device.type,
+                chunk,
+                rot_np.shape[0],
+            )
+            return _skin_frames_kimodo_native(
+                rot_np, pos_np, skeleton, device, chunk_frames=chunk
+            )
+        except torch.cuda.OutOfMemoryError:
+            if device.type != "cuda":
+                raise
+            torch.cuda.empty_cache()
+            if chunk <= _MIN_SKIN_CHUNK_FRAMES:
+                break
+            chunk //= 2
+            logger.info(
+                "SMPL-X skinning: GPU OOM — halving chunk to %d",
+                chunk,
+            )
+    raise torch.cuda.OutOfMemoryError("chunked CUDA skinning exhausted all chunk sizes")
+
+
+def _skin_kimodo_native_with_fallback(
+    rot_np: Any,
+    pos_np: Any,
+    skeleton: Any,
+) -> tuple[Any, Any]:
+    """Skin with proactive GPU chunking and CPU fallback when VRAM is tight."""
+    import torch
+
+    chunk = _skin_chunk_frames()
+    device = _preferred_skin_device(skeleton)
+    T = int(rot_np.shape[0])
+
+    if device.type == "cuda" and T > chunk:
+        logger.info(
+            "SMPL-X skinning: proactive chunked CUDA (T=%d > chunk=%d)",
+            T,
+            chunk,
+        )
+        try:
+            return _skin_chunked_with_halving(rot_np, pos_np, skeleton, device, chunk)
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            logger.info("SMPL-X skinning: chunked CUDA failed — retrying chunked CPU")
+            return _skin_frames_kimodo_native(
+                rot_np, pos_np, skeleton, torch.device("cpu"), chunk_frames=chunk
+            )
+
+    if device.type == "cuda":
+        try:
+            logger.info("SMPL-X skinning: full-batch CUDA (T=%d)", T)
+            return _skin_frames_kimodo_native(
+                rot_np, pos_np, skeleton, device, chunk_frames=None
+            )
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            logger.info("SMPL-X skinning: full-batch GPU OOM — retrying chunked CUDA")
+            try:
+                return _skin_chunked_with_halving(rot_np, pos_np, skeleton, device, chunk)
+            except torch.cuda.OutOfMemoryError:
+                torch.cuda.empty_cache()
+                logger.info("SMPL-X skinning: chunked CUDA failed — retrying chunked CPU")
+                return _skin_frames_kimodo_native(
+                    rot_np, pos_np, skeleton, torch.device("cpu"), chunk_frames=chunk
+                )
+
+    logger.info("SMPL-X skinning: chunked CPU (T=%d, chunk=%d)", T, chunk)
+    return _skin_frames_kimodo_native(
+        rot_np, pos_np, skeleton, torch.device("cpu"), chunk_frames=chunk
+    )
 
 
 def _kimodo_smplx_npz_path() -> Path:
@@ -247,10 +436,7 @@ def skin_sequence_kimodo_native(
     Skin kimodo-smplx-rp output (22 joints) via KiMoD's built-in ``SMPLXSkin``.
     """
     import numpy as np
-    import torch
     from kimodo.skeleton import SMPLXSkeleton22
-
-    SMPLXSkin = _load_kimodo_smplx_skin_class()
 
     if not isinstance(skeleton, SMPLXSkeleton22):
         raise RuntimeError(
@@ -275,20 +461,7 @@ def skin_sequence_kimodo_native(
             f"skin_sequence_kimodo_native: expected 22 joints, got rot={r.shape[1]} pos={p.shape[1]}"
         )
 
-    ensure_kimodo_smplx_npz(skeleton)
-    cache_key = str(Path(skeleton.folder).resolve())
-    skin = _KIMODO_SMPLX_SKIN_CACHE.get(cache_key)
-    if skin is None:
-        skin = SMPLXSkin(skeleton)
-        _KIMODO_SMPLX_SKIN_CACHE[cache_key] = skin
-
-    device = skeleton.neutral_joints.device
-    rot_t = torch.tensor(r, dtype=torch.float32, device=device)
-    pos_t = torch.tensor(p, dtype=torch.float32, device=device)
-    with torch.no_grad():
-        verts = skin.skin(rot_t, pos_t, rot_is_global=True)
-    v = verts.detach().cpu().numpy().astype(np.float32)
-    faces = skin.faces.detach().cpu().numpy().astype(np.int32)
+    v, faces = _skin_kimodo_native_with_fallback(r, p, skeleton)
     return _finalize(v, faces, center_xz)
 
 

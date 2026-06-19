@@ -188,6 +188,10 @@ def ensure_text_encoder(
                 "First run may take several minutes while weights load…"
             )
 
+        from services.kimodo_setup import apply_kimodo_patches
+
+        apply_kimodo_patches(_KIMODO_SRC, log_cb=log_cb)
+
         cmd = [
             sys.executable,
             "-m",

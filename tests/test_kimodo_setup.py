@@ -9,6 +9,7 @@ from unittest import mock
 
 from services.kimodo_setup import (
     apply_kimodo_cmake_patches,
+    apply_kimodo_patches,
     kimodo_build_packages,
     kimodo_cmake_args,
     python_cmake_args,
@@ -59,6 +60,31 @@ class KimodoSetupTests(unittest.TestCase):
             setup_text = (kimodo_dir / "setup.py").read_text(encoding="utf-8")
             self.assertIn("python_cmake_args", setup_text)
             self.assertTrue((kimodo_dir / "MotionCorrection" / "setup.py").is_file())
+
+    def test_apply_kimodo_patches_copies_runtime_overlays(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            kimodo_dir = Path(tmp) / "kimodo"
+            kimodo_dir.mkdir()
+            apply_kimodo_patches(kimodo_dir)
+            encoder = kimodo_dir / "kimodo" / "scripts" / "run_text_encoder_server.py"
+            self.assertTrue(encoder.is_file())
+            self.assertIn("--headless", encoder.read_text(encoding="utf-8"))
+            self.assertTrue((kimodo_dir / "kimodo" / "assets" / "__init__.py").is_file())
+
+    def test_apply_kimodo_patches_removes_conflicting_assets_py(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            kimodo_dir = Path(tmp) / "kimodo"
+            kimodo_dir.mkdir()
+            assets_py = kimodo_dir / "kimodo" / "assets.py"
+            assets_py.parent.mkdir(parents=True, exist_ok=True)
+            assets_py.write_text("# stale module\n", encoding="utf-8")
+            apply_kimodo_patches(kimodo_dir)
+            self.assertFalse(assets_py.is_file())
+            self.assertTrue((kimodo_dir / "kimodo" / "assets" / "__init__.py").is_file())
 
 
 if __name__ == "__main__":

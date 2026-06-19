@@ -30,6 +30,12 @@ _KIMODO_OVERLAY_FILES = (
     "setup.py",
     "MANIFEST.in",
     "MotionCorrection/setup.py",
+    "kimodo/scripts/run_text_encoder_server.py",
+    "kimodo/assets/__init__.py",
+)
+
+_KIMODO_OVERLAY_REMOVALS = (
+    "kimodo/assets.py",
 )
 
 
@@ -38,12 +44,12 @@ def kimodo_cmake_args() -> list[str]:
     return python_cmake_args()
 
 
-def apply_kimodo_cmake_patches(
+def apply_kimodo_patches(
     kimodo_dir: Path,
     *,
     log_cb: Callable[[str], None] | None = None,
 ) -> None:
-    """Copy parent-repo overlays into kimodo submodule before editable install."""
+    """Copy parent-repo overlays into kimodo submodule (CMake + runtime fixes)."""
     for rel in _KIMODO_OVERLAY_FILES:
         src = _PATCHES_DIR / rel
         dst = kimodo_dir / rel
@@ -53,6 +59,21 @@ def apply_kimodo_cmake_patches(
         shutil.copy2(src, dst)
         if log_cb:
             log_cb(f"Applied kimodo overlay: {rel}")
+    for rel in _KIMODO_OVERLAY_REMOVALS:
+        dst = kimodo_dir / rel
+        if dst.is_file():
+            dst.unlink()
+            if log_cb:
+                log_cb(f"Removed conflicting kimodo file: {rel}")
+
+
+def apply_kimodo_cmake_patches(
+    kimodo_dir: Path,
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> None:
+    """Backward-compatible alias for apply_kimodo_patches."""
+    apply_kimodo_patches(kimodo_dir, log_cb=log_cb)
 
 
 def kimodo_importable() -> bool:
@@ -182,7 +203,7 @@ def ensure_kimodo_installed(
 
     ensure_kimodo_build_deps(run_command=run_command, log_cb=log_cb)
     kimodo_dir = _ensure_kimodo_repo(run_command=run_command, log_cb=log_cb)
-    apply_kimodo_cmake_patches(kimodo_dir, log_cb=log_cb)
+    apply_kimodo_patches(kimodo_dir, log_cb=log_cb)
     if log_cb:
         log_cb("Installing kimodo (editable, with MotionCorrection C extension)…")
     run_command(
@@ -211,7 +232,7 @@ def pip_install_kimodo_editable() -> None:
     if not python_dev_headers_ready():
         _run_apt_build_deps()
     require_python_dev_headers()
-    apply_kimodo_cmake_patches(kimodo_dir)
+    apply_kimodo_patches(kimodo_dir)
 
     proc = subprocess.run(
         _kimodo_pip_install_cmd(kimodo_dir),

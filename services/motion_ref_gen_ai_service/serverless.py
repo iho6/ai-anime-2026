@@ -32,6 +32,8 @@ KIMODO_TEXT_ENCODER_READY_TIMEOUT=600  — first Llama load (seconds)
 KIMODO_MOTION_WORKER_READY_TIMEOUT=300 — motion diffusion model load (seconds)
 KIMODO_MODEL=kimodo-smplx-rp  (default model name — SMPL-X checkpoint for mesh skinning)
 SMPLX_MODEL_DIR=storage/body_models  (parent of the smplx/ body-model folder)
+MOTION_REF_SKIN_CHUNK_FRAMES=32  (frames per skinning batch; 0 = default 32)
+MOTION_REF_SKIN_DEVICE=auto|cuda|cpu  (override skinning device)
 
 Text encoder auto-starts on first motion-gen request (headless Gradio on port 9550).
 Manual: python -m kimodo.scripts.run_text_encoder_server --headless
@@ -691,6 +693,10 @@ def ensure_worker(
             return f"http://127.0.0.1:{port}"
 
         ensure_text_encoder(log_cb=log_cb, port=text_encoder_port())
+
+        from services.kimodo_setup import apply_kimodo_patches, _KIMODO_DIR
+
+        apply_kimodo_patches(_KIMODO_DIR, log_cb=log_cb)
 
         if log_cb:
             log_cb(
