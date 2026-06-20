@@ -1,0 +1,14 @@
+# Kimodo runtime deps NOT already provided by repo-root requirements.txt.
+# Keep this list DISJOINT from requirements.txt to avoid duplicate/repeated installs.
+# Intentionally excludes:
+#   - torch/torchvision/torchaudio  (installed via services.pytorch_setup, cu128)
+#   - transformers                  (kept at app/Comfy version, requirements.txt >=4.50.3)
+# Floors mirror kimodo/pyproject.toml.
+hydra-core>=1.3
+omegaconf>=2.3
+peft>=0.18
+gradio>=6.8.0
+gradio-client>=1.0
+trimesh>=3.21.7
+scenepic>=1.1.0
+bvhio

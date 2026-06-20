@@ -7,11 +7,11 @@ active interpreter. CMake must build against the venv Python, not system python.
 
 from __future__ import annotations
 
-import importlib
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Callable
 
@@ -25,6 +25,7 @@ from services.kimodo_build_cmake import (
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _KIMODO_DIR = _REPO_ROOT / "kimodo"
 _PATCHES_DIR = _REPO_ROOT / "patches" / "kimodo"
+_KIMODO_REQUIREMENTS = _PATCHES_DIR / "kimodo-requirements.txt"
 _MOTION_CORRECTION_PKG_DIR = (
     _KIMODO_DIR / "MotionCorrection" / "python" / "motion_correction"
 )
@@ -93,18 +94,44 @@ def motion_correction_extension_files(kimodo_dir: Path | None = None) -> list[Pa
     return sorted(pkg_dir.glob("_motion_correction*.so"))
 
 
+def _subprocess_import_status() -> tuple[bool, list[str]]:
+    """Import kimodo + motion_correction in a fresh interpreter from a neutral cwd.
+
+    Editable installs register packages via .pth files that site.py only reads at
+    interpreter startup, so an in-process import would miss a just-installed package.
+    A neutral cwd also avoids the repo's kimodo/ dir resolving as a namespace package.
+    """
+    script = (
+        "import importlib, sys\n"
+        "ok = True\n"
+        "for name in ('kimodo', 'motion_correction'):\n"
+        "    try:\n"
+        "        m = importlib.import_module(name)\n"
+        "        if getattr(m, '__file__', None) is None and not getattr(m, '__path__', None):\n"
+        "            raise ImportError('namespace-only import (package not found)')\n"
+        "        print(f'{name}: import OK')\n"
+        "    except Exception as exc:\n"
+        "        ok = False\n"
+        "        print(f'{name}: import failed ({type(exc).__name__}: {exc})')\n"
+        "sys.exit(0 if ok else 1)\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=tempfile.gettempdir(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    lines = [ln for ln in (proc.stdout or "").splitlines() if ln.strip()]
+    if proc.returncode != 0 and proc.stderr and not lines:
+        lines.append(proc.stderr.strip())
+    return proc.returncode == 0, lines
+
+
 def _kimodo_import_status(kimodo_dir: Path | None = None) -> tuple[bool, str]:
     """Try kimodo + motion_correction imports; report per-module errors and .so state."""
-    lines: list[str] = []
-    ok = True
-
-    for name in ("kimodo", "motion_correction"):
-        try:
-            importlib.import_module(name)
-            lines.append(f"{name}: import OK")
-        except Exception as exc:
-            ok = False
-            lines.append(f"{name}: import failed ({type(exc).__name__}: {exc})")
+    ok, lines = _subprocess_import_status()
 
     so_files = motion_correction_extension_files(kimodo_dir)
     if so_files:
@@ -163,6 +190,10 @@ def _motion_correction_pip_install_cmd(kimodo_dir: Path) -> list[str]:
     ]
 
 
+def _kimodo_requirements_install_cmd() -> list[str]:
+    return [sys.executable, "-m", "pip", "install", "-r", str(_KIMODO_REQUIREMENTS)]
+
+
 def _run_pip_install(
     cmd: list[str],
     *,
@@ -211,6 +242,14 @@ def _run_kimodo_editable_install(
         run_command=run_command,
         log_cb=log_cb,
         env=env,
+    )
+    if log_cb:
+        log_cb("Installing kimodo runtime dependencies…")
+    _run_pip_install(
+        _kimodo_requirements_install_cmd(),
+        run_command=run_command,
+        log_cb=log_cb,
+        env=os.environ.copy(),
     )
     from services.pytorch_setup import ensure_pytorch_stack
 
@@ -284,9 +323,31 @@ def ensure_kimodo_build_deps(
     require_python_dev_headers()
 
 
+def _run_git_clone(
+    cmd: list[str],
+    *,
+    run_command: Callable[..., None] | None,
+    log_cb: Callable[[str], None] | None,
+) -> None:
+    if run_command is not None:
+        run_command(cmd, cwd=_REPO_ROOT, log_cb=log_cb)
+        return
+    proc = subprocess.run(
+        cmd,
+        cwd=str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "git clone failed").strip()
+        raise RuntimeError(f"Failed to clone kimodo: {err}")
+
+
 def _ensure_kimodo_repo(
     *,
-    run_command: Callable[..., None],
+    run_command: Callable[..., None] | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> Path:
     if (kimodo_dir := _KIMODO_DIR).is_dir() and (
@@ -295,9 +356,9 @@ def _ensure_kimodo_repo(
         return kimodo_dir
     if log_cb:
         log_cb("Cloning nv-tlabs/kimodo…")
-    run_command(
+    _run_git_clone(
         ["git", "clone", "https://github.com/nv-tlabs/kimodo.git", str(kimodo_dir)],
-        cwd=_REPO_ROOT,
+        run_command=run_command,
         log_cb=log_cb,
     )
     return kimodo_dir
@@ -345,9 +406,7 @@ def pip_install_kimodo_editable() -> None:
     if kimodo_importable():
         return
 
-    kimodo_dir = _KIMODO_DIR
-    if not kimodo_dir.is_dir():
-        raise RuntimeError(f"kimodo directory not found: {kimodo_dir}")
+    kimodo_dir = _ensure_kimodo_repo()
 
     if not python_dev_headers_ready():
         _run_apt_build_deps()

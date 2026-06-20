@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -10,12 +11,18 @@ from pathlib import Path
 from unittest import mock
 
 from services.kimodo_build_cmake import target_python_executable
+import services.kimodo_setup as kimodo_setup
 from services.kimodo_setup import (
+    _KIMODO_REQUIREMENTS,
+    _ensure_kimodo_repo,
     _kimodo_import_status,
     _kimodo_pip_install_cmd,
     _kimodo_pip_install_env,
+    _kimodo_requirements_install_cmd,
     _motion_correction_pip_install_cmd,
+    _run_git_clone,
     _run_kimodo_editable_install,
+    _subprocess_import_status,
     apply_kimodo_cmake_patches,
     apply_kimodo_patches,
     kimodo_build_packages,
@@ -80,7 +87,29 @@ class KimodoSetupTests(unittest.TestCase):
         self.assertEqual(env["SKIP_MOTION_CORRECTION_IN_SETUP"], "1")
         self.assertEqual(env["KIMODO_TARGET_PYTHON"], sys.executable)
 
-    def test_run_kimodo_editable_install_runs_two_pip_steps(self) -> None:
+    def test_kimodo_requirements_install_cmd(self) -> None:
+        cmd = _kimodo_requirements_install_cmd()
+        self.assertEqual(cmd[0], sys.executable)
+        self.assertIn("-r", cmd)
+        self.assertTrue(cmd[-1].endswith("kimodo-requirements.txt"))
+
+    def test_kimodo_requirements_file_disjoint_and_complete(self) -> None:
+        text = _KIMODO_REQUIREMENTS.read_text(encoding="utf-8")
+        pkgs = [
+            ln.split("#", 1)[0].strip()
+            for ln in text.splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#")
+        ]
+        names = {p.split(">=")[0].split("==")[0].strip().lower() for p in pkgs}
+        for required in (
+            "peft", "hydra-core", "omegaconf", "gradio",
+            "gradio-client", "trimesh", "scenepic", "bvhio",
+        ):
+            self.assertIn(required, names)
+        self.assertNotIn("torch", names)
+        self.assertNotIn("transformers", names)
+
+    def test_run_kimodo_editable_install_runs_three_pip_steps(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             kimodo_dir = Path(tmp) / "kimodo"
             kimodo_dir.mkdir()
@@ -96,9 +125,11 @@ class KimodoSetupTests(unittest.TestCase):
                     kimodo_dir,
                     run_command=fake_run,
                 )
-            self.assertEqual(len(calls), 2)
+            self.assertEqual(len(calls), 3)
             self.assertIn(str(kimodo_dir), calls[0])
             self.assertIn("MotionCorrection", calls[1][calls[1].index("-e") + 1])
+            self.assertIn("-r", calls[2])
+            self.assertTrue(calls[2][-1].endswith("kimodo-requirements.txt"))
             mock_torch.assert_called_once()
 
     def test_python_dev_headers_ready_is_bool(self) -> None:
@@ -158,11 +189,92 @@ class KimodoSetupTests(unittest.TestCase):
             pkg_dir.mkdir(parents=True)
             (pkg_dir / "__init__.py").write_text("from ._motion_correction import *\n", encoding="utf-8")
 
-            ok, status = _kimodo_import_status(kimodo_dir)
+            with mock.patch.object(
+                kimodo_setup,
+                "_subprocess_import_status",
+                return_value=(True, ["kimodo: import OK", "motion_correction: import OK"]),
+            ):
+                ok, status = _kimodo_import_status(kimodo_dir)
             self.assertFalse(ok)
             self.assertIn("missing", status)
             self.assertIn("_motion_correction*.so", status)
             self.assertEqual(motion_correction_extension_files(kimodo_dir), [])
+
+    def test_kimodo_import_status_fails_when_subprocess_import_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            kimodo_dir = Path(tmp) / "kimodo"
+            pkg_dir = kimodo_dir / "MotionCorrection" / "python" / "motion_correction"
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "_motion_correction.cpython-311-x86_64-linux-gnu.so").write_bytes(b"")
+
+            with mock.patch.object(
+                kimodo_setup,
+                "_subprocess_import_status",
+                return_value=(False, ["motion_correction: import failed (ImportError: boom)"]),
+            ):
+                ok, status = _kimodo_import_status(kimodo_dir)
+            self.assertFalse(ok)
+            self.assertIn("import failed", status)
+            self.assertIn("_motion_correction.cpython-311-x86_64-linux-gnu.so", status)
+
+    def test_subprocess_import_status_uses_neutral_cwd_and_fresh_interpreter(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="kimodo: import OK\nmotion_correction: import OK\n", stderr=""
+        )
+        with mock.patch.object(kimodo_setup.subprocess, "run", return_value=completed) as run:
+            ok, lines = _subprocess_import_status()
+        self.assertTrue(ok)
+        self.assertEqual(lines, ["kimodo: import OK", "motion_correction: import OK"])
+        call_args, call_kwargs = run.call_args
+        cmd = call_args[0]
+        self.assertEqual(cmd[0], sys.executable)
+        self.assertIn("-c", cmd)
+        self.assertEqual(call_kwargs["cwd"], tempfile.gettempdir())
+
+    def test_subprocess_import_status_returns_false_on_failure(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=1,
+            stdout="motion_correction: import failed (ModuleNotFoundError: ...)\n",
+            stderr="",
+        )
+        with mock.patch.object(kimodo_setup.subprocess, "run", return_value=completed):
+            ok, lines = _subprocess_import_status()
+        self.assertFalse(ok)
+        self.assertEqual(lines, ["motion_correction: import failed (ModuleNotFoundError: ...)"])
+
+    def test_ensure_kimodo_repo_returns_existing_when_setup_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            kimodo_dir = Path(tmp) / "kimodo"
+            kimodo_dir.mkdir()
+            (kimodo_dir / "setup.py").write_text("# setup\n", encoding="utf-8")
+            run = mock.Mock()
+            with mock.patch.object(kimodo_setup, "_KIMODO_DIR", kimodo_dir):
+                result = _ensure_kimodo_repo(run_command=run)
+            self.assertEqual(result, kimodo_dir)
+            run.assert_not_called()
+
+    def test_ensure_kimodo_repo_clones_when_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            kimodo_dir = Path(tmp) / "kimodo"  # absent -> must clone
+            run = mock.Mock()
+            with mock.patch.object(kimodo_setup, "_KIMODO_DIR", kimodo_dir):
+                result = _ensure_kimodo_repo(run_command=run)
+            self.assertEqual(result, kimodo_dir)
+            run.assert_called_once()
+            cmd = run.call_args[0][0]
+            self.assertEqual(cmd[:2], ["git", "clone"])
+            self.assertIn("https://github.com/nv-tlabs/kimodo.git", cmd)
+            self.assertIn(str(kimodo_dir), cmd)
+
+    def test_run_git_clone_subprocess_fallback_raises_on_failure(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=128, stdout="", stderr="fatal: boom"
+        )
+        with mock.patch.object(kimodo_setup.subprocess, "run", return_value=completed):
+            with self.assertRaises(RuntimeError) as ctx:
+                _run_git_clone(["git", "clone", "url", "dir"], run_command=None, log_cb=None)
+        self.assertIn("Failed to clone kimodo", str(ctx.exception))
+        self.assertIn("boom", str(ctx.exception))
 
 
 if __name__ == "__main__":

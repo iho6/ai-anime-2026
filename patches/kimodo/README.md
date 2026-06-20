@@ -52,6 +52,30 @@ PEP 660 editable metadata from `pyproject.toml` registers the `kimodo` package b
 Do not use `--force-reinstall` on kimodo — it re-resolves dependencies and can clobber
 the CUDA PyTorch wheel installed by `pytorch_setup`.
 
+`kimodo/` is committed as a gitlink with no `.gitmodules`, so a fresh `git clone` leaves
+it empty. Both entry points clone `nv-tlabs/kimodo` at runtime (`_ensure_kimodo_repo`)
+when `kimodo/` lacks `setup.py`/`pyproject.toml`.
+
+Full install order (`_run_kimodo_editable_install`):
+
+1. editable `kimodo` (`--no-deps`)
+2. editable `kimodo/MotionCorrection` (`--no-deps`)
+3. `pip install -r kimodo-requirements.txt` (kimodo's runtime deps, with transitive resolution)
+4. `ensure_pytorch_stack()` torch guard last (restores cu128 if a dep shifted torch)
+
+`kimodo-requirements.txt` holds only the kimodo deps that are NOT in repo-root
+`requirements.txt` (hydra-core, omegaconf, peft, gradio, gradio-client, trimesh,
+scenepic, bvhio). It is intentionally **disjoint** from `requirements.txt` and excludes
+`torch*` and `transformers` so app/Comfy dep versions are not duplicated or churned.
+Because callers early-return when `kimodo_importable()` is true, this whole step
+(including the deps install) runs only until kimodo imports successfully — it is not
+re-run on later launches.
+
+The install is verified in a **fresh subprocess** (`_subprocess_import_status`), not
+in-process: editable installs register packages via `.pth` files that `site.py` reads
+only at interpreter startup, so a package installed into the already-running process is
+not importable there until a new interpreter starts (e.g. the worker subprocesses).
+
 ## MotionCorrection build (fresh clones)
 
 Editable install runs with `--no-build-isolation` so `setup.py` / CMake bind to the
