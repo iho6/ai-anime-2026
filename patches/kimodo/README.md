@@ -30,6 +30,28 @@ These files mirror paths under `kimodo/` and are copied in automatically by
 Edit overlays here under `patches/kimodo/`, not inside the `kimodo/` submodule.
 Re-applying overlays is idempotent (safe to run multiple times).
 
+## Install flow
+
+PEP 660 editable metadata from `pyproject.toml` registers the `kimodo` package but not
+`motion_correction` (that mapping lives only in `setup.py`). Use a two-step install
+(same pattern as upstream Docker):
+
+1. **Step A — kimodo Python package only**
+
+   ```bash
+   SKIP_MOTION_CORRECTION_IN_SETUP=1 pip install -e kimodo --no-build-isolation --no-deps
+   ```
+
+2. **Step B — motion_correction C extension**
+
+   ```bash
+   pip install -e kimodo/MotionCorrection --no-build-isolation --no-deps
+   ```
+
+`ensure_kimodo_installed` / `pip_install_kimodo_editable` run both steps automatically.
+Do not use `--force-reinstall` on kimodo — it re-resolves dependencies and can clobber
+the CUDA PyTorch wheel installed by `pytorch_setup`.
+
 ## MotionCorrection build (fresh clones)
 
 Editable install runs with `--no-build-isolation` so `setup.py` / CMake bind to the

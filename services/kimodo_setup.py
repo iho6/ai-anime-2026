@@ -133,6 +133,7 @@ def _kimodo_pip_install_env() -> dict[str, str]:
     env = os.environ.copy()
     env["KIMODO_TARGET_PYTHON"] = sys.executable
     env["KIMODO_CMAKE_ARGS"] = " ".join(python_cmake_args())
+    env["SKIP_MOTION_CORRECTION_IN_SETUP"] = "1"
     return env
 
 
@@ -145,9 +146,75 @@ def _kimodo_pip_install_cmd(kimodo_dir: Path) -> list[str]:
         "-e",
         str(kimodo_dir),
         "--no-build-isolation",
-        "--force-reinstall",
-        "--no-cache-dir",
+        "--no-deps",
     ]
+
+
+def _motion_correction_pip_install_cmd(kimodo_dir: Path) -> list[str]:
+    return [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "-e",
+        str(kimodo_dir / "MotionCorrection"),
+        "--no-build-isolation",
+        "--no-deps",
+    ]
+
+
+def _run_pip_install(
+    cmd: list[str],
+    *,
+    run_command: Callable[..., None] | None,
+    log_cb: Callable[[str], None] | None,
+    env: dict[str, str],
+) -> None:
+    if run_command is not None:
+        run_command(cmd, cwd=_REPO_ROOT, log_cb=log_cb, env=env)
+        return
+    proc = subprocess.run(
+        cmd,
+        cwd=str(_REPO_ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "pip install failed").strip()
+        raise RuntimeError(_kimodo_install_failure_message(err))
+
+
+def _run_kimodo_editable_install(
+    kimodo_dir: Path,
+    *,
+    run_command: Callable[..., None] | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> None:
+    """Apply patches, editable-install kimodo + motion_correction, restore cu128 torch."""
+    apply_kimodo_patches(kimodo_dir, log_cb=log_cb)
+    env = _kimodo_pip_install_env()
+    if log_cb:
+        log_cb("Installing kimodo (editable, Python package only)…")
+    _run_pip_install(
+        _kimodo_pip_install_cmd(kimodo_dir),
+        run_command=run_command,
+        log_cb=log_cb,
+        env=env,
+    )
+    if log_cb:
+        log_cb("Installing motion_correction (editable C extension)…")
+    _run_pip_install(
+        _motion_correction_pip_install_cmd(kimodo_dir),
+        run_command=run_command,
+        log_cb=log_cb,
+        env=env,
+    )
+    from services.pytorch_setup import ensure_pytorch_stack
+
+    ensure_pytorch_stack(log_cb=log_cb)
 
 
 def _build_deps_apt_cmd() -> list[str]:
@@ -268,15 +335,7 @@ def ensure_kimodo_installed(
 
     ensure_kimodo_build_deps(run_command=run_command, log_cb=log_cb)
     kimodo_dir = _ensure_kimodo_repo(run_command=run_command, log_cb=log_cb)
-    apply_kimodo_patches(kimodo_dir, log_cb=log_cb)
-    if log_cb:
-        log_cb("Installing kimodo (editable, with MotionCorrection C extension)…")
-    run_command(
-        _kimodo_pip_install_cmd(kimodo_dir),
-        cwd=_REPO_ROOT,
-        log_cb=log_cb,
-        env=_kimodo_pip_install_env(),
-    )
+    _run_kimodo_editable_install(kimodo_dir, run_command=run_command, log_cb=log_cb)
     if not kimodo_importable():
         raise RuntimeError(_kimodo_post_install_failure_message(kimodo_dir))
 
@@ -293,19 +352,6 @@ def pip_install_kimodo_editable() -> None:
     if not python_dev_headers_ready():
         _run_apt_build_deps()
     require_python_dev_headers()
-    apply_kimodo_patches(kimodo_dir)
-
-    proc = subprocess.run(
-        _kimodo_pip_install_cmd(kimodo_dir),
-        cwd=str(_REPO_ROOT),
-        env=_kimodo_pip_install_env(),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    if proc.returncode != 0:
-        err = (proc.stderr or proc.stdout or "pip install failed").strip()
-        raise RuntimeError(_kimodo_install_failure_message(err))
+    _run_kimodo_editable_install(kimodo_dir)
     if not kimodo_importable():
         raise RuntimeError(_kimodo_post_install_failure_message(kimodo_dir))
