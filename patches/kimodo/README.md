@@ -29,3 +29,11 @@ These files mirror paths under `kimodo/` and are copied in automatically by
 
 Edit overlays here under `patches/kimodo/`, not inside the `kimodo/` submodule.
 Re-applying overlays is idempotent (safe to run multiple times).
+
+## MotionCorrection build (fresh clones)
+
+Editable install runs with `--no-build-isolation` so `setup.py` / CMake bind to the
+active venv Python (`KIMODO_TARGET_PYTHON`), not pip's isolated build interpreter.
+The compiled `_motion_correction*.so` is a **local build artifact** under
+`kimodo/MotionCorrection/python/motion_correction/` — it is not committed and is
+rebuilt automatically on UI Launch or `pip_install_kimodo_editable()`.

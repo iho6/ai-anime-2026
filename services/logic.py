@@ -883,7 +883,7 @@ def run_startup_setup_and_launch(
         if log_cb:
             log_cb("Quick check failed. Repairing environment...")
         _run_command_logged(
-            [sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"],
+            [sys.executable, "-m", "pip", "install", "--upgrade", "pip", "setuptools<82", "wheel"],
             cwd=_REPO_ROOT,
             log_cb=log_cb,
         )

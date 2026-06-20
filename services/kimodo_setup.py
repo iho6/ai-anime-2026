@@ -7,6 +7,7 @@ active interpreter. CMake must build against the venv Python, not system python.
 
 from __future__ import annotations
 
+import importlib
 import os
 import shutil
 import subprocess
@@ -24,6 +25,9 @@ from services.kimodo_build_cmake import (
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _KIMODO_DIR = _REPO_ROOT / "kimodo"
 _PATCHES_DIR = _REPO_ROOT / "patches" / "kimodo"
+_MOTION_CORRECTION_PKG_DIR = (
+    _KIMODO_DIR / "MotionCorrection" / "python" / "motion_correction"
+)
 
 _KIMODO_OVERLAY_FILES = (
     "build_cmake.py",
@@ -76,23 +80,74 @@ def apply_kimodo_cmake_patches(
     apply_kimodo_patches(kimodo_dir, log_cb=log_cb)
 
 
+def motion_correction_extension_files(kimodo_dir: Path | None = None) -> list[Path]:
+    """Built extension modules under the kimodo tree, if any."""
+    pkg_dir = (
+        (kimodo_dir or _KIMODO_DIR)
+        / "MotionCorrection"
+        / "python"
+        / "motion_correction"
+    )
+    if not pkg_dir.is_dir():
+        return []
+    return sorted(pkg_dir.glob("_motion_correction*.so"))
+
+
+def _kimodo_import_status(kimodo_dir: Path | None = None) -> tuple[bool, str]:
+    """Try kimodo + motion_correction imports; report per-module errors and .so state."""
+    lines: list[str] = []
+    ok = True
+
+    for name in ("kimodo", "motion_correction"):
+        try:
+            importlib.import_module(name)
+            lines.append(f"{name}: import OK")
+        except Exception as exc:
+            ok = False
+            lines.append(f"{name}: import failed ({type(exc).__name__}: {exc})")
+
+    so_files = motion_correction_extension_files(kimodo_dir)
+    if so_files:
+        lines.append("motion_correction extension: " + ", ".join(p.name for p in so_files))
+    else:
+        ok = False
+        pkg = (
+            (kimodo_dir or _KIMODO_DIR)
+            / "MotionCorrection"
+            / "python"
+            / "motion_correction"
+        )
+        lines.append(
+            f"motion_correction extension: missing (no _motion_correction*.so under {pkg})"
+        )
+
+    return ok, "\n".join(lines)
+
+
 def kimodo_importable() -> bool:
-    try:
-        import motion_correction  # noqa: F401
-        import kimodo  # noqa: F401
-        return True
-    except ImportError:
-        return False
+    ok, _ = _kimodo_import_status()
+    return ok
 
 
 def _kimodo_pip_install_env() -> dict[str, str]:
     env = os.environ.copy()
+    env["KIMODO_TARGET_PYTHON"] = sys.executable
     env["KIMODO_CMAKE_ARGS"] = " ".join(python_cmake_args())
     return env
 
 
 def _kimodo_pip_install_cmd(kimodo_dir: Path) -> list[str]:
-    return [sys.executable, "-m", "pip", "install", "-e", str(kimodo_dir)]
+    return [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "-e",
+        str(kimodo_dir),
+        "--no-build-isolation",
+        "--force-reinstall",
+        "--no-cache-dir",
+    ]
 
 
 def _build_deps_apt_cmd() -> list[str]:
@@ -190,6 +245,16 @@ def _kimodo_install_failure_message(err: str) -> str:
     )
 
 
+def _kimodo_post_install_failure_message(kimodo_dir: Path) -> str:
+    packages = " ".join(kimodo_build_packages())
+    _, status = _kimodo_import_status(kimodo_dir)
+    return (
+        "kimodo install finished but motion_correction is not importable.\n"
+        f"{status}\n"
+        f"Build deps (if needed): sudo apt-get install -y {packages}"
+    )
+
+
 def ensure_kimodo_installed(
     *,
     run_command: Callable[..., None],
@@ -213,11 +278,7 @@ def ensure_kimodo_installed(
         env=_kimodo_pip_install_env(),
     )
     if not kimodo_importable():
-        packages = " ".join(kimodo_build_packages())
-        raise RuntimeError(
-            "kimodo install finished but motion_correction is not importable. "
-            f"Ensure build deps are installed: sudo apt-get install -y {packages}"
-        )
+        raise RuntimeError(_kimodo_post_install_failure_message(kimodo_dir))
 
 
 def pip_install_kimodo_editable() -> None:
@@ -247,8 +308,4 @@ def pip_install_kimodo_editable() -> None:
         err = (proc.stderr or proc.stdout or "pip install failed").strip()
         raise RuntimeError(_kimodo_install_failure_message(err))
     if not kimodo_importable():
-        packages = " ".join(kimodo_build_packages())
-        raise RuntimeError(
-            "kimodo install finished but motion_correction is not importable. "
-            f"Ensure build deps are installed: sudo apt-get install -y {packages}"
-        )
+        raise RuntimeError(_kimodo_post_install_failure_message(kimodo_dir))

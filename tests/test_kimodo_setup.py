@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+from services.kimodo_build_cmake import target_python_executable
 from services.kimodo_setup import (
+    _kimodo_import_status,
+    _kimodo_pip_install_cmd,
     apply_kimodo_cmake_patches,
     apply_kimodo_patches,
     kimodo_build_packages,
     kimodo_cmake_args,
+    motion_correction_extension_files,
     python_cmake_args,
     python_dev_headers_ready,
     require_python_dev_headers,
@@ -34,8 +40,28 @@ class KimodoSetupTests(unittest.TestCase):
         include_arg = next(a for a in args if a.startswith("-DPython3_INCLUDE_DIR="))
         self.assertTrue(include_arg.endswith("=") is False)
 
+    def test_python_cmake_args_respects_kimodo_target_python(self) -> None:
+        import services.kimodo_build_cmake as build_cmake
+
+        with mock.patch.dict(os.environ, {"KIMODO_TARGET_PYTHON": sys.executable}):
+            args = build_cmake.python_cmake_args()
+        self.assertIn(f"-DPython3_EXECUTABLE={sys.executable}", args)
+
+    def test_target_python_executable_prefers_env_when_valid(self) -> None:
+        import services.kimodo_build_cmake as build_cmake
+
+        with mock.patch.dict(os.environ, {"KIMODO_TARGET_PYTHON": sys.executable}):
+            self.assertEqual(build_cmake.target_python_executable(), sys.executable)
+
     def test_kimodo_cmake_args_alias(self) -> None:
         self.assertEqual(kimodo_cmake_args(), python_cmake_args())
+
+    def test_kimodo_pip_install_cmd_uses_no_build_isolation(self) -> None:
+        cmd = _kimodo_pip_install_cmd(Path("/tmp/kimodo"))
+        self.assertIn("--no-build-isolation", cmd)
+        self.assertIn("--force-reinstall", cmd)
+        self.assertIn("--no-cache-dir", cmd)
+        self.assertIn("-e", cmd)
 
     def test_python_dev_headers_ready_is_bool(self) -> None:
         self.assertIsInstance(python_dev_headers_ready(), bool)
@@ -50,8 +76,6 @@ class KimodoSetupTests(unittest.TestCase):
         self.assertIn("python", str(ctx.exception))
 
     def test_apply_kimodo_cmake_patches_copies_overlays(self) -> None:
-        import tempfile
-
         with tempfile.TemporaryDirectory() as tmp:
             kimodo_dir = Path(tmp) / "kimodo"
             kimodo_dir.mkdir()
@@ -60,10 +84,10 @@ class KimodoSetupTests(unittest.TestCase):
             setup_text = (kimodo_dir / "setup.py").read_text(encoding="utf-8")
             self.assertIn("python_cmake_args", setup_text)
             self.assertTrue((kimodo_dir / "MotionCorrection" / "setup.py").is_file())
+            cmake_text = (kimodo_dir / "build_cmake.py").read_text(encoding="utf-8")
+            self.assertIn("KIMODO_TARGET_PYTHON", cmake_text)
 
     def test_apply_kimodo_patches_copies_runtime_overlays(self) -> None:
-        import tempfile
-
         with tempfile.TemporaryDirectory() as tmp:
             kimodo_dir = Path(tmp) / "kimodo"
             kimodo_dir.mkdir()
@@ -74,8 +98,6 @@ class KimodoSetupTests(unittest.TestCase):
             self.assertTrue((kimodo_dir / "kimodo" / "assets" / "__init__.py").is_file())
 
     def test_apply_kimodo_patches_removes_conflicting_assets_py(self) -> None:
-        import tempfile
-
         with tempfile.TemporaryDirectory() as tmp:
             kimodo_dir = Path(tmp) / "kimodo"
             kimodo_dir.mkdir()
@@ -85,6 +107,24 @@ class KimodoSetupTests(unittest.TestCase):
             apply_kimodo_patches(kimodo_dir)
             self.assertFalse(assets_py.is_file())
             self.assertTrue((kimodo_dir / "kimodo" / "assets" / "__init__.py").is_file())
+
+    def test_kimodo_import_status_reports_missing_extension(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            kimodo_dir = Path(tmp) / "kimodo"
+            pkg_dir = (
+                kimodo_dir
+                / "MotionCorrection"
+                / "python"
+                / "motion_correction"
+            )
+            pkg_dir.mkdir(parents=True)
+            (pkg_dir / "__init__.py").write_text("from ._motion_correction import *\n", encoding="utf-8")
+
+            ok, status = _kimodo_import_status(kimodo_dir)
+            self.assertFalse(ok)
+            self.assertIn("missing", status)
+            self.assertIn("_motion_correction*.so", status)
+            self.assertEqual(motion_correction_extension_files(kimodo_dir), [])
 
 
 if __name__ == "__main__":
