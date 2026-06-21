@@ -15,14 +15,13 @@ import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@d
 import { CSS } from "@dnd-kit/utilities";
 import {
   apiSequenceDuplicateAsset,
-  apiSequenceExportGalleryFrameSetMp4Blob,
-  apiSequenceExportTimelineMp4Blob,
   apiSequenceGenerateFlf,
   apiSequenceGenerateI2v,
   apiSequenceStripGenerateFlf,
   apiSequenceStripGenerateI2v,
   apiSequenceGet,
   apiSequencePut,
+  API_BASE_URL,
   assetUrlFromRelPath,
   runDetailWsJob,
   runShotRemoveBgWsJob,
@@ -34,6 +33,7 @@ import {
   type SequenceManifest,
   type SequencePreviewAspect,
 } from "../../../../lib/api";
+import { fetchVideoExport, sanitizeDownloadBaseName } from "../../../../lib/downloadVideo";
 import {
   FrameSequenceModal,
   type FrameSequenceStripActions,
@@ -916,20 +916,13 @@ export function SequenceEditor(props: {
       if (!manifest) return;
       setTimelineExportBusy(true);
       try {
-        const blob = await apiSequenceExportTimelineMp4Blob({ charKey, sequenceName });
-        const safe =
-          sequenceName.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "sequence";
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${safe}_timeline.mp4`;
-        a.rel = "noopener";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+        const safe = sanitizeDownloadBaseName(sequenceName) || "sequence";
+        await fetchVideoExport(
+          `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/sequence/${encodeURIComponent(sequenceName)}/export_timeline_mp4`,
+          `${safe}_timeline`
+        );
       } catch (e) {
-        onErrorRef.current("Download timeline MP4 failed.", e);
+        onErrorRef.current("Download as Video failed.", e);
       } finally {
         setTimelineExportBusy(false);
       }
@@ -946,25 +939,15 @@ export function SequenceEditor(props: {
         }
         setGallerySetDownloadId(galleryId);
         try {
-          const blob = await apiSequenceExportGalleryFrameSetMp4Blob({
-            charKey,
-            sequenceName,
-            galleryId,
-          });
-          const safe =
-            sequenceName.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "sequence";
-          const safeGid = galleryId.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "set";
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `${safe}_${safeGid}_set.mp4`;
-          a.rel = "noopener";
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          URL.revokeObjectURL(url);
+          const safe = sanitizeDownloadBaseName(sequenceName) || "sequence";
+          const safeGid = sanitizeDownloadBaseName(galleryId) || "set";
+          const q = new URLSearchParams({ gallery_id: galleryId });
+          await fetchVideoExport(
+            `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/sequence/${encodeURIComponent(sequenceName)}/export_gallery_frame_set_mp4?${q}`,
+            `${safe}_${safeGid}_set`
+          );
         } catch (e) {
-          onErrorRef.current("Download sequence set MP4 failed.", e);
+          onErrorRef.current("Download as Video failed.", e);
         } finally {
           setGallerySetDownloadId(null);
         }
@@ -1654,8 +1637,8 @@ export function SequenceEditor(props: {
     }
     if (g?.frameSequence && g.id) {
       items.push({
-        key: "downloadSetMp4",
-        label: gallerySetDownloadId === g.id ? "Exporting…" : "Download set",
+        key: "downloadSetVideo",
+        label: gallerySetDownloadId === g.id ? "Exporting…" : "Download as Video",
         disabled: gallerySetDownloadId != null,
         onSelect: () => downloadGalleryFrameSetMp4(g.id),
       });
@@ -2272,7 +2255,7 @@ export function SequenceEditor(props: {
               type="button"
               onClick={() => downloadTimelineMp4()}
               disabled={timelineExportBusy || timelineExportableCount === 0}
-              title={`Slideshow MP4: one frame per timeline image at ${manifest.fps} fps (sequence manifest).`}
+              title={`Slideshow at ${manifest.fps} fps (WebM when frames have transparency, else MP4).`}
               onMouseDown={(ev) => ev.stopPropagation()}
               style={{
                 fontSize: 13,
@@ -2285,7 +2268,7 @@ export function SequenceEditor(props: {
                 opacity: timelineExportBusy || timelineExportableCount === 0 ? 0.45 : 1,
               }}
             >
-              {timelineExportBusy ? "Exporting…" : "Download timeline MP4"}
+              {timelineExportBusy ? "Exporting…" : "Download as Video"}
             </button>
           </div>
           <div style={{ fontSize: 12, color: "#666", marginBottom: 8 }}>

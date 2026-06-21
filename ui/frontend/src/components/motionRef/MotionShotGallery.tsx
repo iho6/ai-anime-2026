@@ -19,6 +19,9 @@ import {
   isShotGridLeaf,
   toggleFolderSelection,
 } from "../../lib/folderSelection";
+import { apiExportFramesVideo, sanitizeDownloadBaseName } from "../../lib/downloadVideo";
+import { ExportFpsDialog } from "../ExportFpsDialog";
+import { useAppError } from "../ErrorProvider";
 import { MOTION_REF_ACCENT_BTN_BG } from "./theme";
 
 export function MotionShotGallery(props: {
@@ -48,9 +51,15 @@ export function MotionShotGallery(props: {
     onDeleteFolder,
   } = props;
 
+  const { showError } = useAppError();
   const tile = 88;
   const [viewFolderId, setViewFolderId] = useState<string | null>(null);
   const [anchorId, setAnchorId] = useState<string | null>(null);
+  const [videoExportBusy, setVideoExportBusy] = useState(false);
+  const [fpsExportPending, setFpsExportPending] = useState<{
+    relPaths: string[];
+    filenameBase: string;
+  } | null>(null);
   const [menu, setMenu] = useState<{
     open: boolean;
     x: number;
@@ -177,11 +186,66 @@ export function MotionShotGallery(props: {
     [gridIds, persistFolderOrder, persistRootOrder, viewFolderId]
   );
 
+  const collectFolderShotRelPaths = useCallback(
+    (folderId: string): string[] => {
+      const order = layout.folderOrder[folderId] ?? [];
+      const relPaths: string[] = [];
+      for (const id of order) {
+        const shot = itemById.get(id);
+        const rel = (shot?.relPath ?? "").trim();
+        if (rel) relPaths.push(rel);
+      }
+      return relPaths;
+    },
+    [layout.folderOrder, itemById]
+  );
+
+  const runFramesVideoExport = useCallback(
+    (relPaths: string[], fps: number, filenameBase: string) => {
+      if (!relPaths.length) {
+        showError({ message: "No frames to export." });
+        return;
+      }
+      void (async () => {
+        setVideoExportBusy(true);
+        try {
+          await apiExportFramesVideo({
+            relPaths,
+            fps,
+            filenameBase: sanitizeDownloadBaseName(filenameBase),
+          });
+        } catch (e) {
+          showError({ message: "Download as Video failed.", error: e });
+        } finally {
+          setVideoExportBusy(false);
+        }
+      })();
+    },
+    [showError]
+  );
+
+  const requestFramesVideoExport = useCallback(
+    (relPaths: string[], filenameBase: string) => {
+      if (!relPaths.length) {
+        showError({ message: "No frames to export." });
+        return;
+      }
+      setFpsExportPending({ relPaths, filenameBase });
+    },
+    [showError]
+  );
+
   const openShotMenu = useCallback(
     (e: React.MouseEvent, shot: MotionRefShot) => {
       e.preventDefault();
       const visibleShotIdSet = new Set(shotOrderInView);
       const groupIds = [...selectedIds].filter((id) => visibleShotIdSet.has(id));
+      const groupRelPaths =
+        groupIds.length >= 2
+          ? groupIds
+              .map((id) => itemById.get(id)?.relPath?.trim())
+              .filter((r): r is string => Boolean(r))
+          : [];
       const items: ContextMenuItem[] = [
         {
           key: "add",
@@ -202,9 +266,28 @@ export function MotionShotGallery(props: {
           onSelect: () => onCreateFolder(viewFolderId, groupIds),
         });
       }
+      if (groupRelPaths.length >= 2) {
+        items.splice(1, 0, {
+          key: "downloadVideo",
+          label: videoExportBusy ? "Exporting…" : "Download as Video",
+          disabled: videoExportBusy,
+          onSelect: () => requestFramesVideoExport(groupRelPaths, "motion_shots"),
+        });
+      }
       setMenu({ open: true, x: e.clientX, y: e.clientY, items });
     },
-    [busy, onAddToPose, onCreateFolder, onDeleteShot, selectedIds, shotOrderInView, viewFolderId]
+    [
+      busy,
+      onAddToPose,
+      onCreateFolder,
+      onDeleteShot,
+      selectedIds,
+      shotOrderInView,
+      viewFolderId,
+      itemById,
+      requestFramesVideoExport,
+      videoExportBusy,
+    ]
   );
 
   const openFolderMenu = useCallback(
@@ -215,7 +298,18 @@ export function MotionShotGallery(props: {
         .map((id) => layout.items.find((s) => s.id === id))
         .filter((s): s is MotionRefShot => Boolean(s));
       const addable = folderShots.filter((s) => !s.keypointId);
+      const exportRelPaths = collectFolderShotRelPaths(folderId);
       const items: ContextMenuItem[] = [
+        {
+          key: "downloadVideo",
+          label: videoExportBusy ? "Exporting…" : "Download as Video",
+          disabled: videoExportBusy || exportRelPaths.length === 0,
+          onSelect: () =>
+            requestFramesVideoExport(
+              exportRelPaths,
+              sanitizeDownloadBaseName(folderName) || "motion_folder"
+            ),
+        },
         {
           key: "add",
           label: "Add to Pose",
@@ -240,7 +334,7 @@ export function MotionShotGallery(props: {
         items,
       });
     },
-    [busy, layout.folderOrder, layout.items, onAddToPose, onDeleteFolder, onRenameFolder]
+    [busy, layout.folderOrder, layout.items, onAddToPose, onDeleteFolder, onRenameFolder, collectFolderShotRelPaths, requestFramesVideoExport, videoExportBusy]
   );
 
   if (layout.items.length === 0 && layout.folders.length === 0) {
@@ -428,6 +522,18 @@ export function MotionShotGallery(props: {
         y={menu.y}
         items={menu.items}
         onClose={() => setMenu((m) => ({ ...m, open: false }))}
+      />
+
+      <ExportFpsDialog
+        open={fpsExportPending != null}
+        title="Download as Video"
+        onCancel={() => setFpsExportPending(null)}
+        onConfirm={(fps) => {
+          const pending = fpsExportPending;
+          setFpsExportPending(null);
+          if (!pending) return;
+          runFramesVideoExport(pending.relPaths, fps, pending.filenameBase);
+        }}
       />
     </div>
   );

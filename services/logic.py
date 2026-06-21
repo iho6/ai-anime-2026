@@ -27,7 +27,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, TypedDict
 
 logger = logging.getLogger(__name__)
 
@@ -8334,6 +8334,38 @@ def encode_rgba_frames_to_webm(
     }
 
 
+def _keyframed_rgba_sequence(
+    all_rgb: list[Any],
+    *,
+    stride: int,
+    process_every_frame: bool,
+    process_frame: Callable[[Any, int], Any],
+) -> list[Any]:
+    """
+    Build a full-length RGBA sequence from decoded RGB frames.
+
+    When ``process_every_frame`` is False, *process_frame* runs every ``stride``
+    indices and the last keyframe alpha is recycled on skipped frames (current RGB).
+    """
+    import numpy as np
+
+    rgba_out: list[Any] = []
+    last_alpha: Any | None = None
+    for i, rgb in enumerate(all_rgb):
+        need = process_every_frame or (i % stride == 0)
+        if need:
+            rgba = process_frame(rgb, i)
+            last_alpha = rgba[:, :, 3]
+        else:
+            if last_alpha is None:
+                raise RuntimeError(
+                    "Keyframe processing requires at least one processed frame."
+                )
+            rgba = np.dstack([rgb, last_alpha])
+        rgba_out.append(rgba)
+    return rgba_out
+
+
 def remove_video_background_rmbg(
     video_path: str | Path,
     output_path: str | Path,
@@ -8346,11 +8378,11 @@ def remove_video_background_rmbg(
     """
     Per-frame RMBG video background removal.
 
-    Default (``output_fps_24=False``): subsample to 12 fps, RMBG each kept frame,
-    output WebM at 12 fps.
+    Default (``output_fps_24=False``): decode all frames, RMBG at ~12 fps
+    keyframes, recycle alpha between, output WebM at source fps (preserves duration).
 
     ``output_fps_24=True``: output at source fps; RMBG every frame unless
-    ``recycle_mask=True`` (RMBG at 12 fps keyframes, hold alpha between).
+    ``recycle_mask=True`` (same keyframe + recycle-alpha behaviour as default).
     """
     import av
     import numpy as np
@@ -8390,39 +8422,6 @@ def remove_video_background_rmbg(
         src_w = int(in_stream.width)
         src_h = int(in_stream.height)
 
-        if not output_fps_24:
-            _log(
-                f"RMBG mode: 12 fps output (source {source_fps:.2f} fps, stride {stride})"
-            )
-            rgba_out: list[Any] = []
-            frame_idx = 0
-            rmbg_count = 0
-            for packet in in_container.demux(in_stream):
-                for av_frame in packet.decode():
-                    if frame_idx % stride != 0:
-                        frame_idx += 1
-                        continue
-                    rgb = av_frame.to_ndarray(format="rgb24")
-                    fp = tmp_dir / f"in_{frame_idx:06d}.png"
-                    rmbg_count += 1
-                    _log(f"RMBG frame {rmbg_count} (source index {frame_idx})…")
-                    rgba_out.append(_rmbg_rgba_from_rgb(rgb, fp))
-                    frame_idx += 1
-            in_container.close()
-            if not rgba_out:
-                raise RuntimeError("No frames extracted for RMBG.")
-            meta = encode_rgba_frames_to_webm(
-                rgba_out,
-                fps=12.0,
-                width=src_w,
-                height=src_h,
-                output_path=out,
-                log_cb=log_cb,
-            )
-            meta["url"] = meta["absPath"]
-            return meta
-
-        # output_fps_24 modes
         all_rgb: list[Any] = []
         for packet in in_container.demux(in_stream):
             for av_frame in packet.decode():
@@ -8431,30 +8430,33 @@ def remove_video_background_rmbg(
         if not all_rgb:
             raise RuntimeError("Video decode produced zero frames.")
 
-        if recycle_mask:
-            _log(
-                f"RMBG mode: {source_fps:.2f} fps output, recycle mask "
-                f"(RMBG every {stride} frames)"
-            )
-        else:
+        process_every_frame = output_fps_24 and not recycle_mask
+        if process_every_frame:
             _log(f"RMBG mode: {source_fps:.2f} fps output, every frame")
+        else:
+            _log(
+                f"RMBG mode: {source_fps:.2f} fps output, keyframes every "
+                f"{stride} frames (12 fps processing)"
+            )
 
-        rgba_out = []
-        last_alpha: Any | None = None
         rmbg_count = 0
-        for i, rgb in enumerate(all_rgb):
-            need_rmbg = (not recycle_mask) or (i % stride == 0)
-            if need_rmbg:
-                fp = tmp_dir / f"in_{i:06d}.png"
-                rmbg_count += 1
+
+        def _process_frame(rgb: Any, i: int) -> Any:
+            nonlocal rmbg_count
+            fp = tmp_dir / f"in_{i:06d}.png"
+            rmbg_count += 1
+            if process_every_frame:
                 _log(f"RMBG frame {rmbg_count}/{len(all_rgb)}…")
-                rgba = _rmbg_rgba_from_rgb(rgb, fp)
-                last_alpha = rgba[:, :, 3]
             else:
-                if last_alpha is None:
-                    raise RuntimeError("recycle_mask requires at least one RMBG keyframe.")
-                rgba = np.dstack([rgb, last_alpha])
-            rgba_out.append(rgba)
+                _log(f"RMBG frame {rmbg_count} (source index {i})…")
+            return _rmbg_rgba_from_rgb(rgb, fp)
+
+        rgba_out = _keyframed_rgba_sequence(
+            all_rgb,
+            stride=stride,
+            process_every_frame=process_every_frame,
+            process_frame=_process_frame,
+        )
 
         meta = encode_rgba_frames_to_webm(
             rgba_out,
@@ -8482,7 +8484,8 @@ def remove_video_background_anime_seg(
     """
     Per-frame anime-segmentation video background removal.
 
-    Same fps modes as :func:`remove_video_background_rmbg`.
+    Same fps modes as :func:`remove_video_background_rmbg` (default preserves duration
+    via keyframed segmentation + recycled alpha at source fps).
     """
     import av
     import numpy as np
@@ -8522,38 +8525,6 @@ def remove_video_background_anime_seg(
         src_w = int(in_stream.width)
         src_h = int(in_stream.height)
 
-        if not output_fps_24:
-            _log(
-                f"Anime Seg mode: 12 fps output (source {source_fps:.2f} fps, stride {stride})"
-            )
-            rgba_out: list[Any] = []
-            frame_idx = 0
-            seg_count = 0
-            for packet in in_container.demux(in_stream):
-                for av_frame in packet.decode():
-                    if frame_idx % stride != 0:
-                        frame_idx += 1
-                        continue
-                    rgb = av_frame.to_ndarray(format="rgb24")
-                    fp = tmp_dir / f"in_{frame_idx:06d}.png"
-                    seg_count += 1
-                    _log(f"Anime Seg frame {seg_count} (source index {frame_idx})…")
-                    rgba_out.append(_anime_rgba_from_rgb(rgb, fp))
-                    frame_idx += 1
-            in_container.close()
-            if not rgba_out:
-                raise RuntimeError("No frames extracted for anime segmentation.")
-            meta = encode_rgba_frames_to_webm(
-                rgba_out,
-                fps=12.0,
-                width=src_w,
-                height=src_h,
-                output_path=out,
-                log_cb=log_cb,
-            )
-            meta["url"] = meta["absPath"]
-            return meta
-
         all_rgb: list[Any] = []
         for packet in in_container.demux(in_stream):
             for av_frame in packet.decode():
@@ -8562,32 +8533,33 @@ def remove_video_background_anime_seg(
         if not all_rgb:
             raise RuntimeError("Video decode produced zero frames.")
 
-        if recycle_mask:
-            _log(
-                f"Anime Seg mode: {source_fps:.2f} fps output, recycle mask "
-                f"(segment every {stride} frames)"
-            )
-        else:
+        process_every_frame = output_fps_24 and not recycle_mask
+        if process_every_frame:
             _log(f"Anime Seg mode: {source_fps:.2f} fps output, every frame")
+        else:
+            _log(
+                f"Anime Seg mode: {source_fps:.2f} fps output, keyframes every "
+                f"{stride} frames (12 fps processing)"
+            )
 
-        rgba_out = []
-        last_alpha: Any | None = None
         seg_count = 0
-        for i, rgb in enumerate(all_rgb):
-            need_seg = (not recycle_mask) or (i % stride == 0)
-            if need_seg:
-                fp = tmp_dir / f"in_{i:06d}.png"
-                seg_count += 1
+
+        def _process_frame(rgb: Any, i: int) -> Any:
+            nonlocal seg_count
+            fp = tmp_dir / f"in_{i:06d}.png"
+            seg_count += 1
+            if process_every_frame:
                 _log(f"Anime Seg frame {seg_count}/{len(all_rgb)}…")
-                rgba = _anime_rgba_from_rgb(rgb, fp)
-                last_alpha = rgba[:, :, 3]
             else:
-                if last_alpha is None:
-                    raise RuntimeError(
-                        "recycle_mask requires at least one segmentation keyframe."
-                    )
-                rgba = np.dstack([rgb, last_alpha])
-            rgba_out.append(rgba)
+                _log(f"Anime Seg frame {seg_count} (source index {i})…")
+            return _anime_rgba_from_rgb(rgb, fp)
+
+        rgba_out = _keyframed_rgba_sequence(
+            all_rgb,
+            stride=stride,
+            process_every_frame=process_every_frame,
+            process_frame=_process_frame,
+        )
 
         meta = encode_rgba_frames_to_webm(
             rgba_out,
@@ -9694,11 +9666,207 @@ def _flatten_rgba_for_video(im_rgba: Any, bg_rgb: tuple[int, int, int]) -> Any:
     return bg
 
 
+def _image_has_transparency(path: Path) -> bool:
+    """True when the source image has any pixel with alpha < 255."""
+    from PIL import Image
+
+    with Image.open(path) as im:
+        if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
+            rgba = im.convert("RGBA")
+            alpha = rgba.getchannel("A")
+            lo, _hi = alpha.getextrema()
+            return lo < 255
+    return False
+
+
+def _frames_need_webm(image_paths: list[Path]) -> bool:
+    """True when any source frame should preserve transparency (WebM VP9+alpha)."""
+    seen: set[str] = set()
+    for p in image_paths:
+        key = str(p.resolve())
+        if key in seen:
+            continue
+        seen.add(key)
+        if _image_has_transparency(p):
+            return True
+    return False
+
+
+class VideoExportResult(TypedDict):
+    absPath: str
+    mediaType: str
+    ext: str
+
+
+def _encode_slideshow_video(
+    *,
+    segments: list[tuple[Path | None, dict[str, Any] | None, int]],
+    fps: float,
+    output_path: Path | str,
+    export_bg: tuple[int, int, int] = (255, 255, 255),
+) -> VideoExportResult:
+    """
+    Encode a slideshow from ``segments``: each ``(path, crop, repeat_count)``.
+
+    ``path`` is ``None`` for a blank/hold frame (white when MP4, transparent when WebM).
+    Auto-selects WebM when any source image has transparency, else MP4.
+    """
+    import av
+    import numpy as np
+    from PIL import Image
+
+    if not segments:
+        raise ValueError("No frames to export.")
+
+    image_paths = [p for p, _crop, _rep in segments if p is not None]
+    if not image_paths:
+        raise ValueError("No image frames to export.")
+
+    w, h = _sequence_export_dimensions_from_images(image_paths)
+    use_webm = _frames_need_webm(image_paths)
+
+    out_stem = Path(output_path)
+    if out_stem.suffix.lower() in (".mp4", ".webm"):
+        out_stem = out_stem.with_suffix("")
+    ext = "webm" if use_webm else "mp4"
+    out_p = out_stem.with_suffix(f".{ext}")
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+
+    rate = max(1, min(120, int(round(float(fps)))))
+    from services.utils import av_output_framerate
+
+    out_rate = av_output_framerate(rate)
+
+    def blank_rgba_array() -> Any:
+        return np.asarray(Image.new("RGBA", (w, h), (0, 0, 0, 0)), dtype=np.uint8)
+
+    def blank_rgb_array() -> Any:
+        return np.asarray(Image.new("RGB", (w, h), export_bg), dtype=np.uint8)
+
+    def load_rgba_array(path: Path, crop: dict[str, Any] | None) -> Any:
+        rgba = render_sequence_timeline_cell_rgba(path, crop, w, h)
+        return np.asarray(rgba, dtype=np.uint8)
+
+    try:
+        if use_webm:
+            rgba_frames: list[Any] = []
+            for path, crop, repeat in segments:
+                if repeat < 1:
+                    continue
+                if path is None:
+                    arr = blank_rgba_array()
+                else:
+                    arr = load_rgba_array(path, crop)
+                for _ in range(repeat):
+                    rgba_frames.append(arr)
+            if not rgba_frames:
+                raise ValueError("No frames to export.")
+            encode_rgba_frames_to_webm(
+                rgba_frames,
+                fps=float(rate),
+                width=w,
+                height=h,
+                output_path=out_p,
+            )
+        else:
+            with av.open(str(out_p), mode="w") as container:
+                stream = container.add_stream("libx264", rate=out_rate)
+                stream.width = w
+                stream.height = h
+                stream.pix_fmt = "yuv420p"
+                stream.options = {"crf": "23", "preset": "veryfast"}
+
+                frames_written = 0
+                for path, crop, repeat in segments:
+                    if repeat < 1:
+                        continue
+                    if path is None:
+                        arr = blank_rgb_array()
+                    else:
+                        rgba_pil = render_sequence_timeline_cell_rgba(path, crop, w, h)
+                        rgb = _flatten_rgba_for_video(rgba_pil, export_bg)
+                        arr = np.asarray(rgb, dtype=np.uint8)
+                    for _ in range(repeat):
+                        frame = av.VideoFrame.from_ndarray(arr, format="rgb24")
+                        frame = frame.reformat(format="yuv420p")
+                        for packet in stream.encode(frame):
+                            if packet is not None:
+                                container.mux(packet)
+                        frames_written += 1
+                if frames_written == 0:
+                    raise ValueError("No frames to export.")
+                for packet in stream.encode(None):
+                    if packet is not None:
+                        container.mux(packet)
+    except ValueError:
+        if out_p.is_file():
+            out_p.unlink(missing_ok=True)
+        raise
+    except Exception as ex:
+        if out_p.is_file():
+            out_p.unlink(missing_ok=True)
+        raise RuntimeError(f"Slideshow video export failed: {ex}") from ex
+
+    media_type = "video/webm" if use_webm else "video/mp4"
+    return {"absPath": str(out_p.resolve()), "mediaType": media_type, "ext": ext}
+
+
+def _resolve_storage_rel_file_for_export(rel_path: str) -> Path:
+    """Resolve clip ``relPath`` across storage roots (raises ``ValueError`` on failure)."""
+    rel = Path(rel_path)
+    parts = rel.parts
+    if parts and parts[0].lower() == "locations":
+        root = (DEFAULT_STORAGE_ROOT.parent / "locations").resolve()
+        rel = Path(*parts[1:])
+    elif parts and parts[0].lower() == "shots":
+        root = (DEFAULT_STORAGE_ROOT.parent / "shots").resolve()
+        rel = Path(*parts[1:])
+    elif parts and parts[0].lower() == "references":
+        root = (DEFAULT_STORAGE_ROOT.parent / "references").resolve()
+        rel = Path(*parts[1:])
+    elif parts and parts[0].lower() == "timelines":
+        root = (DEFAULT_STORAGE_ROOT.parent / "timelines").resolve()
+        rel = Path(*parts[1:])
+    elif parts and parts[0].lower() == "motion_refs":
+        root = (DEFAULT_STORAGE_ROOT.parent / "motion_refs").resolve()
+        rel = Path(*parts[1:])
+    else:
+        root = DEFAULT_STORAGE_ROOT.resolve()
+    target = (root / rel).resolve()
+    if root != target and root not in target.parents:
+        raise ValueError(f"Invalid storage path: {rel_path}")
+    if not target.is_file():
+        raise ValueError(f"File not found: {rel_path}")
+    return target
+
+
+def write_frames_video_from_rel_paths(
+    rel_paths: list[str],
+    fps: float,
+    output_path: Path | str,
+) -> VideoExportResult:
+    """Linear slideshow: one frame per ``relPath`` in order (generic folder export)."""
+    cleaned = [str(r or "").strip().replace("\\", "/").lstrip("/") for r in rel_paths]
+    cleaned = [r for r in cleaned if r]
+    if not cleaned:
+        raise ValueError("relPaths is empty.")
+    fps_val = float(fps)
+    if not math.isfinite(fps_val) or fps_val < 1 or fps_val > 120:
+        raise ValueError("fps must be between 1 and 120.")
+
+    segments: list[tuple[Path | None, dict[str, Any] | None, int]] = []
+    for rel in cleaned:
+        pth = _resolve_storage_rel_file_for_export(rel)
+        segments.append((pth, None, 1))
+
+    return _encode_slideshow_video(segments=segments, fps=fps_val, output_path=output_path)
+
+
 def write_sequence_timeline_slideshow_mp4(
     char_key: str,
     sequence_name: str,
     output_path: Path | str,
-) -> None:
+) -> VideoExportResult:
     """
     Encodes a slideshow at ``manifest.fps`` where each logical timeline tick is ``1/fps``
     seconds. Consecutive visible keys are held for their ``index`` gap; after the last key,
@@ -9706,8 +9874,8 @@ def write_sequence_timeline_slideshow_mp4(
     Skips hidden cells and cells with no ``relPath``. Each frame is rasterized like the sequence
     lightbox viewport: contain-fit and manifest ``crop`` inside a cell sized from the
     largest source frame's natural aspect (capped at ``1920×1080``); ``previewAspect`` is
-    UI-only and does not force export letterboxing. Source files are not modified. Video is
-    even-sized RGB (``#ffffff`` letterbox for transparent areas).
+    UI-only and does not force export letterboxing. Source files are not modified.
+    Auto-selects WebM when any frame has transparency, else MP4.
     """
     manifest = read_sequence_manifest(char_key, sequence_name)
     fps = _sequence_timeline_export_fps(manifest)
@@ -9717,53 +9885,15 @@ def write_sequence_timeline_slideshow_mp4(
             "No timeline images to export (add frames with images or unhide cells)."
         )
 
-    import av
-    import numpy as np
-
     span = _sequence_timeline_span(manifest)
     indices = [fe[0] for fe in export_frames]
     segment_counts = _timeline_export_segment_counts(indices, span)
 
-    export_paths = [p for _idx, p, _crop in export_frames]
-    w, h = _sequence_export_dimensions_from_images(export_paths)
-    # Opaque letterbox for transparent pixels (H.264 yuv420p has no alpha).
-    export_bg = (255, 255, 255)
+    segments: list[tuple[Path | None, dict[str, Any] | None, int]] = []
+    for (_idx, path, crop), count in zip(export_frames, segment_counts, strict=True):
+        segments.append((path, crop, count))
 
-    def load_rgb_array(path: Path, crop: dict[str, Any] | None) -> Any:
-        rgba = render_sequence_timeline_cell_rgba(path, crop, w, h)
-        rgb = _flatten_rgba_for_video(rgba, export_bg)
-        return np.asarray(rgb, dtype=np.uint8)
-
-    rate = max(1, min(120, int(round(fps))))
-    from services.utils import av_output_framerate
-
-    out_rate = av_output_framerate(rate)
-    out_p = Path(output_path)
-    out_p.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        with av.open(str(out_p), mode="w") as container:
-            stream = container.add_stream("libx264", rate=out_rate)
-            stream.width = w
-            stream.height = h
-            stream.pix_fmt = "yuv420p"
-            stream.options = {"crf": "23", "preset": "veryfast"}
-
-            for (_idx, path, crop), count in zip(export_frames, segment_counts, strict=True):
-                arr = load_rgb_array(path, crop)
-                for _ in range(count):
-                    frame = av.VideoFrame.from_ndarray(arr, format="rgb24")
-                    frame = frame.reformat(format="yuv420p")
-                    for packet in stream.encode(frame):
-                        if packet is not None:
-                            container.mux(packet)
-            for packet in stream.encode(None):
-                if packet is not None:
-                    container.mux(packet)
-    except Exception as ex:
-        if out_p.is_file():
-            out_p.unlink(missing_ok=True)
-        raise RuntimeError(f"Timeline MP4 export failed: {ex}") from ex
+    return _encode_slideshow_video(segments=segments, fps=fps, output_path=output_path)
 
 
 def _frame_sequence_strip_slot_visible_for_export(slot: dict[str, Any]) -> bool:
@@ -9781,15 +9911,16 @@ def write_gallery_frame_sequence_set_mp4(
     sequence_name: str,
     gallery_item_id: str,
     output_path: Path | str,
-) -> None:
+) -> VideoExportResult:
     """
-    Linear MP4 for one gallery item's ``frameSequence.strip`` at 24 fps.
+    Linear video for one gallery item's ``frameSequence.strip`` at 24 fps.
 
     Walks the strip in order. ``empty`` slots each emit one output frame (hold: repeat the
-    last visible image, or white before any visible). A **hidden image** (``kind: image`` and
+    last visible image, or blank before any visible). A **hidden image** (``kind: image`` and
     ``hidden: true``) emits no output frame (same idea as skipped hidden timeline cells).
     Visible image slots update the current display then emit.
     Export cell size follows the largest strip image's natural aspect (not ``previewAspect``).
+    Auto-selects WebM when any frame has transparency, else MP4.
     """
     manifest = read_sequence_manifest(char_key, sequence_name)
     gallery = manifest.get("gallery") or []
@@ -9813,106 +9944,42 @@ def write_gallery_frame_sequence_set_mp4(
         raise ValueError("frameSequence.strip is missing or empty.")
     strip: list[dict[str, Any]] = [s for s in strip_raw if isinstance(s, dict)]
 
-    export_paths: list[Path] = []
-    for k, slot in enumerate(strip):
-        if not _frame_sequence_strip_slot_visible_for_export(slot):
-            continue
-        rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
-        _ensure_rel_under_sequence_folder(char_key, sequence_name, rel)
-        pth = (DEFAULT_STORAGE_ROOT / rel).resolve()
-        root = DEFAULT_STORAGE_ROOT.resolve()
-        if root != pth and root not in pth.parents:
-            raise ValueError(f"Strip slot {k}: invalid resolved path.")
-        if not pth.is_file():
-            raise ValueError(f"Strip slot {k}: missing file {rel!r}.")
-        export_paths.append(pth)
-
-    import av
-    import numpy as np
-    from PIL import Image
-
-    w, h = _sequence_export_dimensions_from_images(export_paths)
-    export_bg = (255, 255, 255)
-    rate = 24
-
-    def load_rgb_array(path: Path, crop: dict[str, Any] | None) -> Any:
-        rgba = render_sequence_timeline_cell_rgba(path, crop, w, h)
-        rgb = _flatten_rgba_for_video(rgba, export_bg)
-        return np.asarray(rgb, dtype=np.uint8)
-
-    def blank_rgb_array() -> Any:
-        return np.asarray(Image.new("RGB", (w, h), export_bg), dtype=np.uint8)
-
     current_path: Path | None = None
     current_crop: dict[str, Any] | None = None
-
-    out_p = Path(output_path)
-    out_p.parent.mkdir(parents=True, exist_ok=True)
+    segments: list[tuple[Path | None, dict[str, Any] | None, int]] = []
     L = len(strip)
-    frames_written = 0
-    from services.utils import av_output_framerate
 
-    out_rate = av_output_framerate(rate)
+    for k in range(L):
+        slot = strip[k]
+        if str(slot.get("kind") or "") == "image" and slot.get("hidden") is True:
+            continue
+        if _frame_sequence_strip_slot_visible_for_export(slot):
+            rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+            _ensure_rel_under_sequence_folder(char_key, sequence_name, rel)
+            pth = (DEFAULT_STORAGE_ROOT / rel).resolve()
+            root = DEFAULT_STORAGE_ROOT.resolve()
+            if root != pth and root not in pth.parents:
+                raise ValueError(f"Strip slot {k}: invalid resolved path.")
+            if not pth.is_file():
+                raise ValueError(f"Strip slot {k}: missing file {rel!r}.")
+            raw_crop = slot.get("crop")
+            crop_dict: dict[str, Any] | None
+            if isinstance(raw_crop, dict):
+                crop_dict = raw_crop
+            else:
+                crop_dict = None
+            current_path = pth
+            current_crop = crop_dict
 
-    try:
-        with av.open(str(out_p), mode="w") as container:
-            stream = container.add_stream("libx264", rate=out_rate)
-            stream.width = w
-            stream.height = h
-            stream.pix_fmt = "yuv420p"
-            stream.options = {"crf": "23", "preset": "veryfast"}
+        segments.append((current_path, current_crop, 1))
 
-            for k in range(L):
-                slot = strip[k]
-                if str(slot.get("kind") or "") == "image" and slot.get("hidden") is True:
-                    continue
-                if _frame_sequence_strip_slot_visible_for_export(slot):
-                    rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
-                    _ensure_rel_under_sequence_folder(char_key, sequence_name, rel)
-                    pth = (DEFAULT_STORAGE_ROOT / rel).resolve()
-                    root = DEFAULT_STORAGE_ROOT.resolve()
-                    if root != pth and root not in pth.parents:
-                        raise ValueError(f"Strip slot {k}: invalid resolved path.")
-                    if not pth.is_file():
-                        raise ValueError(f"Strip slot {k}: missing file {rel!r}.")
-                    raw_crop = slot.get("crop")
-                    crop_dict: dict[str, Any] | None
-                    if isinstance(raw_crop, dict):
-                        crop_dict = raw_crop
-                    else:
-                        crop_dict = None
-                    current_path = pth
-                    current_crop = crop_dict
+    if not segments:
+        raise ValueError(
+            "No frames to export: frameSequence.strip is only hidden images, "
+            "or has no non-hidden slots that emit a frame."
+        )
 
-                if current_path is not None:
-                    arr = load_rgb_array(current_path, current_crop)
-                else:
-                    arr = blank_rgb_array()
-
-                frame = av.VideoFrame.from_ndarray(arr, format="rgb24")
-                frame = frame.reformat(format="yuv420p")
-                for packet in stream.encode(frame):
-                    if packet is not None:
-                        container.mux(packet)
-                frames_written += 1
-            for packet in stream.encode(None):
-                if packet is not None:
-                    container.mux(packet)
-        if frames_written == 0:
-            if out_p.is_file():
-                out_p.unlink(missing_ok=True)
-            raise ValueError(
-                "No frames to export: frameSequence.strip is only hidden images, "
-                "or has no non-hidden slots that emit a frame."
-            )
-    except ValueError:
-        if out_p.is_file():
-            out_p.unlink(missing_ok=True)
-        raise
-    except Exception as ex:
-        if out_p.is_file():
-            out_p.unlink(missing_ok=True)
-        raise RuntimeError(f"Frame sequence set MP4 export failed: {ex}") from ex
+    return _encode_slideshow_video(segments=segments, fps=24.0, output_path=output_path)
 
 
 def probe_video_meta(path: Path | str) -> dict[str, Any]:
@@ -9970,19 +10037,20 @@ def materialize_sequence_to_timeline_clip(
 
     dest = Path(dest_dir)
     dest.mkdir(parents=True, exist_ok=True)
-    out_path = dest / f"clip_{uuid.uuid4().hex}.mp4"
+    out_stem = dest / f"clip_{uuid.uuid4().hex}"
 
     gid = (gallery_item_id or "").strip()
     if log_cb:
         log_cb(
             f"Rendering {'gallery item' if gid else 'sequence timeline'} "
-            f"{sequence_name!r} to mp4…"
+            f"{sequence_name!r} to video…"
         )
     if gid:
-        write_gallery_frame_sequence_set_mp4(char_key, sequence_name, gid, out_path)
+        result = write_gallery_frame_sequence_set_mp4(char_key, sequence_name, gid, out_stem)
     else:
-        write_sequence_timeline_slideshow_mp4(char_key, sequence_name, out_path)
+        result = write_sequence_timeline_slideshow_mp4(char_key, sequence_name, out_stem)
 
+    out_path = Path(result["absPath"])
     if not out_path.is_file():
         raise RuntimeError("Sequence materialization produced no file.")
     meta = probe_video_meta(out_path)

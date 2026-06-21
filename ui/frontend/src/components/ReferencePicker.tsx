@@ -24,9 +24,11 @@ import {
 } from "./DesktopContextMenu";
 import { useAppError } from "./ErrorProvider";
 import { GalleryImageLightbox } from "./GalleryImageLightbox";
-import { KeypointRefGrid, parseFolderToken } from "./KeypointRefGrid";
+import { KeypointRefGrid, parseFolderToken, parseVideoToken } from "./KeypointRefGrid";
 import { KeypointVideoSequenceModal } from "./KeypointVideoSequenceModal";
 import { SquareButton } from "./SquareButton";
+import { ExportFpsDialog } from "./ExportFpsDialog";
+import { apiExportFramesVideo, sanitizeDownloadBaseName } from "../lib/downloadVideo";
 import {
   collectFolderIdsPostOrder,
   collectFolderLeafIds,
@@ -73,7 +75,7 @@ function ReferencePickerOpen(props: {
   onOpenMotionRef?: () => void;
 }) {
   const { busy, onCancel, onUseSelected, onPickNew, onGenerateBase, onOpenMotionRef } = props;
-  const { confirmAction, askText } = useAppError();
+  const { confirmAction, askText, showError } = useAppError();
 
   const [layout, setLayout] = useState<KeypointsLayout>({
     folders: [],
@@ -99,6 +101,11 @@ function ReferencePickerOpen(props: {
     index: number;
     title: string;
   } | null>(null);
+  const [videoExportBusy, setVideoExportBusy] = useState(false);
+  const [fpsExportPending, setFpsExportPending] = useState<{
+    relPaths: string[];
+    filenameBase: string;
+  } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const canGenerate = !busy && genPrompt.trim().length > 0;
 
@@ -116,6 +123,81 @@ function ReferencePickerOpen(props: {
 
   const itemById = new Map(layout.items.map((x) => [x.id, x]));
   const videoById = new Map((layout.videoItems ?? []).map((x) => [x.id, x]));
+
+  const visibleStripRelPaths = useCallback(
+    (strip: KeypointVideoReference["frameSequence"]["strip"] | undefined): string[] => {
+      const out: string[] = [];
+      for (const slot of strip ?? []) {
+        if (slot.kind !== "image" || slot.hidden) continue;
+        const rel = (slot.relPath ?? "").trim();
+        if (rel) out.push(rel);
+      }
+      return out;
+    },
+    []
+  );
+
+  const collectFolderExportRelPaths = useCallback(
+    (folderId: string): string[] => {
+      const itemIds = new Set(layout.items.map((x) => x.id));
+      const videoIds = new Set((layout.videoItems ?? []).map((x) => x.id));
+      const isLeaf = (tok: string) => isKeypointGridLeaf(tok, itemIds, videoIds);
+      const leaves = collectFolderLeafIds(folderId, layout, isLeaf);
+      const relPaths: string[] = [];
+      for (const tok of leaves) {
+        const vid = parseVideoToken(tok);
+        if (vid) {
+          const v = videoById.get(vid);
+          if (v) relPaths.push(...visibleStripRelPaths(v.frameSequence?.strip));
+          continue;
+        }
+        const it = itemById.get(tok);
+        const rel = (it?.keypointRelPath ?? "").trim();
+        if (rel) relPaths.push(rel);
+      }
+      return relPaths;
+    },
+    [layout, itemById, videoById, visibleStripRelPaths]
+  );
+
+  const runFramesVideoExport = useCallback(
+    (relPaths: string[], fps: number, filenameBase: string) => {
+      if (!relPaths.length) {
+        showError({ message: "No frames to export." });
+        return;
+      }
+      void (async () => {
+        setVideoExportBusy(true);
+        try {
+          await apiExportFramesVideo({
+            relPaths,
+            fps,
+            filenameBase: sanitizeDownloadBaseName(filenameBase),
+          });
+        } catch (e) {
+          showError({ message: "Download as Video failed.", error: e });
+        } finally {
+          setVideoExportBusy(false);
+        }
+      })();
+    },
+    [showError]
+  );
+
+  const requestFramesVideoExport = useCallback(
+    (relPaths: string[], filenameBase: string, fps?: number) => {
+      if (!relPaths.length) {
+        showError({ message: "No frames to export." });
+        return;
+      }
+      if (fps != null && Number.isFinite(fps) && fps >= 1 && fps <= 120) {
+        runFramesVideoExport(relPaths, fps, filenameBase);
+        return;
+      }
+      setFpsExportPending({ relPaths, filenameBase });
+    },
+    [runFramesVideoExport, showError]
+  );
 
   const gridIdsInView = viewFolderId
     ? layout.folderOrder[viewFolderId] ?? []
@@ -348,11 +430,22 @@ function ReferencePickerOpen(props: {
       const videoIds = new Set((layout.videoItems ?? []).map((x) => x.id));
       const isLeaf = (tok: string) => isKeypointGridLeaf(tok, itemIds, videoIds);
       const leaves = collectFolderLeafIds(folderId, layout, isLeaf);
+      const exportRelPaths = collectFolderExportRelPaths(folderId);
       setMenu({
         open: true,
         x: e.clientX,
         y: e.clientY,
         items: [
+          {
+            key: "downloadVideo",
+            label: videoExportBusy ? "Exporting…" : "Download as Video",
+            disabled: videoExportBusy || exportRelPaths.length === 0,
+            onSelect: () =>
+              requestFramesVideoExport(
+                exportRelPaths,
+                sanitizeDownloadBaseName(folderName) || "folder"
+              ),
+          },
           {
             key: "rename",
             label: "Rename",
@@ -421,17 +514,29 @@ function ReferencePickerOpen(props: {
         ],
       });
     },
-    [confirmAction, layout, loadLayout, renameFolder, viewFolderId]
+    [confirmAction, layout, loadLayout, renameFolder, viewFolderId, collectFolderExportRelPaths, requestFramesVideoExport, videoExportBusy]
   );
 
   const openVideoMenu = useCallback(
     (e: React.MouseEvent, item: KeypointVideoReference) => {
       e.preventDefault();
+      const exportRelPaths = visibleStripRelPaths(item.frameSequence?.strip);
       setMenu({
         open: true,
         x: e.clientX,
         y: e.clientY,
         items: [
+          {
+            key: "downloadVideo",
+            label: videoExportBusy ? "Exporting…" : "Download as Video",
+            disabled: videoExportBusy || exportRelPaths.length === 0,
+            onSelect: () =>
+              requestFramesVideoExport(
+                exportRelPaths,
+                sanitizeDownloadBaseName(item.id) || "video",
+                item.fps
+              ),
+          },
           {
             key: "makeCopy",
             label: "Make Copy",
@@ -472,7 +577,7 @@ function ReferencePickerOpen(props: {
         ],
       });
     },
-    [confirmAction, loadLayout]
+    [confirmAction, loadLayout, visibleStripRelPaths, requestFramesVideoExport, videoExportBusy]
   );
 
   const handleUseSelected = () => {
@@ -723,6 +828,18 @@ function ReferencePickerOpen(props: {
         y={menu.y}
         items={menu.items}
         onClose={() => setMenu((m) => ({ ...m, open: false }))}
+      />
+
+      <ExportFpsDialog
+        open={fpsExportPending != null}
+        title="Download as Video"
+        onCancel={() => setFpsExportPending(null)}
+        onConfirm={(fps) => {
+          const pending = fpsExportPending;
+          setFpsExportPending(null);
+          if (!pending) return;
+          runFramesVideoExport(pending.relPaths, fps, pending.filenameBase);
+        }}
       />
 
       <KeypointVideoSequenceModal

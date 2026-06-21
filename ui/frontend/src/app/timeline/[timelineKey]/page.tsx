@@ -2583,7 +2583,16 @@ export default function TimelineEditorPage() {
       </div>
 
       {/* Preview */}
-      <div style={{ padding: "12px 20px" }}>
+      <div
+        style={{ padding: "12px 20px" }}
+        onPointerDown={(e) => {
+          const t = e.target as HTMLElement;
+          if (t.closest("[data-timeline-preview-frame]")) return;
+          if (t.closest("button")) return;
+          if (t.closest("[data-preview-resize-handle]")) return;
+          selectClip(null, false);
+        }}
+      >
         {/* Aspect ratio switch */}
         <div style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
           <span style={{ fontSize: 11, color: "#aaa", marginRight: 4 }}>Aspect</span>
@@ -2658,6 +2667,7 @@ export default function TimelineEditorPage() {
 
         {/* Drag handle to resize the preview height */}
         <div
+          data-preview-resize-handle
           onPointerDown={(e) => {
             e.preventDefault();
             (e.target as HTMLElement).setPointerCapture?.(e.pointerId);

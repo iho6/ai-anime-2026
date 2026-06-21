@@ -179,6 +179,47 @@ class CameraKeyframePatchBody(BaseModel):
     blendEase: int | None = None
 
 
+class CameraTrajectoryReplaceBody(BaseModel):
+    keyframes: list[CameraKeyframeBody]
+
+
+def _keyframe_entry_from_body(body: CameraKeyframeBody) -> dict[str, Any]:
+    import uuid
+
+    entry: dict[str, Any] = {
+        "id": str(body.id or uuid.uuid4().hex),
+        "frameIndex": int(body.frameIndex),
+        "azimuth": float(body.azimuth),
+        "elevation": float(body.elevation),
+        "distance": float(body.distance),
+        "slideX": float(body.slideX or 0),
+        "slideY": float(body.slideY or 0),
+    }
+    if body.cameraPosition is not None and len(body.cameraPosition) >= 3:
+        entry["cameraPosition"] = [float(x) for x in body.cameraPosition[:3]]
+    if body.lookAtTarget is not None and len(body.lookAtTarget) >= 3:
+        entry["lookAtTarget"] = [float(x) for x in body.lookAtTarget[:3]]
+    if body.holdFrames is not None:
+        entry["holdFrames"] = max(0, int(body.holdFrames))
+    if body.blendEase is not None:
+        entry["blendEase"] = max(0, min(100, int(body.blendEase)))
+    return entry
+
+
+def _keyframes_entries_from_replace_body(
+    bodies: list[CameraKeyframeBody],
+) -> list[dict[str, Any]]:
+    seen_frames: set[int] = set()
+    entries: list[dict[str, Any]] = []
+    for body in bodies:
+        fi = int(body.frameIndex)
+        if fi in seen_frames:
+            raise ValueError(f"Duplicate frameIndex: {fi}")
+        seen_frames.add(fi)
+        entries.append(_keyframe_entry_from_body(body))
+    return entries
+
+
 def _serialize_camera_trajectory(data: dict) -> dict[str, Any]:
     keyframes = data.get("keyframes") or []
     out = []
@@ -282,6 +323,23 @@ def motion_ref_camera_trajectory_upsert(
             motion_key,
             body.model_dump(),
         )
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    return _serialize_camera_trajectory(data)
+
+
+@router.put("/motion_ref/{motion_key}/camera_trajectory")
+def motion_ref_camera_trajectory_replace(
+    motion_key: str, body: CameraTrajectoryReplaceBody
+) -> dict[str, Any]:
+    if not _motion_dir(motion_key).is_dir():
+        raise HTTPException(404, "Motion not found.")
+    try:
+        entries = _keyframes_entries_from_replace_body(body.keyframes)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    try:
+        data = motion_ref_storage.write_camera_trajectory(motion_key, entries)
     except FileNotFoundError as e:
         raise HTTPException(404, str(e)) from e
     return _serialize_camera_trajectory(data)

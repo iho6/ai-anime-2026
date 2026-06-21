@@ -42,7 +42,9 @@ import {
   apiSequenceFolderDuplicate,
   apiSequenceFolderRename,
   type SequenceManifest,
+  API_BASE_URL,
 } from "../../../../lib/api";
+import { fetchVideoExport, sanitizeDownloadBaseName } from "../../../../lib/downloadVideo";
 import { SequenceEditor } from "../dataset/SequenceEditor";
 import { SequencePreviewLightbox } from "../dataset/SequencePreviewLightbox";
 import { addImageToSequenceGallery } from "../dataset/datasetSequenceDrop";
@@ -312,6 +314,7 @@ export default function CreatePage() {
     y: number;
     items: ContextMenuItem[];
   }>({ open: false, x: 0, y: 0, items: [] });
+  const [sequenceVideoExportBusy, setSequenceVideoExportBusy] = useState<string | null>(null);
 
   const [lightbox, setLightbox] = useState<{
     paths: string[];
@@ -1412,6 +1415,21 @@ export default function CreatePage() {
     }
   }
 
+  async function downloadSequenceVideo(name: string) {
+    setSequenceVideoExportBusy(name);
+    try {
+      const safe = sanitizeDownloadBaseName(name) || "sequence";
+      await fetchVideoExport(
+        `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/sequence/${encodeURIComponent(name)}/export_timeline_mp4`,
+        `${safe}_timeline`
+      );
+    } catch (e) {
+      showError({ message: "Download as Video failed.", error: e });
+    } finally {
+      setSequenceVideoExportBusy(null);
+    }
+  }
+
   async function openSequencePreview(name: string) {
     try {
       const m = await apiSequenceGet(charKey, name);
@@ -2273,6 +2291,15 @@ export default function CreatePage() {
                       x: e.clientX,
                       y: e.clientY,
                       items: [
+                        {
+                          key: "downloadVideo",
+                          label:
+                            sequenceVideoExportBusy === seq.name
+                              ? "Exporting…"
+                              : "Download as Video",
+                          disabled: sequenceVideoExportBusy != null,
+                          onSelect: () => void downloadSequenceVideo(seq.name),
+                        },
                         { key: "rename", label: "Rename", onSelect: () => void renameSequence(seq.name) },
                         { key: "duplicate", label: "Duplicate Sequence", onSelect: () => void duplicateSequence(seq.name) },
                         { key: "delete", label: "Delete", onSelect: () => void deleteSequence(seq.name) },

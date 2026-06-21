@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 from queue import Queue
@@ -843,6 +844,52 @@ def detail_expression_angle_gallery_items(
 
 class GalleryDownloadZipBody(BaseModel):
     relPaths: list[str]
+
+
+class ExportFramesVideoBody(BaseModel):
+    relPaths: list[str]
+    fps: float
+    filenameBase: str | None = None
+
+
+@app.post("/export/frames_video")
+def export_frames_video(body: ExportFramesVideoBody) -> FileResponse:
+    """Linear slideshow from ordered storage relPaths; auto WebM when any frame has alpha."""
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp_path = tmp.name
+    tmp.close()
+    try:
+        result = logic.write_frames_video_from_rel_paths(
+            body.relPaths, body.fps, tmp_path
+        )
+    except ValueError as ex:
+        if os.path.isfile(tmp_path):
+            os.unlink(tmp_path)
+        raise HTTPException(status_code=400, detail=str(ex)) from ex
+    except RuntimeError as ex:
+        if os.path.isfile(tmp_path):
+            os.unlink(tmp_path)
+        raise HTTPException(
+            status_code=502, detail={"error": str(ex), "stage": "export_frames_video"}
+        ) from ex
+
+    base = (body.filenameBase or "frames").strip()
+    safe = logic.sanitize_for_folder(base) or "frames"
+    filename = f"{safe}.{result['ext']}"
+    out_path = result["absPath"]
+
+    def _unlink(path: str) -> None:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+    return FileResponse(
+        out_path,
+        media_type=result["mediaType"],
+        filename=filename,
+        background=BackgroundTask(_unlink, out_path),
+    )
 
 
 @app.post("/detail/{char_key}/gallery/download_zip")

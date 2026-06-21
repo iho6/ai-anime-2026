@@ -4,11 +4,6 @@ import type { CameraKeyframe } from "../../lib/api";
 const CENTER_Y_DEFAULT = 0.9;
 export const DEFAULT_BLEND_EASE = 100;
 
-function smoothstep(t: number): number {
-  const x = Math.max(0, Math.min(1, t));
-  return x * x * (3 - 2 * x);
-}
-
 export type CameraWorldPose = {
   position: [number, number, number];
   target: [number, number, number];
@@ -39,6 +34,80 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+function lerp3(
+  a: [number, number, number],
+  b: [number, number, number],
+  t: number,
+): [number, number, number] {
+  return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+}
+
+/** Catmull–Rom spline on segment P1→P2 with neighbors P0, P3; t ∈ [0,1]. */
+function catmullRom(
+  p0: [number, number, number],
+  p1: [number, number, number],
+  p2: [number, number, number],
+  p3: [number, number, number],
+  t: number,
+): [number, number, number] {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return [
+    0.5 *
+      (2 * p1[0] +
+        (-p0[0] + p2[0]) * t +
+        (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+        (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3),
+    0.5 *
+      (2 * p1[1] +
+        (-p0[1] + p2[1]) * t +
+        (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+        (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3),
+    0.5 *
+      (2 * p1[2] +
+        (-p0[2] + p2[2]) * t +
+        (2 * p0[2] - 5 * p1[2] + 4 * p2[2] - p3[2]) * t2 +
+        (-p0[2] + 3 * p1[2] - 3 * p2[2] + p3[2]) * t3),
+  ];
+}
+
+function phantomBefore(
+  curr: CameraWorldPose,
+  next: CameraWorldPose,
+): CameraWorldPose {
+  return {
+    position: lerp3(next.position, curr.position, 2),
+    target: lerp3(next.target, curr.target, 2),
+  };
+}
+
+function phantomAfter(curr: CameraWorldPose, prev: CameraWorldPose): CameraWorldPose {
+  return {
+    position: lerp3(prev.position, curr.position, 2),
+    target: lerp3(prev.target, curr.target, 2),
+  };
+}
+
+function segmentCatmullPose(
+  pa: CameraWorldPose,
+  pb: CameraWorldPose,
+  pPrev: CameraWorldPose,
+  pNext: CameraWorldPose,
+  t: number,
+): CameraWorldPose {
+  return {
+    position: catmullRom(pPrev.position, pa.position, pb.position, pNext.position, t),
+    target: catmullRom(pPrev.target, pa.target, pb.target, pNext.target, t),
+  };
+}
+
+function blendPoses(a: CameraWorldPose, b: CameraWorldPose, ease: number): CameraWorldPose {
+  return {
+    position: lerp3(a.position, b.position, ease),
+    target: lerp3(a.target, b.target, ease),
+  };
+}
+
 function kfSlide(k: CameraKeyframe): { slideX: number; slideY: number } {
   return {
     slideX: Number.isFinite(k.slideX) ? k.slideX! : 0,
@@ -56,13 +125,6 @@ function kfBlendEase(k: CameraKeyframe): number {
   const e = k.blendEase;
   if (e == null || !Number.isFinite(e)) return DEFAULT_BLEND_EASE;
   return Math.max(0, Math.min(100, Math.round(e)));
-}
-
-function easedT(tLin: number, easePct: number): number {
-  const e = easePct / 100;
-  if (e <= 0) return tLin;
-  const s = smoothstep(tLin);
-  return tLin + e * (s - tLin);
 }
 
 function vec3FromPose(
@@ -171,20 +233,24 @@ export function interpolateWorldPoseAtFrame(
         return keyframeWorldPose(b, centerY);
       }
       const tLin = linearT(frame, blendStart, b.frameIndex);
-      const t = easedT(tLin, kfBlendEase(a));
+      const ease = kfBlendEase(a) / 100;
       const pb = keyframeWorldPose(b, centerY);
-      return {
-        position: [
-          lerp(pa.position[0], pb.position[0], t),
-          lerp(pa.position[1], pb.position[1], t),
-          lerp(pa.position[2], pb.position[2], t),
-        ],
-        target: [
-          lerp(pa.target[0], pb.target[0], t),
-          lerp(pa.target[1], pb.target[1], t),
-          lerp(pa.target[2], pb.target[2], t),
-        ],
+
+      const pPrev =
+        i > 0
+          ? keyframeWorldPose(sorted[i - 1], centerY)
+          : phantomBefore(pa, pb);
+      const pNext =
+        i + 2 < sorted.length
+          ? keyframeWorldPose(sorted[i + 2], centerY)
+          : phantomAfter(pb, pa);
+
+      const linearPose: CameraWorldPose = {
+        position: lerp3(pa.position, pb.position, tLin),
+        target: lerp3(pa.target, pb.target, tLin),
       };
+      const crPose = segmentCatmullPose(pa, pb, pPrev, pNext, tLin);
+      return blendPoses(linearPose, crPose, ease);
     }
   }
   return null;

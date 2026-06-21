@@ -422,6 +422,7 @@ export function TrajectoryEditor(props: Props) {
     <>
       {/* Motion toolbar */}
       <div
+        data-trajectory-editor
         style={{
           position: "absolute",
           top: 8,
@@ -529,6 +530,7 @@ export function TrajectoryEditor(props: Props) {
       {/* SVG overlay — above all clip divs (which use zIndex 1–N) */}
       <svg
         ref={svgRef}
+        data-trajectory-editor
         viewBox={`0 0 ${frameW || 1} ${frameH || 1}`}
         preserveAspectRatio="none"
         style={{

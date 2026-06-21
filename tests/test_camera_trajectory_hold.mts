@@ -48,11 +48,25 @@ assert.ok(
 );
 
 const keyframesSmooth = [kf(0, 0, 0, 100), kf(100, 90, 0, 100)];
-const poseMidSmooth = interpolateWorldPoseAtFrame(25, keyframesSmooth, centerY)!;
-const poseMidLinearEase0 = interpolateWorldPoseAtFrame(25, keyframesLinear, centerY)!;
+const poseEndSmooth = interpolateWorldPoseAtFrame(100, keyframesSmooth, centerY)!;
+const poseB = keyframeWorldPose(b, centerY);
+assert.ok(poseDist(poseEndSmooth, poseB) < 1e-6, "ease=100 should hit endpoint keyframe exactly");
+
+// Interior keyframe: motion continues through the knot (no smoothstep pause).
+const k0 = kf(0, 0, 0, 100);
+const kMid = kf(50, 45, 0, 100);
+const kEnd = kf(100, 90, 0, 100);
+const keyframesThree = [k0, kMid, kEnd];
+const poseMidExact = keyframeWorldPose(kMid, centerY);
+const poseBeforeMid = interpolateWorldPoseAtFrame(49, keyframesThree, centerY)!;
+const poseAfterMid = interpolateWorldPoseAtFrame(51, keyframesThree, centerY)!;
 assert.ok(
-  poseDist(poseMidSmooth, pose0) < poseDist(poseMidLinearEase0, pose0),
-  "default ease=100 should lag behind linear at mid-segment",
+  poseDist(poseBeforeMid, poseMidExact) > 0.001,
+  "ease=100 should move through interior keyframe (frame before)",
+);
+assert.ok(
+  poseDist(poseAfterMid, poseMidExact) > 0.001,
+  "ease=100 should move through interior keyframe (frame after)",
 );
 
 const held = kf(0, 0, 10, 100);

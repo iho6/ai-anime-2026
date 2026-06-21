@@ -344,11 +344,11 @@ def sequence_export_timeline_mp4(char_key: str, sequence_name: str) -> FileRespo
     name = sequence_name.strip()
     if not name:
         raise HTTPException(400, "Sequence name is required.")
-    tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+    tmp = tempfile.NamedTemporaryFile(delete=False)
     tmp_path = tmp.name
     tmp.close()
     try:
-        logic.write_sequence_timeline_slideshow_mp4(char_key, name, tmp_path)
+        result = logic.write_sequence_timeline_slideshow_mp4(char_key, name, tmp_path)
     except ValueError as ex:
         if os.path.isfile(tmp_path):
             os.unlink(tmp_path)
@@ -376,7 +376,8 @@ def sequence_export_timeline_mp4(char_key: str, sequence_name: str) -> FileRespo
         ) from ex
 
     safe = logic.sanitize_for_folder(name)
-    filename = f"{safe}_timeline.mp4"
+    filename = f"{safe}_timeline.{result['ext']}"
+    out_path = result["absPath"]
 
     def _unlink(path: str) -> None:
         try:
@@ -385,10 +386,10 @@ def sequence_export_timeline_mp4(char_key: str, sequence_name: str) -> FileRespo
             pass
 
     return FileResponse(
-        tmp_path,
-        media_type="video/mp4",
+        out_path,
+        media_type=result["mediaType"],
         filename=filename,
-        background=BackgroundTask(_unlink, tmp_path),
+        background=BackgroundTask(_unlink, out_path),
     )
 
 
@@ -398,18 +399,18 @@ def sequence_export_gallery_frame_set_mp4(
     sequence_name: str,
     gallery_id: str = Query(..., min_length=1),
 ) -> FileResponse:
-    """Linear MP4 for one gallery item's frame sequence strip (24 fps)."""
+    """Linear video for one gallery item's frame sequence strip (24 fps)."""
     name = sequence_name.strip()
     if not name:
         raise HTTPException(400, "Sequence name is required.")
     gid = (gallery_id or "").strip()
     if not gid:
         raise HTTPException(400, "gallery_id is required.")
-    tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+    tmp = tempfile.NamedTemporaryFile(delete=False)
     tmp_path = tmp.name
     tmp.close()
     try:
-        logic.write_gallery_frame_sequence_set_mp4(char_key, name, gid, tmp_path)
+        result = logic.write_gallery_frame_sequence_set_mp4(char_key, name, gid, tmp_path)
     except ValueError as ex:
         if os.path.isfile(tmp_path):
             os.unlink(tmp_path)
@@ -441,7 +442,8 @@ def sequence_export_gallery_frame_set_mp4(
 
     safe = logic.sanitize_for_folder(name)
     safe_gid = logic.sanitize_for_folder(gid) or "set"
-    filename = f"{safe}_{safe_gid}_set.mp4"
+    filename = f"{safe}_{safe_gid}_set.{result['ext']}"
+    out_path = result["absPath"]
 
     def _unlink(path: str) -> None:
         try:
@@ -450,10 +452,10 @@ def sequence_export_gallery_frame_set_mp4(
             pass
 
     return FileResponse(
-        tmp_path,
-        media_type="video/mp4",
+        out_path,
+        media_type=result["mediaType"],
         filename=filename,
-        background=BackgroundTask(_unlink, tmp_path),
+        background=BackgroundTask(_unlink, out_path),
     )
 
 

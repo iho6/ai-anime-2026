@@ -57,7 +57,7 @@ function isNextProxyPlainInternalError(status: number, snippet: string): boolean
   return status === 500 && /^internal server error$/i.test(snippet.trim());
 }
 
-function formatFailedResponseError(status: number, snippet: string): string {
+export function formatFailedResponseError(status: number, snippet: string): string {
   const base = `API error ${status}${snippet ? `: ${snippet}` : ""}`.trim();
   if (isNextProxyPlainInternalError(status, snippet)) {
     return (
@@ -1258,7 +1258,7 @@ export type CameraKeyframe = {
   lookAtTarget?: [number, number, number];
   /** Animation frames to hold this pose before blending to the next keyframe. */
   holdFrames?: number;
-  /** Glide ease 0–100 (linear → smoothstep). Default 100 when missing. */
+  /** Glide ease 0–100: 0 = straight segments, 100 = smooth Catmull–Rom path (linear time). */
   blendEase?: number;
 };
 
@@ -1545,6 +1545,22 @@ export async function apiMotionRefCameraTrajectorySave(
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(keyframe),
+      credentials: "omit",
+    }
+  );
+  return readJson<CameraTrajectory>(res);
+}
+
+export async function apiMotionRefCameraTrajectoryReplace(
+  motionKey: string,
+  keyframes: CameraKeyframe[]
+): Promise<CameraTrajectory> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/camera_trajectory`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keyframes }),
       credentials: "omit",
     }
   );

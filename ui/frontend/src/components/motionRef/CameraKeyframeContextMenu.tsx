@@ -131,6 +131,16 @@ export function CameraKeyframeContextMenu(props: Props) {
         onChange={setLocalEase}
         onCommit={commitIfChanged}
       />
+      <div
+        style={{
+          padding: "0 14px 8px",
+          fontSize: 10,
+          color: "rgba(255,255,255,0.45)",
+          borderBottom: "1px solid rgba(255,255,255,0.12)",
+        }}
+      >
+        0 = straight path · 100 = smooth curve (speed follows frame spacing)
+      </div>
       <button
         type="button"
         onClick={() => onDelete()}

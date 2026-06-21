@@ -265,7 +265,7 @@ export function RemoveBgVideoModal(props: {
               recycleMask={recycleMask}
               onOutputFps24Change={setOutputFps24}
               onRecycleMaskChange={setRecycleMask}
-              hint="Default: subsample to 12 fps, RMBG each kept frame, output at 12 fps."
+              hint="Default: RMBG at ~12 fps keyframes, recycle alpha between frames, output at source fps (preserves duration)."
             />
           ) : (
             <FpsOptions
@@ -274,7 +274,7 @@ export function RemoveBgVideoModal(props: {
               recycleMask={recycleMask}
               onOutputFps24Change={setOutputFps24}
               onRecycleMaskChange={setRecycleMask}
-              hint="Default: 12 fps anime segmentation. Best for illustrated characters."
+              hint="Default: segment at ~12 fps keyframes, recycle alpha between frames, output at source fps (preserves duration). Best for illustrated characters."
             />
           )}
 

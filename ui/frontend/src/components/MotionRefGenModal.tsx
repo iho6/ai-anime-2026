@@ -22,11 +22,13 @@ import {
   apiMotionRefShotFolderDelete,
   apiMotionRefCameraTrajectoryGet,
   apiMotionRefCameraTrajectorySave,
+  apiMotionRefCameraTrajectoryReplace,
   apiMotionRefCameraTrajectoryDelete,
   apiMotionRefCameraKeyframePatch,
   apiMotionRefPlaybackRangeSave,
   apiMotionRefV2PoseSeqStart,
   apiMotionRefV2PoseSeqFrame,
+  apiUploadStaging,
   MotionRefManifest,
   MotionRefListItem,
   MotionRefSegment,
@@ -62,10 +64,23 @@ import {
   MOTION_REF_ACCENT_BTN_BG,
 } from "./motionRef/theme";
 import { interpolateWorldPoseAtFrame, DEFAULT_BLEND_EASE } from "./motionRef/cameraTrajectory";
+import { ExportFpsDialog } from "./ExportFpsDialog";
+import {
+  apiExportFramesVideo,
+  dataUrlToStagingFile,
+  sanitizeDownloadBaseName,
+} from "../lib/downloadVideo";
+import { isEditableTarget } from "../lib/nativeClipboardShortcuts";
 
 const DEFAULT_SEGMENTS: MotionRefSegment[] = [
   { text: "A person is ", duration: 3.0 },
 ];
+
+const TRAJECTORY_UNDO_CAP = 50;
+
+function cloneKeyframes(kfs: CameraKeyframe[]): CameraKeyframe[] {
+  return kfs.map((k) => ({ ...k }));
+}
 
 export function MotionRefGenModal(props: {
   open: boolean;
@@ -141,6 +156,10 @@ export function MotionRefGenModal(props: {
     y: number;
   } | null>(null);
   const [cameraKeyframes, setCameraKeyframes] = useState<CameraKeyframe[]>([]);
+  const cameraKeyframesRef = useRef(cameraKeyframes);
+  cameraKeyframesRef.current = cameraKeyframes;
+  const trajectoryUndoRef = useRef<CameraKeyframe[][]>([]);
+  const trajectoryRedoRef = useRef<CameraKeyframe[][]>([]);
   const [playbackStart, setPlaybackStart] = useState(0);
   const [playbackEnd, setPlaybackEnd] = useState(0);
   const playbackSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -172,9 +191,16 @@ export function MotionRefGenModal(props: {
     sampleFps: V2PoseSeqSampleFps;
     folderName: string;
   } | null>(null);
+  const [fpsExportPending, setFpsExportPending] = useState<{
+    motionKey: string;
+    item: MotionRefListItem;
+    label: string;
+  } | null>(null);
 
   // ── Playback ───────────────────────────────────────────────────────────────
   const [frameIndex, setFrameIndex] = useState(0);
+  const frameIndexRef = useRef(frameIndex);
+  frameIndexRef.current = frameIndex;
   const [playing, setPlaying] = useState(false);
   const rafRef = useRef<number | null>(null);
   const anchorRef = useRef<{ wall: number; head: number; fps: number } | null>(null);
@@ -239,6 +265,57 @@ export function MotionRefGenModal(props: {
     const cam = skeletonRef.current?.getCameraState();
     if (cam) setCameraState(cam);
   }
+
+  const clearTrajectoryHistory = useCallback(() => {
+    trajectoryUndoRef.current = [];
+    trajectoryRedoRef.current = [];
+  }, []);
+
+  const commitTrajectory = useCallback(() => {
+    trajectoryUndoRef.current.push(cloneKeyframes(cameraKeyframesRef.current));
+    if (trajectoryUndoRef.current.length > TRAJECTORY_UNDO_CAP) {
+      trajectoryUndoRef.current.shift();
+    }
+    trajectoryRedoRef.current = [];
+  }, []);
+
+  const applyTrajectorySnapshot = useCallback(
+    async (next: CameraKeyframe[]) => {
+      if (!manifest?.motionKey) return;
+      const prev = cloneKeyframes(cameraKeyframesRef.current);
+      setCameraKeyframes(next);
+      try {
+        const data = await apiMotionRefCameraTrajectoryReplace(manifest.motionKey, next);
+        const kfs = data.keyframes ?? [];
+        setCameraKeyframes(kfs);
+        applyTrajectoryAtFrame(frameIndexRef.current, kfs, { forCapture: false });
+      } catch {
+        setCameraKeyframes(prev);
+        showError({ message: "Could not restore camera trajectory." });
+      }
+    },
+    [manifest?.motionKey, showError]
+  );
+
+  const undoTrajectory = useCallback(async () => {
+    const snap = trajectoryUndoRef.current.pop();
+    if (!snap || !manifest?.motionKey) return;
+    trajectoryRedoRef.current.push(cloneKeyframes(cameraKeyframesRef.current));
+    if (trajectoryRedoRef.current.length > TRAJECTORY_UNDO_CAP) {
+      trajectoryRedoRef.current.shift();
+    }
+    await applyTrajectorySnapshot(snap);
+  }, [manifest?.motionKey, applyTrajectorySnapshot]);
+
+  const redoTrajectory = useCallback(async () => {
+    const snap = trajectoryRedoRef.current.pop();
+    if (!snap || !manifest?.motionKey) return;
+    trajectoryUndoRef.current.push(cloneKeyframes(cameraKeyframesRef.current));
+    if (trajectoryUndoRef.current.length > TRAJECTORY_UNDO_CAP) {
+      trajectoryUndoRef.current.shift();
+    }
+    await applyTrajectorySnapshot(snap);
+  }, [manifest?.motionKey, applyTrajectorySnapshot]);
 
   function handleResetCamera() {
     skeletonRef.current?.resetCamera();
@@ -381,11 +458,34 @@ export function MotionRefGenModal(props: {
     if (!open) {
       setPlaying(false);
       setFrameIndex(0);
+      clearTrajectoryHistory();
       // Hard-reset the job session so a finished/stale loading window does not
       // reappear when the modal is reopened (the hook instance persists).
       resetSession();
     }
-  }, [open, resetSession]);
+  }, [open, resetSession, clearTrajectoryHistory]);
+
+  useEffect(() => {
+    clearTrajectoryHistory();
+  }, [manifest?.motionKey, clearTrajectoryHistory]);
+
+  useEffect(() => {
+    if (!open || !manifest?.motionKey || busy) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (isEditableTarget(e.target)) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) {
+        e.preventDefault();
+        void undoTrajectory();
+      } else if ((k === "z" && e.shiftKey) || k === "y") {
+        e.preventDefault();
+        void redoTrajectory();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, manifest?.motionKey, busy, undoTrajectory, redoTrajectory]);
 
   // Fetch the SMPL-X mesh stream for a motion, push faces into the viewer, and
   // return the decoded frame buffer (flat float32 vertices for all frames).
@@ -589,6 +689,7 @@ export function MotionRefGenModal(props: {
     setDisplayMode("mesh");
     setFrameIndex(0);
     setCameraKeyframes([]);
+    clearTrajectoryHistory();
     setPlaybackStart(0);
     setPlaybackEnd(0);
     setTrajectoryEnabled(true);
@@ -785,6 +886,7 @@ export function MotionRefGenModal(props: {
     if (!cam) return;
     const pose = skeletonRef.current?.getCameraWorldPose();
     if (!pose) return;
+    commitTrajectory();
     try {
       const data = await apiMotionRefCameraTrajectorySave(manifest.motionKey, {
         frameIndex,
@@ -805,6 +907,7 @@ export function MotionRefGenModal(props: {
   async function deleteCameraKeyframe(keyframeId: string) {
     if (!manifest) return;
     setCameraCtxMenu(null);
+    commitTrajectory();
     try {
       const data = await apiMotionRefCameraTrajectoryDelete(manifest.motionKey, keyframeId);
       setCameraKeyframes(data.keyframes ?? []);
@@ -820,6 +923,7 @@ export function MotionRefGenModal(props: {
     if (!manifest) return;
     const existing = cameraKeyframes.find((k) => k.id === keyframeId);
     if (!existing) return;
+    commitTrajectory();
     try {
       const data = await apiMotionRefCameraKeyframePatch(
         manifest.motionKey,
@@ -1032,7 +1136,7 @@ export function MotionRefGenModal(props: {
     start: number,
     end: number,
     sourceFps: number,
-    sampleFps: V2PoseSeqSampleFps
+    sampleFps: V2PoseSeqSampleFps | number
   ): number[] {
     const out: number[] = [];
     if (end < start) return out;
@@ -1040,7 +1144,8 @@ export function MotionRefGenModal(props: {
       for (let f = start; f <= end; f++) out.push(f);
       return out;
     }
-    const step = Math.max(1, Math.round(sourceFps / sampleFps));
+    const targetFps = typeof sampleFps === "number" ? sampleFps : sampleFps;
+    const step = Math.max(1, Math.round(sourceFps / targetFps));
     for (let f = start; f <= end; f += step) out.push(f);
     return out;
   }
@@ -1049,6 +1154,162 @@ export function MotionRefGenModal(props: {
     await new Promise<void>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     });
+  }
+
+  async function captureMotionViewerFrames(
+    motionKey: string,
+    item: MotionRefListItem,
+    sampleFps: V2PoseSeqSampleFps | number,
+    opts: {
+      mode: "video" | "v2pose";
+      pushLog: (msg: string) => void;
+      setRunningStatus: (msg: string) => void;
+    }
+  ): Promise<
+    | { mode: "video"; dataUrls: string[] }
+    | {
+        mode: "v2pose";
+        captures: V2PoseSeqFrameCapture[];
+        skippedFrames: number[];
+        clippedFrames: number[];
+      }
+  > {
+    let start = playbackStart;
+    let end = playbackEnd;
+    let fps = manifest?.fps ?? item.fps ?? 30;
+    let motionFrameCount = totalFrames;
+    let captureKeyframes = cameraKeyframes;
+
+    if (manifest?.motionKey !== motionKey) {
+      opts.pushLog(`Loading ${motionKey}…`);
+      const loaded = await loadMotion(item, { quiet: true });
+      if (!loaded) throw new Error("Could not load motion.");
+      start = loaded.playbackStart;
+      end = loaded.playbackEnd;
+      fps = loaded.fps;
+      motionFrameCount = loaded.frameCount;
+      captureKeyframes = loaded.keyframes;
+    }
+
+    end = Math.min(end, Math.max(0, motionFrameCount - 1));
+    const frames = computeV2PoseFrameList(start, end, fps, sampleFps);
+    if (!frames.length) {
+      throw new Error("Trim range is empty — adjust in/out handles.");
+    }
+    const trajectoryCapture =
+      trajectoryEnabledRef.current && captureKeyframes.length > 0;
+    opts.pushLog(
+      `Capturing ${frames.length} frames (trim f${start}–f${end}, ${String(sampleFps)} fps` +
+        `${trajectoryCapture ? ", trajectory camera" : ", fixed camera"})…`
+    );
+    setPlaying(false);
+    await waitViewerFrame();
+
+    if (opts.mode === "video") {
+      const dataUrls: string[] = [];
+      for (let i = 0; i < frames.length; i++) {
+        const f = frames[i];
+        opts.setRunningStatus(`Capturing frame ${i + 1}/${frames.length}…`);
+        setFrameIndex(f);
+        await waitViewerFrame();
+        applyTrajectoryAtFrame(f, captureKeyframes, { forCapture: true });
+        await waitViewerFrame();
+        const dataUrl = skeletonRef.current?.captureFrame();
+        if (!dataUrl) throw new Error(`Capture failed at frame ${f}.`);
+        dataUrls.push(dataUrl);
+        opts.pushLog(`Captured f${f} (${i + 1}/${frames.length})`);
+      }
+      return { mode: "video", dataUrls };
+    }
+
+    const captures: V2PoseSeqFrameCapture[] = [];
+    const skippedFrames: number[] = [];
+    const clippedFrames: number[] = [];
+    for (let i = 0; i < frames.length; i++) {
+      const f = frames[i];
+      opts.setRunningStatus(`Capturing frame ${i + 1}/${frames.length}…`);
+      setFrameIndex(f);
+      await waitViewerFrame();
+      applyTrajectoryAtFrame(f, captureKeyframes, { forCapture: true });
+      await waitViewerFrame();
+      const dataUrl = skeletonRef.current?.captureFrame();
+      if (!dataUrl) throw new Error(`Capture failed at frame ${f}.`);
+      const screenBbox = skeletonRef.current?.getFigureScreenBbox();
+      if (!screenBbox) {
+        skippedFrames.push(f);
+        opts.pushLog(`Skipped f${f}: figure out of frame.`);
+        continue;
+      }
+      const edgeClipped =
+        screenBbox.x <= 0 ||
+        screenBbox.y <= 0 ||
+        screenBbox.x + screenBbox.width >= screenBbox.imageWidth ||
+        screenBbox.y + screenBbox.height >= screenBbox.imageHeight;
+      if (edgeClipped) clippedFrames.push(f);
+      const cam = skeletonRef.current?.getCameraState() ?? cameraState;
+      captures.push({
+        frameIndex: f,
+        pngBase64: dataUrl,
+        azimuth: cam.azimuth,
+        elevation: cam.elevation,
+        cropBox: {
+          x: screenBbox.x,
+          y: screenBbox.y,
+          width: screenBbox.width,
+          height: screenBbox.height,
+        },
+        imageWidth: screenBbox.imageWidth,
+        imageHeight: screenBbox.imageHeight,
+      });
+      opts.pushLog(`Captured f${f} (${i + 1}/${frames.length})`);
+    }
+    return { mode: "v2pose", captures, skippedFrames, clippedFrames };
+  }
+
+  async function runMotionVideoExport(
+    motionKey: string,
+    item: MotionRefListItem,
+    exportFps: number,
+    label: string
+  ) {
+    setFpsExportPending(null);
+    beginSession({
+      title: "Download as Video",
+      clearLog: true,
+      runningStatus: "Capturing frames…",
+    });
+    await Promise.resolve();
+    try {
+      const captured = await captureMotionViewerFrames(motionKey, item, exportFps, {
+        mode: "video",
+        pushLog,
+        setRunningStatus,
+      });
+      if (captured.mode !== "video" || !captured.dataUrls.length) {
+        throw new Error("No frames captured.");
+      }
+
+      pushLog(`Uploading ${captured.dataUrls.length} frames…`);
+      const relPaths: string[] = [];
+      for (let i = 0; i < captured.dataUrls.length; i++) {
+        setRunningStatus(`Uploading frame ${i + 1}/${captured.dataUrls.length}…`);
+        const file = await dataUrlToStagingFile(captured.dataUrls[i], i);
+        const { relPath } = await apiUploadStaging({ charKey, file });
+        relPaths.push(relPath);
+      }
+
+      pushLog("Encoding video…");
+      setRunningStatus("Encoding video…");
+      await apiExportFramesVideo({
+        relPaths,
+        fps: exportFps,
+        filenameBase: sanitizeDownloadBaseName(label || motionKey),
+      });
+      pushLog("Download started.");
+      endSession();
+    } catch (e) {
+      failSession(e, "Download as Video failed.");
+    }
   }
 
   async function runV2PoseSeq(
@@ -1065,95 +1326,31 @@ export function MotionRefGenModal(props: {
     });
     await Promise.resolve();
     try {
-      let start = playbackStart;
-      let end = playbackEnd;
-      let fps = manifest?.fps ?? item.fps ?? 30;
-      let motionFrameCount = totalFrames;
-
-      let captureKeyframes = cameraKeyframes;
-
-      if (manifest?.motionKey !== motionKey) {
-        pushLog(`Loading ${motionKey}…`);
-        const loaded = await loadMotion(item, { quiet: true });
-        if (!loaded) throw new Error("Could not load motion.");
-        start = loaded.playbackStart;
-        end = loaded.playbackEnd;
-        fps = loaded.fps;
-        motionFrameCount = loaded.frameCount;
-        captureKeyframes = loaded.keyframes;
+      const captured = await captureMotionViewerFrames(motionKey, item, sampleFps, {
+        mode: "v2pose",
+        pushLog,
+        setRunningStatus,
+      });
+      if (captured.mode !== "v2pose") {
+        throw new Error("Unexpected capture mode.");
       }
-
-      end = Math.min(end, Math.max(0, motionFrameCount - 1));
-      const frames = computeV2PoseFrameList(start, end, fps, sampleFps);
-      if (!frames.length) {
-        throw new Error("Trim range is empty — adjust in/out handles.");
-      }
-      const trajectoryCapture =
-        trajectoryEnabledRef.current && captureKeyframes.length > 0;
-      pushLog(
-        `Capturing ${frames.length} frames (trim f${start}–f${end}, ${String(sampleFps)} fps` +
-          `${trajectoryCapture ? ", trajectory camera" : ", fixed camera"})…`,
-      );
-      setPlaying(false);
-      await waitViewerFrame();
-
-      const captures: V2PoseSeqFrameCapture[] = [];
-      const skippedFrames: number[] = [];
-      const clippedFrames: number[] = [];
-      for (let i = 0; i < frames.length; i++) {
-        const f = frames[i];
-        setRunningStatus(`Capturing frame ${i + 1}/${frames.length}…`);
-        setFrameIndex(f);
-        await waitViewerFrame();
-        applyTrajectoryAtFrame(f, captureKeyframes, { forCapture: true });
-        await waitViewerFrame();
-        const dataUrl = skeletonRef.current?.captureFrame();
-        if (!dataUrl) throw new Error(`Capture failed at frame ${f}.`);
-        const screenBbox = skeletonRef.current?.getFigureScreenBbox();
-        if (!screenBbox) {
-          skippedFrames.push(f);
-          pushLog(`Skipped f${f}: figure out of frame.`);
-          continue;
-        }
-        const edgeClipped =
-          screenBbox.x <= 0 ||
-          screenBbox.y <= 0 ||
-          screenBbox.x + screenBbox.width >= screenBbox.imageWidth ||
-          screenBbox.y + screenBbox.height >= screenBbox.imageHeight;
-        if (edgeClipped) clippedFrames.push(f);
-        const cam = skeletonRef.current?.getCameraState() ?? cameraState;
-        captures.push({
-          frameIndex: f,
-          pngBase64: dataUrl,
-          azimuth: cam.azimuth,
-          elevation: cam.elevation,
-          cropBox: {
-            x: screenBbox.x,
-            y: screenBbox.y,
-            width: screenBbox.width,
-            height: screenBbox.height,
-          },
-          imageWidth: screenBbox.imageWidth,
-          imageHeight: screenBbox.imageHeight,
-        });
-        pushLog(`Captured f${f} (${i + 1}/${frames.length})`);
-      }
+      const { captures, skippedFrames, clippedFrames } = captured;
 
       if (skippedFrames.length) {
         pushLog(
           `Skipped ${skippedFrames.length} frame(s) with the figure out of frame. ` +
-            `Adjust the camera/zoom (or enable In place) so the output frame stays on the figure.`,
+            `Adjust the camera/zoom (or enable In place) so the output frame stays on the figure.`
         );
       }
       if (clippedFrames.length) {
         pushLog(
           `Warning: ${clippedFrames.length} frame(s) had the SDPose crop touching the output frame edge — ` +
-            `the figure may be cut off. Zoom out or recenter for best keypoints.`,
+            `the figure may be cut off. Zoom out or recenter for best keypoints.`
         );
       }
       if (!captures.length) {
         throw new Error(
-          "No frames captured — the figure was out of frame for the whole range. Recenter the camera and try again.",
+          "No frames captured — the figure was out of frame for the whole range. Recenter the camera and try again."
         );
       }
 
@@ -1487,7 +1684,7 @@ export function MotionRefGenModal(props: {
                       e.stopPropagation();
                       setMotionCtxMenu({ motionKey: m.motionKey, x: e.clientX, y: e.clientY });
                     }}
-                    title={`${label} — ${m.frameCount} frames @ ${m.fps} fps\nClick to load · Right-click to delete`}
+                    title={`${label} — ${m.frameCount} frames @ ${m.fps} fps\nClick to load · Right-click for menu`}
                     style={{
                       width: 90,
                       cursor: busy ? "not-allowed" : "pointer",
@@ -1564,6 +1761,25 @@ export function MotionRefGenModal(props: {
             onClick={() => {
               const item = motions.find((m) => m.motionKey === motionCtxMenu.motionKey);
               if (!item) return;
+              const label =
+                item.segments?.[0]?.text?.slice(0, 24) || item.motionKey.slice(0, 20);
+              setMotionCtxMenu(null);
+              setFpsExportPending({
+                motionKey: item.motionKey,
+                item,
+                label,
+              });
+            }}
+            style={ctxMenuBtn}
+          >
+            Download as Video
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              const item = motions.find((m) => m.motionKey === motionCtxMenu.motionKey);
+              if (!item) return;
               const label = item.segments?.[0]?.text?.slice(0, 24) || item.motionKey.slice(0, 20);
               setMotionCtxMenu(null);
               setV2poseDialog({
@@ -1585,6 +1801,24 @@ export function MotionRefGenModal(props: {
             Delete motion
           </button>
         </div>
+      )}
+
+      {fpsExportPending && (
+        <ExportFpsDialog
+          open
+          title="Download as Video"
+          zIndex={10450}
+          defaultFps={Math.round(fpsExportPending.item.fps) || 24}
+          onCancel={() => setFpsExportPending(null)}
+          onConfirm={(fps) => {
+            void runMotionVideoExport(
+              fpsExportPending.motionKey,
+              fpsExportPending.item,
+              fps,
+              fpsExportPending.label
+            );
+          }}
+        />
       )}
 
       {v2poseDialog && (

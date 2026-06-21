@@ -607,12 +607,18 @@ export function TimelinePreviewPlayer(props: {
   }
 
   return (
-    <div style={{ display: "flex", justifyContent: "center" }}>
+    <div style={{ display: "flex", justifyContent: "center", width: "100%" }}>
       <div
         ref={frameRef}
+        data-timeline-preview-frame
         onPointerDownCapture={handleFramePointerDownCapture}
         onPointerDown={(e) => {
-          if (e.target === e.currentTarget) onSelectClip(null, false);
+          const t = e.target as HTMLElement;
+          if (t.closest("[data-preview-clip-hit]")) return;
+          if (t.closest("[data-trajectory-editor]")) return;
+          if (t.closest("[data-geometry-editor]")) return;
+          if (t.closest("[data-text-style-bar]")) return;
+          onSelectClip(null, false);
         }}
         style={{
           position: "relative",
@@ -683,6 +689,7 @@ export function TimelinePreviewPlayer(props: {
           return (
             <div
               key={`hit-${clip.id}`}
+              data-preview-clip-hit
               {...textHandlers}
               onDoubleClick={(e) => {
                 if (!editable) return;
@@ -781,6 +788,7 @@ export function TimelinePreviewPlayer(props: {
             return (
               <div
                 key={`text-edit-${editClip.id}`}
+                data-preview-clip-hit
                 style={{
                   position: "absolute",
                   left: rect.left,
