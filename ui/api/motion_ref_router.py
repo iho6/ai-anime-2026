@@ -625,7 +625,9 @@ async def motion_ref_generate_ws(ws: WebSocket) -> None:
           "segments": [{"text": "...", "duration": 3.0}, ...],
           "numSamples": 1,
           "diffusionSteps": 100,
-          "model": "kimodo-soma-rp"   // optional
+          "numTransitionFrames": 5,        // optional, multi-segment overlap blend
+          "startingPose": [[x,y,z], ...],  // optional, frame-0 full-body constraint
+          "model": "kimodo-soma-rp"        // optional
         }
 
     Streams ``{"type":"log","line":"..."}`` during inference, then:
@@ -650,8 +652,20 @@ async def motion_ref_generate_ws(ws: WebSocket) -> None:
         diffusion_steps = int(msg.get("diffusionSteps") or 100)
         model_name_req = (msg.get("model") or "").strip() or None
 
-        from services.motion_ref_gen_ai_service.serverless import _DEFAULT_MODEL
+        from services.motion_ref_gen_ai_service.serverless import (
+            _DEFAULT_MODEL,
+            _DEFAULT_NUM_TRANSITION_FRAMES,
+        )
         model_name = model_name_req or _DEFAULT_MODEL
+
+        num_transition_frames = int(
+            msg.get("numTransitionFrames") or _DEFAULT_NUM_TRANSITION_FRAMES
+        )
+        starting_pose = msg.get("startingPose") or None
+        if starting_pose is not None and (
+            not isinstance(starting_pose, list) or not starting_pose
+        ):
+            raise ValueError("startingPose must be a non-empty list of [x, y, z] joints.")
 
         motion_key = motion_ref_storage.unique_motion_ref_key(motion_name)
         dest_dir = str(motion_ref_storage.motion_ref_dir(motion_key))
@@ -666,6 +680,8 @@ async def motion_ref_generate_ws(ws: WebSocket) -> None:
                 model_name=model_name,
                 num_samples=num_samples,
                 diffusion_steps=diffusion_steps,
+                num_transition_frames=num_transition_frames,
+                starting_pose=starting_pose,
                 log_cb=log_cb,
             )
             # Persist manifest in storage layer too.

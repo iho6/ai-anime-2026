@@ -33,7 +33,7 @@ import {
   type SequenceManifest,
   type SequencePreviewAspect,
 } from "../../../../lib/api";
-import { fetchVideoExport, sanitizeDownloadBaseName } from "../../../../lib/downloadVideo";
+import { fetchVideoExport, runVideoExportJob, sanitizeDownloadBaseName } from "../../../../lib/downloadVideo";
 import {
   FrameSequenceModal,
   type FrameSequenceStripActions,
@@ -915,19 +915,21 @@ export function SequenceEditor(props: {
     void (async () => {
       if (!manifest) return;
       setTimelineExportBusy(true);
-      try {
-        const safe = sanitizeDownloadBaseName(sequenceName) || "sequence";
-        await fetchVideoExport(
-          `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/sequence/${encodeURIComponent(sequenceName)}/export_timeline_mp4`,
-          `${safe}_timeline`
-        );
-      } catch (e) {
-        onErrorRef.current("Download as Video failed.", e);
-      } finally {
-        setTimelineExportBusy(false);
-      }
+      const safe = sanitizeDownloadBaseName(sequenceName) || "sequence";
+      await runVideoExportJob(jobModal, {
+        runningStatus: "Encoding video…",
+        run: async () => {
+          await fetchVideoExport(
+            `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/sequence/${encodeURIComponent(sequenceName)}/export_timeline_mp4`,
+            `${safe}_timeline`
+          );
+        },
+        failMessage: "Download as Video failed.",
+        onError: (e) => onErrorRef.current("Download as Video failed.", e),
+      });
+      setTimelineExportBusy(false);
     })();
-  }, [charKey, sequenceName, manifest]);
+  }, [charKey, sequenceName, manifest, jobModal]);
 
   const downloadGalleryFrameSetMp4 = useCallback(
     (galleryId: string) => {
@@ -938,22 +940,24 @@ export function SequenceEditor(props: {
           /* best-effort before export */
         }
         setGallerySetDownloadId(galleryId);
-        try {
-          const safe = sanitizeDownloadBaseName(sequenceName) || "sequence";
-          const safeGid = sanitizeDownloadBaseName(galleryId) || "set";
-          const q = new URLSearchParams({ gallery_id: galleryId });
-          await fetchVideoExport(
-            `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/sequence/${encodeURIComponent(sequenceName)}/export_gallery_frame_set_mp4?${q}`,
-            `${safe}_${safeGid}_set`
-          );
-        } catch (e) {
-          onErrorRef.current("Download as Video failed.", e);
-        } finally {
-          setGallerySetDownloadId(null);
-        }
+        const safe = sanitizeDownloadBaseName(sequenceName) || "sequence";
+        const safeGid = sanitizeDownloadBaseName(galleryId) || "set";
+        const q = new URLSearchParams({ gallery_id: galleryId });
+        await runVideoExportJob(jobModal, {
+          runningStatus: "Encoding video…",
+          run: async () => {
+            await fetchVideoExport(
+              `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/sequence/${encodeURIComponent(sequenceName)}/export_gallery_frame_set_mp4?${q}`,
+              `${safe}_${safeGid}_set`
+            );
+          },
+          failMessage: "Download as Video failed.",
+          onError: (e) => onErrorRef.current("Download as Video failed.", e),
+        });
+        setGallerySetDownloadId(null);
       })();
     },
-    [charKey, sequenceName, flushSave]
+    [charKey, sequenceName, flushSave, jobModal]
   );
 
   const setFramesHidden = useCallback(

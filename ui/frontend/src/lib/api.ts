@@ -1344,7 +1344,9 @@ export function runMotionRefGenerateWsJob(params: {
   numSamples?: number;
   diffusionSteps?: number;
   model?: string;
-  /** Optional 77×3 joint positions to constrain the first frame of generation. */
+  /** Overlap frames blended between consecutive multi-segment prompts (Kimodo default 5). */
+  numTransitionFrames?: number;
+  /** Optional joint positions to constrain the first frame of generation. */
   startingPose?: number[][];
   onLogLine: (line: string) => void;
 }): Promise<WsDoneMessage<MotionRefManifest>> {

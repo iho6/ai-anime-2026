@@ -44,7 +44,7 @@ import {
   type SequenceManifest,
   API_BASE_URL,
 } from "../../../../lib/api";
-import { fetchVideoExport, sanitizeDownloadBaseName } from "../../../../lib/downloadVideo";
+import { fetchVideoExport, runVideoExportJob, sanitizeDownloadBaseName } from "../../../../lib/downloadVideo";
 import { SequenceEditor } from "../dataset/SequenceEditor";
 import { SequencePreviewLightbox } from "../dataset/SequencePreviewLightbox";
 import { addImageToSequenceGallery } from "../dataset/datasetSequenceDrop";
@@ -1417,17 +1417,22 @@ export default function CreatePage() {
 
   async function downloadSequenceVideo(name: string) {
     setSequenceVideoExportBusy(name);
-    try {
-      const safe = sanitizeDownloadBaseName(name) || "sequence";
-      await fetchVideoExport(
-        `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/sequence/${encodeURIComponent(name)}/export_timeline_mp4`,
-        `${safe}_timeline`
-      );
-    } catch (e) {
-      showError({ message: "Download as Video failed.", error: e });
-    } finally {
-      setSequenceVideoExportBusy(null);
-    }
+    const safe = sanitizeDownloadBaseName(name) || "sequence";
+    await runVideoExportJob(
+      { begin: beginSession, end: endSession, fail: failSession, log: pushLog },
+      {
+        runningStatus: "Encoding video…",
+        run: async () => {
+          await fetchVideoExport(
+            `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/sequence/${encodeURIComponent(name)}/export_timeline_mp4`,
+            `${safe}_timeline`
+          );
+        },
+        failMessage: "Download as Video failed.",
+        onError: (e) => showError({ message: "Download as Video failed.", error: e }),
+      }
+    );
+    setSequenceVideoExportBusy(null);
   }
 
   async function openSequencePreview(name: string) {
@@ -2500,6 +2505,7 @@ export default function CreatePage() {
             setReferencePickerOpen(false);
             setMotionRefOpen(true);
           }}
+          jobModal={{ begin: beginSession, end: endSession, fail: failSession, log: pushLog }}
         />
       )}
 

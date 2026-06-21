@@ -28,7 +28,7 @@ import { KeypointRefGrid, parseFolderToken, parseVideoToken } from "./KeypointRe
 import { KeypointVideoSequenceModal } from "./KeypointVideoSequenceModal";
 import { SquareButton } from "./SquareButton";
 import { ExportFpsDialog } from "./ExportFpsDialog";
-import { apiExportFramesVideo, sanitizeDownloadBaseName } from "../lib/downloadVideo";
+import { apiExportFramesVideo, runVideoExportJob, sanitizeDownloadBaseName, type VideoExportJob } from "../lib/downloadVideo";
 import {
   collectFolderIdsPostOrder,
   collectFolderLeafIds,
@@ -50,6 +50,7 @@ export function ReferencePicker(props: {
   onPickNew: (file: File) => void;
   onGenerateBase: (promptText: string) => void;
   onOpenMotionRef?: () => void;
+  jobModal?: VideoExportJob;
 }) {
   if (!props.open) return null;
   return (
@@ -61,6 +62,7 @@ export function ReferencePicker(props: {
       onPickNew={props.onPickNew}
       onGenerateBase={props.onGenerateBase}
       onOpenMotionRef={props.onOpenMotionRef}
+      jobModal={props.jobModal}
     />
   );
 }
@@ -73,8 +75,9 @@ function ReferencePickerOpen(props: {
   onPickNew: (file: File) => void;
   onGenerateBase: (promptText: string) => void;
   onOpenMotionRef?: () => void;
+  jobModal?: VideoExportJob;
 }) {
-  const { busy, onCancel, onUseSelected, onPickNew, onGenerateBase, onOpenMotionRef } = props;
+  const { busy, onCancel, onUseSelected, onPickNew, onGenerateBase, onOpenMotionRef, jobModal } = props;
   const { confirmAction, askText, showError } = useAppError();
 
   const [layout, setLayout] = useState<KeypointsLayout>({
@@ -168,20 +171,22 @@ function ReferencePickerOpen(props: {
       }
       void (async () => {
         setVideoExportBusy(true);
-        try {
-          await apiExportFramesVideo({
-            relPaths,
-            fps,
-            filenameBase: sanitizeDownloadBaseName(filenameBase),
-          });
-        } catch (e) {
-          showError({ message: "Download as Video failed.", error: e });
-        } finally {
-          setVideoExportBusy(false);
-        }
+        await runVideoExportJob(jobModal, {
+          runningStatus: "Encoding video…",
+          run: async () => {
+            await apiExportFramesVideo({
+              relPaths,
+              fps,
+              filenameBase: sanitizeDownloadBaseName(filenameBase),
+            });
+          },
+          failMessage: "Download as Video failed.",
+          onError: (e) => showError({ message: "Download as Video failed.", error: e }),
+        });
+        setVideoExportBusy(false);
       })();
     },
-    [showError]
+    [showError, jobModal]
   );
 
   const requestFramesVideoExport = useCallback(

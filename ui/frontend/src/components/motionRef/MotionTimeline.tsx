@@ -5,8 +5,10 @@ import type { MotionRefSegment } from "../../lib/api";
 
 /**
  * Multi-segment motion timeline editor.
- * Each row = one text-prompt + duration that maps directly to KiMoD's
- * multi_prompt texts[] / durations[] API.
+ * Each row = one text-prompt + duration. With more than one row, KiMoD generates
+ * the segments **sequentially**: each segment continues from the end of the
+ * previous one, with a short blended overlap for a smooth transition (KiMoD
+ * multi_prompt path). Rows are not independent clips played back-to-back.
  */
 export function MotionTimeline(props: {
   segments: MotionRefSegment[];
@@ -111,6 +113,23 @@ export function MotionTimeline(props: {
       >
         + Add Motion (Animates a Sequence)
       </button>
+      {segments.length > 1 ? (
+        <div style={hintBox}>
+          Segments generate in order, each continuing from the previous one.
+          For best results:
+          <ul style={hintList}>
+            <li>Start each prompt with “A person…”.</li>
+            <li>
+              Make every prompt self-contained (e.g. “A person lands and lies on
+              the ground”), not relative (“then they stop”).
+            </li>
+            <li>
+              The first ~0.2s of each later segment is spent transitioning, so
+              give big action changes a little extra duration.
+            </li>
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -135,4 +154,19 @@ const addBtn: React.CSSProperties = {
   font: "inherit",
   fontSize: 12,
   textAlign: "left",
+};
+
+const hintBox: React.CSSProperties = {
+  fontSize: 11,
+  lineHeight: 1.5,
+  color: "#9a9a9a",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 4,
+  padding: "8px 10px",
+  background: "rgba(255,255,255,0.03)",
+};
+
+const hintList: React.CSSProperties = {
+  margin: "4px 0 0",
+  paddingLeft: 16,
 };

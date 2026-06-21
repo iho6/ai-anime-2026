@@ -19,7 +19,7 @@ import {
   isShotGridLeaf,
   toggleFolderSelection,
 } from "../../lib/folderSelection";
-import { apiExportFramesVideo, sanitizeDownloadBaseName } from "../../lib/downloadVideo";
+import { apiExportFramesVideo, runVideoExportJob, sanitizeDownloadBaseName, type VideoExportJob } from "../../lib/downloadVideo";
 import { ExportFpsDialog } from "../ExportFpsDialog";
 import { useAppError } from "../ErrorProvider";
 import { MOTION_REF_ACCENT_BTN_BG } from "./theme";
@@ -36,6 +36,7 @@ export function MotionShotGallery(props: {
   onCreateFolder: (parentFolderId: string | null, shotIds: string[]) => void;
   onRenameFolder: (folderId: string, currentName: string) => void;
   onDeleteFolder: (folderId: string) => void;
+  jobModal?: VideoExportJob;
 }) {
   const {
     busy = false,
@@ -49,6 +50,7 @@ export function MotionShotGallery(props: {
     onCreateFolder,
     onRenameFolder,
     onDeleteFolder,
+    jobModal,
   } = props;
 
   const { showError } = useAppError();
@@ -208,20 +210,22 @@ export function MotionShotGallery(props: {
       }
       void (async () => {
         setVideoExportBusy(true);
-        try {
-          await apiExportFramesVideo({
-            relPaths,
-            fps,
-            filenameBase: sanitizeDownloadBaseName(filenameBase),
-          });
-        } catch (e) {
-          showError({ message: "Download as Video failed.", error: e });
-        } finally {
-          setVideoExportBusy(false);
-        }
+        await runVideoExportJob(jobModal, {
+          runningStatus: "Encoding video…",
+          run: async () => {
+            await apiExportFramesVideo({
+              relPaths,
+              fps,
+              filenameBase: sanitizeDownloadBaseName(filenameBase),
+            });
+          },
+          failMessage: "Download as Video failed.",
+          onError: (e) => showError({ message: "Download as Video failed.", error: e }),
+        });
+        setVideoExportBusy(false);
       })();
     },
-    [showError]
+    [showError, jobModal]
   );
 
   const requestFramesVideoExport = useCallback(
@@ -527,6 +531,7 @@ export function MotionShotGallery(props: {
       <ExportFpsDialog
         open={fpsExportPending != null}
         title="Download as Video"
+        zIndex={10450}
         onCancel={() => setFpsExportPending(null)}
         onConfirm={(fps) => {
           const pending = fpsExportPending;

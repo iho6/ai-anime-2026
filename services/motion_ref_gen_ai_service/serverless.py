@@ -177,6 +177,10 @@ _MODEL_CACHE: dict[str, Any] = {}
 _DEFAULT_MODEL = os.environ.get("KIMODO_MODEL", "kimodo-smplx-rp")
 _DEFAULT_SERVE_PORT = 8766
 _DEFAULT_DIFFUSION_STEPS = 100
+# Overlap frames blended between consecutive multi-prompt segments (Kimodo default is 5).
+# Larger values give smoother transitions for dramatic pose changes at the cost of
+# segment time spent transitioning. Override via KIMODO_NUM_TRANSITION_FRAMES.
+_DEFAULT_NUM_TRANSITION_FRAMES = int(os.environ.get("KIMODO_NUM_TRANSITION_FRAMES", "5") or "5")
 
 
 def _load_kimodo_model(model_name: str = _DEFAULT_MODEL) -> Any:
@@ -220,7 +224,57 @@ def _load_kimodo_model(model_name: str = _DEFAULT_MODEL) -> Any:
     model = load_model(model_name, device=device)
     _MODEL_CACHE[model_name] = model
     logger.info("KiMoD model loaded.")
+    _check_kimodo_multiprompt_api(model)
     return model
+
+
+def _log_kimodo_commit() -> None:
+    """Best-effort log of the installed Kimodo git SHA (read-only; never pulls)."""
+    kimodo_dir = _SERVICE_DIR.parents[1] / "kimodo"
+    if not (kimodo_dir / ".git").exists():
+        return
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(kimodo_dir), "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        sha = (proc.stdout or "").strip()
+        if proc.returncode == 0 and sha:
+            logger.info("Kimodo source at commit %s", sha)
+    except Exception:
+        # Version logging is diagnostic only; never block model load on it.
+        pass
+
+
+def _check_kimodo_multiprompt_api(model: Any) -> None:
+    """
+    Verify the installed Kimodo exposes the sequential multi-prompt API.
+
+    Read-only: logs the commit and fails fast with guidance if the API is too old.
+    It never updates Kimodo — updating is opt-in via ``KIMODO_GIT_UPDATE=1`` on Launch.
+    """
+    import inspect
+
+    _log_kimodo_commit()
+
+    has_seq = hasattr(model, "_multiprompt")
+    accepts_transition = False
+    try:
+        sig = inspect.signature(model.__call__)
+        accepts_transition = "num_transition_frames" in sig.parameters
+    except (TypeError, ValueError):
+        # Some callables don't expose a signature; fall back to the _multiprompt check.
+        accepts_transition = has_seq
+
+    if not (has_seq and accepts_transition):
+        raise RuntimeError(
+            "Installed Kimodo does not expose the sequential multi-prompt API "
+            "(missing Kimodo._multiprompt / num_transition_frames). Multi-segment "
+            "motion needs Kimodo >= 2026-04-24. Update by re-running Launch with "
+            "KIMODO_GIT_UPDATE=1 (this re-pulls and reinstalls Kimodo safely)."
+        )
 
 
 # ── Core generation ───────────────────────────────────────────────────────────
@@ -233,14 +287,22 @@ def generate_motion(
     model_name: str = _DEFAULT_MODEL,
     num_samples: int = 1,
     diffusion_steps: int = _DEFAULT_DIFFUSION_STEPS,
+    num_transition_frames: int = _DEFAULT_NUM_TRANSITION_FRAMES,
     starting_pose: list[list[float]] | None = None,  # 77×3 joint positions
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """
     Generate a 3D motion sequence from text prompts using KiMoD.
 
+    With more than one segment, Kimodo's sequential multi-prompt path
+    (``multi_prompt=True``) is used: each segment is generated in order, the last
+    ``num_transition_frames`` of the previous segment seed full-body + end-effector
+    constraints at the start of the next, and the shared overlap is blended for a
+    smooth transition (see Kimodo tech report Sec. 4.4).
+
     If ``starting_pose`` is supplied (77×3 joint positions from the puppet editor),
-    a FullBodyConstraintSet is applied at frame 0 to start generation from that pose.
+    a FullBodyConstraintSet is applied at frame 0 of the first segment to start
+    generation from that pose.
 
     Returns a manifest dict:
         {motion_key, fps, frame_count, joint_count, joints_gz_path, npz_path, segments}
@@ -267,11 +329,18 @@ def generate_motion(
     durations = [float(s.get("duration", 3.0)) for s in segments]
     num_frames_list = [max(1, int(round(d * fps))) for d in durations]
 
-    _log(f"Generating motion: {len(texts)} segment(s), {sum(num_frames_list)} frames @ {fps} fps")
-    for i, (t, nf) in enumerate(zip(texts, num_frames_list)):
-        _log(f"  Segment {i+1}: '{t[:80]}' → {nf} frames ({durations[i]:.1f}s)")
-
     multi_prompt = len(texts) > 1
+    transition = max(1, int(num_transition_frames))
+
+    if multi_prompt:
+        _log(
+            f"Generating motion: {len(texts)} segments generated sequentially, "
+            f"{sum(num_frames_list)} frames @ {fps} fps, transition={transition} frames"
+        )
+    else:
+        _log(f"Generating motion: 1 segment, {sum(num_frames_list)} frames @ {fps} fps")
+    for i, (t, nf) in enumerate(zip(texts, num_frames_list)):
+        _log(f"  Segment {i+1}/{len(texts)}: '{t[:80]}' → {nf} frames ({durations[i]:.1f}s)")
 
     # Build starting-pose constraint if the user specified one.
     constraint_lst: list = []
@@ -283,7 +352,16 @@ def generate_motion(
             _log(f"Warning: could not build starting pose constraint: {exc}. Generating unconstrained.")
             constraint_lst = []
 
-    output: dict = model(
+    # Silence Kimodo's tqdm in the worker subprocess (its stdout is parsed for logs).
+    def _silent_progress(iterable: Any = None, *args: Any, **kwargs: Any) -> Any:
+        return iterable if iterable is not None else iter(())
+
+    # Multi-prompt: mirror the official CLI (kimodo/scripts/generate.py) — pass list
+    # prompts/frames so multi_prompt runs the sequential transition path with
+    # num_samples variations of the whole sequence.
+    # Single-prompt: pass a string + int so ``num_samples`` produces independent
+    # variations (Kimodo overrides num_samples to len(prompts) when prompts is a list).
+    model_kwargs: dict[str, Any] = dict(
         prompts=texts if multi_prompt else texts[0],
         num_frames=num_frames_list if multi_prompt else num_frames_list[0],
         num_denoising_steps=diffusion_steps,
@@ -292,7 +370,12 @@ def generate_motion(
         constraint_lst=constraint_lst,
         return_numpy=True,
         post_processing=True,
+        progress_bar=_silent_progress,
     )
+    if multi_prompt:
+        model_kwargs["num_transition_frames"] = transition
+
+    output: dict = model(**model_kwargs)
 
     # Extract posed_joints: shape [T, J, 3] (or [B, T, J, 3] for num_samples>1)
     posed_joints_raw = output["posed_joints"]
@@ -483,42 +566,64 @@ def reskin_motion(motion_key: str, log_cb: Callable[[str], None] | None = None) 
 
 def _build_fullbody_constraint_at_frame0(
     model: Any,
-    joints_77x3: list[list[float]],
+    joints_in: list[list[float]],
 ) -> Any:
     """
-    Construct a ``FullBodyConstraintSet`` that pins the first frame of generation
-    to the given joint positions.
+    Construct a ``FullBodyConstraintSet`` that pins frame 0 of generation to the
+    given joint positions (from the puppet editor).
 
-    The model's ``neutral_joints`` (rest-pose global rotations) are reused for
-    the rotation component — only the positions are updated from the puppet pose.
-    This avoids needing to invert FK, which would require knowing local rotations.
-    The result is a soft constraint: KiMoD will start from this pose but may
-    slightly deviate to satisfy the physics (foot contacts, etc.).
+    Mirrors ``kimodo/demo/generation.py`` ``compute_model_constraints_lst``:
+    constraints are built against the model's **internal** skeleton
+    (``model.skeleton``), not the unwrapped SOMA 77-joint skeleton. When the model
+    uses the SOMA 30-joint skeleton and the puppet supplies the 77-joint pose, the
+    pose is sliced down with ``get_skel_slice`` so joint indices line up.
+
+    Only positions are available from the puppet, so identity global rotations are
+    used as the rotation component; the model refines orientation while honoring the
+    positional seed. This is a soft constraint at frame 0 of the first segment only;
+    ``_multiprompt`` crops it temporally per segment.
     """
     import torch
     from kimodo.constraints import FullBodyConstraintSet
 
-    skel = model.skeleton
-    # If the model uses SOMA77 wrapped, unwrap to the base skeleton.
-    if hasattr(skel, "somaskel77"):
-        skel = skel.somaskel77
+    try:
+        from kimodo.skeleton import SOMASkeleton30
+    except Exception:  # pragma: no cover - skeleton class may move between versions
+        SOMASkeleton30 = ()  # type: ignore[assignment]
 
-    J = len(joints_77x3)
-    joints_tensor = torch.tensor(joints_77x3, dtype=torch.float32).unsqueeze(0)  # [1, J, 3]
+    skel = model.skeleton  # model's internal skeleton (do NOT unwrap to somaskel77)
+    joints_tensor = torch.tensor(joints_in, dtype=torch.float32)  # [J_in, 3]
+    j_in = int(joints_tensor.shape[0])
+    model_nb = int(getattr(skel, "nbjoints", j_in))
+
+    # SOMA 30-joint model + SOMA 77-joint puppet pose → slice to the model joints.
+    if (
+        isinstance(skel, SOMASkeleton30)
+        and j_in != model_nb
+        and hasattr(skel, "somaskel77")
+    ):
+        skel_slice = skel.get_skel_slice(skel.somaskel77)
+        joints_tensor = joints_tensor[skel_slice]
+
+    j = int(joints_tensor.shape[0])
+    if j != model_nb:
+        raise ValueError(
+            f"Starting pose has {j} joints but model skeleton expects {model_nb}; "
+            "cannot build a full-body constraint for this model."
+        )
+
+    joints_tensor = joints_tensor.unsqueeze(0)  # [1, J, 3]
     frame_indices = torch.tensor([0], dtype=torch.long)
+    # Positions-only seed: identity global rotations, refined by the model.
+    identity_rot = torch.eye(3).reshape(1, 1, 3, 3).expand(1, j, 3, 3).contiguous()
 
-    # Use neutral global rotations as the rotation component.
-    # neutral_joints has shape [J, 3]; we need global rot mats [1, J, 3, 3].
-    # KiMoD supports positions-only constraints when rotations match the neutral pose.
-    neutral_rot = torch.eye(3).unsqueeze(0).unsqueeze(0).expand(1, J, 3, 3)  # identity
-
-    constraint = FullBodyConstraintSet(
-        skeleton=skel,
-        frame_indices=frame_indices,
-        global_joints_positions=joints_tensor,
-        global_joints_rots=neutral_rot,
+    # Positional constructor matches the demo (skeleton, frames, pos, rot).
+    return FullBodyConstraintSet(
+        skel,
+        frame_indices,
+        joints_tensor,
+        identity_rot,
     )
-    return constraint
 
 
 # ── Persistent HTTP worker ────────────────────────────────────────────────────
@@ -566,6 +671,9 @@ def _make_request_handler(model_name: str) -> type:
                 dest_dir = payload.get("dest_dir", "")
                 diffusion_steps = int(payload.get("diffusion_steps") or _DEFAULT_DIFFUSION_STEPS)
                 num_samples = int(payload.get("num_samples") or 1)
+                num_transition_frames = int(
+                    payload.get("num_transition_frames") or _DEFAULT_NUM_TRANSITION_FRAMES
+                )
                 starting_pose = payload.get("starting_pose") or None
                 logs: list[str] = []
                 try:
@@ -575,6 +683,7 @@ def _make_request_handler(model_name: str) -> type:
                         model_name=model_name,
                         num_samples=num_samples,
                         diffusion_steps=diffusion_steps,
+                        num_transition_frames=num_transition_frames,
                         starting_pose=starting_pose,
                         log_cb=lambda m: logs.append(m),
                     )
@@ -735,6 +844,8 @@ def call_generate(
     model_name: str = _DEFAULT_MODEL,
     num_samples: int = 1,
     diffusion_steps: int = _DEFAULT_DIFFUSION_STEPS,
+    num_transition_frames: int = _DEFAULT_NUM_TRANSITION_FRAMES,
+    starting_pose: list[list[float]] | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Call /generate on the persistent worker."""
@@ -749,6 +860,8 @@ def call_generate(
         "dest_dir": dest_dir,
         "num_samples": num_samples,
         "diffusion_steps": diffusion_steps,
+        "num_transition_frames": num_transition_frames,
+        "starting_pose": starting_pose,
     }).encode()
 
     req = urllib.request.Request(

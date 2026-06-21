@@ -3,6 +3,46 @@ import {
   formatFailedResponseError,
   formatFastApiDetailMessage,
 } from "./api";
+import type { BeginSessionOpts } from "../hooks/useJobRunSession";
+
+export type VideoExportJob = {
+  begin: (opts: BeginSessionOpts) => void;
+  end: () => void;
+  fail: (err: unknown, userMessage: string) => void;
+  log?: (line: string) => void;
+};
+
+export async function runVideoExportJob(
+  job: VideoExportJob | undefined,
+  opts: {
+    title?: string;
+    runningStatus?: string;
+    run: () => Promise<void>;
+    failMessage: string;
+    onError?: (e: unknown) => void;
+  }
+): Promise<void> {
+  job?.begin({
+    title: opts.title ?? "Download as Video",
+    clearLog: true,
+    runningStatus: opts.runningStatus ?? "Encoding video…",
+  });
+  await Promise.resolve();
+  try {
+    job?.log?.("Starting export…");
+    await opts.run();
+    job?.log?.("Download started.");
+    job?.end();
+  } catch (e) {
+    if (job) {
+      job.fail(e, opts.failMessage);
+    } else if (opts.onError) {
+      opts.onError(e);
+    } else {
+      throw e;
+    }
+  }
+}
 
 export function sanitizeDownloadBaseName(name: string): string {
   return name.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "video";

@@ -30,6 +30,27 @@ These files mirror paths under `kimodo/` and are copied in automatically by
 Edit overlays here under `patches/kimodo/`, not inside the `kimodo/` submodule.
 Re-applying overlays is idempotent (safe to run multiple times).
 
+## Updating Kimodo (opt-in only)
+
+Kimodo is **never updated automatically**. The default install path early-returns once
+`kimodo` imports, so a stale clone is kept as-is across launches.
+
+Multi-segment motion generation needs Kimodo **>= 2026-04-24** (the "improved
+multi-prompt generation" release). The motion worker logs the installed commit on load
+and fails fast if the sequential multi-prompt API (`Kimodo._multiprompt` /
+`num_transition_frames`) is missing.
+
+To update, set `KIMODO_GIT_UPDATE=1` and re-run Launch. `ensure_kimodo_installed` then:
+
+1. `git fetch` + `git pull --ff-only` in `kimodo/` (`update_kimodo_repo`)
+2. re-apply overlays (`apply_kimodo_patches`)
+3. run the same guarded editable install (`--no-deps` kimodo, `--no-deps`
+   MotionCorrection, `-r kimodo-requirements.txt`, then `ensure_pytorch_stack()` last)
+4. verify in a fresh subprocess (`_subprocess_import_status`)
+
+`--ff-only` makes a dirty or diverged checkout fail loudly rather than producing a bad
+merge. With the flag unset, install behavior is unchanged.
+
 ## Install flow
 
 PEP 660 editable metadata from `pyproject.toml` registers the `kimodo` package but not

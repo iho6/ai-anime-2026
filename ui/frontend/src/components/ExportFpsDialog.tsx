@@ -43,6 +43,10 @@ export function ExportFpsDialog(props: {
   const parsed = Number(fpsText);
   const valid = Number.isFinite(parsed) && parsed >= 1 && parsed <= 120;
 
+  function stopClick(e: React.MouseEvent) {
+    e.stopPropagation();
+  }
+
   return (
     <div
       role="dialog"
@@ -57,7 +61,10 @@ export function ExportFpsDialog(props: {
         justifyContent: "center",
         padding: 16,
       }}
-      onMouseDown={onCancel}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+        e.stopPropagation();
+      }}
     >
       <div
         style={{
@@ -68,7 +75,7 @@ export function ExportFpsDialog(props: {
           width: "100%",
           border: "1px solid rgba(255,255,255,0.22)",
         }}
-        onMouseDown={(e) => e.stopPropagation()}
+        onClick={stopClick}
       >
         <div style={{ fontWeight: 600, marginBottom: 8 }}>{title}</div>
         <label style={{ display: "block", fontSize: 12, marginBottom: 6, opacity: 0.85 }}>
@@ -91,14 +98,24 @@ export function ExportFpsDialog(props: {
           }}
         />
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
-          <button type="button" style={modalBtnSecondary} onClick={onCancel}>
+          <button
+            type="button"
+            style={modalBtnSecondary}
+            onClick={(e) => {
+              stopClick(e);
+              onCancel();
+            }}
+          >
             Cancel
           </button>
           <button
             type="button"
             style={valid ? modalBtnPrimary : { ...modalBtnPrimary, opacity: 0.45, cursor: "not-allowed" }}
             disabled={!valid}
-            onClick={() => onConfirm(parsed)}
+            onClick={(e) => {
+              stopClick(e);
+              onConfirm(parsed);
+            }}
           >
             Download
           </button>

@@ -276,6 +276,84 @@ class KimodoSetupTests(unittest.TestCase):
         self.assertIn("Failed to clone kimodo", str(ctx.exception))
         self.assertIn("boom", str(ctx.exception))
 
+    # ── Install-safety: opt-in Kimodo update never runs by default ────────────
+
+    def test_default_install_does_not_update_when_importable(self) -> None:
+        """Flag unset + already importable → early return, no git/pull/reinstall."""
+        run = mock.Mock()
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("KIMODO_GIT_UPDATE", None)
+            with mock.patch.object(kimodo_setup, "kimodo_importable", return_value=True), \
+                mock.patch.object(kimodo_setup, "update_kimodo_repo") as upd, \
+                mock.patch.object(kimodo_setup, "_run_kimodo_editable_install") as reinstall, \
+                mock.patch.object(kimodo_setup, "_ensure_kimodo_repo") as ensure_repo:
+                kimodo_setup.ensure_kimodo_installed(run_command=run)
+        run.assert_not_called()
+        upd.assert_not_called()
+        reinstall.assert_not_called()
+        ensure_repo.assert_not_called()
+
+    def test_git_update_flag_triggers_update_even_when_importable(self) -> None:
+        """KIMODO_GIT_UPDATE=1 → update + full reinstall run despite importable."""
+        run = mock.Mock()
+        order: list[str] = []
+        with mock.patch.dict(os.environ, {"KIMODO_GIT_UPDATE": "1"}):
+            with mock.patch.object(kimodo_setup, "kimodo_importable", return_value=True), \
+                mock.patch.object(kimodo_setup, "ensure_kimodo_build_deps"), \
+                mock.patch.object(
+                    kimodo_setup, "_ensure_kimodo_repo", return_value=Path("/tmp/kimodo")
+                ), \
+                mock.patch.object(
+                    kimodo_setup, "update_kimodo_repo",
+                    side_effect=lambda *a, **k: order.append("update"),
+                ) as upd, \
+                mock.patch.object(
+                    kimodo_setup, "_run_kimodo_editable_install",
+                    side_effect=lambda *a, **k: order.append("reinstall"),
+                ) as reinstall:
+                kimodo_setup.ensure_kimodo_installed(run_command=run)
+        upd.assert_called_once()
+        reinstall.assert_called_once()
+        # Update (pull + re-patch) must precede the editable reinstall.
+        self.assertEqual(order, ["update", "reinstall"])
+
+    def test_kimodo_git_update_requested_parses_truthy(self) -> None:
+        for val, expected in (("1", True), ("true", True), ("YES", True),
+                              ("0", False), ("", False), ("off", False)):
+            with mock.patch.dict(os.environ, {"KIMODO_GIT_UPDATE": val}):
+                self.assertEqual(kimodo_setup.kimodo_git_update_requested(), expected)
+
+    def test_update_kimodo_repo_pulls_then_patches_in_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            kimodo_dir = Path(tmp) / "kimodo"
+            (kimodo_dir / ".git").mkdir(parents=True)
+            order: list[str] = []
+
+            def fake_git(cmd: list[str], **kwargs: object) -> None:
+                order.append(" ".join(cmd[3:]))  # drop ["git", "-C", dir]
+
+            with mock.patch.object(kimodo_setup, "_run_git_clone", side_effect=fake_git), \
+                mock.patch.object(
+                    kimodo_setup, "apply_kimodo_patches",
+                    side_effect=lambda *a, **k: order.append("patches"),
+                ):
+                kimodo_setup.update_kimodo_repo(kimodo_dir, run_command=mock.Mock())
+
+            self.assertEqual(
+                order,
+                ["fetch --all --prune", "pull --ff-only", "patches"],
+            )
+
+    def test_update_kimodo_repo_skips_when_not_git(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            kimodo_dir = Path(tmp) / "kimodo"
+            kimodo_dir.mkdir()  # no .git
+            with mock.patch.object(kimodo_setup, "_run_git_clone") as git, \
+                mock.patch.object(kimodo_setup, "apply_kimodo_patches") as patches:
+                kimodo_setup.update_kimodo_repo(kimodo_dir, run_command=mock.Mock())
+            git.assert_not_called()
+            patches.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

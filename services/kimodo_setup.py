@@ -364,6 +364,47 @@ def _ensure_kimodo_repo(
     return kimodo_dir
 
 
+def kimodo_git_update_requested() -> bool:
+    """True when the user opted into updating Kimodo via ``KIMODO_GIT_UPDATE=1``.
+
+    Updating Kimodo is never automatic: the default install path early-returns when
+    Kimodo already imports. This opt-in flag is the only way to re-pull + reinstall.
+    """
+    return os.environ.get("KIMODO_GIT_UPDATE", "").strip().lower() in {"1", "true", "yes"}
+
+
+def update_kimodo_repo(
+    kimodo_dir: Path,
+    *,
+    run_command: Callable[..., None] | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> None:
+    """Fast-forward the Kimodo checkout, then re-apply overlays.
+
+    Opt-in only (see ``kimodo_git_update_requested``). Uses ``--ff-only`` so a dirty
+    or diverged tree fails loudly instead of producing a bad merge. Overlays are
+    re-applied immediately so upstream ``setup.py`` / ``build_cmake.py`` never linger
+    un-patched before the editable reinstall.
+    """
+    if not (kimodo_dir / ".git").is_dir():
+        if log_cb:
+            log_cb("Kimodo is not a git checkout; skipping update.")
+        return
+    if log_cb:
+        log_cb("Updating Kimodo (git fetch + pull --ff-only)…")
+    _run_git_clone(
+        ["git", "-C", str(kimodo_dir), "fetch", "--all", "--prune"],
+        run_command=run_command,
+        log_cb=log_cb,
+    )
+    _run_git_clone(
+        ["git", "-C", str(kimodo_dir), "pull", "--ff-only"],
+        run_command=run_command,
+        log_cb=log_cb,
+    )
+    apply_kimodo_patches(kimodo_dir, log_cb=log_cb)
+
+
 def _kimodo_install_failure_message(err: str) -> str:
     packages = " ".join(kimodo_build_packages())
     return (
@@ -388,7 +429,26 @@ def ensure_kimodo_installed(
     run_command: Callable[..., None],
     log_cb: Callable[[str], None] | None = None,
 ) -> None:
-    """Editable-install kimodo with MotionCorrection when imports are missing."""
+    """Editable-install kimodo with MotionCorrection when imports are missing.
+
+    Default behaviour is unchanged: early-return when kimodo already imports. When
+    ``KIMODO_GIT_UPDATE=1`` is set, the checkout is fast-forwarded and the full
+    guarded reinstall runs even if kimodo currently imports (the only way to pick up
+    upstream multi-prompt improvements). The reinstall order is preserved:
+    pull -> apply patches -> pip kimodo -> pip MotionCorrection -> pip requirements
+    -> ensure_pytorch_stack -> verify.
+    """
+    if kimodo_git_update_requested():
+        if log_cb:
+            log_cb("KIMODO_GIT_UPDATE=1 — updating and reinstalling kimodo…")
+        ensure_kimodo_build_deps(run_command=run_command, log_cb=log_cb)
+        kimodo_dir = _ensure_kimodo_repo(run_command=run_command, log_cb=log_cb)
+        update_kimodo_repo(kimodo_dir, run_command=run_command, log_cb=log_cb)
+        _run_kimodo_editable_install(kimodo_dir, run_command=run_command, log_cb=log_cb)
+        if not kimodo_importable():
+            raise RuntimeError(_kimodo_post_install_failure_message(kimodo_dir))
+        return
+
     if kimodo_importable():
         if log_cb:
             log_cb("kimodo + motion_correction already importable")

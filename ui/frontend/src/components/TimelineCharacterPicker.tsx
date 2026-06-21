@@ -934,6 +934,7 @@ export function TimelineCharacterPicker(props: {
           setRefPickerOpen(false);
           setMotionRefOpen(true);
         }}
+        jobModal={{ begin: beginSession, end: endSession, fail: failSession, log: pushLog }}
       />
 
       {/* Motion Ref Gen modal (KiMoD) */}

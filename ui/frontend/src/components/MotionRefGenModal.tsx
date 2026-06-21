@@ -247,13 +247,17 @@ export function MotionRefGenModal(props: {
   function applyTrajectoryAtFrame(
     frame: number,
     keyframes: CameraKeyframe[] = cameraKeyframes,
-    opts?: { forCapture?: boolean },
+    opts?: { forCapture?: boolean; forceApply?: boolean },
   ) {
-    if (keyframes.length === 0 || !trajectoryEnabledRef.current) {
+    if (keyframes.length === 0) {
+      return;
+    }
+    if (!opts?.forceApply && !trajectoryEnabledRef.current) {
       return;
     }
     if (
       !opts?.forCapture &&
+      !opts?.forceApply &&
       (userOrbitingRef.current || userCameraOverrideRef.current)
     ) {
       return;
@@ -948,7 +952,10 @@ export function MotionRefGenModal(props: {
   function jumpToCameraKeyframe(kf: CameraKeyframe) {
     setPlaying(false);
     const maxFrame = Math.max(0, totalFrames - 1);
-    setFrameIndex(Math.min(Math.max(0, kf.frameIndex), maxFrame));
+    const f = Math.min(Math.max(0, kf.frameIndex), maxFrame);
+    setFrameIndex(f);
+    applyTrajectoryAtFrame(f, cameraKeyframes, { forceApply: true });
+    userCameraOverrideRef.current = true;
   }
 
   async function saveShot() {
@@ -1404,6 +1411,7 @@ export function MotionRefGenModal(props: {
       onClick={() => {
         if (motionCtxMenu) { setMotionCtxMenu(null); return; }
         if (cameraCtxMenu) { setCameraCtxMenu(null); return; }
+        if (fpsExportPending || v2poseDialog || jobModalProps.open) return;
         onClose();
       }}
     >
@@ -1736,6 +1744,12 @@ export function MotionRefGenModal(props: {
             onCreateFolder={(parentId, shotIds) => void createShotFolder(parentId, shotIds)}
             onRenameFolder={(id, name) => void renameShotFolder(id, name)}
             onDeleteFolder={(id) => void deleteShotFolder(id)}
+            jobModal={{
+              begin: beginSession,
+              end: endSession,
+              fail: failSession,
+              log: pushLog,
+            }}
           />
         </div>
       </div>
