@@ -13,9 +13,14 @@ import {
   assetUrlFromRelPath,
   runDetailWsJob,
   runShotMakeAngleWsJob,
-  type PoseReference,
   type SequenceManifest,
 } from "../lib/api";
+import {
+  type KeypointRefEntry,
+  keypointRefHasFrames,
+} from "../lib/keypointRefGeneration";
+import { pickSingleKeypointRefFromSelection } from "../lib/referencePickerSelection";
+import { KeypointReferenceSlot } from "./KeypointReferenceSlot";
 import { CollapsibleGallerySection } from "./CollapsibleGallerySection";
 import { GalleryImageLightbox } from "./GalleryImageLightbox";
 import { GalleryPickTile } from "./GalleryPickTile";
@@ -25,7 +30,6 @@ import {
   relPathsToPreviewUrls,
   toggleSetMember,
 } from "./timeline/pickerGalleryUtils";
-import { SquareButton } from "./SquareButton";
 import { SquareIconButton, TriangleIcon } from "./IconPrimitives";
 import { ReferencePicker } from "./ReferencePicker";
 import { MotionRefGenModal } from "./MotionRefGenModal";
@@ -106,7 +110,7 @@ export function TimelineCharacterPicker(props: {
   // New Pose panel state
   const [newPosePanel, setNewPosePanel] = useState<{ charKey: string; baseRelPath: string } | null>(null);
   const [newPosePrompt, setNewPosePrompt] = useState("");
-  const [newPoseRef, setNewPoseRef] = useState<PoseReference | null>(null);
+  const [newPoseRef, setNewPoseRef] = useState<KeypointRefEntry | null>(null);
   const [refPickerOpen, setRefPickerOpen] = useState(false);
   const [motionRefOpen, setMotionRefOpen] = useState(false);
 
@@ -257,20 +261,76 @@ export function TimelineCharacterPicker(props: {
   }
 
   async function runNewPose() {
-    if (!newPosePanel || !newPosePrompt.trim()) return;
+    if (!newPosePanel) return;
+    const hasRef = keypointRefHasFrames(newPoseRef);
+    const promptTrim = newPosePrompt.trim();
+    if (!promptTrim && !hasRef) return;
     const { charKey, baseRelPath } = newPosePanel;
+    const prompts = promptTrim
+      ? [`Edit the subject to ${promptTrim}, keep identity and clothing coherent unless impossible.`]
+      : [];
     beginSession({ title: "Generating pose", clearLog: true });
     await Promise.resolve();
     pushLog("Starting pose generation…");
     try {
+      if (newPoseRef?.kind === "folder") {
+        const done = await runDetailWsJob<{ sequenceName: string; galleryItemId: string }>({
+          charKey,
+          pathSuffix: "/pose/ws",
+          payload: {
+            job: "generate_folder_ref_sequence",
+            folderId: newPoseRef.folderId,
+            baseRelPath,
+            prompts,
+          },
+          onLogLine: (line) => pushLog(line),
+        });
+        if (!done.ok || !done.result?.sequenceName) {
+          throw new Error(done.error ?? "Pose sequence generation failed.");
+        }
+        pushLog(`Done — sequence ${done.result.sequenceName}.`);
+        endSession();
+        setNewPosePanel(null);
+        setNewPosePrompt("");
+        setNewPoseRef(null);
+        onPickSequences(charKey, [done.result.sequenceName]);
+        void loadSections(charKey);
+        return;
+      }
+      if (newPoseRef?.kind === "video") {
+        const done = await runDetailWsJob<{ sequenceName: string; galleryItemId: string }>({
+          charKey,
+          pathSuffix: "/pose/ws",
+          payload: {
+            job: "generate_video_ref_sequence",
+            videoRefId: newPoseRef.ref.id,
+            baseRelPath,
+            prompts,
+          },
+          onLogLine: (line) => pushLog(line),
+        });
+        if (!done.ok || !done.result?.sequenceName) {
+          throw new Error(done.error ?? "Pose sequence generation failed.");
+        }
+        pushLog(`Done — sequence ${done.result.sequenceName}.`);
+        endSession();
+        setNewPosePanel(null);
+        setNewPosePrompt("");
+        setNewPoseRef(null);
+        onPickSequences(charKey, [done.result.sequenceName]);
+        void loadSections(charKey);
+        return;
+      }
       const done = await runDetailWsJob<{ firstPoseKey: string | null; lastInputRelPath: string }>({
         charKey,
         pathSuffix: "/pose/ws",
         payload: {
           job: "generate_prompts",
           baseRelPath,
-          prompts: [`Edit the subject to ${newPosePrompt.trim()}, keep identity and clothing coherent unless impossible.`],
-          ...(newPoseRef?.keypointRelPath ? { keypointRelPath: newPoseRef.keypointRelPath } : {}),
+          prompts,
+          ...(newPoseRef?.kind === "single" && newPoseRef.ref.keypointRelPath
+            ? { keypointRelPath: newPoseRef.ref.keypointRelPath }
+            : {}),
         },
         onLogLine: (line) => pushLog(line),
       });
@@ -279,6 +339,7 @@ export function TimelineCharacterPicker(props: {
       endSession();
       setNewPosePanel(null);
       setNewPosePrompt("");
+      setNewPoseRef(null);
       void loadSections(charKey);
     } catch (e) {
       failSession(e, "Pose generation failed.");
@@ -679,44 +740,14 @@ export function TimelineCharacterPicker(props: {
                         <div style={{ fontSize: 10, color: "#666", marginTop: 4, textAlign: "center" }}>Starting image</div>
                       </div>
 
-                      {/* Reference square button */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        <SquareButton
-                          variant="import"
-                          tone="light"
-                          size={100}
-                          disabled={poseBusy}
-                          onClick={() => setRefPickerOpen(true)}
-                          style={{ color: "inherit" }}
-                          title="Add a pose reference (optional)"
-                        >
-                          {newPoseRef ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={assetUrlFromRelPath(newPoseRef.keypointRelPath)}
-                              alt=""
-                              style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                            />
-                          ) : (
-                            <>
-                              Add
-                              <br />
-                              Reference
-                              <br />
-                              (optional)
-                            </>
-                          )}
-                        </SquareButton>
-                        {newPoseRef && (
-                          <button
-                            type="button"
-                            onClick={() => setNewPoseRef(null)}
-                            style={{ background: "transparent", border: "none", color: "#888", cursor: "pointer", fontSize: 11, textAlign: "center" }}
-                          >
-                            Clear ref
-                          </button>
-                        )}
-                      </div>
+                      <KeypointReferenceSlot
+                        keypointRef={newPoseRef}
+                        size={100}
+                        tone="light"
+                        disabled={poseBusy}
+                        onOpenPicker={() => setRefPickerOpen(true)}
+                        onClear={() => setNewPoseRef(null)}
+                      />
                     </div>
 
                     <textarea
@@ -741,13 +772,19 @@ export function TimelineCharacterPicker(props: {
                     <button
                       type="button"
                       onClick={() => void runNewPose()}
-                      disabled={poseBusy || !newPosePrompt.trim()}
+                      disabled={poseBusy || (!newPosePrompt.trim() && !keypointRefHasFrames(newPoseRef))}
                       style={{
                         border: "1px solid rgba(255,255,255,0.4)",
-                        background: poseBusy || !newPosePrompt.trim() ? "rgba(255,255,255,0.05)" : "rgba(100,200,100,0.12)",
+                        background:
+                          poseBusy || (!newPosePrompt.trim() && !keypointRefHasFrames(newPoseRef))
+                            ? "rgba(255,255,255,0.05)"
+                            : "rgba(100,200,100,0.12)",
                         color: "#eee",
                         padding: "8px 16px",
-                        cursor: poseBusy || !newPosePrompt.trim() ? "not-allowed" : "pointer",
+                        cursor:
+                          poseBusy || (!newPosePrompt.trim() && !keypointRefHasFrames(newPoseRef))
+                            ? "not-allowed"
+                            : "pointer",
                         font: "inherit",
                         fontWeight: 600,
                       }}
@@ -925,7 +962,8 @@ export function TimelineCharacterPicker(props: {
         busy={poseBusy}
         onCancel={() => setRefPickerOpen(false)}
         onUseSelected={(sel) => {
-          if (sel.singles[0]) setNewPoseRef(sel.singles[0]);
+          const ref = pickSingleKeypointRefFromSelection(sel);
+          if (ref) setNewPoseRef(ref);
           setRefPickerOpen(false);
         }}
         onPickNew={() => setRefPickerOpen(false)}
@@ -944,7 +982,10 @@ export function TimelineCharacterPicker(props: {
         onBack={() => { setMotionRefOpen(false); setRefPickerOpen(true); }}
         onClose={() => setMotionRefOpen(false)}
         onKeypointsMade={(ref) => {
-          setNewPoseRef(ref);
+          setNewPoseRef({ kind: "single", ref });
+        }}
+        onKeypointVideoMade={() => {
+          pushLog("Video keypoint sequence saved to reference library.");
         }}
       />
 

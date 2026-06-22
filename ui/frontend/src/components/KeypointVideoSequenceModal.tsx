@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   assetUrlFromRelPath,
   type FrameSequencePayload,
@@ -8,6 +8,7 @@ import {
   type KeypointVideoStripSlot,
 } from "../lib/api";
 import { PauseBarsIcon, TimelinePlayIcon } from "./IconPrimitives";
+import { PoseRefFramePreview } from "./PoseRefFramePreview";
 
 const CELL = 72;
 
@@ -36,14 +37,12 @@ export function KeypointVideoSequenceModal(props: {
   const { open, item, busy, onClose, onSave } = props;
   const initial = item?.frameSequence;
   const fps = item?.fps ?? 24;
-  const videoSrc = item?.videoRelPath ? assetUrlFromRelPath(item.videoRelPath) : "";
 
   const [strip, setStrip] = useState<KeypointVideoStripSlot[]>([]);
   const [focusIx, setFocusIx] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(() => new Set([0]));
   const [play, setPlay] = useState(false);
   const [playIx, setPlayIx] = useState(0);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (!open || !initial) return;
@@ -55,27 +54,15 @@ export function KeypointVideoSequenceModal(props: {
   }, [open, initial, item?.id]);
 
   const vis = useMemo(() => visibleStripIndices(strip), [strip]);
-  const displayIx = play ? playIx : focusIx;
-  const displaySlot = strip[displayIx];
-
-  const syncVideoTime = useCallback(
-    (stripIndex: number) => {
-      const v = videoRef.current;
-      if (!v || !videoSrc) return;
-      const t = stripIndex / Math.max(1, fps);
-      try {
-        if (Math.abs(v.currentTime - t) > 0.05) v.currentTime = t;
-      } catch {
-        /* ignore seek errors */
-      }
-    },
-    [fps, videoSrc]
+  const previewPaths = useMemo(
+    () =>
+      vis
+        .map((i) => strip[i]?.relPath ?? "")
+        .filter((p): p is string => Boolean(p)),
+    [strip, vis]
   );
-
-  useEffect(() => {
-    if (!open) return;
-    syncVideoTime(displayIx);
-  }, [open, displayIx, syncVideoTime]);
+  const displayIx = play ? playIx : focusIx;
+  const previewFrameIndex = Math.max(0, vis.indexOf(displayIx));
 
   useEffect(() => {
     if (!play || !open) return;
@@ -138,16 +125,18 @@ export function KeypointVideoSequenceModal(props: {
       >
         <div style={{ fontWeight: 400, marginBottom: 10 }}>Video Keypoint Sequence</div>
 
-        {videoSrc ? (
-          <div style={{ marginBottom: 10 }}>
-            <video
-              ref={videoRef}
-              src={videoSrc}
-              controls
-              style={{ width: "100%", maxHeight: 240, background: "#000" }}
-            />
-          </div>
-        ) : null}
+        <div style={{ marginBottom: 10 }}>
+          <PoseRefFramePreview
+            frameRelPaths={previewPaths}
+            fps={fps}
+            maxWidth="100%"
+            maxHeight={240}
+            frameIndex={previewFrameIndex}
+            playing={play}
+            onPlayingChange={setPlay}
+            showPlayOverlay={false}
+          />
+        </div>
 
         <div style={{ marginBottom: 8, display: "flex", gap: 8, alignItems: "center" }}>
           <button
@@ -270,22 +259,6 @@ export function KeypointVideoSequenceModal(props: {
             );
           })}
         </div>
-
-        {displaySlot?.kind === "image" && displaySlot.relPath ? (
-          <div style={{ marginBottom: 10 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={assetUrlFromRelPath(displaySlot.relPath)}
-              alt=""
-              style={{
-                width: "100%",
-                maxHeight: 280,
-                objectFit: "contain",
-                background: "rgba(0,0,0,0.3)",
-              }}
-            />
-          </div>
-        ) : null}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button

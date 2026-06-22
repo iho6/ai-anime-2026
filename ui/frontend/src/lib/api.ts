@@ -3529,7 +3529,14 @@ export async function apiReferenceKeypointVideoDelete(videoId: string): Promise<
 
 /** Run SD pose service on a video; resolves with per-frame keypoint video ref. */
 export function runReferenceMakeKeypointVideoWsJob(params: {
-  videoRelPath: string;
+  videoRelPath?: string;
+  frameRelPaths?: string[];
+  frameMeta?: Array<{
+    cropBox?: { x: number; y: number; width: number; height: number };
+    imageWidth?: number;
+    imageHeight?: number;
+  }>;
+  fps?: number;
   onLogLine: (line: string) => void;
 }): Promise<WsDoneMessage<{ item: KeypointVideoReference }>> {
   const url = wsUrlForPath("/reference/make_keypoint_video/ws");
@@ -4200,6 +4207,7 @@ export type FrameSequencePayload = {
 
 export type KeypointVideoStripSlot = FrameSequenceStripSlot & {
   referenceRelPath?: string;
+  placedFigure?: PlacedFigureMeta;
 };
 
 export type KeypointVideoReference = {

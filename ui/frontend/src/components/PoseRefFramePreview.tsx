@@ -9,23 +9,51 @@ type Props = {
   fps?: number;
   maxWidth?: number | string;
   maxHeight?: number | string;
+  /** When set, parent drives which frame is shown (strip index in `frameRelPaths`). */
+  frameIndex?: number;
+  /** When set with `onPlayingChange`, parent drives playback. */
+  playing?: boolean;
+  onPlayingChange?: (playing: boolean) => void;
+  /** Show hover play/pause overlay (default true). */
+  showPlayOverlay?: boolean;
 };
 
 export function PoseRefFramePreview(props: Props) {
-  const { frameRelPaths, fps = 24, maxWidth = 140, maxHeight = 140 } = props;
+  const {
+    frameRelPaths,
+    fps = 24,
+    maxWidth = 140,
+    maxHeight = 140,
+    frameIndex: frameIndexProp,
+    playing: playingProp,
+    onPlayingChange,
+    showPlayOverlay = true,
+  } = props;
   const paths = frameRelPaths.filter(Boolean);
   const [idx, setIdx] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  const [playingInternal, setPlayingInternal] = useState(false);
   const [hover, setHover] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    setIdx(0);
-    setPlaying(false);
-  }, [paths.join("|")]);
+  const controlledIndex = frameIndexProp !== undefined;
+  const controlledPlaying = playingProp !== undefined;
+  const playing = controlledPlaying ? playingProp : playingInternal;
+  const setPlaying = (next: boolean) => {
+    if (controlledPlaying) onPlayingChange?.(next);
+    else setPlayingInternal(next);
+  };
+  const displayIdx = controlledIndex
+    ? Math.max(0, Math.min(paths.length - 1, frameIndexProp))
+    : idx;
 
   useEffect(() => {
-    if (!playing || paths.length <= 1) {
+    if (controlledIndex || controlledPlaying) return;
+    setIdx(0);
+    setPlayingInternal(false);
+  }, [paths.join("|"), controlledIndex, controlledPlaying]);
+
+  useEffect(() => {
+    if (controlledPlaying || !playing || paths.length <= 1) {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -40,7 +68,7 @@ export function PoseRefFramePreview(props: Props) {
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = null;
     };
-  }, [playing, paths.length, fps]);
+  }, [playing, paths.length, fps, controlledPlaying]);
 
   if (!paths.length) {
     return (
@@ -62,7 +90,7 @@ export function PoseRefFramePreview(props: Props) {
     );
   }
 
-  const src = assetUrlFromRelPath(paths[idx] ?? paths[0]);
+  const src = assetUrlFromRelPath(paths[displayIdx] ?? paths[0]);
   const canPlay = paths.length > 1;
 
   return (
@@ -92,7 +120,7 @@ export function PoseRefFramePreview(props: Props) {
         }}
         draggable={false}
       />
-      {canPlay ? (
+      {showPlayOverlay && canPlay ? (
         <>
           {!playing ? (
             <button
@@ -167,7 +195,7 @@ export function PoseRefFramePreview(props: Props) {
             pointerEvents: "none",
           }}
         >
-          {idx + 1}/{paths.length}
+          {displayIdx + 1}/{paths.length}
         </span>
       ) : null}
     </div>

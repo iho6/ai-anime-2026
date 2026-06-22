@@ -138,3 +138,33 @@ export async function apiExportFramesVideo(params: {
   });
   await downloadVideoFromResponse(res, params.filenameBase ?? "frames");
 }
+
+export async function apiEncodeFramesVideoToStaging(params: {
+  charKey: string;
+  relPaths: string[];
+  fps: number;
+  filenameBase?: string;
+}): Promise<{ videoRelPath: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/detail/${encodeURIComponent(params.charKey)}/staging/encode_frames_video`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        relPaths: params.relPaths,
+        fps: params.fps,
+        filenameBase: params.filenameBase,
+      }),
+      credentials: "omit",
+    }
+  );
+  if (!res.ok) {
+    await readVideoFetchError(res);
+  }
+  const data = (await res.json()) as { videoRelPath?: string };
+  const videoRelPath = (data.videoRelPath || "").trim();
+  if (!videoRelPath) {
+    throw new Error("Encode response missing videoRelPath");
+  }
+  return { videoRelPath };
+}

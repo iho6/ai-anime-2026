@@ -26,6 +26,23 @@ def persist_preview_from_abs(abs_src: str, char_key: str) -> str:
     return storage_rel_from_abs(str(dest))
 
 
+def staging_video_output_stem(char_key: str) -> Path:
+    """Path stem (no extension) for a new encoded video under ``.react_staging/``."""
+    character = logic.get_character_paths(char_key)
+    dest_dir = character.character_dir / ".react_staging"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    return dest_dir / f"motion_vid_{unique_suffix()}"
+
+
+def save_staging_encoded_video(char_key: str, encoded_abs_path: str) -> str:
+    """Register an encoded video file already written under the character staging dir."""
+    p = Path(encoded_abs_path)
+    if not p.is_file():
+        raise ValueError(f"Encoded video not found: {encoded_abs_path}")
+    ensure_path_under_character(char_key, p)
+    return storage_rel_from_abs(str(p))
+
+
 def save_staging_upload(char_key: str, data: bytes, original_name: str) -> str:
     """Write upload bytes under ``<character>/.react_staging/``; return storage rel path."""
     character = logic.get_character_paths(char_key)

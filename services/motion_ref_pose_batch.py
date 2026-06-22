@@ -20,22 +20,13 @@ def _decode_png_base64(raw: str) -> bytes:
 
 
 def _placed_figure_from_frame(fr: dict[str, Any]) -> dict[str, Any] | None:
-    from services.figure_crop import build_placed_figure_meta
+    from services.figure_crop import placed_figure_from_crop_meta
 
-    crop = fr.get("cropBox")
-    if not isinstance(crop, dict) or not crop.get("width") or not crop.get("height"):
-        return None
-    placement = {
-        "x": int(crop["x"]),
-        "y": int(crop["y"]),
-        "width": int(crop["width"]),
-        "height": int(crop["height"]),
-    }
-    iw = fr.get("imageWidth")
-    ih = fr.get("imageHeight")
-    if iw and ih:
-        return build_placed_figure_meta(int(iw), int(ih), placement)
-    return {"placement": placement}
+    return placed_figure_from_crop_meta(
+        fr.get("cropBox") if isinstance(fr.get("cropBox"), dict) else None,
+        fr.get("imageWidth"),
+        fr.get("imageHeight"),
+    )
 
 
 def create_v2pose_folder(folder_name: str, *, motion_key: str = "") -> dict[str, Any]:

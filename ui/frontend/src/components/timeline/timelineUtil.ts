@@ -634,6 +634,76 @@ export function appendClipToTrack(track: TimelineTrack, clip: TimelineClip): Tim
   return { ...track, clips: [...track.clips, { ...clip, start }] };
 }
 
+/**
+ * Move a clip to ``toTrackId``, removing every other copy of ``clip.id`` first.
+ * Idempotent: safe to call repeatedly during a drag gesture.
+ */
+export function moveClipBetweenTracks(
+  manifest: TimelineManifest,
+  toTrackId: string,
+  clip: TimelineClip,
+  newStart: number
+): TimelineManifest {
+  const placed = { ...clip, start: newStart };
+  return {
+    ...manifest,
+    tracks: manifest.tracks.map((t) => {
+      const without = t.clips.filter((c) => c.id !== clip.id);
+      if (t.id !== toTrackId) {
+        return without.length === t.clips.length ? t : { ...t, clips: without };
+      }
+      const base =
+        t.kind === "neutral" && t.clips.length === 0
+          ? promoteTrackKind(t, trackKindForClip(clip), manifest.tracks)
+          : { ...t, clips: without };
+      return { ...base, clips: [...without, placed] };
+    }),
+  };
+}
+
+/** Drop per-track duplicate clip ids; re-id clips that appear on multiple tracks. */
+export function dedupeTimelineManifestClips(manifest: TimelineManifest): {
+  manifest: TimelineManifest;
+  changed: boolean;
+} {
+  let changed = false;
+  const seenGlobal = new Set<string>();
+
+  const tracks = manifest.tracks.map((track) => {
+    const seenOnTrack = new Set<string>();
+    const clips: TimelineClip[] = [];
+
+    for (const clip of track.clips) {
+      if (seenOnTrack.has(clip.id)) {
+        changed = true;
+        continue;
+      }
+      seenOnTrack.add(clip.id);
+
+      if (seenGlobal.has(clip.id)) {
+        changed = true;
+        const reIded = { ...clip, id: genId("clip") };
+        seenGlobal.add(reIded.id);
+        clips.push(reIded);
+      } else {
+        seenGlobal.add(clip.id);
+        clips.push(clip);
+      }
+    }
+
+    if (
+      clips.length === track.clips.length &&
+      clips.every((c, i) => c.id === track.clips[i]?.id)
+    ) {
+      return track;
+    }
+    return { ...track, clips };
+  });
+
+  if (!changed) return { manifest, changed: false };
+  return { manifest: { ...manifest, tracks }, changed: true };
+}
+
 function loadHTMLImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();

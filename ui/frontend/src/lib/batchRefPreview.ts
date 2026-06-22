@@ -1,8 +1,7 @@
 import type { KeypointVideoReference, PoseReference } from "./api";
+import type { KeypointRefEntry } from "./keypointRefGeneration";
 
-export type BatchRefEntryLike =
-  | { kind: "single"; ref: PoseReference }
-  | { kind: "video"; ref: KeypointVideoReference };
+export type BatchRefEntryLike = KeypointRefEntry;
 
 /** First keypoint frame path per queued reference (for batch preview slideshow). */
 export function batchRefPreviewFramePaths(queue: BatchRefEntryLike[]): string[] {
@@ -11,6 +10,13 @@ export function batchRefPreviewFramePaths(queue: BatchRefEntryLike[]): string[] 
     if (entry.kind === "single") {
       const kp = (entry.ref.keypointRelPath || "").trim();
       if (kp) paths.push(kp);
+      continue;
+    }
+    if (entry.kind === "folder") {
+      for (const k of entry.keypoints) {
+        const kp = (k.keypointRelPath || "").trim();
+        if (kp) paths.push(kp);
+      }
       continue;
     }
     const strip = entry.ref.frameSequence?.strip ?? [];

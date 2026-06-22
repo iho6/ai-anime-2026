@@ -3988,12 +3988,8 @@ def generate_pose_starting_images_from_prompts(
 
     from services import reference_storage
 
+    placed = reference_storage.find_placed_figure_for_keypoint_abs(kp) if kp else None
     kp_entry = reference_storage.find_keypoint_by_keypoint_abs(kp) if kp else None
-    placed = (
-        kp_entry.get("placedFigure")
-        if kp_entry and isinstance(kp_entry.get("placedFigure"), dict)
-        else None
-    )
     has_placed = bool(
         placed and placed.get("placement") and placed.get("canvas")
     )
@@ -4101,12 +4097,8 @@ def _generate_pose_image_edit_url(
 
     from services import reference_storage
 
+    placed = reference_storage.find_placed_figure_for_keypoint_abs(kp) if kp else None
     kp_entry = reference_storage.find_keypoint_by_keypoint_abs(kp) if kp else None
-    placed = (
-        kp_entry.get("placedFigure")
-        if kp_entry and isinstance(kp_entry.get("placedFigure"), dict)
-        else None
-    )
     if placed and placed.get("placement") and placed.get("canvas"):
         return _run_keypoint_image_edit_with_plate(
             character_name,
@@ -4147,6 +4139,140 @@ def _generate_pose_image_edit_url(
     return url.strip()
 
 
+def _keypoint_storage_rel_to_abs(kp_rel: str) -> str:
+    from services import reference_storage
+
+    rel = str(kp_rel or "").strip()
+    if rel.lower().startswith("references/"):
+        return str(reference_storage.resolve_rel(rel))
+    return str(resolve_storage_rel_path_to_abs(rel))
+
+
+def _first_prompt_text(prompt_texts: list[str]) -> str:
+    for p in prompt_texts or []:
+        if str(p).strip():
+            return str(p).strip()
+    return ""
+
+
+def _allocate_sequence_name(char_key: str, prefix: str) -> str:
+    base = sanitize_for_folder(prefix) or "keypoints"
+    ts = int(time.time())
+    seq_name = f"{base}_{ts}"
+    existing = set(list_sequence_folder_names(char_key))
+    while seq_name in existing:
+        seq_name = f"{base}_{ts}_{unique_suffix(4)}"
+    return seq_name
+
+
+def generate_pose_sequence_from_keypoints(
+    char_key: str,
+    keypoint_abs_paths: list[str],
+    base_image_path: str,
+    prompt_texts: list[str],
+    *,
+    fps: int = 24,
+    seq_name_prefix: str = "keypoints",
+    gallery_subdir_prefix: str = "posevid",
+    error_tag: str = "Pose keypoint sequence",
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """
+    Generate one pose image per keypoint frame and store as a frameSequence strip
+    inside a new auto-named character sequence.
+    """
+    from services.sequence_gallery_strip import gallery_item_from_frame_urls
+
+    paths = [str(p).strip() for p in keypoint_abs_paths if str(p).strip()]
+    if not paths:
+        raise ValueError("No keypoint frames provided.")
+
+    prompt = _first_prompt_text(prompt_texts)
+    seq_name = _allocate_sequence_name(char_key, seq_name_prefix)
+    character = get_character_paths(char_key)
+    folder = character.sequence_dir(seq_name)
+    if folder.exists():
+        raise ValueError(f"Sequence {seq_name!r} already exists.")
+    ensure_dirs(folder, folder / "gallery", folder / "cells")
+    write_sequence_manifest(
+        char_key,
+        seq_name,
+        {
+            "version": 1,
+            "fps": int(fps) if fps else 24,
+            "gallery": [],
+            "frames": [],
+            "previewAspect": "16:9",
+            "timelineViewStep": 1,
+        },
+    )
+
+    frame_urls: list[str] = []
+    for i, kp_abs in enumerate(paths):
+        if log_cb:
+            log_cb(f"Generating pose frame {i + 1}/{len(paths)}…")
+        url = _generate_pose_image_edit_url(
+            char_key,
+            base_image_path,
+            prompt,
+            keypoint_image_path=kp_abs,
+            log_cb=log_cb,
+        )
+        frame_urls.append(url)
+
+    built = gallery_item_from_frame_urls(
+        char_key=char_key,
+        sequence_name=seq_name,
+        frame_urls=frame_urls,
+        gallery_subdir_prefix=gallery_subdir_prefix,
+        error_tag=error_tag,
+    )
+    gallery_item = built["galleryItem"]
+    manifest = read_sequence_manifest(char_key, seq_name)
+    gallery = manifest.get("gallery") if isinstance(manifest.get("gallery"), list) else []
+    gallery.append(gallery_item)
+    manifest["gallery"] = gallery
+    write_sequence_manifest(char_key, seq_name, manifest)
+    return {"sequenceName": seq_name, "galleryItemId": gallery_item.get("id")}
+
+
+def generate_pose_sequence_from_folder_ref(
+    char_key: str,
+    folder_id: str,
+    base_image_path: str,
+    prompt_texts: list[str],
+    log_cb: Callable[[str], None] | None = None,
+    *,
+    fps: int = 24,
+) -> dict[str, Any]:
+    """Generate a pose sequence from an ordered keypoint folder in the reference library."""
+    from services import reference_storage
+
+    entries = reference_storage.list_folder_keypoints_ordered(folder_id)
+    layout = reference_storage.get_keypoints_layout()
+    folder_name = folder_id
+    for f in layout.get("folders") or []:
+        if str(f.get("id")) == str(folder_id):
+            folder_name = str(f.get("name") or folder_id)
+            break
+    kp_paths = [
+        _keypoint_storage_rel_to_abs(str(e.get("keypointRelPath") or ""))
+        for e in entries
+    ]
+    prefix = f"folder_{sanitize_for_folder(folder_name) or folder_id}"
+    return generate_pose_sequence_from_keypoints(
+        char_key,
+        kp_paths,
+        base_image_path,
+        prompt_texts,
+        fps=fps,
+        seq_name_prefix=prefix,
+        gallery_subdir_prefix="posefolder",
+        error_tag="Pose folder ref",
+        log_cb=log_cb,
+    )
+
+
 def generate_pose_sequence_from_video_ref(
     char_key: str,
     video_ref_id: str,
@@ -4159,7 +4285,6 @@ def generate_pose_sequence_from_video_ref(
     frameSequence folder inside a new auto-named character sequence.
     """
     from services import reference_storage
-    from services.sequence_gallery_strip import gallery_item_from_frame_urls
 
     entry = reference_storage.get_keypoint_video(video_ref_id)
     if not entry:
@@ -4177,70 +4302,21 @@ def generate_pose_sequence_from_video_ref(
     if not visible:
         raise ValueError("Video reference has no visible keypoint frames.")
 
-    prompt = ""
-    for p in prompt_texts or []:
-        if str(p).strip():
-            prompt = str(p).strip()
-            break
-
+    kp_paths = [
+        _keypoint_storage_rel_to_abs(str(slot.get("relPath") or "")) for slot in visible
+    ]
     base_name = sanitize_for_folder(str(video_ref_id)) or "video"
-    ts = int(time.time())
-    seq_name = f"video_{base_name}_{ts}"
-    existing = set(list_sequence_folder_names(char_key))
-    while seq_name in existing:
-        seq_name = f"video_{base_name}_{ts}_{unique_suffix(4)}"
-
-    character = get_character_paths(char_key)
-    folder = character.sequence_dir(seq_name)
-    if folder.exists():
-        raise ValueError(f"Sequence {seq_name!r} already exists.")
-    ensure_dirs(folder, folder / "gallery", folder / "cells")
-    fps = int(entry.get("fps") or 24)
-    write_sequence_manifest(
+    return generate_pose_sequence_from_keypoints(
         char_key,
-        seq_name,
-        {
-            "version": 1,
-            "fps": fps,
-            "gallery": [],
-            "frames": [],
-            "previewAspect": "16:9",
-            "timelineViewStep": 1,
-        },
-    )
-
-    frame_urls: list[str] = []
-    for i, slot in enumerate(visible):
-        kp_rel = str(slot.get("relPath") or "").strip()
-        if kp_rel.lower().startswith("references/"):
-            kp_abs = str(reference_storage.resolve_rel(kp_rel))
-        else:
-            kp_abs = str(resolve_storage_rel_path_to_abs(kp_rel))
-        if log_cb:
-            log_cb(f"Generating pose frame {i + 1}/{len(visible)}…")
-        url = _generate_pose_image_edit_url(
-            char_key,
-            base_image_path,
-            prompt,
-            keypoint_image_path=kp_abs,
-            log_cb=log_cb,
-        )
-        frame_urls.append(url)
-
-    built = gallery_item_from_frame_urls(
-        char_key=char_key,
-        sequence_name=seq_name,
-        frame_urls=frame_urls,
+        kp_paths,
+        base_image_path,
+        prompt_texts,
+        fps=int(entry.get("fps") or 24),
+        seq_name_prefix=f"video_{base_name}",
         gallery_subdir_prefix="posevid",
         error_tag="Pose video ref",
+        log_cb=log_cb,
     )
-    gallery_item = built["galleryItem"]
-    manifest = read_sequence_manifest(char_key, seq_name)
-    gallery = manifest.get("gallery") if isinstance(manifest.get("gallery"), list) else []
-    gallery.append(gallery_item)
-    manifest["gallery"] = gallery
-    write_sequence_manifest(char_key, seq_name, manifest)
-    return {"sequenceName": seq_name, "galleryItemId": gallery_item.get("id")}
 
 
 def generate_expression_starting_image(
@@ -8767,8 +8843,6 @@ def run_pose_keypoint_for_image(
     from services.figure_crop import (
         MIN_SQUARE_WORKING_SIZE,
         extract_square_working_crop,
-        paste_square_working_onto_canvas,
-        upscale_to_working_square,
     )
 
     src = Path(image_abs_path)
@@ -8834,22 +8908,23 @@ def run_pose_keypoint_for_image(
         raise RuntimeError("Pose keypoint result missing url and local_path.")
 
     if placement is not None and canvas_w > 0 and canvas_h > 0:
-        with Image.open(kp_crop_path) as patch:
-            kp_square = upscale_to_working_square(patch, min_side=min_side)
-        kp_on_black = Image.new("RGB", (kp_square.width, kp_square.height), (0, 0, 0))
-        kp_on_black.paste(kp_square)
-        kp_square_path = (work_dir or Path(tempfile.gettempdir())) / "kp_square.png"
-        kp_square_path.parent.mkdir(parents=True, exist_ok=True)
-        kp_on_black.save(kp_square_path)
+        from services.figure_crop import paste_working_keypoint_onto_canvas
+
         if save_square_crops_to:
-            shutil.copy2(kp_square_path, Path(save_square_crops_to) / "kp_square.png")
-        full = paste_square_working_onto_canvas(
-            kp_on_black, canvas_w, canvas_h, placement, background=(0, 0, 0)
+            out_dir = Path(save_square_crops_to)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            with Image.open(kp_crop_path) as patch:
+                sq = extract_square_working_crop(patch, placement, min_side=min_side)
+            sq.save(out_dir / "kp_square.png")
+        full_dest = paste_working_keypoint_onto_canvas(
+            kp_crop_path,
+            placed_figure,
+            background=(0, 0, 0),
         )
-        full_dest = Path(tempfile.gettempdir()) / f"kp_full_{unique_suffix()}.png"
-        full.save(full_dest)
         if log_cb:
-            log_cb(f"Pasted {min_side}×{min_side} skeleton onto {canvas_w}×{canvas_h} canvas.")
+            log_cb(
+                f"Pasted {min_side}×{min_side} skeleton onto {canvas_w}×{canvas_h} canvas."
+            )
         return str(full_dest)
 
     return str(kp_crop_path)
@@ -9037,9 +9112,118 @@ def commit_reference_image(preview_rel: str) -> dict[str, Any]:
     return reference_storage.commit_preview(preview_rel)
 
 
+def make_reference_keypoint_video_from_staged_frames(
+    frame_rel_paths: list[str],
+    frame_meta: list[dict[str, Any]],
+    log_cb: Callable[[str], None] | None = None,
+    *,
+    fps: int | None = None,
+) -> dict[str, Any]:
+    """
+    Run SD pose on cropped-square video built from staged motion-ref frames,
+    paste keypoints onto full canvas, and store a video reference row.
+    """
+    from services import reference_storage
+    from services.figure_crop import (
+        extract_square_working_crop_path,
+        paste_working_keypoint_onto_canvas,
+        placed_figure_from_crop_meta,
+    )
+
+    rels = [str(r or "").strip().replace("\\", "/").lstrip("/") for r in frame_rel_paths]
+    rels = [r for r in rels if r]
+    if not rels:
+        raise ValueError("frameRelPaths is empty.")
+    if len(rels) != len(frame_meta):
+        raise ValueError("frameRelPaths and frameMeta length mismatch.")
+
+    full_abs_paths: list[str] = []
+    placed_figures: list[dict[str, Any]] = []
+    for rel, meta in zip(rels, frame_meta):
+        abs_path = str(resolve_storage_rel_path_to_abs(rel))
+        if not Path(abs_path).is_file():
+            raise ValueError(f"Staged frame not found: {rel}")
+        pf = placed_figure_from_crop_meta(
+            meta.get("cropBox") if isinstance(meta, dict) else None,
+            meta.get("imageWidth") if isinstance(meta, dict) else None,
+            meta.get("imageHeight") if isinstance(meta, dict) else None,
+        )
+        if not pf or not pf.get("placement") or not pf.get("canvas"):
+            raise ValueError(f"Invalid crop metadata for frame: {rel}")
+        full_abs_paths.append(abs_path)
+        placed_figures.append(pf)
+
+    store_fps = int(fps) if fps is not None and int(fps) > 0 else 24
+    work_root = Path(tempfile.mkdtemp(prefix="ref_vid_crop_"))
+    crop_dir = work_root / "crops"
+    crop_dir.mkdir(parents=True, exist_ok=True)
+    kp_full_dir = work_root / "kp_full"
+    kp_full_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        crop_paths: list[Path] = []
+        for i, (full_abs, pf) in enumerate(zip(full_abs_paths, placed_figures)):
+            crop_out = crop_dir / f"crop_{i + 1:06d}.png"
+            extract_square_working_crop_path(
+                full_abs, pf["placement"], crop_out, min_side=int(pf.get("workingSquareSize") or 1024)
+            )
+            crop_paths.append(crop_out)
+
+        if log_cb:
+            log_cb(f"Encoding {len(crop_paths)} cropped frames for SDPose video…")
+        cropped_video_stem = work_root / "cropped"
+        cropped_result = write_frames_video_from_abs_paths(
+            crop_paths, store_fps, cropped_video_stem
+        )
+        cropped_video_abs = cropped_result["absPath"]
+
+        if log_cb:
+            log_cb("Running video keypoint service on cropped video…")
+        kp_square_frames = run_pose_keypoint_for_video_frames(
+            cropped_video_abs, log_cb=log_cb
+        )
+        n = min(len(full_abs_paths), len(kp_square_frames))
+        if n < 1:
+            raise RuntimeError("Video keypoint extraction produced no frames.")
+        if len(full_abs_paths) != len(kp_square_frames) and log_cb:
+            log_cb(
+                f"Note: frame count ({len(full_abs_paths)}) != kp frame count "
+                f"({len(kp_square_frames)}); using first {n}."
+            )
+
+        kp_full_paths: list[str] = []
+        for i in range(n):
+            kp_full = paste_working_keypoint_onto_canvas(
+                kp_square_frames[i],
+                placed_figures[i],
+                background=(0, 0, 0),
+                dest_path=kp_full_dir / f"kp_{i + 1:06d}.png",
+            )
+            kp_full_paths.append(str(kp_full))
+
+        if log_cb:
+            log_cb("Encoding full viewport source video…")
+        full_video_stem = work_root / "source"
+        full_result = write_frames_video_from_abs_paths(
+            full_abs_paths[:n], store_fps, full_video_stem
+        )
+
+        return reference_storage.add_keypoint_video(
+            full_result["absPath"],
+            full_abs_paths[:n],
+            kp_full_paths,
+            fps=store_fps,
+            placed_figures=placed_figures[:n],
+        )
+    finally:
+        shutil.rmtree(work_root, ignore_errors=True)
+
+
 def make_reference_keypoint_video(
     video_rel_path: str,
     log_cb: Callable[[str], None] | None = None,
+    *,
+    fps: int | None = None,
 ) -> dict[str, Any]:
     """Run SD pose service on a video and store per-frame ref/kp pairs globally."""
     from services import reference_storage
@@ -9065,11 +9249,12 @@ def make_reference_keypoint_video(
                 f"Note: ref frame count ({len(ref_frames)}) != kp frame count "
                 f"({len(kp_frames)}); using first {n}."
             )
+        store_fps = int(fps) if fps is not None and int(fps) > 0 else 24
         return reference_storage.add_keypoint_video(
             abs_path,
             ref_frames[:n],
             kp_frames[:n],
-            fps=24,
+            fps=store_fps,
         )
     finally:
         shutil.rmtree(ref_tmp, ignore_errors=True)
@@ -9859,6 +10044,27 @@ def write_frames_video_from_rel_paths(
         pth = _resolve_storage_rel_file_for_export(rel)
         segments.append((pth, None, 1))
 
+    return _encode_slideshow_video(segments=segments, fps=fps_val, output_path=output_path)
+
+
+def write_frames_video_from_abs_paths(
+    abs_paths: list[str | Path],
+    fps: float,
+    output_path: Path | str,
+) -> VideoExportResult:
+    """Linear slideshow from absolute frame paths (staging / temp dirs)."""
+    paths = [Path(p) for p in abs_paths if str(p).strip()]
+    if not paths:
+        raise ValueError("abs_paths is empty.")
+    for p in paths:
+        if not p.is_file():
+            raise ValueError(f"Frame not found: {p}")
+    fps_val = float(fps)
+    if not math.isfinite(fps_val) or fps_val < 1 or fps_val > 120:
+        raise ValueError("fps must be between 1 and 120.")
+    segments: list[tuple[Path | None, dict[str, Any] | None, int]] = [
+        (p, None, 1) for p in paths
+    ]
     return _encode_slideshow_video(segments=segments, fps=fps_val, output_path=output_path)
 
 

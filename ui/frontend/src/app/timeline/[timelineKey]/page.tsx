@@ -105,6 +105,7 @@ import {
   newNeutralTrack,
   newVideoTrack,
   promoteTrackKind,
+  dedupeTimelineManifestClips,
   defaultTrackNameForKind,
   overlayShotLayerPlacement,
   pruneBrokenTransitions,
@@ -272,7 +273,8 @@ export default function TimelineEditorPage() {
     if (!timelineKey) return;
     apiTimelineGet(timelineKey)
       .then((m) => {
-        setManifest(m);
+        const { manifest: cleaned } = dedupeTimelineManifestClips(m);
+        setManifest(cleaned);
         loadedRef.current = true;
       })
       .catch((e) => showError({ message: "Could not load timeline.", error: e }));
@@ -2858,7 +2860,7 @@ export default function TimelineEditorPage() {
               setPlayhead(t);
             }}
             onSelectClip={selectClip}
-            onChange={(next) => setManifest(next)}
+            onChange={(updater) => setManifest((prev) => (prev ? updater(prev) : prev))}
             onCommit={commit}
             setPxPerSec={setPxPerSec}
             onAddTrack={addNeutralTrack}

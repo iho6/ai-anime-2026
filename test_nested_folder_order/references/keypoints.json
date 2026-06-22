@@ -1,0 +1,12 @@
+[
+  {
+    "id": "kp_a",
+    "referenceRelPath": "references/keypoints/a_ref.png",
+    "keypointRelPath": "references/keypoints/a_kp.png"
+  },
+  {
+    "id": "kp_b",
+    "referenceRelPath": "references/keypoints/b_ref.png",
+    "keypointRelPath": "references/keypoints/b_kp.png"
+  }
+]

@@ -15,6 +15,7 @@ working square size):
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -306,3 +307,61 @@ def composite_qwen_output_on_white_plate(
     placement = placed_figure["placement"]
     c_w, c_h = int(canvas["width"]), int(canvas["height"])
     return paste_on_white_canvas(qwen_output, c_w, c_h, placement)
+
+
+def placed_figure_from_crop_meta(
+    crop_box: dict[str, Any] | None,
+    image_width: int | None,
+    image_height: int | None,
+) -> dict[str, Any] | None:
+    """Build ``placedFigure`` from motion-ref capture metadata (cropBox + canvas size)."""
+    if not isinstance(crop_box, dict) or not crop_box.get("width") or not crop_box.get("height"):
+        return None
+    placement = {
+        "x": int(crop_box["x"]),
+        "y": int(crop_box["y"]),
+        "width": int(crop_box["width"]),
+        "height": int(crop_box["height"]),
+    }
+    if image_width and image_height:
+        return build_placed_figure_meta(int(image_width), int(image_height), placement)
+    return {"placement": placement}
+
+
+def paste_working_keypoint_onto_canvas(
+    kp_square_path: Path | str,
+    placed_figure: dict[str, Any],
+    *,
+    background: tuple[int, int, int] = (0, 0, 0),
+    dest_path: Path | str | None = None,
+) -> Path:
+    """
+    Upscale a SDPose square output and paste it onto a full canvas at ``placedFigure`` placement.
+    """
+    if not isinstance(placed_figure.get("placement"), dict) or not isinstance(
+        placed_figure.get("canvas"), dict
+    ):
+        raise ValueError("placed_figure must include placement and canvas.")
+    placement = placed_figure["placement"]
+    canvas_w = int(placed_figure["canvas"]["width"])
+    canvas_h = int(placed_figure["canvas"]["height"])
+    min_side = int(placed_figure.get("workingSquareSize") or MIN_SQUARE_WORKING_SIZE)
+    src = Path(kp_square_path)
+    if not src.is_file():
+        raise FileNotFoundError(f"Keypoint square not found: {src}")
+    with Image.open(src) as patch:
+        kp_square = upscale_to_working_square(patch, min_side=min_side)
+    kp_on_bg = Image.new("RGB", (kp_square.width, kp_square.height), background)
+    kp_on_bg.paste(kp_square)
+    full = paste_square_working_onto_canvas(
+        kp_on_bg, canvas_w, canvas_h, placement, background=background
+    )
+    if dest_path is not None:
+        out = Path(dest_path)
+    else:
+        from services.character_storage import unique_suffix
+
+        out = Path(tempfile.gettempdir()) / f"kp_full_{unique_suffix()}.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    full.save(out)
+    return out

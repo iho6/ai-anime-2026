@@ -668,6 +668,37 @@ def find_keypoint_by_id(keypoint_id: str) -> dict[str, Any] | None:
     return next((e for e in list_keypoints() if str(e.get("id")) == kid), None)
 
 
+def list_folder_keypoints_ordered(folder_id: str) -> list[dict[str, Any]]:
+    """Return keypoint manifest entries in folder display order (nested subfolders)."""
+    fid = str(folder_id).strip()
+    if not fid:
+        raise ValueError("folderId is required.")
+    entries = list_keypoints()
+    layout = _sync_ui_layout_with_keypoints(entries)
+    folder_by_id = {str(f.get("id")): f for f in layout.get("folders", []) if f.get("id")}
+    if fid not in folder_by_id:
+        raise ValueError(f"Folder not found: {folder_id}")
+    entry_by_id = {str(e.get("id")): e for e in entries if e.get("id")}
+    folder_parents = _folder_parent_map(list(folder_by_id.values()))
+    out: list[dict[str, Any]] = []
+
+    def walk(container_id: str) -> None:
+        for tok in layout.get("folderOrder", {}).get(container_id, []):
+            child_fid = _parse_folder_token(tok)
+            if child_fid is not None:
+                if child_fid in folder_by_id and folder_parents.get(child_fid) == container_id:
+                    walk(child_fid)
+                continue
+            e = entry_by_id.get(str(tok))
+            if e is not None:
+                out.append(e)
+
+    walk(fid)
+    if not out:
+        raise ValueError("Folder has no keypoint frames.")
+    return out
+
+
 def find_keypoint_folder_by_name(
     name: str,
     *,
@@ -974,6 +1005,33 @@ def find_keypoint_by_keypoint_abs(abs_path: str) -> dict[str, Any] | None:
     return None
 
 
+def find_placed_figure_for_keypoint_abs(abs_path: str) -> dict[str, Any] | None:
+    """Return ``placedFigure`` for a keypoint file (folder single or video strip slot)."""
+    entry = find_keypoint_by_keypoint_abs(abs_path)
+    if entry and isinstance(entry.get("placedFigure"), dict):
+        pf = entry["placedFigure"]
+        if pf.get("placement") and pf.get("canvas"):
+            return pf
+    target = Path(abs_path).resolve()
+    for e in list_keypoint_videos():
+        fs = e.get("frameSequence") or {}
+        strip = fs.get("strip") if isinstance(fs.get("strip"), list) else []
+        for slot in strip:
+            if not isinstance(slot, dict) or slot.get("kind") != "image":
+                continue
+            try:
+                kp_rel = str(slot.get("relPath") or "").strip()
+                if not kp_rel:
+                    continue
+                if _resolve_rel(kp_rel).resolve() == target:
+                    pf = slot.get("placedFigure")
+                    if isinstance(pf, dict) and pf.get("placement") and pf.get("canvas"):
+                        return pf
+            except Exception:
+                continue
+    return None
+
+
 def update_placed_figure_outputs(
     keypoint_id: str,
     *,
@@ -1091,6 +1149,7 @@ def add_keypoint_video(
     kp_frame_paths: list[str],
     *,
     fps: int = 24,
+    placed_figures: list[dict[str, Any] | None] | None = None,
 ) -> dict[str, Any]:
     """Store a video reference with per-frame ref/kp pairs and frameSequence strip."""
     if len(ref_frame_paths) != len(kp_frame_paths):
@@ -1122,13 +1181,16 @@ def add_keypoint_video(
         kp_dest = kp_dir / frame_name
         shutil.copy2(ref_p, ref_dest)
         shutil.copy2(kp_p, kp_dest)
-        strip.append(
-            {
-                "kind": "image",
-                "relPath": _abs_to_storage_rel(kp_dest),
-                "referenceRelPath": _abs_to_storage_rel(ref_dest),
-            }
-        )
+        slot: dict[str, Any] = {
+            "kind": "image",
+            "relPath": _abs_to_storage_rel(kp_dest),
+            "referenceRelPath": _abs_to_storage_rel(ref_dest),
+        }
+        if placed_figures and i < len(placed_figures):
+            pf = placed_figures[i]
+            if isinstance(pf, dict) and pf.get("placement") and pf.get("canvas"):
+                slot["placedFigure"] = pf
+        strip.append(slot)
 
     entry: dict[str, Any] = {
         "id": rid,

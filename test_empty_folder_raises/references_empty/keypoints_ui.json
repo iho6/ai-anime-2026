@@ -1,0 +1,14 @@
+{
+  "rootOrder": [
+    "folder:empty"
+  ],
+  "folders": [
+    {
+      "id": "empty",
+      "name": "Empty"
+    }
+  ],
+  "folderOrder": {
+    "empty": []
+  }
+}

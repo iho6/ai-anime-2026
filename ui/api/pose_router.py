@@ -10,7 +10,11 @@ from pydantic import BaseModel
 
 from services import logic
 
-from .preview_storage import save_staging_upload
+from .preview_storage import (
+    save_staging_encoded_video,
+    save_staging_upload,
+    staging_video_output_stem,
+)
 from .storage_paths import resolve_storage_rel_file, storage_rel_from_abs
 from .ws_streaming import run_with_log_stream, safe_send_json
 
@@ -207,6 +211,37 @@ async def upload_staging(char_key: str, file: UploadFile = File(...)) -> dict[st
     return {"relPath": rel}
 
 
+class EncodeFramesVideoStagingBody(BaseModel):
+    relPaths: list[str]
+    fps: float
+    filenameBase: str | None = None
+
+
+@router.post("/detail/{char_key}/staging/encode_frames_video")
+def encode_frames_video_staging(
+    char_key: str, body: EncodeFramesVideoStagingBody
+) -> dict[str, str]:
+    """Encode ordered staging frames into an MP4/WebM kept under character staging."""
+    if not char_key:
+        raise HTTPException(400, "Missing char_key")
+    out_stem = staging_video_output_stem(char_key)
+    try:
+        result = logic.write_frames_video_from_rel_paths(
+            body.relPaths, body.fps, out_stem
+        )
+    except ValueError as ex:
+        raise HTTPException(status_code=400, detail=str(ex)) from ex
+    except RuntimeError as ex:
+        raise HTTPException(
+            status_code=502, detail={"error": str(ex), "stage": "encode_frames_video_staging"}
+        ) from ex
+    try:
+        video_rel = save_staging_encoded_video(char_key, result["absPath"])
+    except ValueError as ex:
+        raise HTTPException(status_code=400, detail=str(ex)) from ex
+    return {"videoRelPath": video_rel}
+
+
 @router.websocket("/detail/{char_key}/pose/ws")
 async def pose_job_ws(ws: WebSocket, char_key: str) -> None:
     await ws.accept()
@@ -256,6 +291,33 @@ async def pose_job_ws(ws: WebSocket, char_key: str) -> None:
                 )
 
             result, err = await run_with_log_stream(ws, work_video_seq)
+            if err:
+                await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+            else:
+                await safe_send_json(
+                    ws, {"type": "done", "ok": True, "result": result}
+                )
+
+        elif job == "generate_folder_ref_sequence":
+            folder_id = (msg.get("folderId") or "").strip()
+            if not folder_id:
+                raise ValueError("folderId is required.")
+            prompts = msg.get("prompts") or []
+            if not isinstance(prompts, list):
+                raise ValueError("prompts must be a list")
+            texts = [str(p).strip() for p in prompts if str(p).strip()]
+            input_abs = base_abs_from_msg()
+
+            def work_folder_seq(log_cb):
+                return logic.generate_pose_sequence_from_folder_ref(
+                    char_key,
+                    folder_id,
+                    input_abs,
+                    texts,
+                    log_cb=log_cb,
+                )
+
+            result, err = await run_with_log_stream(ws, work_folder_seq)
             if err:
                 await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
             else:

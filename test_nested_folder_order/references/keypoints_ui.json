@@ -1,0 +1,25 @@
+{
+  "rootOrder": [
+    "folder:parent"
+  ],
+  "folders": [
+    {
+      "id": "parent",
+      "name": "Parent"
+    },
+    {
+      "id": "child",
+      "name": "Child",
+      "parentId": "parent"
+    }
+  ],
+  "folderOrder": {
+    "parent": [
+      "folder:child",
+      "kp_b"
+    ],
+    "child": [
+      "kp_a"
+    ]
+  }
+}

@@ -100,12 +100,38 @@ async def reference_make_keypoint_video_ws(ws: WebSocket) -> None:
     except WebSocketDisconnect:
         return
     try:
+        frame_rels_raw = msg.get("frameRelPaths")
+        frame_meta_raw = msg.get("frameMeta")
+        frame_rels: list[str] = []
+        if isinstance(frame_rels_raw, list):
+            frame_rels = [str(r or "").strip() for r in frame_rels_raw if str(r or "").strip()]
+        frame_meta: list[dict[str, Any]] = []
+        if isinstance(frame_meta_raw, list):
+            frame_meta = [m for m in frame_meta_raw if isinstance(m, dict)]
+
         video_rel = (msg.get("videoRelPath") or "").strip()
-        if not video_rel:
-            raise ValueError("videoRelPath is required.")
+        fps_raw = msg.get("fps")
+        fps: int | None = None
+        if fps_raw is not None:
+            try:
+                fps = int(fps_raw)
+            except (TypeError, ValueError):
+                fps = None
 
         def work(log_cb: Any) -> dict[str, Any]:
-            entry = logic.make_reference_keypoint_video(video_rel, log_cb=log_cb)
+            if frame_rels:
+                entry = logic.make_reference_keypoint_video_from_staged_frames(
+                    frame_rels,
+                    frame_meta,
+                    log_cb=log_cb,
+                    fps=fps,
+                )
+            elif video_rel:
+                entry = logic.make_reference_keypoint_video(
+                    video_rel, log_cb=log_cb, fps=fps
+                )
+            else:
+                raise ValueError("videoRelPath or frameRelPaths is required.")
             return {
                 "item": {
                     "id": entry["id"],

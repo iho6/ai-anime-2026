@@ -42,7 +42,9 @@ import {
   runMotionRefGenerateWsJob,
   runMotionRefSkinWsJob,
   runMotionRefShotAddToPoseWsJob,
+  runReferenceMakeKeypointVideoWsJob,
   PoseReference,
+  type KeypointVideoReference,
 } from "../lib/api";
 import { useJobRunSession } from "../hooks/useJobRunSession";
 import type { SharedLogStreamHandle } from "./SharedLogStream";
@@ -66,6 +68,7 @@ import {
 import { interpolateWorldPoseAtFrame, DEFAULT_BLEND_EASE } from "./motionRef/cameraTrajectory";
 import { ExportFpsDialog } from "./ExportFpsDialog";
 import {
+  apiEncodeFramesVideoToStaging,
   apiExportFramesVideo,
   dataUrlToStagingFile,
   sanitizeDownloadBaseName,
@@ -82,6 +85,16 @@ function cloneKeyframes(kfs: CameraKeyframe[]): CameraKeyframe[] {
   return kfs.map((k) => ({ ...k }));
 }
 
+function encodeFpsFromSample(
+  sampleFps: V2PoseSeqSampleFps,
+  sourceFps: number
+): number {
+  if (sampleFps === "source") {
+    return Math.max(1, Math.min(120, Math.round(sourceFps) || 24));
+  }
+  return sampleFps;
+}
+
 export function MotionRefGenModal(props: {
   open: boolean;
   charKey: string;
@@ -90,8 +103,10 @@ export function MotionRefGenModal(props: {
   onClose: () => void;
   /** Called each time a keypoint is saved — adds to the unified pose gallery. */
   onKeypointsMade?: (ref: PoseReference) => void;
+  /** Called when a video keypoint sequence row is saved to the reference library. */
+  onKeypointVideoMade?: (ref: KeypointVideoReference) => void;
 }) {
-  const { open, charKey, onBack, onClose, onKeypointsMade } = props;
+  const { open, charKey, onBack, onClose, onKeypointsMade, onKeypointVideoMade } = props;
   const { showError, askText, confirmAction } = useAppError();
 
   const logRef = useRef<SharedLogStreamHandle | null>(null);
@@ -190,6 +205,7 @@ export function MotionRefGenModal(props: {
     label: string;
     sampleFps: V2PoseSeqSampleFps;
     folderName: string;
+    useVideoKeypointService: boolean;
   } | null>(null);
   const [fpsExportPending, setFpsExportPending] = useState<{
     motionKey: string;
@@ -1273,6 +1289,36 @@ export function MotionRefGenModal(props: {
     return { mode: "v2pose", captures, skippedFrames, clippedFrames };
   }
 
+  async function uploadCapturedFramesToStaging(dataUrls: string[]): Promise<string[]> {
+    pushLog(`Uploading ${dataUrls.length} frames…`);
+    const relPaths: string[] = [];
+    for (let i = 0; i < dataUrls.length; i++) {
+      setRunningStatus(`Uploading frame ${i + 1}/${dataUrls.length}…`);
+      const file = await dataUrlToStagingFile(dataUrls[i], i);
+      const { relPath } = await apiUploadStaging({ charKey, file });
+      relPaths.push(relPath);
+    }
+    return relPaths;
+  }
+
+  async function uploadCapturedFramesAndEncode(params: {
+    dataUrls: string[];
+    fps: number;
+    filenameBase: string;
+  }): Promise<{ videoRelPath: string; relPaths: string[] }> {
+    const { dataUrls, fps, filenameBase } = params;
+    const relPaths = await uploadCapturedFramesToStaging(dataUrls);
+    pushLog("Encoding video…");
+    setRunningStatus("Encoding video…");
+    const { videoRelPath } = await apiEncodeFramesVideoToStaging({
+      charKey,
+      relPaths,
+      fps,
+      filenameBase: sanitizeDownloadBaseName(filenameBase),
+    });
+    return { videoRelPath, relPaths };
+  }
+
   async function runMotionVideoExport(
     motionKey: string,
     item: MotionRefListItem,
@@ -1296,15 +1342,7 @@ export function MotionRefGenModal(props: {
         throw new Error("No frames captured.");
       }
 
-      pushLog(`Uploading ${captured.dataUrls.length} frames…`);
-      const relPaths: string[] = [];
-      for (let i = 0; i < captured.dataUrls.length; i++) {
-        setRunningStatus(`Uploading frame ${i + 1}/${captured.dataUrls.length}…`);
-        const file = await dataUrlToStagingFile(captured.dataUrls[i], i);
-        const { relPath } = await apiUploadStaging({ charKey, file });
-        relPaths.push(relPath);
-      }
-
+      const relPaths = await uploadCapturedFramesToStaging(captured.dataUrls);
       pushLog("Encoding video…");
       setRunningStatus("Encoding video…");
       await apiExportFramesVideo({
@@ -1323,16 +1361,86 @@ export function MotionRefGenModal(props: {
     motionKey: string,
     item: MotionRefListItem,
     folderName: string,
-    sampleFps: V2PoseSeqSampleFps
+    sampleFps: V2PoseSeqSampleFps,
+    useVideoKeypointService: boolean
   ) {
     setV2poseDialog(null);
     beginSession({
-      title: "V2Pose Seq",
+      title: useVideoKeypointService ? "V2Pose Seq (video)" : "V2Pose Seq",
       clearLog: true,
       runningStatus: "Capturing frames…",
     });
     await Promise.resolve();
     try {
+      const sourceFps = manifest?.fps ?? item.fps ?? 30;
+      const encodeFps = encodeFpsFromSample(sampleFps, sourceFps);
+
+      if (useVideoKeypointService) {
+        const captured = await captureMotionViewerFrames(motionKey, item, sampleFps, {
+          mode: "v2pose",
+          pushLog,
+          setRunningStatus,
+        });
+        if (captured.mode !== "v2pose") {
+          throw new Error("Unexpected capture mode.");
+        }
+        const { captures, skippedFrames, clippedFrames } = captured;
+
+        if (skippedFrames.length) {
+          pushLog(
+            `Skipped ${skippedFrames.length} frame(s) with the figure out of frame. ` +
+              `Adjust the camera/zoom (or enable In place) so the output frame stays on the figure.`
+          );
+        }
+        if (clippedFrames.length) {
+          pushLog(
+            `Warning: ${clippedFrames.length} frame(s) had the SDPose crop touching the output frame edge — ` +
+              `the figure may be cut off. Zoom out or recenter for best keypoints.`
+          );
+        }
+        if (!captures.length) {
+          throw new Error(
+            "No frames captured — the figure was out of frame for the whole range. Recenter the camera and try again."
+          );
+        }
+
+        pushLog(`Uploading ${captures.length} frames…`);
+        const frameRelPaths: string[] = [];
+        for (let i = 0; i < captures.length; i++) {
+          const c = captures[i];
+          setRunningStatus(`Uploading frame ${i + 1}/${captures.length}…`);
+          const file = await dataUrlToStagingFile(c.pngBase64, i);
+          const { relPath } = await apiUploadStaging({ charKey, file });
+          frameRelPaths.push(relPath);
+        }
+
+        pushLog("Running video keypoint service…");
+        setRunningStatus("Starting video keypoint job…");
+        const done = await runReferenceMakeKeypointVideoWsJob({
+          frameRelPaths,
+          frameMeta: captures.map((c) => ({
+            cropBox: c.cropBox,
+            imageWidth: c.imageWidth,
+            imageHeight: c.imageHeight,
+          })),
+          fps: encodeFps,
+          onLogLine: onJobLogLine,
+        });
+        if (!done.ok || !done.result?.item) {
+          throw new Error(done.error || "Video keypoint generation failed.");
+        }
+        onKeypointVideoMade?.(done.result.item);
+        const frameCount = (done.result.item.frameSequence?.strip ?? []).filter(
+          (s) => s.kind === "image"
+        ).length;
+        pushLog(
+          `Done — video keypoint sequence (${frameCount} frame${frameCount === 1 ? "" : "s"}). ` +
+            `Saved to reference library as video row.`
+        );
+        endSession();
+        return;
+      }
+
       const captured = await captureMotionViewerFrames(motionKey, item, sampleFps, {
         mode: "v2pose",
         pushLog,
@@ -1801,6 +1909,7 @@ export function MotionRefGenModal(props: {
                 label,
                 sampleFps: "source",
                 folderName: `v2pose_${item.motionKey.slice(0, 20)}_${Date.now()}`,
+                useVideoKeypointService: false,
               });
             }}
             style={ctxMenuBtn}
@@ -1863,14 +1972,6 @@ export function MotionRefGenModal(props: {
               {v2poseDialog.label} · trim f{playbackStart}–f{playbackEnd}
               {cameraKeyframes.length === 0 ? " · no trajectory (uses current camera)" : ""}
             </div>
-            <label style={{ display: "block", fontSize: 11, marginBottom: 6 }}>Pose folder name</label>
-            <input
-              value={v2poseDialog.folderName}
-              onChange={(e) =>
-                setV2poseDialog((d) => (d ? { ...d, folderName: e.target.value } : d))
-              }
-              style={{ width: "100%", marginBottom: 12, padding: 8, background: "#111", border: "1px solid #444", color: "#eee" }}
-            />
             <label style={{ display: "block", fontSize: 11, marginBottom: 6 }}>Sample rate</label>
             <select
               value={String(v2poseDialog.sampleFps)}
@@ -1880,27 +1981,72 @@ export function MotionRefGenModal(props: {
                   v === "12" ? 12 : v === "24" ? 24 : "source";
                 setV2poseDialog((d) => (d ? { ...d, sampleFps } : d));
               }}
-              style={{ width: "100%", marginBottom: 16, padding: 8, background: "#111", border: "1px solid #444", color: "#eee" }}
+              style={{ width: "100%", marginBottom: 12, padding: 8, background: "#111", border: "1px solid #444", color: "#eee" }}
             >
               <option value="source">Source fps (every frame in trim)</option>
               <option value="12">12 fps</option>
               <option value="24">24 fps</option>
             </select>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 8,
+                fontSize: 11,
+                marginBottom: 12,
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={v2poseDialog.useVideoKeypointService}
+                onChange={(e) =>
+                  setV2poseDialog((d) =>
+                    d ? { ...d, useVideoKeypointService: e.target.checked } : d
+                  )
+                }
+                style={{ marginTop: 2 }}
+              />
+              <span>
+                Use video keypoint service (creates video row)
+                <span style={{ display: "block", color: "#888", marginTop: 4 }}>
+                  Faster for long trims; one SDPose pass on cropped-square video with per-frame
+                  placement restored. Inspect via the video keypoint sequence editor.
+                </span>
+              </span>
+            </label>
+            {!v2poseDialog.useVideoKeypointService ? (
+              <>
+                <label style={{ display: "block", fontSize: 11, marginBottom: 6 }}>Pose folder name</label>
+                <input
+                  value={v2poseDialog.folderName}
+                  onChange={(e) =>
+                    setV2poseDialog((d) => (d ? { ...d, folderName: e.target.value } : d))
+                  }
+                  style={{ width: "100%", marginBottom: 12, padding: 8, background: "#111", border: "1px solid #444", color: "#eee" }}
+                />
+              </>
+            ) : null}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button type="button" onClick={() => setV2poseDialog(null)} style={actionBtn}>
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={busy || !v2poseDialog.folderName.trim()}
+                disabled={
+                  busy ||
+                  (!v2poseDialog.useVideoKeypointService && !v2poseDialog.folderName.trim())
+                }
                 onClick={() => {
                   const item = motions.find((m) => m.motionKey === v2poseDialog.motionKey);
                   if (!item) return;
                   void runV2PoseSeq(
                     v2poseDialog.motionKey,
                     item,
-                    v2poseDialog.folderName.trim(),
-                    v2poseDialog.sampleFps
+                    v2poseDialog.folderName.trim() ||
+                      `v2pose_${v2poseDialog.motionKey.slice(0, 20)}`,
+                    v2poseDialog.sampleFps,
+                    v2poseDialog.useVideoKeypointService
                   );
                 }}
                 style={{ ...actionBtn, background: MOTION_REF_ACCENT_BTN_BG }}

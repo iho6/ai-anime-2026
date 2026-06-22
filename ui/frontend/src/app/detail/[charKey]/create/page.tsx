@@ -60,6 +60,11 @@ import { reorderInsertBeforeOrAfter } from "../../../../components/dnd/reorder";
 type GenType = "pose" | "expression";
 import { buildFlatGalleryLightboxPaths } from "../../../../lib/galleryLightboxOrder";
 import { batchRefPreviewFramePaths } from "../../../../lib/batchRefPreview";
+import {
+  type KeypointRefEntry,
+  keypointRefHasFrames,
+  keypointRefPreviewFps,
+} from "../../../../lib/keypointRefGeneration";
 import { CameraAngleModal } from "../../../../components/CameraAngleModal";
 import { DesktopContextMenu, ContextMenuItem } from "../../../../components/DesktopContextMenu";
 import { DetailSubpageChrome } from "../../../../components/DetailSubpageChrome";
@@ -78,6 +83,8 @@ import {
 } from "../../../../components/ReferencePicker";
 import { MotionRefGenModal } from "../../../../components/MotionRefGenModal";
 import { StartingImagePreview } from "../../../../components/StartingImagePreview";
+import { buildKeypointRefQueueFromSelection } from "../../../../lib/referencePickerSelection";
+import { KeypointReferenceSlot } from "../../../../components/KeypointReferenceSlot";
 import { PoseRefFramePreview } from "../../../../components/PoseRefFramePreview";
 import { GalleryImageLightbox } from "../../../../components/GalleryImageLightbox";
 import { SquareButton } from "../../../../components/SquareButton";
@@ -89,59 +96,9 @@ const POSE_FLAT_FOLDER_KEY = "flat";
 
 type StartingImageState = { stack: string[]; index: number };
 
-type BatchRefEntry =
-  | { kind: "single"; ref: PoseReference }
-  | { kind: "video"; ref: KeypointVideoReference };
+type BatchRefEntry = KeypointRefEntry;
 
-type ActiveReference =
-  | { kind: "single"; ref: PoseReference }
-  | { kind: "video"; ref: KeypointVideoReference };
-
-function activeReferenceHasKeypoint(ar: ActiveReference | null): boolean {
-  if (!ar) return false;
-  if (ar.kind === "single") return !!(ar.ref.keypointRelPath || "").trim();
-  const strip = ar.ref.frameSequence?.strip ?? [];
-  return strip.some((s) => s.kind === "image" && !s.hidden && (s.relPath || "").trim());
-}
-
-function activeReferenceKeypointPreview(ar: ActiveReference | null): string | null {
-  if (!ar) return null;
-  if (ar.kind === "single") return ar.ref.keypointRelPath || null;
-  const strip = ar.ref.frameSequence?.strip ?? [];
-  const visible = strip.find((s) => s.kind === "image" && !s.hidden && s.relPath);
-  if (visible?.relPath) return visible.relPath;
-  const any = strip.find((s) => s.kind === "image" && s.relPath);
-  return any?.relPath ?? null;
-}
-
-function activeReferenceKeypointFramePaths(ar: ActiveReference | null): string[] {
-  if (!ar) return [];
-  if (ar.kind === "single") {
-    const kp = (ar.ref.keypointRelPath || "").trim();
-    return kp ? [kp] : [];
-  }
-  const strip = ar.ref.frameSequence?.strip ?? [];
-  return strip
-    .filter((s) => s.kind === "image" && !s.hidden && (s.relPath || "").trim())
-    .map((s) => String(s.relPath));
-}
-
-function activeReferencePreviewFps(ar: ActiveReference | null): number {
-  if (!ar || ar.kind !== "video") return 24;
-  return ar.ref.fps || 24;
-}
-
-function activeReferenceThumbPreview(ar: ActiveReference | null): string | null {
-  if (!ar) return null;
-  if (ar.kind === "single") return ar.ref.referenceRelPath || null;
-  const strip = ar.ref.frameSequence?.strip ?? [];
-  for (const s of strip) {
-    if (s.kind !== "image") continue;
-    const refRel = (s as { referenceRelPath?: string }).referenceRelPath;
-    if (refRel) return refRel;
-  }
-  return activeReferenceKeypointPreview(ar);
-}
+type ActiveReference = KeypointRefEntry;
 
 function mergeStackAfterGeneration(prev: StartingImageState, lastRel: string): StartingImageState {
   const idx = Math.min(Math.max(0, prev.index), Math.max(0, prev.stack.length - 1));
@@ -720,29 +677,24 @@ export default function CreatePage() {
     }
   }, [clearPosePromptUiForKeypointReference]);
 
-  function buildBatchQueueFromSelection(
-    singles: PoseReference[],
-    videos: KeypointVideoReference[]
-  ): BatchRefEntry[] {
-    const out: BatchRefEntry[] = [];
-    for (const ref of singles) out.push({ kind: "single", ref });
-    for (const ref of videos) out.push({ kind: "video", ref });
-    return out;
-  }
-
-  function activeRefFromBatchEntry(entry: BatchRefEntry): ActiveReference {
-    return entry.kind === "video"
-      ? { kind: "video", ref: entry.ref }
-      : { kind: "single", ref: entry.ref };
-  }
-
   async function onReferenceUseSelected(sel: ReferencePickerSelection) {
-    const { singles, videos } = sel;
-    if (!singles.length && !videos.length) return;
+    const { singles, videos, folders } = sel;
+    if (!singles.length && !videos.length && !folders.length) return;
     setReferencePickerOpen(false);
-    const total = singles.length + videos.length;
+    const total = singles.length + videos.length + folders.length;
     if (total === 1) {
       setBatchRefQueue([]);
+      if (folders.length === 1) {
+        const f = folders[0];
+        setActiveReference({
+          kind: "folder",
+          folderId: f.folder.id,
+          folderName: f.folder.name,
+          keypoints: f.keypoints,
+        });
+        clearPosePromptUiForKeypointReference();
+        return;
+      }
       if (videos.length === 1) {
         setActiveReference({ kind: "video", ref: videos[0] });
         clearPosePromptUiForKeypointReference();
@@ -751,9 +703,9 @@ export default function CreatePage() {
       onReferencePickSaved(singles[0]);
       return;
     }
-    const queue = buildBatchQueueFromSelection(singles, videos);
+    const queue = buildKeypointRefQueueFromSelection(sel);
     setBatchRefQueue(queue);
-    setActiveReference(activeRefFromBatchEntry(queue[0]));
+    setActiveReference(queue[0]);
     clearPosePromptUiForKeypointReference();
   }
 
@@ -1127,6 +1079,14 @@ export default function CreatePage() {
           : activeReference?.kind === "video"
             ? activeReference.ref
             : null;
+    const folderRef =
+      entry?.kind === "folder"
+        ? entry
+        : entry
+          ? null
+          : activeReference?.kind === "folder"
+            ? activeReference
+            : null;
     const keypointRelPath =
       entry?.kind === "single"
         ? entry.ref.keypointRelPath
@@ -1135,9 +1095,33 @@ export default function CreatePage() {
           : activeReference?.kind === "single"
             ? activeReference.ref.keypointRelPath
             : undefined;
-    if (!promptTextsForGeneration.length && !keypointRelPath && !videoRef) {
+    if (!promptTextsForGeneration.length && !keypointRelPath && !videoRef && !folderRef) {
       showError({ message: "Enter a prompt (or load a reference keypoint) first." });
       return false;
+    }
+    if (folderRef) {
+      const done = await runDetailWsJob<{
+        sequenceName: string;
+        galleryItemId: string;
+      }>({
+        charKey,
+        pathSuffix: wsSuffix,
+        payload: {
+          job: "generate_folder_ref_sequence",
+          folderId: folderRef.folderId,
+          baseRelPath: activeStartingRel,
+          prompts: promptTextsForGeneration,
+        },
+        onLogLine: onLog,
+      });
+      if (!done.ok) {
+        failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
+        return false;
+      }
+      const r = done.result!;
+      await loadSequences();
+      if (r.sequenceName) setActiveSequence(r.sequenceName);
+      return true;
     }
     if (videoRef) {
       const done = await runDetailWsJob<{
@@ -1894,132 +1878,67 @@ export default function CreatePage() {
 
           {/* Column B: Reference + keypoint (pose only) */}
           {isPose && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-              <button
-                type="button"
-                disabled={uiBusy}
-                onClick={() => setReferencePickerOpen(true)}
-                style={{
-                  width: 140,
-                  height: 140,
-                  borderRadius: 0,
-                  border: "1px solid rgba(0,0,0,0.5)",
-                  background: "transparent",
-                  cursor: uiBusy ? "not-allowed" : "pointer",
-                }}
-              >
-                Add Reference
-              </button>
-              {activeReference && activeReferenceThumbPreview(activeReference) ? (
-                <div
-                  style={{
-                    width: 140,
-                    height: 140,
-                    flexShrink: 0,
-                    border: "1px solid rgba(0,0,0,0.35)",
-                    overflow: "hidden",
-                    position: "relative",
-                  }}
-                >
-                  {activeReference.kind === "video" ? (
-                    <span
-                      style={{
-                        position: "absolute",
-                        top: 4,
-                        left: 4,
-                        zIndex: 1,
-                        fontSize: 10,
-                        padding: "1px 4px",
-                        background: "rgba(0,0,0,0.65)",
-                        color: "#fff",
-                      }}
-                    >
-                      Video
-                    </span>
-                  ) : null}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={assetUrlFromRelPath(activeReferenceThumbPreview(activeReference)!)}
-                    alt="Reference"
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    draggable={false}
-                  />
-                </div>
-              ) : null}
-            </div>
-            {activeReference &&
-            (batchRefQueue.length > 1
-              ? batchRefPreviewFramePaths(batchRefQueue)
-              : activeReferenceKeypointFramePaths(activeReference)
-            ).length > 0 ? (
-              <div
-                style={{ position: "relative" }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setMenu({
-                    open: true,
-                    x: e.clientX,
-                    y: e.clientY,
-                    items: [
-                      {
-                        key: "clear-ref",
-                        label: "Clear reference",
-                        onSelect: () => {
-                          setActiveReference(null);
-                          setBatchRefQueue([]);
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: 8 }}
+            onContextMenu={
+              activeReference
+                ? (e) => {
+                    e.preventDefault();
+                    setMenu({
+                      open: true,
+                      x: e.clientX,
+                      y: e.clientY,
+                      items: [
+                        {
+                          key: "clear-ref",
+                          label: "Clear reference",
+                          onSelect: () => {
+                            setActiveReference(null);
+                            setBatchRefQueue([]);
+                          },
                         },
-                      },
-                    ],
-                  });
-                }}
-              >
-                <PoseRefFramePreview
-                  frameRelPaths={
-                    batchRefQueue.length > 1
-                      ? batchRefPreviewFramePaths(batchRefQueue)
-                      : activeReferenceKeypointFramePaths(activeReference)
+                      ],
+                    });
                   }
-                  fps={activeReferencePreviewFps(activeReference)}
+                : undefined
+            }
+          >
+            <KeypointReferenceSlot
+              keypointRef={activeReference}
+              size={140}
+              tone="dark"
+              disabled={uiBusy}
+              onOpenPicker={() => setReferencePickerOpen(true)}
+              onClear={() => {
+                setActiveReference(null);
+                setBatchRefQueue([]);
+              }}
+              emptyLabel="Add Reference"
+              title="Add reference image"
+            />
+            {batchRefQueue.length > 1 ? (
+              <>
+                <PoseRefFramePreview
+                  frameRelPaths={batchRefPreviewFramePaths(batchRefQueue)}
+                  fps={keypointRefPreviewFps(activeReference)}
                   maxWidth={STARTING_PREVIEW_MAX_W}
                   maxHeight={STARTING_PREVIEW_MAX_H}
                 />
-                {batchRefQueue.length > 1 ? (
-                  <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-                    {batchRefQueue.length} references queued
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div
-                style={{
-                  width: 140,
-                  height: 140,
-                  flexShrink: 0,
-                  border: "1px solid rgba(0,0,0,0.35)",
-                  background: "rgba(0,0,0,0.02)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 14,
-                  lineHeight: 1.25,
-                  opacity: 0.75,
-                  padding: 8,
-                  boxSizing: "border-box",
-                  textAlign: "center",
-                }}
-              >
-                No reference
-              </div>
-            )}
+                <div style={{ fontSize: 12, opacity: 0.75 }}>
+                  {batchRefQueue.length} references queued
+                </div>
+              </>
+            ) : null}
           </div>
           )}
         </div>
 
         <div style={{ marginBottom: 10, opacity: 0.95 }}>
-          {activeReferenceHasKeypoint(activeReference)
-            ? activeReference?.kind === "video"
-              ? `Describe the pose to generate. With a video keypoint sequence loaded, generation creates a new Sequence folder (not flat gallery images). Prompt is optional.`
+          {keypointRefHasFrames(activeReference)
+            ? activeReference?.kind === "video" || activeReference?.kind === "folder"
+              ? `Describe the pose to generate. With a ${
+                  activeReference?.kind === "folder" ? "keypoint folder" : "video keypoint sequence"
+                } loaded, generation creates a new Sequence folder (not flat gallery images). Prompt is optional.`
               : `Describe the ${isPose ? "pose" : "expression"} to generate. With a reference keypoint loaded, the prompt is optional and defaults to matching the reference pose.`
             : `Describe the ${isPose ? "pose" : "expression"} to generate.`}
         </div>
@@ -2030,7 +1949,7 @@ export default function CreatePage() {
             disabled={uiBusy}
             onChange={(e) => setSinglePrompt(e.target.value)}
             placeholder={
-              activeReferenceHasKeypoint(activeReference)
+              keypointRefHasFrames(activeReference)
                 ? "Provide description of reference pose (optional)"
                 : isPose
                 ? "Input new pose description"
@@ -2520,6 +2439,11 @@ export default function CreatePage() {
           onClose={() => setMotionRefOpen(false)}
           onKeypointsMade={(ref) => {
             onReferencePickSaved(ref);
+          }}
+          onKeypointVideoMade={(ref) => {
+            setActiveReference({ kind: "video", ref });
+            setBatchRefQueue([]);
+            clearPosePromptUiForKeypointReference();
           }}
         />
       )}

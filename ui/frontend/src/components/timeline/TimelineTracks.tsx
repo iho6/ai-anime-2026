@@ -25,9 +25,8 @@ import {
   clipEnd,
   clipTrackLabel,
   connectedClipPairs,
-  promoteTrackKind,
+  moveClipBetweenTracks,
   timelineDuration,
-  trackKindForClip,
 } from "./timelineUtil";
 
 const LABEL_W = 120;
@@ -130,7 +129,7 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
   selectedClipIds: string[];
   onSeek: (t: number) => void;
   onSelectClip: (clipId: string | null, additive: boolean) => void;
-  onChange: (next: TimelineManifest) => void;
+  onChange: (updater: (prev: TimelineManifest) => TimelineManifest) => void;
   onCommit: () => void;
   setPxPerSec: (updater: (prev: number) => number) => void;
   onClipContextMenu: (
@@ -261,26 +260,26 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
 
   function renameTrack(trackId: string, name: string) {
     onCommit();
-    onChange({
-      ...manifest,
-      tracks: manifest.tracks.map((t) => (t.id === trackId ? { ...t, name } : t)),
-    });
+    onChange((prev) => ({
+      ...prev,
+      tracks: prev.tracks.map((t) => (t.id === trackId ? { ...t, name } : t)),
+    }));
   }
 
   function toggleTrackHidden(trackId: string) {
     onCommit();
-    onChange({
-      ...manifest,
-      tracks: manifest.tracks.map((t) =>
+    onChange((prev) => ({
+      ...prev,
+      tracks: prev.tracks.map((t) =>
         t.id === trackId ? { ...t, hidden: !t.hidden } : t
       ),
-    });
+    }));
   }
 
   function mutateClip(trackId: string, clipId: string, patch: Partial<TimelineClip>) {
-    onChange({
-      ...manifest,
-      tracks: manifest.tracks.map((t) =>
+    onChange((prev) => ({
+      ...prev,
+      tracks: prev.tracks.map((t) =>
         t.id !== trackId
           ? t
           : {
@@ -288,32 +287,17 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
               clips: t.clips.map((c) => (c.id === clipId ? { ...c, ...patch } : c)),
             }
       ),
-    });
+    }));
   }
 
   /** Move a clip to another track (cross-lane drag), placing it at ``newStart``. */
   function moveClipToTrack(
-    fromTrackId: string,
+    _fromTrackId: string,
     toTrackId: string,
     clip: TimelineClip,
     newStart: number
   ) {
-    onChange({
-      ...manifest,
-      tracks: manifest.tracks.map((t) => {
-        if (t.id === fromTrackId) {
-          return { ...t, clips: t.clips.filter((c) => c.id !== clip.id) };
-        }
-        if (t.id === toTrackId) {
-          const base =
-            t.kind === "neutral" && t.clips.length === 0
-              ? promoteTrackKind(t, trackKindForClip(clip), manifest.tracks)
-              : t;
-          return { ...base, clips: [...base.clips, { ...clip, start: newStart }] };
-        }
-        return t;
-      }),
-    });
+    onChange((prev) => moveClipBetweenTracks(prev, toTrackId, clip, newStart));
   }
 
   /** Candidate snap times (seconds): playhead, 0, and every other clip's edges. */
@@ -529,15 +513,18 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
       const dropIdx = getTrackDropIndexFromY(e.clientY);
       trackDragRef.current = null;
       setTrackDropIndex(null);
-      const tracks = manifest.tracks;
-      const fromIdx = tracks.findIndex((t) => t.id === trackId);
+      const fromIdx = manifest.tracks.findIndex((t) => t.id === trackId);
       if (fromIdx !== -1 && dropIdx !== fromIdx && dropIdx !== fromIdx + 1) {
-        const next = [...tracks];
-        const [moved] = next.splice(fromIdx, 1);
-        const insertAt = dropIdx > fromIdx ? dropIdx - 1 : dropIdx;
-        next.splice(insertAt, 0, moved);
         onCommit();
-        onChange({ ...manifest, tracks: next });
+        onChange((prev) => {
+          const idx = prev.tracks.findIndex((t) => t.id === trackId);
+          if (idx === -1 || dropIdx === idx || dropIdx === idx + 1) return prev;
+          const next = [...prev.tracks];
+          const [moved] = next.splice(idx, 1);
+          const insertAt = dropIdx > idx ? dropIdx - 1 : dropIdx;
+          next.splice(insertAt, 0, moved);
+          return { ...prev, tracks: next };
+        });
       }
       return;
     }

@@ -13,21 +13,7 @@
       "id": "trk_mqgqoiqx_22",
       "name": "FLF",
       "kind": "video",
-      "clips": [
-        {
-          "id": "clip_mqgqoiqx_20",
-          "type": "video",
-          "srcRelPath": "timelines/Timeline/clips/clip_15a3016f77a44ee18302d1ca044e6102.mp4",
-          "start": 11.864091259995316,
-          "inPoint": 0.3983566233606073,
-          "outPoint": 1.375,
-          "speed": 1,
-          "duration": 0.9766433766393927,
-          "srcDuration": 1.375,
-          "naturalW": 1280,
-          "naturalH": 1280
-        }
-      ]
+      "clips": []
     },
     {
       "id": "trk_mqgqehuo_19",
@@ -79,6 +65,45 @@
             "y": 0,
             "scale": 1
           }
+        },
+        {
+          "id": "clip_mqgqoiqx_20",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_15a3016f77a44ee18302d1ca044e6102.mp4",
+          "start": 4.401584453293774,
+          "inPoint": 0.3983566233606073,
+          "outPoint": 1.375,
+          "speed": 1,
+          "duration": 0.9766433766393927,
+          "srcDuration": 1.375,
+          "naturalW": 1280,
+          "naturalH": 1280
+        },
+        {
+          "id": "clip_mqgqoiqx_20",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_15a3016f77a44ee18302d1ca044e6102.mp4",
+          "start": 4.401584453293774,
+          "inPoint": 0.3983566233606073,
+          "outPoint": 1.375,
+          "speed": 1,
+          "duration": 0.9766433766393927,
+          "srcDuration": 1.375,
+          "naturalW": 1280,
+          "naturalH": 1280
+        },
+        {
+          "id": "clip_mqgqoiqx_20",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_15a3016f77a44ee18302d1ca044e6102.mp4",
+          "start": 4.401584453293774,
+          "inPoint": 0.3983566233606073,
+          "outPoint": 1.375,
+          "speed": 1,
+          "duration": 0.9766433766393927,
+          "srcDuration": 1.375,
+          "naturalW": 1280,
+          "naturalH": 1280
         }
       ]
     },
@@ -450,6 +475,40 @@
             "fontSize": 48,
             "color": "#ff88cc",
             "align": "center"
+          }
+        },
+        {
+          "id": "clip_mqoz2uqn_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_816827fc05c44e8dbe90becb11b03432.mp4",
+          "start": 22.3438625496374,
+          "inPoint": 0,
+          "outPoint": 1.958,
+          "speed": 1,
+          "duration": 1.958,
+          "srcDuration": 1.958,
+          "naturalW": 1080,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "Sequence_1"
+          }
+        },
+        {
+          "id": "clip_mqoz3qfu_2",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline/clips/clip_145dfc75ab734f64aa78e1dd100b9014.mp4",
+          "start": 24.3018625496374,
+          "inPoint": 0,
+          "outPoint": 1.958,
+          "speed": 1,
+          "duration": 1.958,
+          "srcDuration": 1.958,
+          "naturalW": 1080,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "Sequence_1"
           }
         }
       ],

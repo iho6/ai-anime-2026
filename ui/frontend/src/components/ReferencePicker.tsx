@@ -14,6 +14,7 @@ import {
   assetDownloadUrlFromRelPath,
   assetUrlFromRelPath,
   type FrameSequencePayload,
+  type KeypointFolder,
   type KeypointsLayout,
   type KeypointVideoReference,
   type PoseReference,
@@ -33,12 +34,19 @@ import {
   collectFolderIdsPostOrder,
   collectFolderLeafIds,
   folderContainsFolderId,
+  folderSelectionState,
   isKeypointGridLeaf,
 } from "../lib/folderSelection";
+
+export type ReferencePickerFolderSelection = {
+  folder: KeypointFolder;
+  keypoints: PoseReference[];
+};
 
 export type ReferencePickerSelection = {
   singles: PoseReference[];
   videos: KeypointVideoReference[];
+  folders: ReferencePickerFolderSelection[];
 };
 
 export function ReferencePicker(props: {
@@ -222,6 +230,28 @@ function ReferencePickerOpen(props: {
     );
 
   const orderedSelection = (): ReferencePickerSelection => {
+    const itemIds = new Set(layout.items.map((x) => x.id));
+    const videoIds = new Set((layout.videoItems ?? []).map((x) => x.id));
+    const isLeaf = (tok: string) => isKeypointGridLeaf(tok, itemIds, videoIds);
+
+    const folders: ReferencePickerFolderSelection[] = [];
+    const leafIdsInFolders = new Set<string>();
+    for (const f of layout.folders) {
+      const fid = f.id;
+      const folderSel = folderSelectionState(fid, layout, selectedIds, isLeaf);
+      if (!folderSel.checked) continue;
+      const leaves = collectFolderLeafIds(fid, layout, isLeaf);
+      const keypoints: PoseReference[] = [];
+      for (const tok of leaves) {
+        const it = itemById.get(tok);
+        if (it) {
+          keypoints.push(it);
+          leafIdsInFolders.add(tok);
+        }
+      }
+      if (keypoints.length) folders.push({ folder: f, keypoints });
+    }
+
     const order = viewFolderId
       ? layout.folderOrder[viewFolderId] ?? []
       : layout.rootOrder;
@@ -229,6 +259,7 @@ function ReferencePickerOpen(props: {
     const videos: KeypointVideoReference[] = [];
     for (const tok of order) {
       if (!selectedIds.has(tok)) continue;
+      if (leafIdsInFolders.has(tok)) continue;
       if (tok.startsWith("video:")) {
         const vid = tok.slice("video:".length);
         const it = videoById.get(vid);
@@ -240,6 +271,7 @@ function ReferencePickerOpen(props: {
       if (it) singles.push(it);
     }
     for (const tok of selectedIds) {
+      if (leafIdsInFolders.has(tok)) continue;
       if (tok.startsWith("video:")) {
         const vid = tok.slice("video:".length);
         if (!videos.some((x) => x.id === vid)) {
@@ -251,7 +283,7 @@ function ReferencePickerOpen(props: {
         if (it) singles.push(it);
       }
     }
-    return { singles, videos };
+    return { singles, videos, folders };
   };
 
   const handleDrop = useCallback(
@@ -587,7 +619,7 @@ function ReferencePickerOpen(props: {
 
   const handleUseSelected = () => {
     const sel = orderedSelection();
-    if (!sel.singles.length && !sel.videos.length) return;
+    if (!sel.singles.length && !sel.videos.length && !sel.folders.length) return;
     onUseSelected(sel);
   };
 
