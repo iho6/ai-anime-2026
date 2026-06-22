@@ -784,15 +784,18 @@ export default function CreatePage() {
     })().catch(() => {});
   }, [charKey, refreshGallery, loadSequences, clearPosePromptUiForKeypointReference]);
 
-  // Single-prompt generate: the typed prompt is wrapped by the active-type prefix builder.
+  // Single-prompt generate: wrap by type unless a keypoint ref supplies pose authority.
   const promptTextsForGeneration = useMemo(() => {
     const raw = singlePrompt.trim();
     if (!raw) return [];
+    if (genType === "pose" && keypointRefHasFrames(activeReference)) {
+      return [raw];
+    }
     const buildPromptFromLabel =
       genType === "pose" ? buildPosePromptFromLabel : buildExpressionPromptFromLabel;
     const f = buildPromptFromLabel(raw);
     return f ? [f] : [];
-  }, [singlePrompt, genType]);
+  }, [singlePrompt, genType, activeReference]);
 
   async function loadStartingImageCandidates(): Promise<{
     pose: CoverCandidate[];

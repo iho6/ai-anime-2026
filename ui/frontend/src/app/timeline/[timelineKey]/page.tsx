@@ -818,20 +818,25 @@ export default function TimelineEditorPage() {
     }
   }
 
-  async function onPickCharSequences(charKey: string, sequenceNames: string[]) {
-    if (!sequenceNames.length) return;
+  async function onPickCharSequences(
+    charKey: string,
+    picks: { sequenceName: string; galleryItemId?: string }[]
+  ) {
+    if (!picks.length) return;
     setCharPickerOpen(false);
     setChangePoseClipId(null);
     setCharPickerInitialKey(null);
     beginSession({ title: "Importing sequences", clearLog: true });
     await Promise.resolve();
     try {
-      for (const sequenceName of sequenceNames) {
+      for (const pick of picks) {
+        const { sequenceName, galleryItemId } = pick;
         pushLog(`Materializing ${sequenceName}…`);
         const done = await runTimelineImportSequenceWsJob({
           timelineKey,
           charKey,
           sequenceName,
+          galleryItemId,
           onLogLine: (line) => pushLog(line),
         });
         const r = done.result;
@@ -854,6 +859,7 @@ export default function TimelineEditorPage() {
           source: {
             charKey,
             sequenceName,
+            ...(galleryItemId ? { galleryItemId } : {}),
           },
         });
       }

@@ -38,6 +38,7 @@ import type { SharedLogStreamHandle } from "./SharedLogStream";
 import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 import { useJobRunSession } from "../hooks/useJobRunSession";
 import { useAppError } from "./ErrorProvider";
+import { resolveSequenceImportGalleryItemId } from "../lib/sequenceImport";
 import { BaseCloseupWizardModal } from "./BaseCloseupWizardModal";
 import { SequencePreviewLightbox } from "../app/detail/[charKey]/dataset/SequencePreviewLightbox";
 import {
@@ -50,7 +51,7 @@ type CharIcon = { key: string; label: string; coverRelPath: string };
 type SectionData = {
   poseImages: { relPath: string }[];
   exprImages: { relPath: string }[];
-  sequences: { name: string; coverRelPath: string }[];
+  sequences: { name: string; coverRelPath: string; galleryItemId?: string }[];
 };
 
 export function TimelineCharacterPicker(props: {
@@ -61,7 +62,10 @@ export function TimelineCharacterPicker(props: {
   /** When true (Change Pose on clip), only one image; sequences hidden. */
   poseChangeMode?: boolean;
   onPickImages: (charKey: string, relPaths: string[]) => void;
-  onPickSequences: (charKey: string, sequenceNames: string[]) => void;
+  onPickSequences: (
+    charKey: string,
+    picks: { sequenceName: string; galleryItemId?: string }[]
+  ) => void;
   onCancel: () => void;
 }) {
   const { open, poseChangeMode = false, onPickImages, onPickSequences, onCancel } = props;
@@ -183,7 +187,7 @@ export function TimelineCharacterPicker(props: {
         apiSequenceFolderNames(charKey),
       ]);
 
-      let sequences: { name: string; coverRelPath: string }[] = [];
+      let sequences: { name: string; coverRelPath: string; galleryItemId?: string }[] = [];
       if (seqNames.length > 0) {
         const manifests = await Promise.all(
           seqNames.map((name) =>
@@ -191,12 +195,16 @@ export function TimelineCharacterPicker(props: {
           )
         );
         sequences = seqNames
-          .map((name, i) => ({
-            name,
-            coverRelPath:
-              manifests[i]?.frames?.[0]?.relPath ??
-              manifests[i]?.gallery?.[0]?.relPath ?? "",
-          }))
+          .map((name, i) => {
+            const manifest = manifests[i]!;
+            return {
+              name,
+              coverRelPath:
+                manifest.frames?.[0]?.relPath ??
+                manifest.gallery?.[0]?.relPath ?? "",
+              galleryItemId: resolveSequenceImportGalleryItemId(manifest),
+            };
+          })
           .filter((s) => s.coverRelPath);
       }
 
@@ -266,9 +274,7 @@ export function TimelineCharacterPicker(props: {
     const promptTrim = newPosePrompt.trim();
     if (!promptTrim && !hasRef) return;
     const { charKey, baseRelPath } = newPosePanel;
-    const prompts = promptTrim
-      ? [`Edit the subject to ${promptTrim}, keep identity and clothing coherent unless impossible.`]
-      : [];
+    const prompts = promptTrim ? [promptTrim] : [];
     beginSession({ title: "Generating pose", clearLog: true });
     await Promise.resolve();
     pushLog("Starting pose generation…");
@@ -293,7 +299,6 @@ export function TimelineCharacterPicker(props: {
         setNewPosePanel(null);
         setNewPosePrompt("");
         setNewPoseRef(null);
-        onPickSequences(charKey, [done.result.sequenceName]);
         void loadSections(charKey);
         return;
       }
@@ -317,7 +322,6 @@ export function TimelineCharacterPicker(props: {
         setNewPosePanel(null);
         setNewPosePrompt("");
         setNewPoseRef(null);
-        onPickSequences(charKey, [done.result.sequenceName]);
         void loadSections(charKey);
         return;
       }
@@ -411,7 +415,13 @@ export function TimelineCharacterPicker(props: {
     const paths = allImageRelPaths.filter((p) => selectedRelPaths.has(p));
     if (paths.length) onPickImages(selectedKey, paths);
     if (!poseChangeMode && selectedSequences.size) {
-      onPickSequences(selectedKey, [...selectedSequences]);
+      const seqPicks = sequences
+        .filter((s) => selectedSequences.has(s.name))
+        .map((s) => ({
+          sequenceName: s.name,
+          ...(s.galleryItemId ? { galleryItemId: s.galleryItemId } : {}),
+        }));
+      if (seqPicks.length) onPickSequences(selectedKey, seqPicks);
     }
   }, [
     allImageRelPaths,
@@ -422,6 +432,7 @@ export function TimelineCharacterPicker(props: {
     selectedKey,
     selectedRelPaths,
     selectedSequences,
+    sequences,
   ]);
 
   const openImagePreview = useCallback(

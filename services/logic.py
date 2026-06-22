@@ -10112,6 +10112,29 @@ def _frame_sequence_strip_slot_visible_for_export(slot: dict[str, Any]) -> bool:
     return bool(rel)
 
 
+def _first_exportable_gallery_frame_sequence_id(manifest: dict[str, Any]) -> str | None:
+    """First gallery item with at least one exportable ``frameSequence.strip`` image."""
+    gallery = manifest.get("gallery") or []
+    if not isinstance(gallery, list):
+        return None
+    for item in gallery:
+        if not isinstance(item, dict):
+            continue
+        gid = str(item.get("id") or "").strip()
+        if not gid:
+            continue
+        fs = item.get("frameSequence")
+        if not isinstance(fs, dict):
+            continue
+        strip = fs.get("strip")
+        if not isinstance(strip, list):
+            continue
+        for slot in strip:
+            if isinstance(slot, dict) and _frame_sequence_strip_slot_visible_for_export(slot):
+                return gid
+    return None
+
+
 def write_gallery_frame_sequence_set_mp4(
     char_key: str,
     sequence_name: str,
@@ -10245,7 +10268,14 @@ def materialize_sequence_to_timeline_clip(
     dest.mkdir(parents=True, exist_ok=True)
     out_stem = dest / f"clip_{uuid.uuid4().hex}"
 
+    manifest = read_sequence_manifest(char_key, sequence_name)
     gid = (gallery_item_id or "").strip()
+    if not gid:
+        export_frames = _sequence_timeline_visible_export_frames(
+            char_key, sequence_name, manifest
+        )
+        if not export_frames:
+            gid = _first_exportable_gallery_frame_sequence_id(manifest) or ""
     if log_cb:
         log_cb(
             f"Rendering {'gallery item' if gid else 'sequence timeline'} "

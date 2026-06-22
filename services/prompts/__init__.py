@@ -14,6 +14,7 @@ orchestration layer into worker bundles and risk circular imports.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -168,6 +169,37 @@ NO_TEXT_IN_IMAGE_CONSTRAINT = (
     "anywhere in the image"
 )
 
+KEYPOINT_POSE_AUTHORITY_LEAD = (
+    "Edit the character's full body pose to exactly match the keypoint skeleton reference. "
+    "Change limbs, torso, and stance to follow the skeleton even when different from the "
+    "starting image. The skeleton reference is the primary authority for body pose."
+)
+
+KEYPOINT_IDENTITY_TAIL = (
+    "Keep the same character identity, face, proportions, and clothing from the first "
+    "input reference (starting image)."
+)
+
+KEYPOINT_IDENTITY_TAIL_WITH_CLOSEUP = (
+    "Keep the same character identity, face, proportions, and clothing from the first "
+    "input reference (starting image). Use the closeup auxiliary only for facial identity."
+)
+
+_KEYPOINT_USER_CATALOG_WRAP_RE = (
+    r"^Edit the subject to (.+?), keep identity and clothing coherent unless impossible\.?$"
+)
+
+
+def normalize_keypoint_user_description(text: str) -> str:
+    """Strip UI/catalog pose wrappers; return a short action or mood phrase."""
+    u = (text or "").strip()
+    if not u:
+        return ""
+    m = re.match(_KEYPOINT_USER_CATALOG_WRAP_RE, u, flags=re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    return u
+
 
 def build_pose_prompt_from_label(short_desc: str) -> str:
     """Convert a short pose checklist label into the inline image-edit prompt."""
@@ -189,32 +221,32 @@ def compose_keypoint_pose_edit_prompt(
 
     ``with_closeup_sheet`` is True when a closeup composite is passed as an extra auxiliary.
     """
-    u = (user_description or "").strip()
+    u = normalize_keypoint_user_description(user_description)
     if with_closeup_sheet:
         role = (
-            "Replace the scene with exactly one full-body image of the same character as in "
-            "the first input reference (starting image), in the same pose as the keypoint "
-            "skeleton (third image). Use the closeup auxiliary only for facial identity; "
-            "still output exactly one full-body figure, no close-up inset. "
-            "Keep facial features consistent."
+            "Return a single full-body image of the same character as in the first input "
+            "reference (starting image), in the same pose as the keypoint skeleton (third image). "
+            "Return only the full-body image, no close-up inset. Keep facial features consistent."
         )
+        identity = KEYPOINT_IDENTITY_TAIL_WITH_CLOSEUP
     else:
         role = (
-            "Replace the scene with exactly one full-body image of the same character as in "
-            "the first input reference (starting image), in the same pose as the keypoint image."
+            "Return a single full-body image of the same character as in the first input "
+            "reference (starting image), in the same pose as the keypoint image. "
+            "Return only the full-body image."
         )
-    constraints = (
-        f"{SOLO_CHARACTER_EDIT_CONSTRAINTS} "
-        f"{NO_TEXT_IN_IMAGE_CONSTRAINT} "
-        "Match the reference body pose and skeleton; preserve the subject's identity, "
-        "proportions, and clothing unless impossible. "
+        identity = KEYPOINT_IDENTITY_TAIL
+    practical = (
         "No objects in the hands; keep the hand pose exactly the same as the keypoint reference. "
         "No background scenery; use a flat plain white background only."
     )
-    body = f"{constraints} {role}"
+    formatting = f"{SOLO_CHARACTER_EDIT_CONSTRAINTS} {NO_TEXT_IN_IMAGE_CONSTRAINT}"
+    body = (
+        f"{KEYPOINT_POSE_AUTHORITY_LEAD} {identity} {practical} {formatting} {role}"
+    )
     if not u:
         return body
-    return f"{u}. {body}"
+    return f"{body} Optional action or mood: {u}."
 
 
 # ============================================================================
