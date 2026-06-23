@@ -78,6 +78,15 @@ export type SkeletonViewer3DHandle = {
   resetAll(): void;
   /** Capture the current canvas as a PNG data URL. */
   captureFrame(): string | null;
+  /**
+   * Zoom camera so the figure fills ~fillFraction of a targetSize×targetSize square,
+   * render at that resolution, compute the figure bbox, then restore the camera.
+   * Returns null if the figure is not visible.
+   */
+  captureFrameAutoFit(opts?: {
+    targetSize?: number;
+    fillFraction?: number;
+  }): { dataUrl: string; screenBbox: FigureScreenBbox } | null;
   /** Screen-space figure AABB for crop placement (motion-ref keypoint pipeline). */
   getFigureScreenBbox(): FigureScreenBbox | null;
   /** Toggle the live crop-frame overlay (square fed to SDPose). */
@@ -105,7 +114,8 @@ const DEFAULT_ORBIT: CameraState = {
   slideX: 0,
   slideY: 0,
 };
-const SLIDE_SCALE = 0.003;
+const TAN_HALF_FOV = Math.tan((45 * 0.5) * Math.PI / 180); // FOV=45 fixed at camera creation
+const ZOOM_FACTOR = 0.001;
 const FALLBACK_W = 380;
 const FALLBACK_H = 320;
 const FIGURE_CROP_PAD_FRAC = 0.15;
@@ -563,8 +573,8 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       const onWheelNative = (e: WheelEvent) => {
         e.preventDefault();
         orbitRef.current.distance = Math.max(
-          0.5,
-          Math.min(10, orbitRef.current.distance + e.deltaY * 0.005)
+          0.05,
+          orbitRef.current.distance * (1 + e.deltaY * ZOOM_FACTOR)
         );
         _applyCameraToThree();
         onCameraChangeRef.current?.({ ...orbitRef.current });
@@ -834,6 +844,57 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           return null;
         }
       },
+      captureFrameAutoFit(opts) {
+        const t = threeRef.current;
+        if (!t) return null;
+
+        const bbox = _computeFigureScreenBbox();
+        if (!bbox) return null;
+
+        const targetSize = opts?.targetSize ?? 1024;
+        const fillFraction = opts?.fillFraction ?? 0.75;
+
+        // How much the figure currently fills the shorter viewport dimension.
+        const figureMaxDim = Math.max(bbox.width, bbox.height);
+        const currentFillFrac =
+          figureMaxDim / Math.min(bbox.imageWidth, bbox.imageHeight);
+        // Only zoom IN (scale >= 1), cap at 4× to avoid extreme close-ups.
+        const scaleFactor = Math.min(
+          Math.max(fillFraction / currentFillFrac, 1.0),
+          4.0
+        );
+
+        const savedDist = orbitRef.current.distance;
+        const savedW = t.renderer.domElement.width;
+        const savedH = t.renderer.domElement.height;
+        const savedAspect = t.camera.aspect;
+
+        try {
+          orbitRef.current = {
+            ...orbitRef.current,
+            distance: savedDist / scaleFactor,
+          };
+          t.renderer.setSize(targetSize, targetSize);
+          t.camera.aspect = 1.0;
+          t.camera.updateProjectionMatrix();
+          _applyCameraToThree();
+
+          const wasGizmoVisible = t.gizmoGroup.visible;
+          t.gizmoGroup.visible = false;
+          t.renderer.render(t.scene, t.camera);
+          const dataUrl = t.renderer.domElement.toDataURL("image/png");
+          t.gizmoGroup.visible = wasGizmoVisible && gizmosVisibleRef.current;
+
+          const newBbox = _computeFigureScreenBbox();
+          return newBbox ? { dataUrl, screenBbox: newBbox } : null;
+        } finally {
+          orbitRef.current = { ...orbitRef.current, distance: savedDist };
+          t.renderer.setSize(savedW, savedH);
+          t.camera.aspect = savedAspect;
+          t.camera.updateProjectionMatrix();
+          _applyCameraToThree();
+        }
+      },
       getFigureScreenBbox(): FigureScreenBbox | null {
         return _computeFigureScreenBbox();
       },
@@ -880,7 +941,8 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           Math.min(89, orbitRef.current.elevation - dy * 0.4)
         );
       } else {
-        const scale = Math.max(0.25, orbitRef.current.distance) * SLIDE_SCALE;
+        const vh = sizeRef.current.h || FALLBACK_H;
+        const scale = (Math.max(0.05, orbitRef.current.distance) * TAN_HALF_FOV) / (vh * 0.5);
         orbitRef.current.slideX -= dx * scale;
         orbitRef.current.slideY += dy * scale;
       }

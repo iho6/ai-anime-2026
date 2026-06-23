@@ -112,7 +112,7 @@ export function TimelineCharacterPicker(props: {
   const [angleSourceRelPath, setAngleSourceRelPath] = useState("");
 
   // New Pose panel state
-  const [newPosePanel, setNewPosePanel] = useState<{ charKey: string; baseRelPath: string } | null>(null);
+  const [newPoseBaseRelPath, setNewPoseBaseRelPath] = useState<string | null>(null);
   const [newPosePrompt, setNewPosePrompt] = useState("");
   const [newPoseRef, setNewPoseRef] = useState<KeypointRefEntry | null>(null);
   const [refPickerOpen, setRefPickerOpen] = useState(false);
@@ -154,7 +154,7 @@ export function TimelineCharacterPicker(props: {
     setStage(initialKey ? "gallery" : "pick");
     setSectionData(null);
     setSectionsError(null);
-    setNewPosePanel(null);
+    setNewPoseBaseRelPath(null);
     setNewPosePrompt("");
     setNewPoseRef(null);
     setImgCtxMenu(null);
@@ -225,6 +225,11 @@ export function TimelineCharacterPicker(props: {
     void loadSections(selectedKey);
   }, [open, selectedKey, stage, loadSections]);
 
+  useEffect(() => {
+    if (!sectionData) return;
+    setNewPoseBaseRelPath((prev) => prev ?? sectionData.poseImages[0]?.relPath ?? null);
+  }, [sectionData]);
+
   async function handlePickerCancel() {
     if (stage === "create") {
       const ok = await createPanelRef.current?.discardDraftsWithConfirm();
@@ -269,11 +274,12 @@ export function TimelineCharacterPicker(props: {
   }
 
   async function runNewPose() {
-    if (!newPosePanel) return;
     const hasRef = keypointRefHasFrames(newPoseRef);
     const promptTrim = newPosePrompt.trim();
     if (!promptTrim && !hasRef) return;
-    const { charKey, baseRelPath } = newPosePanel;
+    const baseRelPath = newPoseBaseRelPath;
+    const charKey = selectedKey;
+    if (!baseRelPath || !charKey) return;
     const prompts = promptTrim ? [promptTrim] : [];
     beginSession({ title: "Generating pose", clearLog: true });
     await Promise.resolve();
@@ -296,7 +302,6 @@ export function TimelineCharacterPicker(props: {
         }
         pushLog(`Done — sequence ${done.result.sequenceName}.`);
         endSession();
-        setNewPosePanel(null);
         setNewPosePrompt("");
         setNewPoseRef(null);
         void loadSections(charKey);
@@ -319,7 +324,6 @@ export function TimelineCharacterPicker(props: {
         }
         pushLog(`Done — sequence ${done.result.sequenceName}.`);
         endSession();
-        setNewPosePanel(null);
         setNewPosePrompt("");
         setNewPoseRef(null);
         void loadSections(charKey);
@@ -341,7 +345,7 @@ export function TimelineCharacterPicker(props: {
       if (!done.ok) throw new Error(done.error ?? "Pose generation failed.");
       pushLog("Done. Refreshing gallery…");
       endSession();
-      setNewPosePanel(null);
+      if (!poseChangeMode) setNewPosePanel(null);
       setNewPosePrompt("");
       setNewPoseRef(null);
       void loadSections(charKey);
@@ -536,10 +540,10 @@ export function TimelineCharacterPicker(props: {
           </div>
 
           {/* Body */}
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12, position: "relative" }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative", display: "flex", flexDirection: "column" }}>
             {/* Stage 1: character icons */}
             {stage === "pick" && (
-              <>
+              <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12 }}>
                 {iconsError && <div style={{ color: "#ff8080", fontSize: 13 }}>{iconsError}</div>}
                 {loading && icons.length === 0 && <div style={{ opacity: 0.6, fontSize: 13 }}>Loading…</div>}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10 }}>
@@ -599,7 +603,7 @@ export function TimelineCharacterPicker(props: {
                     </button>
                   ))}
                 </div>
-              </>
+              </div>
             )}
 
             {stage === "create" && (
@@ -618,16 +622,105 @@ export function TimelineCharacterPicker(props: {
             {/* Stage 2: pose / expression / sequence sections */}
             {stage === "gallery" && selectedKey && (
               <>
-                {sectionsError && <div style={{ color: "#ff8080", fontSize: 13 }}>{sectionsError}</div>}
-                {loading && !sectionData && <div style={{ opacity: 0.6, fontSize: 13 }}>Loading…</div>}
+                {sectionsError && <div style={{ color: "#ff8080", fontSize: 13, padding: 12 }}>{sectionsError}</div>}
+                {loading && !sectionData && <div style={{ opacity: 0.6, fontSize: 13, padding: 12 }}>Loading…</div>}
                 {sectionData && (
                   <>
+                    {/* New Pose top section — fixed, does not scroll */}
+                    <div style={{ flexShrink: 0, padding: "10px 12px 0", display: "flex", gap: 8, alignItems: "flex-start", paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                      {/* Starting image */}
+                      <div style={{ flexShrink: 0 }}>
+                        {newPoseBaseRelPath ? (
+                          <button
+                            type="button"
+                            onClick={() => openImagePreview(newPoseBaseRelPath)}
+                            style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}
+                            title="Preview starting image"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={assetUrlFromRelPath(newPoseBaseRelPath)}
+                              alt="Starting image"
+                              style={{ width: 80, height: 80, objectFit: "contain", border: "1px solid rgba(255,255,255,0.2)", display: "block" }}
+                            />
+                          </button>
+                        ) : (
+                          <div style={{ width: 80, height: 80, border: "1px dashed rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#555", textAlign: "center", padding: 4, boxSizing: "border-box" }}>
+                            Right-click image below
+                          </div>
+                        )}
+                        <div style={{ fontSize: 9, color: "#555", marginTop: 2, textAlign: "center" }}>Starting image</div>
+                      </div>
+                      {/* Ref slot */}
+                      <KeypointReferenceSlot
+                        keypointRef={newPoseRef}
+                        size={80}
+                        tone="light"
+                        disabled={poseBusy}
+                        onOpenPicker={() => setRefPickerOpen(true)}
+                        onClear={() => setNewPoseRef(null)}
+                      />
+                      {/* Prompt + generate */}
+                      <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+                        <textarea
+                          value={newPosePrompt}
+                          disabled={poseBusy}
+                          onChange={(e) => setNewPosePrompt(e.target.value)}
+                          placeholder="Describe the new pose…"
+                          style={{
+                            width: "100%",
+                            height: 80,
+                            maxHeight: 80,
+                            boxSizing: "border-box",
+                            background: "transparent",
+                            border: "1px solid rgba(255,255,255,0.25)",
+                            color: "#eee",
+                            padding: "6px 8px",
+                            paddingBottom: 24,
+                            font: "inherit",
+                            fontSize: 12,
+                            resize: "none",
+                            overflowY: "auto",
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void runNewPose()}
+                          disabled={poseBusy || !newPoseBaseRelPath || (!newPosePrompt.trim() && !keypointRefHasFrames(newPoseRef))}
+                          style={{
+                            position: "absolute",
+                            bottom: 4,
+                            right: 4,
+                            border: "1px solid rgba(255,255,255,0.35)",
+                            background:
+                              poseBusy || !newPoseBaseRelPath || (!newPosePrompt.trim() && !keypointRefHasFrames(newPoseRef))
+                                ? "rgba(255,255,255,0.05)"
+                                : "rgba(100,200,100,0.12)",
+                            color: "#eee",
+                            padding: "2px 8px",
+                            cursor:
+                              poseBusy || !newPoseBaseRelPath || (!newPosePrompt.trim() && !keypointRefHasFrames(newPoseRef))
+                                ? "not-allowed"
+                                : "pointer",
+                            font: "inherit",
+                            fontSize: 11,
+                            fontWeight: 400,
+                          }}
+                        >
+                          Generate Pose
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Gallery dropdowns — outer scroll handles section headers, each section has internal image scroll */}
+                    <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 12px 12px" }}>
                     <CollapsibleGallerySection
                       title="Pose"
                       images={sectionData.poseImages}
                       mode="select"
                       selectedRelPaths={selectedRelPaths}
                       disabled={poseBusy}
+                      maxGridHeight={200}
                       onToggleSelect={(relPath, e) => {
                         setSelectedRelPaths((prev) =>
                           toggleSetMember(prev, relPath, e.target.checked)
@@ -644,6 +737,7 @@ export function TimelineCharacterPicker(props: {
                       mode="select"
                       selectedRelPaths={selectedRelPaths}
                       disabled={poseBusy}
+                      maxGridHeight={200}
                       onToggleSelect={(relPath, e) => {
                         setSelectedRelPaths((prev) =>
                           toggleSetMember(prev, relPath, e.target.checked)
@@ -669,6 +763,7 @@ export function TimelineCharacterPicker(props: {
                           <span style={{ opacity: 0.55, fontSize: 12 }}>({sectionData.sequences.length})</span>
                         </button>
                         {seqOpen && (
+                          <div style={{ maxHeight: 200, overflowY: "auto" }}>
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8, paddingTop: 6 }}>
                             {sectionData.sequences.map((seq) => (
                               <GalleryPickTile
@@ -683,7 +778,7 @@ export function TimelineCharacterPicker(props: {
                                   );
                                 }}
                                 onPrimaryClick={() => openSequencePreview(seq)}
-                                onPlayClick={() => void openSequencePlayPreview(seq.name)}
+                                topRightBadge="Vid"
                                 onContextMenu={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
@@ -707,103 +802,15 @@ export function TimelineCharacterPicker(props: {
                               />
                             ))}
                           </div>
+                          </div>{/* end sequence scroll */}
                         )}
                       </div>
                     )}
+                    </div>{/* end scrollable gallery */}
                   </>
                 )}
 
                 {/* New Pose inline panel */}
-                {newPosePanel && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      background: "rgba(10,10,10,0.97)",
-                      zIndex: 10,
-                      display: "flex",
-                      flexDirection: "column",
-                      padding: 16,
-                      gap: 12,
-                      overflowY: "auto",
-                    }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <button type="button" onClick={() => setNewPosePanel(null)}
-                        style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.25)", color: "#aaa", padding: "4px 10px", cursor: "pointer", font: "inherit", fontSize: 12 }}>
-                        ← Back
-                      </button>
-                      <span style={{ fontSize: 14, fontWeight: 600 }}>New Pose</span>
-                    </div>
-
-                    {/* Starting image + reference row */}
-                    <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                      {/* Starting image thumbnail */}
-                      <div style={{ flexShrink: 0 }}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={assetUrlFromRelPath(newPosePanel.baseRelPath)}
-                          alt="Starting image"
-                          style={{ width: 100, height: 100, objectFit: "contain", border: "1px solid rgba(255,255,255,0.2)" }}
-                        />
-                        <div style={{ fontSize: 10, color: "#666", marginTop: 4, textAlign: "center" }}>Starting image</div>
-                      </div>
-
-                      <KeypointReferenceSlot
-                        keypointRef={newPoseRef}
-                        size={100}
-                        tone="light"
-                        disabled={poseBusy}
-                        onOpenPicker={() => setRefPickerOpen(true)}
-                        onClear={() => setNewPoseRef(null)}
-                      />
-                    </div>
-
-                    <textarea
-                      value={newPosePrompt}
-                      disabled={poseBusy}
-                      onChange={(e) => setNewPosePrompt(e.target.value)}
-                      placeholder="Describe the new pose (e.g. 'arms raised', 'sitting cross-legged')"
-                      rows={3}
-                      style={{
-                        width: "100%",
-                        boxSizing: "border-box",
-                        background: "transparent",
-                        border: "1px solid rgba(255,255,255,0.25)",
-                        color: "#eee",
-                        padding: 8,
-                        font: "inherit",
-                        fontSize: 13,
-                        resize: "vertical",
-                      }}
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => void runNewPose()}
-                      disabled={poseBusy || (!newPosePrompt.trim() && !keypointRefHasFrames(newPoseRef))}
-                      style={{
-                        border: "1px solid rgba(255,255,255,0.4)",
-                        background:
-                          poseBusy || (!newPosePrompt.trim() && !keypointRefHasFrames(newPoseRef))
-                            ? "rgba(255,255,255,0.05)"
-                            : "rgba(100,200,100,0.12)",
-                        color: "#eee",
-                        padding: "8px 16px",
-                        cursor:
-                          poseBusy || (!newPosePrompt.trim() && !keypointRefHasFrames(newPoseRef))
-                            ? "not-allowed"
-                            : "pointer",
-                        font: "inherit",
-                        fontWeight: 600,
-                      }}
-                    >
-                      Generate Pose
-                    </button>
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -868,6 +875,29 @@ export function TimelineCharacterPicker(props: {
             onClick={() => {
               const { relPath } = imgCtxMenu;
               setImgCtxMenu(null);
+              setNewPoseBaseRelPath(relPath);
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "8px 14px",
+              background: "transparent",
+              color: "#eee",
+              border: "none",
+              textAlign: "left",
+              cursor: "pointer",
+              font: "inherit",
+              fontSize: 13,
+            }}
+          >
+            Add As Starting Img
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              const { relPath } = imgCtxMenu;
+              setImgCtxMenu(null);
               setAngleSourceRelPath(relPath);
               setAngleModalOpen(true);
             }}
@@ -885,31 +915,6 @@ export function TimelineCharacterPicker(props: {
             }}
           >
             New Angle
-          </button>
-          <button
-            type="button"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={() => {
-              const { relPath } = imgCtxMenu;
-              setImgCtxMenu(null);
-              setNewPosePanel({ charKey: selectedKey!, baseRelPath: relPath });
-              setNewPosePrompt("");
-              setNewPoseRef(null);
-            }}
-            style={{
-              display: "block",
-              width: "100%",
-              padding: "8px 14px",
-              background: "transparent",
-              color: "#eee",
-              border: "none",
-              textAlign: "left",
-              cursor: "pointer",
-              font: "inherit",
-              fontSize: 13,
-            }}
-          >
-            New Pose
           </button>
         </div>
       )}
@@ -969,7 +974,7 @@ export function TimelineCharacterPicker(props: {
       {/* Reference picker — includes Motion Ref Gen (KiMoD) option */}
       <ReferencePicker
         open={refPickerOpen}
-        charKey={newPosePanel?.charKey ?? ""}
+        charKey={selectedKey ?? ""}
         busy={poseBusy}
         onCancel={() => setRefPickerOpen(false)}
         onUseSelected={(sel) => {
@@ -989,7 +994,7 @@ export function TimelineCharacterPicker(props: {
       {/* Motion Ref Gen modal (KiMoD) */}
       <MotionRefGenModal
         open={motionRefOpen}
-        charKey={newPosePanel?.charKey ?? ""}
+        charKey={selectedKey ?? ""}
         onBack={() => { setMotionRefOpen(false); setRefPickerOpen(true); }}
         onClose={() => setMotionRefOpen(false)}
         onKeypointsMade={(ref) => {

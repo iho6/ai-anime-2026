@@ -87,6 +87,32 @@ def test_single_segment_is_not_multiprompt(patched_generate, tmp_path):
     assert kwargs["num_frames"] == 60
     # num_transition_frames is only meaningful for the multi-prompt path.
     assert "num_transition_frames" not in kwargs
+    assert kwargs["cfg_type"] == "separated"
+    assert kwargs["cfg_weight"] == [2.0, 2.0]
+
+
+def test_cfg_text_weight_passed_to_model(patched_generate, tmp_path):
+    serverless.generate_motion(
+        [{"text": "A person waves", "duration": 1.0}],
+        tmp_path,
+        cfg_text_weight=3.0,
+        log_cb=None,
+    )
+
+    kwargs = patched_generate.calls[0]
+    assert kwargs["cfg_type"] == "separated"
+    assert kwargs["cfg_weight"] == [3.0, 2.0]
+
+
+def test_segment_duration_over_max_raises(patched_generate, tmp_path):
+    with pytest.raises(ValueError, match="at most 10 seconds"):
+        serverless.generate_motion(
+            [{"text": "A person runs", "duration": 11.0}],
+            tmp_path,
+            log_cb=None,
+        )
+
+    assert patched_generate.calls == []
 
 
 def test_default_transition_frames_from_module(patched_generate, tmp_path):

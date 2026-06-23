@@ -45,6 +45,8 @@ import {
   runReferenceMakeKeypointVideoWsJob,
   PoseReference,
   type KeypointVideoReference,
+  MOTION_REF_DEFAULT_PROMPT_ADHERENCE,
+  MOTION_REF_MAX_SEGMENT_DURATION_SEC,
 } from "../lib/api";
 import { useJobRunSession } from "../hooks/useJobRunSession";
 import type { SharedLogStreamHandle } from "./SharedLogStream";
@@ -53,6 +55,7 @@ import { useAppError } from "./ErrorProvider";
 import { PauseBarsIcon, SquareIconButton, TimelinePlayIcon, TriangleIcon } from "./IconPrimitives";
 import { SkeletonViewer3D, SkeletonViewer3DHandle, CameraState, ViewerMode } from "./motionRef/SkeletonViewer3D";
 import { MotionTimeline } from "./motionRef/MotionTimeline";
+import { PromptAdherenceKnob } from "./motionRef/PromptAdherenceKnob";
 import { MotionShotGallery } from "./motionRef/MotionShotGallery";
 import { MotionPlaybackScrubber } from "./motionRef/MotionPlaybackScrubber";
 import { CameraKeyframeContextMenu } from "./motionRef/CameraKeyframeContextMenu";
@@ -126,6 +129,7 @@ export function MotionRefGenModal(props: {
 
   // ── Motion data ────────────────────────────────────────────────────────────
   const [segments, setSegments] = useState<MotionRefSegment[]>(DEFAULT_SEGMENTS);
+  const [promptAdherence, setPromptAdherence] = useState(MOTION_REF_DEFAULT_PROMPT_ADHERENCE);
   const [manifest, setManifest] = useState<MotionRefManifest | null>(null);
   // SMPL-X mesh stream: flat float32 vertices for all frames + dims for slicing.
   const [meshData, setMeshData] = useState<{
@@ -702,6 +706,13 @@ export function MotionRefGenModal(props: {
       showError({ message: "Enter at least one motion prompt before generating." });
       return;
     }
+    const activeSegments = segments.filter((s) => s.text.trim());
+    if (activeSegments.some((s) => s.duration > MOTION_REF_MAX_SEGMENT_DURATION_SEC)) {
+      showError({
+        message: `Each segment must be at most ${MOTION_REF_MAX_SEGMENT_DURATION_SEC} seconds (Kimodo limit).`,
+      });
+      return;
+    }
     setPlaying(false);
     setManifest(null);
     setMeshData(null);
@@ -722,7 +733,8 @@ export function MotionRefGenModal(props: {
     try {
       const done = await runMotionRefGenerateWsJob({
         motionName: segments[0].text.trim().slice(0, 40) || "motion",
-        segments: segments.filter((s) => s.text.trim()),
+        segments: activeSegments,
+        promptAdherence,
         onLogLine: (line) => pushLog(line),
       });
 
@@ -1255,14 +1267,13 @@ export function MotionRefGenModal(props: {
       await waitViewerFrame();
       applyTrajectoryAtFrame(f, captureKeyframes, { forCapture: true });
       await waitViewerFrame();
-      const dataUrl = skeletonRef.current?.captureFrame();
-      if (!dataUrl) throw new Error(`Capture failed at frame ${f}.`);
-      const screenBbox = skeletonRef.current?.getFigureScreenBbox();
-      if (!screenBbox) {
+      const autoFit = skeletonRef.current?.captureFrameAutoFit();
+      if (!autoFit) {
         skippedFrames.push(f);
         opts.pushLog(`Skipped f${f}: figure out of frame.`);
         continue;
       }
+      const { dataUrl, screenBbox } = autoFit;
       const edgeClipped =
         screenBbox.x <= 0 ||
         screenBbox.y <= 0 ||
@@ -1516,7 +1527,7 @@ export function MotionRefGenModal(props: {
         justifyContent: "center",
         zIndex: 10200, // above TimelineCharacterPicker (9998) and ReferencePicker (10000)
       }}
-      onClick={() => {
+      onMouseDown={() => {
         if (motionCtxMenu) { setMotionCtxMenu(null); return; }
         if (cameraCtxMenu) { setCameraCtxMenu(null); return; }
         if (fpsExportPending || v2poseDialog || jobModalProps.open) return;
@@ -1524,6 +1535,7 @@ export function MotionRefGenModal(props: {
       }}
     >
       <div
+        onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
         onContextMenu={(e) => {
           if (motionCtxMenu) { e.preventDefault(); setMotionCtxMenu(null); }
@@ -1739,6 +1751,15 @@ export function MotionRefGenModal(props: {
               In place
             </label>
           </div>
+        </div>
+
+        {/* Prompt adherence */}
+        <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+          <PromptAdherenceKnob
+            value={promptAdherence}
+            onChange={setPromptAdherence}
+            disabled={busy}
+          />
         </div>
 
         {/* Motion segments */}

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { TimelinePlayIcon } from "./IconPrimitives";
+import { TriangleIcon } from "./IconPrimitives";
 
 export function KeypointRefTile(props: {
   tile: number;
@@ -82,9 +82,8 @@ export function KeypointVideoTile(props: {
   disabled: boolean;
   onToggle: (on: boolean, e: React.ChangeEvent<HTMLInputElement>) => void;
   onOpen: () => void;
-  onPlay?: () => void;
 }) {
-  const { tile, count, thumbSrc, checked, disabled, onToggle, onOpen, onPlay } = props;
+  const { tile, count, thumbSrc, checked, disabled, onToggle, onOpen } = props;
   return (
     <div style={{ width: tile, height: tile, position: "relative" }}>
       <button
@@ -126,63 +125,51 @@ export function KeypointVideoTile(props: {
               style={{
                 fontSize: 10,
                 padding: "1px 4px",
-                background: "rgba(0,0,0,0.55)",
-                color: "#fff",
+                background: "rgba(140,140,140,0.55)",
+                color: "#eee",
               }}
             >
-              Video
+              Vid
             </span>
             <span style={{ opacity: 0.85 }}>{count} frames</span>
           </>
         )}
-        {thumbSrc ? (
-          <span
-            style={{
-              position: "absolute",
-              top: 4,
-              left: 4,
-              fontSize: 9,
-              padding: "1px 4px",
-              background: "rgba(0,0,0,0.65)",
-              color: "#fff",
-              pointerEvents: "none",
-            }}
-          >
-            Video
-          </span>
-        ) : null}
-      </button>
-      {thumbSrc && onPlay ? (
-        <button
-          type="button"
-          disabled={disabled}
-          aria-label="Play preview"
-          title="Play preview"
-          onClick={(e) => {
-            e.stopPropagation();
-            onPlay();
-          }}
+
+        {/* Triangle play indicator — centered non-interactive overlay */}
+        <span
           style={{
             position: "absolute",
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            width: 28,
-            height: 28,
-            display: "grid",
-            placeItems: "center",
-            padding: 0,
-            border: "none",
-            borderRadius: 0,
-            background: "rgba(120,120,120,0.35)",
-            color: "rgba(255,255,255,0.9)",
-            cursor: disabled ? "not-allowed" : "pointer",
-            zIndex: 1,
+            color: "rgba(255,255,255,0.85)",
+            pointerEvents: "none",
+            display: "flex",
           }}
         >
-          <TimelinePlayIcon size={14} />
-        </button>
-      ) : null}
+          <TriangleIcon direction="right" size={18} />
+        </span>
+
+        {/* "Vid" badge — top-right */}
+        {thumbSrc ? (
+          <span
+            style={{
+              position: "absolute",
+              top: 4,
+              right: 4,
+              fontSize: 9,
+              padding: "1px 4px",
+              background: "rgba(140,140,140,0.65)",
+              color: "#eee",
+              pointerEvents: "none",
+            }}
+          >
+            Vid
+          </span>
+        ) : null}
+      </button>
+
+      {/* Checkbox — top-left, outside the main button */}
       <label
         style={{
           position: "absolute",
@@ -216,7 +203,7 @@ export function KeypointFolderTile(props: {
   indeterminate?: boolean;
   onToggle?: (on: boolean, e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
-  const { tile, name, count, disabled, onOpen, checked, indeterminate, onToggle } = props;
+  const { tile, name, count: _count, disabled, onOpen, checked, indeterminate, onToggle } = props;
   const showCheckbox = typeof onToggle === "function";
   return (
     <div style={{ width: tile, height: tile, position: "relative" }}>
@@ -227,7 +214,11 @@ export function KeypointFolderTile(props: {
         style={{
           width: tile,
           height: tile,
-          padding: 8,
+          padding: 0,
+          paddingTop: 22,
+          paddingBottom: 8,
+          paddingLeft: 6,
+          paddingRight: 6,
           border: "1px solid rgba(255,255,255,0.25)",
           background: "rgba(255,255,255,0.06)",
           color: "#eee",
@@ -236,26 +227,44 @@ export function KeypointFolderTile(props: {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: 4,
-          textAlign: "center",
-          fontSize: 12,
-          lineHeight: 1.2,
+          gap: 3,
+          overflow: "hidden",
+          boxSizing: "border-box",
         }}
-        title={`Open folder: ${name}`}
+        title={`Open: ${name}`}
       >
         <span
           style={{
-            fontSize: 10,
-            padding: "1px 4px",
-            background: "rgba(0,0,0,0.55)",
-            color: "#fff",
+            fontSize: 11,
+            fontWeight: 400,
+            width: "100%",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            textAlign: "center",
           }}
         >
-          Folder
+          {name}
         </span>
-        <span style={{ fontWeight: 400, wordBreak: "break-word" }}>{name}</span>
-        <span style={{ opacity: 0.65 }}>{count}</span>
       </button>
+
+      {/* "Folder" tag — top-right, within tile boundary */}
+      <span
+        style={{
+          position: "absolute",
+          top: 4,
+          right: 4,
+          fontSize: 9,
+          padding: "1px 4px",
+          background: "rgba(140,140,140,0.65)",
+          color: "#eee",
+          pointerEvents: "none",
+          zIndex: 1,
+        }}
+      >
+        Folder
+      </span>
+
       {showCheckbox ? (
         <label
           style={{

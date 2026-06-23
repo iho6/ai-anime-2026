@@ -306,7 +306,6 @@ export function KeypointRefGrid(props: {
                     disabled={busy}
                     onToggle={(on, e) => onCheckboxChange(id, on, e)}
                     onOpen={() => onOpenVideo(video)}
-                    onPlay={() => onOpenVideo(video)}
                   />
                 </div>
               </SortableItem>

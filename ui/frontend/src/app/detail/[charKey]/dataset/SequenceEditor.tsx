@@ -39,6 +39,7 @@ import {
   type FrameSequenceStripActions,
 } from "./FrameSequenceModal";
 import { outputDirFromRelPath } from "../../../../components/frameSequenceStripUtils";
+import { TriangleIcon } from "../../../../components/IconPrimitives";
 import { AiEditModal } from "../../../../components/AiEditModal";
 import { RemoveBgImageModal } from "../../../../components/removeBg/RemoveBgImageModal";
 import {
@@ -447,22 +448,38 @@ function GalleryThumb(props: {
       }}
     >
       {props.frameSequence ? (
-        <span
-          style={{
-            position: "absolute",
-            top: 2,
-            left: 2,
-            fontSize: 10,
-            lineHeight: 1,
-            padding: "1px 4px",
-            background: "rgba(0,0,0,0.65)",
-            color: "#fff",
-            zIndex: 1,
-            pointerEvents: "none",
-          }}
-        >
-          Folder
-        </span>
+        <>
+          <span
+            style={{
+              position: "absolute",
+              top: 2,
+              right: 2,
+              fontSize: 9,
+              lineHeight: 1,
+              padding: "1px 4px",
+              background: "rgba(140,140,140,0.65)",
+              color: "#eee",
+              zIndex: 1,
+              pointerEvents: "none",
+            }}
+          >
+            Vid
+          </span>
+          <span
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              color: "rgba(255,255,255,0.7)",
+              pointerEvents: "none",
+              display: "flex",
+              zIndex: 1,
+            }}
+          >
+            <TriangleIcon direction="right" size={18} />
+          </span>
+        </>
       ) : null}
       <div style={{ ...SEQUENCE_CROP_OUTER_CLIP_FLEX, pointerEvents: "none" }}>
         <div style={sequenceCropTransformWrapperStyle(props.crop)}>

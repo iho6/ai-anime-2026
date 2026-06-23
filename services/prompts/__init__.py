@@ -172,7 +172,9 @@ NO_TEXT_IN_IMAGE_CONSTRAINT = (
 KEYPOINT_POSE_AUTHORITY_LEAD = (
     "Edit the character's full body pose to exactly match the keypoint skeleton reference. "
     "Change limbs, torso, and stance to follow the skeleton even when different from the "
-    "starting image. The skeleton reference is the primary authority for body pose."
+    "starting image. The skeleton reference is the primary authority for body pose, "
+    "facing direction, and head orientation; match the character's facing direction and "
+    "head turn exactly as shown in the skeleton."
 )
 
 KEYPOINT_IDENTITY_TAIL = (
@@ -238,6 +240,8 @@ def compose_keypoint_pose_edit_prompt(
         identity = KEYPOINT_IDENTITY_TAIL
     practical = (
         "No objects in the hands; keep the hand pose exactly the same as the keypoint reference. "
+        "Preserve natural body proportions from the starting image; do not enlarge the head or "
+        "distort limb lengths. "
         "No background scenery; use a flat plain white background only."
     )
     formatting = f"{SOLO_CHARACTER_EDIT_CONSTRAINTS} {NO_TEXT_IN_IMAGE_CONSTRAINT}"

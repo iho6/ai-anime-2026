@@ -13,6 +13,7 @@ type BaseProps = {
   defaultOpen?: boolean;
   emptyText?: string;
   onRightClick?: (relPath: string, x: number, y: number) => void;
+  maxGridHeight?: number;
 };
 
 type ImmediateProps = BaseProps & {
@@ -40,6 +41,7 @@ export function CollapsibleGallerySection(props: ImmediateProps | SelectProps) {
     defaultOpen = true,
     emptyText = "No images",
     onRightClick,
+    maxGridHeight,
   } = props;
   const mode = props.mode ?? "immediate";
   const [open, setOpen] = useState(defaultOpen);
@@ -89,25 +91,46 @@ export function CollapsibleGallerySection(props: ImmediateProps | SelectProps) {
           </div>
         ) : (
           <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
-              gap: 8,
-              paddingTop: 6,
-            }}
+            style={maxGridHeight ? { maxHeight: maxGridHeight, overflowY: "auto" } : undefined}
           >
-            {images.map((img) => {
-              if (mode === "select") {
-                const selectProps = props as SelectProps;
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+                gap: 8,
+                paddingTop: 6,
+              }}
+            >
+              {images.map((img) => {
+                if (mode === "select") {
+                  const selectProps = props as SelectProps;
+                  return (
+                    <GalleryPickTile
+                      key={img.relPath}
+                      src={assetUrlFromRelPath(img.relPath)}
+                      caption={img.caption}
+                      checked={selectProps.selectedRelPaths.has(img.relPath)}
+                      disabled={selectProps.disabled}
+                      onToggle={(on, e) => selectProps.onToggleSelect(img.relPath, e)}
+                      onPrimaryClick={() => selectProps.onPreview(img.relPath)}
+                      onContextMenu={
+                        onRightClick
+                          ? (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onRightClick(img.relPath, e.clientX, e.clientY);
+                            }
+                          : undefined
+                      }
+                    />
+                  );
+                }
+                const immediateProps = props as ImmediateProps;
                 return (
-                  <GalleryPickTile
+                  <button
                     key={img.relPath}
-                    src={assetUrlFromRelPath(img.relPath)}
-                    caption={img.caption}
-                    checked={selectProps.selectedRelPaths.has(img.relPath)}
-                    disabled={selectProps.disabled}
-                    onToggle={(on, e) => selectProps.onToggleSelect(img.relPath, e)}
-                    onPrimaryClick={() => selectProps.onPreview(img.relPath)}
+                    type="button"
+                    onClick={() => immediateProps.onPick(img.relPath)}
                     onContextMenu={
                       onRightClick
                         ? (e) => {
@@ -117,48 +140,31 @@ export function CollapsibleGallerySection(props: ImmediateProps | SelectProps) {
                           }
                         : undefined
                     }
-                  />
-                );
-              }
-              const immediateProps = props as ImmediateProps;
-              return (
-                <button
-                  key={img.relPath}
-                  type="button"
-                  onClick={() => immediateProps.onPick(img.relPath)}
-                  onContextMenu={
-                    onRightClick
-                      ? (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onRightClick(img.relPath, e.clientX, e.clientY);
-                        }
-                      : undefined
-                  }
-                  title={img.caption}
-                  style={{
-                    width: "100%",
-                    aspectRatio: "1 / 1",
-                    padding: 4,
-                    borderRadius: 0,
-                    border: "1px solid rgba(255,255,255,0.2)",
-                    background: "transparent",
-                    cursor: "pointer",
-                  }}
-                >
-                  <img
-                    src={assetUrlFromRelPath(img.relPath)}
-                    alt=""
+                    title={img.caption}
                     style={{
                       width: "100%",
-                      height: "100%",
-                      objectFit: "contain",
-                      display: "block",
+                      aspectRatio: "1 / 1",
+                      padding: 4,
+                      borderRadius: 0,
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      background: "transparent",
+                      cursor: "pointer",
                     }}
-                  />
-                </button>
-              );
-            })}
+                  >
+                    <img
+                      src={assetUrlFromRelPath(img.relPath)}
+                      alt=""
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "contain",
+                        display: "block",
+                      }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )
       ) : null}

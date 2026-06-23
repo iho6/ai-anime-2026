@@ -1150,6 +1150,7 @@ def add_keypoint_video(
     *,
     fps: int = 24,
     placed_figures: list[dict[str, Any] | None] | None = None,
+    kp_square_frame_paths: list[str] | None = None,
 ) -> dict[str, Any]:
     """Store a video reference with per-frame ref/kp pairs and frameSequence strip."""
     if len(ref_frame_paths) != len(kp_frame_paths):
@@ -1164,6 +1165,11 @@ def add_keypoint_video(
     kp_dir = base / "kp"
     ref_dir.mkdir(parents=True, exist_ok=True)
     kp_dir.mkdir(parents=True, exist_ok=True)
+
+    kp_sq_dir: Path | None = None
+    if kp_square_frame_paths:
+        kp_sq_dir = base / "kp_sq"
+        kp_sq_dir.mkdir(parents=True, exist_ok=True)
 
     src = Path(video_abs)
     if not src.is_file():
@@ -1189,7 +1195,13 @@ def add_keypoint_video(
         if placed_figures and i < len(placed_figures):
             pf = placed_figures[i]
             if isinstance(pf, dict) and pf.get("placement") and pf.get("canvas"):
-                slot["placedFigure"] = pf
+                slot["placedFigure"] = dict(pf)
+        if kp_sq_dir and kp_square_frame_paths and i < len(kp_square_frame_paths):
+            sq_dest = kp_sq_dir / frame_name
+            shutil.copy2(kp_square_frame_paths[i], sq_dest)
+            pf_slot = slot.get("placedFigure")
+            if isinstance(pf_slot, dict):
+                pf_slot["squareKeypointCropRelPath"] = _abs_to_storage_rel(sq_dest)
         strip.append(slot)
 
     entry: dict[str, Any] = {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   assetUrlFromRelPath,
   type FrameSequencePayload,
@@ -43,6 +43,7 @@ export function KeypointVideoSequenceModal(props: {
   const [selected, setSelected] = useState<Set<number>>(() => new Set([0]));
   const [play, setPlay] = useState(false);
   const [playIx, setPlayIx] = useState(0);
+  const stripScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open || !initial) return;
@@ -78,6 +79,20 @@ export function KeypointVideoSequenceModal(props: {
     return () => window.clearInterval(id);
   }, [play, open, fps, vis]);
 
+  useEffect(() => {
+    const container = stripScrollRef.current;
+    if (!container) return;
+    const cell = container.children[focusIx] as HTMLElement | undefined;
+    if (!cell) return;
+    const cRect = container.getBoundingClientRect();
+    const cellRect = cell.getBoundingClientRect();
+    if (cellRect.left < cRect.left) {
+      container.scrollLeft -= cRect.left - cellRect.left + 6;
+    } else if (cellRect.right > cRect.right) {
+      container.scrollLeft += cellRect.right - cRect.right + 6;
+    }
+  }, [focusIx]);
+
   if (!open || !item || !initial) return null;
 
   const toggleHideSelected = (hidden: boolean) => {
@@ -86,6 +101,37 @@ export function KeypointVideoSequenceModal(props: {
         selected.has(i) && s.kind === "image" ? { ...s, hidden } : s
       )
     );
+  };
+
+  const removeSelected = () => {
+    const indices = selected;
+    setStrip((prev) => prev.filter((_, i) => !indices.has(i)));
+    const remaining = strip.length - indices.size;
+    const newFocus = Math.min(focusIx, Math.max(0, remaining - 1));
+    setFocusIx(newFocus);
+    setSelected(new Set(remaining > 0 ? [newFocus] : []));
+  };
+
+  const addEmpty = () => {
+    const insertAfter = selected.size > 0 ? Math.max(...selected) : strip.length - 1;
+    const newIx = insertAfter + 1;
+    setStrip((prev) => {
+      const t = [...prev];
+      t.splice(newIx, 0, { kind: "empty" });
+      return t;
+    });
+    setFocusIx(newIx);
+    setSelected(new Set([newIx]));
+  };
+
+  const handleStripKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const dir = e.key === "ArrowRight" ? 1 : -1;
+    const next = Math.max(0, Math.min(strip.length - 1, focusIx + dir));
+    setFocusIx(next);
+    setSelected(new Set([next]));
+    setPlay(false);
   };
 
   const handleSave = () => {
@@ -125,25 +171,42 @@ export function KeypointVideoSequenceModal(props: {
       >
         <div style={{ fontWeight: 400, marginBottom: 10 }}>Video Keypoint Sequence</div>
 
-        <div style={{ marginBottom: 10 }}>
+        <div
+          style={{
+            resize: "both",
+            overflow: "hidden",
+            width: 420,
+            height: 300,
+            minWidth: 160,
+            minHeight: 120,
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            marginBottom: 4,
+          }}
+        >
           <PoseRefFramePreview
             frameRelPaths={previewPaths}
             fps={fps}
             maxWidth="100%"
-            maxHeight={240}
+            maxHeight="100%"
             frameIndex={previewFrameIndex}
             playing={play}
             onPlayingChange={setPlay}
             showPlayOverlay={false}
           />
         </div>
+        <div style={{ fontSize: 10, color: "#555", marginBottom: 8, userSelect: "none" }}>
+          Drag corner to resize preview
+        </div>
 
         <div style={{ marginBottom: 8, display: "flex", gap: 8, alignItems: "center" }}>
           <button
             type="button"
             disabled={busy || !vis.length}
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => setPlay((p) => !p)}
             style={{
+              outline: "none",
               border: "1px solid rgba(255,255,255,0.35)",
               background: "transparent",
               color: "#eee",
@@ -155,9 +218,43 @@ export function KeypointVideoSequenceModal(props: {
           </button>
           <button
             type="button"
+            disabled={busy}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={addEmpty}
+            style={{
+              outline: "none",
+              border: "1px solid rgba(255,255,255,0.35)",
+              background: "transparent",
+              color: "#eee",
+              padding: "4px 10px",
+              cursor: "pointer",
+            }}
+          >
+            Add empty
+          </button>
+          <button
+            type="button"
             disabled={busy || selected.size === 0}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={removeSelected}
+            style={{
+              outline: "none",
+              border: "1px solid rgba(255,255,255,0.35)",
+              background: "transparent",
+              color: "#eee",
+              padding: "4px 10px",
+              cursor: "pointer",
+            }}
+          >
+            Remove
+          </button>
+          <button
+            type="button"
+            disabled={busy || selected.size === 0}
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => toggleHideSelected(true)}
             style={{
+              outline: "none",
               border: "1px solid rgba(255,255,255,0.35)",
               background: "transparent",
               color: "#eee",
@@ -170,8 +267,10 @@ export function KeypointVideoSequenceModal(props: {
           <button
             type="button"
             disabled={busy || selected.size === 0}
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => toggleHideSelected(false)}
             style={{
+              outline: "none",
               border: "1px solid rgba(255,255,255,0.35)",
               background: "transparent",
               color: "#eee",
@@ -184,12 +283,16 @@ export function KeypointVideoSequenceModal(props: {
         </div>
 
         <div
+          ref={stripScrollRef}
+          tabIndex={0}
+          onKeyDown={handleStripKeyDown}
           style={{
             display: "flex",
             gap: 6,
             overflowX: "auto",
             paddingBottom: 8,
             marginBottom: 8,
+            outline: "none",
           }}
         >
           {strip.map((slot, i) => {
@@ -222,9 +325,10 @@ export function KeypointVideoSequenceModal(props: {
                   height: CELL,
                   flex: "0 0 auto",
                   padding: 0,
+                  outline: "none",
                   border: isSel
-                    ? "2px solid #06c"
-                    : "1px solid rgba(255,255,255,0.25)",
+                    ? "2px solid #4af"
+                    : "1px solid rgba(255,255,255,0.18)",
                   background: slot.hidden ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.2)",
                   opacity: slot.hidden ? 0.45 : 1,
                   cursor: "pointer",
@@ -232,16 +336,35 @@ export function KeypointVideoSequenceModal(props: {
                   position: "relative",
                 }}
               >
+                {/* Frame number — always top-left */}
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 2,
+                    left: 2,
+                    fontSize: 9,
+                    background: "rgba(0,0,0,0.55)",
+                    color: "#bbb",
+                    padding: "1px 3px",
+                    lineHeight: 1,
+                    pointerEvents: "none",
+                  }}
+                >
+                  {i + 1}
+                </span>
+                {/* Hidden badge — top-right */}
                 {slot.hidden ? (
                   <span
                     style={{
                       position: "absolute",
                       top: 2,
-                      left: 2,
+                      right: 2,
                       fontSize: 9,
                       background: "rgba(0,0,0,0.7)",
                       color: "#fff",
                       padding: "1px 3px",
+                      lineHeight: 1,
+                      pointerEvents: "none",
                     }}
                   >
                     Hidden

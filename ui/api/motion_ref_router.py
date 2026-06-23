@@ -626,6 +626,7 @@ async def motion_ref_generate_ws(ws: WebSocket) -> None:
           "numSamples": 1,
           "diffusionSteps": 100,
           "numTransitionFrames": 5,        // optional, multi-segment overlap blend
+          "promptAdherence": 2.0,            // optional, Kimodo CFG text weight (1–4)
           "startingPose": [[x,y,z], ...],  // optional, frame-0 full-body constraint
           "model": "kimodo-soma-rp"        // optional
         }
@@ -646,6 +647,15 @@ async def motion_ref_generate_ws(ws: WebSocket) -> None:
         for seg in segments:
             if not isinstance(seg, dict) or not seg.get("text"):
                 raise ValueError("Each segment must have a non-empty 'text' field.")
+            duration = float(seg.get("duration", 3.0))
+            if duration > 10.0:
+                raise ValueError(
+                    "Each segment duration must be at most 10 seconds (Kimodo limit)."
+                )
+            if duration < 0.5:
+                raise ValueError(
+                    "Each segment duration must be at least 0.5 seconds."
+                )
 
         motion_name = (msg.get("motionName") or "motion").strip() or "motion"
         num_samples = int(msg.get("numSamples") or 1)
@@ -653,13 +663,22 @@ async def motion_ref_generate_ws(ws: WebSocket) -> None:
         model_name_req = (msg.get("model") or "").strip() or None
 
         from services.motion_ref_gen_ai_service.serverless import (
+            _DEFAULT_CFG_TEXT_WEIGHT,
             _DEFAULT_MODEL,
             _DEFAULT_NUM_TRANSITION_FRAMES,
+            _MAX_CFG_TEXT_WEIGHT,
+            _MIN_CFG_TEXT_WEIGHT,
         )
         model_name = model_name_req or _DEFAULT_MODEL
 
         num_transition_frames = int(
             msg.get("numTransitionFrames") or _DEFAULT_NUM_TRANSITION_FRAMES
+        )
+        prompt_adherence = float(
+            msg.get("promptAdherence") or _DEFAULT_CFG_TEXT_WEIGHT
+        )
+        prompt_adherence = max(
+            _MIN_CFG_TEXT_WEIGHT, min(_MAX_CFG_TEXT_WEIGHT, prompt_adherence)
         )
         starting_pose = msg.get("startingPose") or None
         if starting_pose is not None and (
@@ -681,6 +700,7 @@ async def motion_ref_generate_ws(ws: WebSocket) -> None:
                 num_samples=num_samples,
                 diffusion_steps=diffusion_steps,
                 num_transition_frames=num_transition_frames,
+                cfg_text_weight=prompt_adherence,
                 starting_pose=starting_pose,
                 log_cb=log_cb,
             )

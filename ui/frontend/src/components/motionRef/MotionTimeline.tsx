@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import type { MotionRefSegment } from "../../lib/api";
+import { MOTION_REF_MAX_SEGMENT_DURATION_SEC, MOTION_REF_MIN_SEGMENT_DURATION_SEC } from "../../lib/api";
+import { MOTION_REF_HINT_COLOR, motionRefNumberInputStyle } from "./theme";
 
 /**
  * Multi-segment motion timeline editor.
@@ -59,12 +61,18 @@ export function MotionTimeline(props: {
             }}
           />
           <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 70 }}>
-            <label style={{ fontSize: 10, color: "#888" }}>Duration (s)</label>
+            <label
+              style={{ fontSize: 10, color: "#888" }}
+              title="Kimodo max 10 seconds per segment"
+            >
+              Duration (s) <span style={{ color: "#666" }}>max {MOTION_REF_MAX_SEGMENT_DURATION_SEC}</span>
+            </label>
             <input
               type="number"
-              min={0.5}
-              max={30}
+              min={MOTION_REF_MIN_SEGMENT_DURATION_SEC}
+              max={MOTION_REF_MAX_SEGMENT_DURATION_SEC}
               step={0.5}
+              title="Kimodo max 10 seconds per segment"
               value={durEdit?.i === i ? durEdit.val : String(seg.duration)}
               onChange={(e) => {
                 const raw = e.target.value;
@@ -76,20 +84,15 @@ export function MotionTimeline(props: {
                 if (durEdit?.i !== i) return;
                 let n = parseFloat(durEdit.val);
                 if (Number.isNaN(n)) n = 3;
-                n = Math.max(0.5, Math.min(30, n));
+                n = Math.max(
+                  MOTION_REF_MIN_SEGMENT_DURATION_SEC,
+                  Math.min(MOTION_REF_MAX_SEGMENT_DURATION_SEC, n),
+                );
                 update(i, { duration: n });
                 setDurEdit(null);
               }}
               disabled={disabled}
-              style={{
-                width: "100%",
-                padding: "4px 6px",
-                background: "#111",
-                color: "#eee",
-                border: "1px solid rgba(255,255,255,0.2)",
-                font: "inherit",
-                fontSize: 12,
-              }}
+              style={motionRefNumberInputStyle}
             />
           </div>
           {segments.length > 1 ? (
@@ -122,6 +125,9 @@ export function MotionTimeline(props: {
             <li>
               Make every prompt self-contained (e.g. “A person lands and lies on
               the ground”), not relative (“then they stop”).
+            </li>
+            <li>
+              Each segment is at most {MOTION_REF_MAX_SEGMENT_DURATION_SEC} seconds (Kimodo limit).
             </li>
             <li>
               The first ~0.2s of each later segment is spent transitioning, so
@@ -159,7 +165,7 @@ const addBtn: React.CSSProperties = {
 const hintBox: React.CSSProperties = {
   fontSize: 11,
   lineHeight: 1.5,
-  color: "#9a9a9a",
+  color: MOTION_REF_HINT_COLOR,
   border: "1px solid rgba(255,255,255,0.12)",
   borderRadius: 4,
   padding: "8px 10px",

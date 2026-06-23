@@ -78,32 +78,6 @@
           "srcDuration": 1.375,
           "naturalW": 1280,
           "naturalH": 1280
-        },
-        {
-          "id": "clip_mqgqoiqx_20",
-          "type": "video",
-          "srcRelPath": "timelines/Timeline/clips/clip_15a3016f77a44ee18302d1ca044e6102.mp4",
-          "start": 4.401584453293774,
-          "inPoint": 0.3983566233606073,
-          "outPoint": 1.375,
-          "speed": 1,
-          "duration": 0.9766433766393927,
-          "srcDuration": 1.375,
-          "naturalW": 1280,
-          "naturalH": 1280
-        },
-        {
-          "id": "clip_mqgqoiqx_20",
-          "type": "video",
-          "srcRelPath": "timelines/Timeline/clips/clip_15a3016f77a44ee18302d1ca044e6102.mp4",
-          "start": 4.401584453293774,
-          "inPoint": 0.3983566233606073,
-          "outPoint": 1.375,
-          "speed": 1,
-          "duration": 0.9766433766393927,
-          "srcDuration": 1.375,
-          "naturalW": 1280,
-          "naturalH": 1280
         }
       ]
     },

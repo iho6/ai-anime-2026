@@ -13,6 +13,7 @@ export type GalleryPickTileProps = {
   onPlayClick?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   footer?: React.ReactNode;
+  topRightBadge?: string;
 };
 
 export function GalleryPickTile(props: GalleryPickTileProps) {
@@ -26,6 +27,7 @@ export function GalleryPickTile(props: GalleryPickTileProps) {
     onPlayClick,
     onContextMenu,
     footer,
+    topRightBadge,
   } = props;
 
   return (
@@ -95,6 +97,10 @@ export function GalleryPickTile(props: GalleryPickTileProps) {
           >
             <TimelinePlayIcon size={12} />
           </button>
+        ) : topRightBadge ? (
+          <span style={{ position: "absolute", top: 4, right: 4, fontSize: 9, padding: "1px 4px", background: "rgba(140,140,140,0.65)", color: "#eee", pointerEvents: "none", zIndex: 2 }}>
+            {topRightBadge}
+          </span>
         ) : null}
 
         <label

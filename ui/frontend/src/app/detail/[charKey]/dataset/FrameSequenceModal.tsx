@@ -286,22 +286,21 @@ function StripDraggableCell(props: {
       }
       style={{
         width: CELL,
-        minHeight: CELL + 8,
+        minHeight: CELL + 14,
         padding: 2,
         boxSizing: "border-box",
-        border: selected
-          ? isFocus
-            ? "2px solid #6cf"
-            : "2px solid rgba(100,200,255,0.55)"
-          : "1px solid #444",
-        background: "#000",
+        border: selected ? "2px solid #4af" : "1px solid rgba(255,255,255,0.18)",
+        background: "transparent",
         flexShrink: 0,
         cursor: canDrag ? "grab" : "pointer",
         opacity: isDragging ? 0.45 : 1,
         touchAction: canDrag ? "none" : undefined,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
       }}
     >
-      <div style={{ width: "100%", height: CELL, position: "relative" }}>
+      <div style={{ width: "100%", height: CELL, position: "relative", flexShrink: 0 }}>
         {slot.kind === "image" && slot.relPath ? (
           <>
             <div style={{ ...SEQUENCE_CROP_OUTER_CLIP_FLEX, height: "100%" }}>
@@ -318,25 +317,18 @@ function StripDraggableCell(props: {
                 style={{
                   position: "absolute",
                   inset: 0,
-                  background: "rgba(0,0,0,0.55)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 10,
-                  color: "#ccc",
+                  background: "rgba(0,0,0,0.45)",
                   pointerEvents: "none",
                 }}
-              >
-                Hidden
-              </div>
+              />
             ) : null}
           </>
         ) : (
-          <div style={{ width: "100%", height: CELL, background: "#222" }} />
+          <div style={{ width: "100%", height: CELL }} />
         )}
       </div>
-      <div style={{ fontSize: 10, color: "#888" }}>
-        {visibleFooterLabel != null ? String(visibleFooterLabel) : ""}
+      <div style={{ fontSize: 10, color: slot.hidden ? "#666" : "#888", lineHeight: 1, paddingTop: 2 }}>
+        {stripIndex + 1}
       </div>
     </button>
   );
@@ -370,19 +362,16 @@ function GroupStripStackedColumn(props: {
       onClick={(ev) => onStripSlotClick(stripIndex, ev)}
       style={{
         width: CELL,
-        minHeight: CELL + 8,
+        minHeight: CELL + 14,
         padding: 2,
         boxSizing: "border-box",
-        border: selected
-          ? isFocus
-            ? "2px solid #6cf"
-            : "2px solid rgba(100,200,255,0.55)"
-          : "1px solid #444",
-        background: "#000",
+        border: selected ? "2px solid #4af" : "1px solid rgba(255,255,255,0.18)",
+        background: "transparent",
         flexShrink: 0,
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
+        alignItems: "center",
       }}
     >
       <div style={{ width: "100%", flex: 1, display: "flex", flexDirection: "column", gap: 1 }}>
@@ -424,27 +413,20 @@ function GroupStripStackedColumn(props: {
                     style={{
                       position: "absolute",
                       inset: 0,
-                      background: "rgba(0,0,0,0.55)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 8,
-                      color: "#ccc",
+                      background: "rgba(0,0,0,0.45)",
                       pointerEvents: "none",
                     }}
-                  >
-                    Hidden
-                  </div>
+                  />
                 ) : null}
               </>
             ) : (
-              <div style={{ width: "100%", height: thumbH, background: "#222" }} />
+              <div style={{ width: "100%", height: thumbH }} />
             )}
           </div>
         ))}
       </div>
-      <div style={{ fontSize: 10, color: "#888" }}>
-        {visibleFooterLabel != null ? String(visibleFooterLabel) : ""}
+      <div style={{ fontSize: 10, color: "#888", lineHeight: 1, paddingTop: 2 }}>
+        {stripIndex + 1}
       </div>
     </button>
   );
@@ -538,6 +520,8 @@ export function FrameSequenceModal(props: {
   const stripClipRef = useRef<FrameSeqStripClip | null>(null);
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+  const stripScrollRef = useRef<HTMLDivElement>(null);
+  const stripInnerRef = useRef<HTMLDivElement>(null);
 
   const stepPreviewFrame = useCallback((delta: number) => {
     const { play: playing, playIx: ix, focusIx: fx } = navRef.current;
@@ -1006,6 +990,21 @@ export function FrameSequenceModal(props: {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, charKey, sequenceName, stepPreviewFrame, snapshot, pushUndo, removeSelectedSlots]);
 
+  useEffect(() => {
+    const outer = stripScrollRef.current;
+    const inner = stripInnerRef.current;
+    if (!outer || !inner) return;
+    const cell = inner.children[focusIx] as HTMLElement | undefined;
+    if (!cell) return;
+    const cRect = outer.getBoundingClientRect();
+    const cellRect = cell.getBoundingClientRect();
+    if (cellRect.left < cRect.left) {
+      outer.scrollLeft -= cRect.left - cellRect.left + 6;
+    } else if (cellRect.right > cRect.right) {
+      outer.scrollLeft += cellRect.right - cRect.right + 6;
+    }
+  }, [focusIx]);
+
   const hideSelectedSlots = () => {
     const editStrip = isGroupMode ? contextStrip : strip;
     const targets = [...selectedIndices].filter((i) => {
@@ -1285,20 +1284,47 @@ export function FrameSequenceModal(props: {
             one hold frame; hidden image cells are skipped in the file, like a hidden cell on the main timeline.
           </div>
           <div
-            title="Drag bottom edge to resize strip area"
             style={{
-              flex: "0 0 auto",
-              resize: "vertical",
-              height: "min(42vh, 420px)",
-              minHeight: 140,
-              maxHeight: "min(55vh, 560px)",
-              overflowY: "auto",
-              overflowX: "auto",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
               marginBottom: 8,
-              boxSizing: "border-box",
+              flexShrink: 0,
             }}
           >
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "flex-end" }}>
+            <button
+              type="button"
+              onClick={() => stripScrollRef.current?.scrollBy({ left: -(CELL + 4) * 3, behavior: "smooth" })}
+              style={{
+                background: "transparent",
+                border: "1px solid rgba(255,255,255,0.18)",
+                color: "#999",
+                padding: "4px 6px",
+                cursor: "pointer",
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                borderRadius: 0,
+              }}
+            >
+              <svg width="10" height="14" viewBox="0 0 10 14" fill="none">
+                <polyline points="8,2 2,7 8,12" stroke="#999" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter" />
+              </svg>
+            </button>
+            <div
+              ref={stripScrollRef}
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowLeft" || e.key === "ArrowRight") e.preventDefault();
+              }}
+              style={{
+                flex: 1,
+                overflowX: "auto",
+                overflowY: "hidden",
+                outline: "none",
+              }}
+            >
+            <div ref={stripInnerRef} style={{ display: "flex", flexWrap: "nowrap", gap: 4, alignItems: "flex-start", paddingBottom: 4 }}>
               {isGroupMode && groupLayers
                 ? Array.from({ length: columnCount }, (_, i) => (
                     <GroupStripStackedColumn
@@ -1339,6 +1365,26 @@ export function FrameSequenceModal(props: {
                     />
                   ))}
             </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => stripScrollRef.current?.scrollBy({ left: (CELL + 4) * 3, behavior: "smooth" })}
+              style={{
+                background: "transparent",
+                border: "1px solid rgba(255,255,255,0.18)",
+                color: "#999",
+                padding: "4px 6px",
+                cursor: "pointer",
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                borderRadius: 0,
+              }}
+            >
+              <svg width="10" height="14" viewBox="0 0 10 14" fill="none">
+                <polyline points="2,2 8,7 2,12" stroke="#999" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter" />
+              </svg>
+            </button>
           </div>
           <div
             style={{

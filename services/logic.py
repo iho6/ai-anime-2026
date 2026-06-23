@@ -8913,9 +8913,9 @@ def run_pose_keypoint_for_image(
         if save_square_crops_to:
             out_dir = Path(save_square_crops_to)
             out_dir.mkdir(parents=True, exist_ok=True)
-            with Image.open(kp_crop_path) as patch:
-                sq = extract_square_working_crop(patch, placement, min_side=min_side)
-            sq.save(out_dir / "kp_square.png")
+            # SDPose ran on ref_square.png (already 1024²); its output IS the square keypoint.
+            # Do not re-crop with canvas-space placement — just copy directly.
+            shutil.copy2(kp_crop_path, out_dir / "kp_square.png")
         full_dest = paste_working_keypoint_onto_canvas(
             kp_crop_path,
             placed_figure,
@@ -9201,6 +9201,16 @@ def make_reference_keypoint_video_from_staged_frames(
             )
             kp_full_paths.append(str(kp_full))
 
+        # Save per-frame square keypoints so Qwen can use the cached path instead of
+        # re-cropping the full-canvas keypoint (which degrades resolution).
+        kp_sq_dir = work_root / "kp_sq"
+        kp_sq_dir.mkdir(parents=True, exist_ok=True)
+        kp_sq_paths: list[str] = []
+        for i in range(n):
+            sq_dest = kp_sq_dir / f"kp_{i + 1:06d}.png"
+            shutil.copy2(kp_square_frames[i], sq_dest)
+            kp_sq_paths.append(str(sq_dest))
+
         if log_cb:
             log_cb("Encoding full viewport source video…")
         full_video_stem = work_root / "source"
@@ -9214,6 +9224,7 @@ def make_reference_keypoint_video_from_staged_frames(
             kp_full_paths,
             fps=store_fps,
             placed_figures=placed_figures[:n],
+            kp_square_frame_paths=kp_sq_paths,
         )
     finally:
         shutil.rmtree(work_root, ignore_errors=True)

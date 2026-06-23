@@ -1204,6 +1204,17 @@ export function runTimelineExportMp4WsJob(params: {
 // Motion reference generation (KiMoD)
 // ----------------------------------------------------------------------------
 
+/** Kimodo max duration per prompt/segment (seconds). */
+export const MOTION_REF_MAX_SEGMENT_DURATION_SEC = 10;
+export const MOTION_REF_MIN_SEGMENT_DURATION_SEC = 0.5;
+
+/** Kimodo CFG text weight (prompt adherence) bounds; default matches Kimodo. */
+export const MOTION_REF_DEFAULT_PROMPT_ADHERENCE = 2;
+export const MOTION_REF_MIN_PROMPT_ADHERENCE = 1;
+export const MOTION_REF_MAX_PROMPT_ADHERENCE = 4;
+export const MOTION_REF_PROMPT_ADHERENCE_STEP = 0.5;
+export const MOTION_REF_DEFAULT_CFG_CONSTRAINT_WEIGHT = 2;
+
 export type MotionRefSegment = {
   text: string;
   duration: number; // seconds
@@ -1346,6 +1357,8 @@ export function runMotionRefGenerateWsJob(params: {
   model?: string;
   /** Overlap frames blended between consecutive multi-segment prompts (Kimodo default 5). */
   numTransitionFrames?: number;
+  /** Kimodo CFG text weight (1–4); higher = stronger text following. Default 2. */
+  promptAdherence?: number;
   /** Optional joint positions to constrain the first frame of generation. */
   startingPose?: number[][];
   onLogLine: (line: string) => void;

@@ -181,6 +181,12 @@ _DEFAULT_DIFFUSION_STEPS = 100
 # Larger values give smoother transitions for dramatic pose changes at the cost of
 # segment time spent transitioning. Override via KIMODO_NUM_TRANSITION_FRAMES.
 _DEFAULT_NUM_TRANSITION_FRAMES = int(os.environ.get("KIMODO_NUM_TRANSITION_FRAMES", "5") or "5")
+_MAX_SEGMENT_DURATION_SEC = 10.0
+_MIN_SEGMENT_DURATION_SEC = 0.5
+_DEFAULT_CFG_TEXT_WEIGHT = 2.0
+_DEFAULT_CFG_CONSTRAINT_WEIGHT = 2.0
+_MIN_CFG_TEXT_WEIGHT = 1.0
+_MAX_CFG_TEXT_WEIGHT = 4.0
 
 
 def _load_kimodo_model(model_name: str = _DEFAULT_MODEL) -> Any:
@@ -288,6 +294,7 @@ def generate_motion(
     num_samples: int = 1,
     diffusion_steps: int = _DEFAULT_DIFFUSION_STEPS,
     num_transition_frames: int = _DEFAULT_NUM_TRANSITION_FRAMES,
+    cfg_text_weight: float = _DEFAULT_CFG_TEXT_WEIGHT,
     starting_pose: list[list[float]] | None = None,  # 77×3 joint positions
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
@@ -327,6 +334,20 @@ def generate_motion(
 
     texts = [str(s["text"]).strip() for s in segments]
     durations = [float(s.get("duration", 3.0)) for s in segments]
+    for i, d in enumerate(durations):
+        if d > _MAX_SEGMENT_DURATION_SEC:
+            raise ValueError(
+                f"Each segment duration must be at most {_MAX_SEGMENT_DURATION_SEC:g} seconds "
+                f"(Kimodo limit); segment {i + 1} is {d:g}s."
+            )
+        if d < _MIN_SEGMENT_DURATION_SEC:
+            raise ValueError(
+                f"Each segment duration must be at least {_MIN_SEGMENT_DURATION_SEC:g} seconds; "
+                f"segment {i + 1} is {d:g}s."
+            )
+
+    cfg_text = float(cfg_text_weight)
+    cfg_text = max(_MIN_CFG_TEXT_WEIGHT, min(_MAX_CFG_TEXT_WEIGHT, cfg_text))
     num_frames_list = [max(1, int(round(d * fps))) for d in durations]
 
     multi_prompt = len(texts) > 1
@@ -339,6 +360,7 @@ def generate_motion(
         )
     else:
         _log(f"Generating motion: 1 segment, {sum(num_frames_list)} frames @ {fps} fps")
+    _log(f"Prompt adherence (CFG text weight): {cfg_text:.1f}")
     for i, (t, nf) in enumerate(zip(texts, num_frames_list)):
         _log(f"  Segment {i+1}/{len(texts)}: '{t[:80]}' → {nf} frames ({durations[i]:.1f}s)")
 
@@ -371,6 +393,8 @@ def generate_motion(
         return_numpy=True,
         post_processing=True,
         progress_bar=_silent_progress,
+        cfg_type="separated",
+        cfg_weight=[cfg_text, _DEFAULT_CFG_CONSTRAINT_WEIGHT],
     )
     if multi_prompt:
         model_kwargs["num_transition_frames"] = transition
@@ -675,6 +699,9 @@ def _make_request_handler(model_name: str) -> type:
                     payload.get("num_transition_frames") or _DEFAULT_NUM_TRANSITION_FRAMES
                 )
                 starting_pose = payload.get("starting_pose") or None
+                cfg_text_weight = float(
+                    payload.get("cfg_text_weight") or _DEFAULT_CFG_TEXT_WEIGHT
+                )
                 logs: list[str] = []
                 try:
                     result = generate_motion(
@@ -684,6 +711,7 @@ def _make_request_handler(model_name: str) -> type:
                         num_samples=num_samples,
                         diffusion_steps=diffusion_steps,
                         num_transition_frames=num_transition_frames,
+                        cfg_text_weight=cfg_text_weight,
                         starting_pose=starting_pose,
                         log_cb=lambda m: logs.append(m),
                     )
@@ -845,6 +873,7 @@ def call_generate(
     num_samples: int = 1,
     diffusion_steps: int = _DEFAULT_DIFFUSION_STEPS,
     num_transition_frames: int = _DEFAULT_NUM_TRANSITION_FRAMES,
+    cfg_text_weight: float = _DEFAULT_CFG_TEXT_WEIGHT,
     starting_pose: list[list[float]] | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
@@ -861,6 +890,7 @@ def call_generate(
         "num_samples": num_samples,
         "diffusion_steps": diffusion_steps,
         "num_transition_frames": num_transition_frames,
+        "cfg_text_weight": cfg_text_weight,
         "starting_pose": starting_pose,
     }).encode()
 
