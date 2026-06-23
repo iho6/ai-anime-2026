@@ -345,7 +345,6 @@ export function TimelineCharacterPicker(props: {
       if (!done.ok) throw new Error(done.error ?? "Pose generation failed.");
       pushLog("Done. Refreshing gallery…");
       endSession();
-      if (!poseChangeMode) setNewPosePanel(null);
       setNewPosePrompt("");
       setNewPoseRef(null);
       void loadSections(charKey);
@@ -802,7 +801,7 @@ export function TimelineCharacterPicker(props: {
                               />
                             ))}
                           </div>
-                          </div>{/* end sequence scroll */}
+                          </div>
                         )}
                       </div>
                     )}

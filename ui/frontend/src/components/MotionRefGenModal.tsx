@@ -1895,6 +1895,7 @@ export function MotionRefGenModal(props: {
             zIndex: 10300,
             minWidth: 140,
           }}
+          onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
           onMouseLeave={() => setMotionCtxMenu(null)}
         >

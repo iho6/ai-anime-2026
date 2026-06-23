@@ -1210,7 +1210,7 @@ export default function CreatePage() {
         const entry = batchRefQueue[i];
         const index = i + 1;
         onJobLogLine(`[${index}/${total}] Starting reference…`);
-        setActiveReference(activeRefFromBatchEntry(entry));
+        setActiveReference(entry);
         ok = await runOneGenerateStep(entry, { index, total });
         if (!ok) break;
         onJobLogLine(`[${index}/${total}] Reference complete`);

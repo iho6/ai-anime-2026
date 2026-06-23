@@ -10,7 +10,7 @@ import { keyframeWorldPose, orbitStateFromWorldPose, worldPoseFromOrbitState } f
 import type { CameraWorldPose } from "./cameraTrajectory";
 import { computeCaptureViewportLayout } from "./captureViewportLayout";
 import type { SequencePreviewAspect } from "../../lib/api";
-import { normalizeSequencePreviewAspect } from "../../lib/sequenceAspect";
+import { normalizeSequencePreviewAspect, aspectDimensionsForId } from "../../lib/sequenceAspect";
 
 export type CameraGizmoKeyframe = {
   id: string;
@@ -95,6 +95,14 @@ export type SkeletonViewer3DHandle = {
   setOutputFrameOverlayVisible(visible: boolean): void;
   /** Update capture aspect ratio (16:9, 9:16, 1:1, 4:3). */
   setCaptureAspect(aspect: SequencePreviewAspect): void;
+  /**
+   * Render the current frame at the capture-aspect output resolution WITHOUT
+   * changing the camera (no auto-zoom). The exported pixels exactly match the
+   * live preview. Returns null if the figure is not visible at all.
+   */
+  captureFrameAtAspect(opts?: {
+    targetSize?: number;
+  }): { dataUrl: string; screenBbox: FigureScreenBbox } | null;
 };
 
 type Props = {
@@ -848,34 +856,115 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         const t = threeRef.current;
         if (!t) return null;
 
-        const bbox = _computeFigureScreenBbox();
-        if (!bbox) return null;
+        if (!positionsRef.current || positionsRef.current.length < 3) return null;
 
         const targetSize = opts?.targetSize ?? 1024;
-        const fillFraction = opts?.fillFraction ?? 0.75;
 
-        // How much the figure currently fills the shorter viewport dimension.
-        const figureMaxDim = Math.max(bbox.width, bbox.height);
-        const currentFillFrac =
-          figureMaxDim / Math.min(bbox.imageWidth, bbox.imageHeight);
-        // Only zoom IN (scale >= 1), cap at 4× to avoid extreme close-ups.
-        const scaleFactor = Math.min(
-          Math.max(fillFraction / currentFillFrac, 1.0),
-          4.0
-        );
+        const { w: arW, h: arH } = aspectDimensionsForId(captureAspectRef.current);
+        const captureW = arW >= arH ? targetSize : Math.round(targetSize * arW / arH);
+        const captureH = arH >= arW ? targetSize : Math.round(targetSize * arH / arW);
+        const captureAspRatio = captureW / captureH;
 
-        const savedDist = orbitRef.current.distance;
-        const savedW = t.renderer.domElement.width;
-        const savedH = t.renderer.domElement.height;
+        const savedRendSize = new t.THREE.Vector2();
+        t.renderer.getSize(savedRendSize);
         const savedAspect = t.camera.aspect;
 
         try {
-          orbitRef.current = {
-            ...orbitRef.current,
-            distance: savedDist / scaleFactor,
-          };
+          // ── Phase 1: full-frame render to get screenBbox ──────────────────
+          // Render with the exact trajectory camera (no zoom, no pan) so the
+          // figure position matches the mesh video perfectly.
+          t.renderer.setSize(captureW, captureH);
+          t.camera.aspect = captureAspRatio;
+          t.camera.updateProjectionMatrix();
+
+          const wasGizmoVisible = t.gizmoGroup.visible;
+          t.gizmoGroup.visible = false;
+          t.renderer.render(t.scene, t.camera);
+          t.gizmoGroup.visible = wasGizmoVisible && gizmosVisibleRef.current;
+
+          const screenBbox = _computeFigureScreenBbox();
+          if (!screenBbox) return null;
+
+          // ── Phase 2: HD closeup via tile projection matrix ────────────────
+          // Switch to a square viewport so the closeup has 1:1 aspect for Qwen.
           t.renderer.setSize(targetSize, targetSize);
           t.camera.aspect = 1.0;
+          t.camera.updateProjectionMatrix();
+
+          // Compute where the figure sits in this 1:1 projection (vertex project
+          // uses the current camera matrices — no render needed here).
+          const closeupBbox = _computeFigureScreenBbox();
+          if (!closeupBbox) return null;
+
+          // Convert padded pixel bbox → NDC.  Y is flipped: screen top = NDC +1.
+          const imgW = closeupBbox.imageWidth;
+          const imgH = closeupBbox.imageHeight;
+          const ndcL = (closeupBbox.x / imgW) * 2 - 1;
+          const ndcR = ((closeupBbox.x + closeupBbox.width) / imgW) * 2 - 1;
+          const ndcT = 1 - (closeupBbox.y / imgH) * 2;
+          const ndcB = 1 - ((closeupBbox.y + closeupBbox.height) / imgH) * 2;
+
+          // Tile matrix: maps the figure's NDC sub-region → [-1, 1] × [-1, 1].
+          // Premultiplied onto projectionMatrix so the camera and geometry are
+          // completely unchanged — only the frustum is narrowed around the figure.
+          const scaleX = 2 / (ndcR - ndcL);
+          const scaleY = 2 / (ndcT - ndcB);
+          const transX = -(ndcR + ndcL) / (ndcR - ndcL);
+          const transY = -(ndcT + ndcB) / (ndcT - ndcB);
+          const tileMatrix = new t.THREE.Matrix4();
+          // Matrix4.set() takes row-major order
+          tileMatrix.set(
+            scaleX, 0,      0, transX,
+            0,      scaleY, 0, transY,
+            0,      0,      1, 0,
+            0,      0,      0, 1,
+          );
+
+          const savedProjMatrix = t.camera.projectionMatrix.clone();
+          t.camera.projectionMatrix.premultiply(tileMatrix);
+
+          t.gizmoGroup.visible = false;
+          t.renderer.render(t.scene, t.camera);
+          t.gizmoGroup.visible = wasGizmoVisible && gizmosVisibleRef.current;
+
+          t.camera.projectionMatrix.copy(savedProjMatrix);
+
+          const dataUrl = t.renderer.domElement.toDataURL('image/png');
+
+          return {
+            dataUrl,
+            screenBbox: {
+              x: screenBbox.x,
+              y: screenBbox.y,
+              width: screenBbox.width,
+              height: screenBbox.height,
+              imageWidth: screenBbox.imageWidth,
+              imageHeight: screenBbox.imageHeight,
+            },
+          };
+        } finally {
+          t.renderer.setSize(savedRendSize.x, savedRendSize.y);
+          t.camera.aspect = savedAspect;
+          t.camera.updateProjectionMatrix();
+        }
+      },
+      captureFrameAtAspect(opts) {
+        const t = threeRef.current;
+        if (!t) return null;
+
+        const targetSize = opts?.targetSize ?? 1024;
+        const { w: arW, h: arH } = aspectDimensionsForId(captureAspectRef.current);
+        const captureW = arW >= arH ? targetSize : Math.round(targetSize * arW / arH);
+        const captureH = arH >= arW ? targetSize : Math.round(targetSize * arH / arW);
+        const captureAspRatio = captureW / captureH;
+
+        const savedSize = new t.THREE.Vector2();
+        t.renderer.getSize(savedSize);
+        const savedAspect = t.camera.aspect;
+
+        try {
+          t.renderer.setSize(captureW, captureH);
+          t.camera.aspect = captureAspRatio;
           t.camera.updateProjectionMatrix();
           _applyCameraToThree();
 
@@ -885,11 +974,10 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           const dataUrl = t.renderer.domElement.toDataURL("image/png");
           t.gizmoGroup.visible = wasGizmoVisible && gizmosVisibleRef.current;
 
-          const newBbox = _computeFigureScreenBbox();
-          return newBbox ? { dataUrl, screenBbox: newBbox } : null;
+          const screenBbox = _computeFigureScreenBbox();
+          return screenBbox ? { dataUrl, screenBbox } : null;
         } finally {
-          orbitRef.current = { ...orbitRef.current, distance: savedDist };
-          t.renderer.setSize(savedW, savedH);
+          t.renderer.setSize(savedSize.x, savedSize.y);
           t.camera.aspect = savedAspect;
           t.camera.updateProjectionMatrix();
           _applyCameraToThree();
