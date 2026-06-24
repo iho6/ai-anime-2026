@@ -169,22 +169,51 @@ NO_TEXT_IN_IMAGE_CONSTRAINT = (
     "anywhere in the image"
 )
 
-KEYPOINT_POSE_AUTHORITY_LEAD = (
-    "Edit the character's full body pose to exactly match the keypoint skeleton reference. "
-    "Change limbs, torso, and stance to follow the skeleton even when different from the "
-    "starting image. The skeleton reference is the primary authority for body pose, "
-    "facing direction, and head orientation; match the character's facing direction and "
-    "head turn exactly as shown in the skeleton."
+# Role declaration preamble — must open the prompt so Qwen anchors each Picture
+# token to its role before reading any instruction. Labels match exactly what
+# nodes_qwen.py emits ("Picture 1", "Picture 2", "Picture 3").
+
+KEYPOINT_ROLE_PREAMBLE_NO_CLOSEUP = (
+    "Picture 1 is the character identity reference: appearance, clothing, face, hair, "
+    "and body proportions come from Picture 1. "
+    "Picture 2 is the keypoint skeleton pose reference: it is the primary authority for "
+    "body pose, limb positions, stance, facing direction, and head orientation."
 )
 
-KEYPOINT_IDENTITY_TAIL = (
-    "Keep the same character identity, face, proportions, and clothing from the first "
-    "input reference (starting image)."
+KEYPOINT_ROLE_PREAMBLE_WITH_CLOSEUP = (
+    "Picture 1 is the character identity reference: appearance, clothing, face, hair, "
+    "and body proportions come from Picture 1. "
+    "Picture 2 is a multi-angle facial closeup reference: use it only to improve facial "
+    "feature accuracy. Do not render Picture 2 as a figure, floating head, or any visual "
+    "element in the output — it is reference data only, invisible in the result. "
+    "Picture 3 is the keypoint skeleton pose reference: it is the primary authority for "
+    "body pose, limb positions, stance, facing direction, and head orientation."
 )
 
-KEYPOINT_IDENTITY_TAIL_WITH_CLOSEUP = (
-    "Keep the same character identity, face, proportions, and clothing from the first "
-    "input reference (starting image). Use the closeup auxiliary only for facial identity."
+# Generation instruction body — references Pictures by exact number.
+
+KEYPOINT_GENERATION_BODY_NO_CLOSEUP = (
+    "Generate a single full-body image of the character from Picture 1, posed exactly "
+    "as shown in the skeleton in Picture 2. Change limbs, torso, and stance to match "
+    "Picture 2 even when different from Picture 1. "
+    "Keep the character's identity, face, proportions, and clothing from Picture 1. "
+    "Ensure clothing details, colors, and style are consistent with Picture 1. "
+    "No objects in the hands; match the hand pose exactly to Picture 2. "
+    "Preserve natural body proportions from Picture 1; do not enlarge the head, distort "
+    "limb lengths, or repeat any limb. "
+    "No background scenery; use a flat plain white background only."
+)
+
+KEYPOINT_GENERATION_BODY_WITH_CLOSEUP = (
+    "Generate a single full-body image of the character from Picture 1, posed exactly "
+    "as shown in the skeleton in Picture 3. Change limbs, torso, and stance to match "
+    "Picture 3 even when different from Picture 1. "
+    "Keep the character's identity, face, proportions, and clothing from Picture 1. "
+    "Ensure clothing details, colors, and style are consistent with Picture 1. "
+    "No objects in the hands; match the hand pose exactly to Picture 3. "
+    "Preserve natural body proportions from Picture 1; do not enlarge the head, distort "
+    "limb lengths, or repeat any limb. "
+    "No background scenery; use a flat plain white background only."
 )
 
 _KEYPOINT_USER_CATALOG_WRAP_RE = (
@@ -222,32 +251,17 @@ def compose_keypoint_pose_edit_prompt(
     Full Qwen image-edit prompt for starting-image + keypoint auxiliary generation.
 
     ``with_closeup_sheet`` is True when a closeup composite is passed as an extra auxiliary.
+    Structure: role declarations → generation instruction → constraints → optional mood.
     """
     u = normalize_keypoint_user_description(user_description)
     if with_closeup_sheet:
-        role = (
-            "Return a single full-body image of the same character as in the first input "
-            "reference (starting image), in the same pose as the keypoint skeleton (third image). "
-            "Return only the full-body image, no close-up inset. Keep facial features consistent."
-        )
-        identity = KEYPOINT_IDENTITY_TAIL_WITH_CLOSEUP
+        preamble = KEYPOINT_ROLE_PREAMBLE_WITH_CLOSEUP
+        generation = KEYPOINT_GENERATION_BODY_WITH_CLOSEUP
     else:
-        role = (
-            "Return a single full-body image of the same character as in the first input "
-            "reference (starting image), in the same pose as the keypoint image. "
-            "Return only the full-body image."
-        )
-        identity = KEYPOINT_IDENTITY_TAIL
-    practical = (
-        "No objects in the hands; keep the hand pose exactly the same as the keypoint reference. "
-        "Preserve natural body proportions from the starting image; do not enlarge the head or "
-        "distort limb lengths. "
-        "No background scenery; use a flat plain white background only."
-    )
+        preamble = KEYPOINT_ROLE_PREAMBLE_NO_CLOSEUP
+        generation = KEYPOINT_GENERATION_BODY_NO_CLOSEUP
     formatting = f"{SOLO_CHARACTER_EDIT_CONSTRAINTS} {NO_TEXT_IN_IMAGE_CONSTRAINT}"
-    body = (
-        f"{KEYPOINT_POSE_AUTHORITY_LEAD} {identity} {practical} {formatting} {role}"
-    )
+    body = f"{preamble} {generation} {formatting}"
     if not u:
         return body
     return f"{body} Optional action or mood: {u}."

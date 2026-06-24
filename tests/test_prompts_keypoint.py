@@ -24,10 +24,13 @@ def test_compose_keypoint_pose_edit_prompt_pose_first() -> None:
     solo_idx = p.index("only one character")
     assert pose_idx < solo_idx
     assert "Replace the scene" not in p
-    assert "Return a single full-body image" in p
+    assert "Generate a single full-body image" in p
+    assert "Picture 1" in p
+    assert "Picture 2" in p
     assert "primary authority for body pose" in p
     assert "plain white background" in p
     assert "no text" in p
+    assert "repeat any limb" in p
     assert "#ffffff" not in p.lower()
     assert "ffffff" not in p
 
@@ -49,7 +52,11 @@ def test_compose_keypoint_pose_edit_prompt_normalizes_wrapped_user_text() -> Non
 
 def test_compose_keypoint_pose_edit_prompt_with_closeup() -> None:
     p = compose_keypoint_pose_edit_prompt("jogging", with_closeup_sheet=True)
-    assert "closeup auxiliary only for facial identity" in p
-    assert "Return only the full-body image, no close-up inset" in p
+    assert "Picture 1" in p
+    assert "Picture 2" in p
+    assert "Picture 3" in p
+    assert "multi-angle facial closeup reference" in p
+    assert "invisible in the result" in p
+    assert "repeat any limb" in p
     assert "jogging" in p
     assert p.index("primary authority for body pose") < p.index("only one character")
