@@ -891,22 +891,26 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           t.camera.aspect = 1.0;
           t.camera.updateProjectionMatrix();
 
-          // Compute where the figure sits in this 1:1 projection (vertex project
-          // uses the current camera matrices — no render needed here).
-          const closeupBbox = _computeFigureScreenBbox();
-          if (!closeupBbox) return null;
+          // Derive the tile NDC directly from Phase 1's screenBbox converted to
+          // 1:1 camera space. The key insight: a square pixel region in the 16:9
+          // canvas maps to a square NDC region in the 1:1 camera (horizontal NDC
+          // scales by captureAspRatio = captureW/captureH), so scaleX ≈ scaleY
+          // and there is no distortion. Crucially, this approach is correct even
+          // when the figure is near horizontal edges: the old approach computed
+          // closeupBbox in the 1:1 camera (whose horizontal FOV is narrower than
+          // 16:9), placing the zoom region at the wrong offset for off-center
+          // figures. WebGL clips in final NDC space after tile-matrix application,
+          // so ndcL/ndcR can legitimately exceed ±1 for edge-positioned figures.
+          const imgW_p1 = screenBbox.imageWidth;   // captureW * pixelRatio
+          const imgH_p1 = screenBbox.imageHeight;  // captureH * pixelRatio
+          // 16:9 NDC of the screenBbox, then scale horizontal by captureAspRatio:
+          const ndcL = ((screenBbox.x / imgW_p1) * 2 - 1) * captureAspRatio;
+          const ndcR = (((screenBbox.x + screenBbox.width) / imgW_p1) * 2 - 1) * captureAspRatio;
+          const ndcT = 1 - (screenBbox.y / imgH_p1) * 2;
+          const ndcB = 1 - ((screenBbox.y + screenBbox.height) / imgH_p1) * 2;
 
-          // Convert padded pixel bbox → NDC.  Y is flipped: screen top = NDC +1.
-          const imgW = closeupBbox.imageWidth;
-          const imgH = closeupBbox.imageHeight;
-          const ndcL = (closeupBbox.x / imgW) * 2 - 1;
-          const ndcR = ((closeupBbox.x + closeupBbox.width) / imgW) * 2 - 1;
-          const ndcT = 1 - (closeupBbox.y / imgH) * 2;
-          const ndcB = 1 - ((closeupBbox.y + closeupBbox.height) / imgH) * 2;
-
-          // Tile matrix: maps the figure's NDC sub-region → [-1, 1] × [-1, 1].
-          // Premultiplied onto projectionMatrix so the camera and geometry are
-          // completely unchanged — only the frustum is narrowed around the figure.
+          // Tile matrix: maps [ndcL,ndcR]×[ndcB,ndcT] → [-1,1]×[-1,1].
+          // Premultiplied onto projectionMatrix so only the frustum changes.
           const scaleX = 2 / (ndcR - ndcL);
           const scaleY = 2 / (ndcT - ndcB);
           const transX = -(ndcR + ndcL) / (ndcR - ndcL);
@@ -931,15 +935,21 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
 
           const dataUrl = t.renderer.domElement.toDataURL('image/png');
 
+          // Normalize screenBbox to logical pixel space (captureW × captureH).
+          // _computeFigureScreenBbox uses renderer.domElement.width/height which
+          // are physical pixels (logical × devicePixelRatio). We divide back so
+          // cropBox and imageWidth/imageHeight are always in the same logical
+          // coordinate space as captureW/captureH, regardless of display DPI.
+          const pr = t.renderer.getPixelRatio();
           return {
             dataUrl,
             screenBbox: {
-              x: screenBbox.x,
-              y: screenBbox.y,
-              width: screenBbox.width,
-              height: screenBbox.height,
-              imageWidth: screenBbox.imageWidth,
-              imageHeight: screenBbox.imageHeight,
+              x: Math.round(screenBbox.x / pr),
+              y: Math.round(screenBbox.y / pr),
+              width: Math.round(screenBbox.width / pr),
+              height: Math.round(screenBbox.height / pr),
+              imageWidth: captureW,
+              imageHeight: captureH,
             },
           };
         } finally {
@@ -974,8 +984,18 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           const dataUrl = t.renderer.domElement.toDataURL("image/png");
           t.gizmoGroup.visible = wasGizmoVisible && gizmosVisibleRef.current;
 
-          const screenBbox = _computeFigureScreenBbox();
-          return screenBbox ? { dataUrl, screenBbox } : null;
+          const rawBbox = _computeFigureScreenBbox();
+          if (!rawBbox) return null;
+          const pr2 = t.renderer.getPixelRatio();
+          const screenBbox = {
+            x: Math.round(rawBbox.x / pr2),
+            y: Math.round(rawBbox.y / pr2),
+            width: Math.round(rawBbox.width / pr2),
+            height: Math.round(rawBbox.height / pr2),
+            imageWidth: captureW,
+            imageHeight: captureH,
+          };
+          return { dataUrl, screenBbox };
         } finally {
           t.renderer.setSize(savedSize.x, savedSize.y);
           t.camera.aspect = savedAspect;

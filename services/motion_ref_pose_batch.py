@@ -81,6 +81,65 @@ def process_v2pose_frame(
     return item
 
 
+def create_diag_folder(folder_name: str, *, motion_key: str = "") -> dict[str, Any]:
+    """Create an empty shots gallery folder for a diag run. Returns { folderId, folderName }."""
+    from services import motion_shot_storage
+
+    label = folder_name.strip() or f"diag_{motion_key}"
+    folder = motion_shot_storage.create_shot_folder(label, [])
+    return {"folderId": folder["id"], "folderName": label}
+
+
+def save_diag_shot(
+    motion_key: str,
+    folder_id: str,
+    frame: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Composite one frame (zoomed square pasted at cropBox on full canvas) and save it
+    to the shots gallery, then assign it to folder_id. Returns { shotId }.
+    """
+    import io
+
+    from PIL import Image
+
+    from services import motion_shot_storage
+    from services.figure_crop import paste_on_black_canvas
+
+    frame_idx = int(frame.get("frameIndex", 0))
+    raw_b64 = frame.get("pngBase64") or frame.get("png_base64") or ""
+    png_bytes = _decode_png_base64(str(raw_b64))
+    if not png_bytes:
+        raise ValueError(f"Empty PNG for frame {frame_idx}")
+
+    crop_box = frame.get("cropBox") if isinstance(frame.get("cropBox"), dict) else None
+    img_w = frame.get("imageWidth")
+    img_h = frame.get("imageHeight")
+
+    with Image.open(io.BytesIO(png_bytes)) as zoomed:
+        if crop_box and img_w and img_h:
+            composite = paste_on_black_canvas(zoomed, int(img_w), int(img_h), crop_box)
+        else:
+            composite = zoomed.convert("RGB")
+
+    buf = io.BytesIO()
+    composite.save(buf, format="PNG")
+    composite_b64 = base64.b64encode(buf.getvalue()).decode()
+
+    item = motion_shot_storage.save_shot(
+        motion_key=motion_key,
+        png_base64=composite_b64,
+        frame_index=frame_idx,
+        azimuth=float(frame.get("azimuth") or 0),
+        elevation=float(frame.get("elevation") or 0),
+        crop_box=crop_box,
+        image_width=int(img_w) if img_w else None,
+        image_height=int(img_h) if img_h else None,
+    )
+    motion_shot_storage.assign_shots_to_folder(folder_id, [item["id"]])
+    return {"shotId": item["id"]}
+
+
 def batch_v2pose_from_frames(
     motion_key: str,
     folder_name: str,

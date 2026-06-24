@@ -1694,6 +1694,39 @@ export async function apiMotionRefV2PoseSeqFrame(
   return readJson(res);
 }
 
+export async function apiMotionRefDiagShotsStart(
+  motionKey: string,
+  folderName: string
+): Promise<{ folderId: string; folderName: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/v2pose_diag_shots/start`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ folderName }),
+      credentials: "omit",
+    }
+  );
+  return readJson(res);
+}
+
+export async function apiMotionRefDiagShotsFrame(
+  motionKey: string,
+  folderId: string,
+  capture: V2PoseSeqFrameCapture
+): Promise<{ shotId: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/v2pose_diag_shots/${encodeURIComponent(folderId)}/frame`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(capture),
+      credentials: "omit",
+    }
+  );
+  return readJson(res);
+}
+
 export async function apiMotionRefShotsReorderRoot(order: string[]): Promise<void> {
   const res = await fetch(`${API_BASE_URL}/motion_ref/shots/reorder`, {
     method: "POST",
@@ -3248,7 +3281,7 @@ export async function apiReferenceImagesReorder(order: string[]): Promise<void> 
   if (!res.ok) await readJson(res);
 }
 
-export type KeypointFolder = { id: string; name: string; parentId?: string | null };
+export type KeypointFolder = { id: string; name: string; parentId?: string | null; createdAt?: number };
 
 export type AudioReference = {
   id: string;

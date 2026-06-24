@@ -1,5 +1,6074 @@
 [
   {
+    "id": "6cf1031de365",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 354,
+    "azimuth": -159.42147827148435,
+    "elevation": 7.39670410156252,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6cf1031de365.png",
+    "createdAt": 1782271956.807623,
+    "cropBox": {
+      "x": 664,
+      "y": 108,
+      "width": 252,
+      "height": 252
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8463436119ba",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 351,
+    "azimuth": -159.42147827148435,
+    "elevation": 7.39670410156252,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8463436119ba.png",
+    "createdAt": 1782271956.4029417,
+    "cropBox": {
+      "x": 662,
+      "y": 107,
+      "width": 254,
+      "height": 254
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "04ee0bd91113",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 348,
+    "azimuth": -159.42147827148435,
+    "elevation": 7.39670410156252,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/04ee0bd91113.png",
+    "createdAt": 1782271956.0532458,
+    "cropBox": {
+      "x": 660,
+      "y": 107,
+      "width": 253,
+      "height": 253
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "f9da41aec4b6",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 345,
+    "azimuth": -159.42147827148435,
+    "elevation": 7.39670410156252,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/f9da41aec4b6.png",
+    "createdAt": 1782271955.7012732,
+    "cropBox": {
+      "x": 659,
+      "y": 111,
+      "width": 249,
+      "height": 249
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "0c2d71c181a1",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 342,
+    "azimuth": -166.2340828235207,
+    "elevation": 9.631949908255478,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0c2d71c181a1.png",
+    "createdAt": 1782271955.3417344,
+    "cropBox": {
+      "x": 622,
+      "y": 96,
+      "width": 267,
+      "height": 267
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "ec1669868431",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 339,
+    "azimuth": 178.15331969557764,
+    "elevation": 13.951426111316025,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ec1669868431.png",
+    "createdAt": 1782271955.0618422,
+    "cropBox": {
+      "x": 538,
+      "y": 69,
+      "width": 294,
+      "height": 294
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "11228cff0754",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 336,
+    "azimuth": 156.44922677275096,
+    "elevation": 18.04030583425724,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/11228cff0754.png",
+    "createdAt": 1782271954.776411,
+    "cropBox": {
+      "x": 425,
+      "y": 52,
+      "width": 316,
+      "height": 316
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "1bf7d2aba0d1",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 333,
+    "azimuth": 134.1557266515179,
+    "elevation": 19.759289106796786,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1bf7d2aba0d1.png",
+    "createdAt": 1782271954.4941933,
+    "cropBox": {
+      "x": 334,
+      "y": 59,
+      "width": 331,
+      "height": 331
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "2bf05806a3f3",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 330,
+    "azimuth": 116.86650483659598,
+    "elevation": 19.44994135758411,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/2bf05806a3f3.png",
+    "createdAt": 1782271954.2226043,
+    "cropBox": {
+      "x": 298,
+      "y": 76,
+      "width": 343,
+      "height": 343
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "a12e6c3135a5",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 327,
+    "azimuth": 104.71078491210938,
+    "elevation": 18.63636474609372,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a12e6c3135a5.png",
+    "createdAt": 1782271953.892248,
+    "cropBox": {
+      "x": 295,
+      "y": 97,
+      "width": 350,
+      "height": 350
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "69c053f7a3da",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 324,
+    "azimuth": 93.56877758993728,
+    "elevation": 17.931752358310717,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/69c053f7a3da.png",
+    "createdAt": 1782271953.528918,
+    "cropBox": {
+      "x": 296,
+      "y": 109,
+      "width": 357,
+      "height": 357
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "41462d44e799",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 321,
+    "azimuth": 82.88001409281286,
+    "elevation": 17.281092171074263,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/41462d44e799.png",
+    "createdAt": 1782271953.2593164,
+    "cropBox": {
+      "x": 288,
+      "y": 105,
+      "width": 374,
+      "height": 374
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "0a91d06ff26a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 318,
+    "azimuth": 72.78576134679402,
+    "elevation": 16.471070565927633,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0a91d06ff26a.png",
+    "createdAt": 1782271952.861414,
+    "cropBox": {
+      "x": 288,
+      "y": 83,
+      "width": 406,
+      "height": 406
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "f05512854faa",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 315,
+    "azimuth": 64.31406992547713,
+    "elevation": 15.52371151080466,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/f05512854faa.png",
+    "createdAt": 1782271952.5592542,
+    "cropBox": {
+      "x": 297,
+      "y": 64,
+      "width": 429,
+      "height": 429
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "38b209b602c4",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 312,
+    "azimuth": 58.843017578124986,
+    "elevation": 14.66943359375,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/38b209b602c4.png",
+    "createdAt": 1782271952.2771745,
+    "cropBox": {
+      "x": 315,
+      "y": 55,
+      "width": 436,
+      "height": 436
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "75be0213ed39",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 309,
+    "azimuth": 58.30190221809471,
+    "elevation": 14.554356547518566,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/75be0213ed39.png",
+    "createdAt": 1782271951.993454,
+    "cropBox": {
+      "x": 317,
+      "y": 54,
+      "width": 436,
+      "height": 436
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b0bf5288ec58",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 306,
+    "azimuth": 57.85607340005416,
+    "elevation": 14.448255973177382,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b0bf5288ec58.png",
+    "createdAt": 1782271951.681717,
+    "cropBox": {
+      "x": 320,
+      "y": 53,
+      "width": 436,
+      "height": 436
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "35eaa224bc20",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 303,
+    "azimuth": 57.49706585206954,
+    "elevation": 14.351010605834688,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/35eaa224bc20.png",
+    "createdAt": 1782271951.3865447,
+    "cropBox": {
+      "x": 321,
+      "y": 51,
+      "width": 437,
+      "height": 437
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b0f98ec203b8",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 300,
+    "azimuth": 57.2173091579729,
+    "elevation": 14.262455074603793,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b0f98ec203b8.png",
+    "createdAt": 1782271951.0618176,
+    "cropBox": {
+      "x": 322,
+      "y": 50,
+      "width": 439,
+      "height": 439
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "a7f0c20138f4",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 297,
+    "azimuth": 57.00996651487714,
+    "elevation": 14.182402491440499,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a7f0c20138f4.png",
+    "createdAt": 1782271950.7925663,
+    "cropBox": {
+      "x": 324,
+      "y": 50,
+      "width": 440,
+      "height": 440
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "e070ad801648",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 294,
+    "azimuth": 56.86879132120404,
+    "elevation": 14.110660638398542,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e070ad801648.png",
+    "createdAt": 1782271950.51222,
+    "cropBox": {
+      "x": 324,
+      "y": 48,
+      "width": 442,
+      "height": 442
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "4839f47ad5eb",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 291,
+    "azimuth": 56.78799917441741,
+    "elevation": 14.047043534303015,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/4839f47ad5eb.png",
+    "createdAt": 1782271950.132305,
+    "cropBox": {
+      "x": 324,
+      "y": 47,
+      "width": 444,
+      "height": 444
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "677c0f921253",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 288,
+    "azimuth": 56.762153062718205,
+    "elevation": 13.991379671581527,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/677c0f921253.png",
+    "createdAt": 1782271949.8444724,
+    "cropBox": {
+      "x": 323,
+      "y": 45,
+      "width": 447,
+      "height": 447
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "526700dd4ecd",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 285,
+    "azimuth": 56.78605985031144,
+    "elevation": 13.943517849697656,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/526700dd4ecd.png",
+    "createdAt": 1782271949.5464933,
+    "cropBox": {
+      "x": 326,
+      "y": 45,
+      "width": 449,
+      "height": 449
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "a1493561c761",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 282,
+    "azimuth": 56.85467652423699,
+    "elevation": 13.903331259052322,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a1493561c761.png",
+    "createdAt": 1782271949.239844,
+    "cropBox": {
+      "x": 330,
+      "y": 44,
+      "width": 451,
+      "height": 451
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "ad673eac566a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 279,
+    "azimuth": 56.96302506031387,
+    "elevation": 13.870720262325733,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ad673eac566a.png",
+    "createdAt": 1782271948.8719678,
+    "cropBox": {
+      "x": 331,
+      "y": 45,
+      "width": 451,
+      "height": 451
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "bd156e17421b",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 276,
+    "azimuth": 57.10611515904848,
+    "elevation": 13.845614159606683,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/bd156e17421b.png",
+    "createdAt": 1782271948.427783,
+    "cropBox": {
+      "x": 330,
+      "y": 49,
+      "width": 449,
+      "height": 449
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "d635b9be4ac4",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 273,
+    "azimuth": 57.2788744894845,
+    "elevation": 13.82797209506981,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d635b9be4ac4.png",
+    "createdAt": 1782271948.043969,
+    "cropBox": {
+      "x": 335,
+      "y": 53,
+      "width": 445,
+      "height": 445
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "bea5ea9e4900",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 270,
+    "azimuth": 57.4760864531888,
+    "elevation": 13.817783156270607,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/bea5ea9e4900.png",
+    "createdAt": 1782271947.6777928,
+    "cropBox": {
+      "x": 338,
+      "y": 47,
+      "width": 455,
+      "height": 455
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "af322f518fd6",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 267,
+    "azimuth": 57.6923358357238,
+    "elevation": 13.815065625487918,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/af322f518fd6.png",
+    "createdAt": 1782271947.312174,
+    "cropBox": {
+      "x": 348,
+      "y": 40,
+      "width": 465,
+      "height": 465
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "7657d9f327b4",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 264,
+    "azimuth": 57.921963041985876,
+    "elevation": 13.819865261873716,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/7657d9f327b4.png",
+    "createdAt": 1782271946.9425669,
+    "cropBox": {
+      "x": 349,
+      "y": 40,
+      "width": 466,
+      "height": 466
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "ab72058e4a96",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 261,
+    "azimuth": 58.15902790609778,
+    "elevation": 13.832252421841218,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ab72058e4a96.png",
+    "createdAt": 1782271946.592689,
+    "cropBox": {
+      "x": 353,
+      "y": 34,
+      "width": 476,
+      "height": 476
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "6d9cb0aeee71",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 258,
+    "azimuth": 58.39728431598875,
+    "elevation": 13.852317763781969,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6d9cb0aeee71.png",
+    "createdAt": 1782271946.3133445,
+    "cropBox": {
+      "x": 369,
+      "y": 36,
+      "width": 458,
+      "height": 458
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "1be4f2688698",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 255,
+    "azimuth": 58.630167086175454,
+    "elevation": 13.88016623465765,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1be4f2688698.png",
+    "createdAt": 1782271946.0246089,
+    "cropBox": {
+      "x": 384,
+      "y": 51,
+      "width": 423,
+      "height": 423
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "c40aef240856",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 252,
+    "azimuth": 58.8507926380925,
+    "elevation": 13.915909005141103,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c40aef240856.png",
+    "createdAt": 1782271945.7352924,
+    "cropBox": {
+      "x": 396,
+      "y": 52,
+      "width": 424,
+      "height": 424
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8721805cde63",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 249,
+    "azimuth": 59.051975094741,
+    "elevation": 13.95965301357188,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8721805cde63.png",
+    "createdAt": 1782271945.3763876,
+    "cropBox": {
+      "x": 398,
+      "y": 52,
+      "width": 426,
+      "height": 426
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "01605179f08d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 246,
+    "azimuth": 59.22625935584629,
+    "elevation": 14.011487805457705,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/01605179f08d.png",
+    "createdAt": 1782271945.0585814,
+    "cropBox": {
+      "x": 395,
+      "y": 55,
+      "width": 423,
+      "height": 423
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "fd58f9b32817",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 243,
+    "azimuth": 59.36597258302149,
+    "elevation": 14.071469424183661,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/fd58f9b32817.png",
+    "createdAt": 1782271944.6815784,
+    "cropBox": {
+      "x": 382,
+      "y": 40,
+      "width": 441,
+      "height": 441
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "9e6019b9dee4",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 240,
+    "azimuth": 59.46329528433179,
+    "elevation": 14.139601230025718,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/9e6019b9dee4.png",
+    "createdAt": 1782271944.384047,
+    "cropBox": {
+      "x": 379,
+      "y": 32,
+      "width": 449,
+      "height": 449
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "73a37daafc09",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 237,
+    "azimuth": 59.510352836118855,
+    "elevation": 14.215811707949953,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/73a37daafc09.png",
+    "createdAt": 1782271944.095289,
+    "cropBox": {
+      "x": 374,
+      "y": 40,
+      "width": 440,
+      "height": 440
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "cf05dcf42618",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 234,
+    "azimuth": 59.4993278058656,
+    "elevation": 14.299929577371344,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/cf05dcf42618.png",
+    "createdAt": 1782271943.820083,
+    "cropBox": {
+      "x": 341,
+      "y": 40,
+      "width": 458,
+      "height": 458
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "80f71400fb88",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 231,
+    "azimuth": 59.42259282652307,
+    "elevation": 14.391656842237154,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/80f71400fb88.png",
+    "createdAt": 1782271943.54034,
+    "cropBox": {
+      "x": 304,
+      "y": 31,
+      "width": 494,
+      "height": 494
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "3764360159ba",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 228,
+    "azimuth": 59.27286299612313,
+    "elevation": 14.490540813739983,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/3764360159ba.png",
+    "createdAt": 1782271943.2534835,
+    "cropBox": {
+      "x": 275,
+      "y": 20,
+      "width": 513,
+      "height": 513
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "45cae608620d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 225,
+    "azimuth": 59.04336580644398,
+    "elevation": 14.595946586429875,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/45cae608620d.png",
+    "createdAt": 1782271942.9491584,
+    "cropBox": {
+      "x": 262,
+      "y": 16,
+      "width": 517,
+      "height": 517
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "0ca6dd2f587f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 222,
+    "azimuth": 58.65487688751252,
+    "elevation": 14.733187936384198,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0ca6dd2f587f.png",
+    "createdAt": 1782271942.6470218,
+    "cropBox": {
+      "x": 248,
+      "y": 17,
+      "width": 515,
+      "height": 515
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "08537728fe1c",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 219,
+    "azimuth": 57.977236850277755,
+    "elevation": 14.961245187154347,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/08537728fe1c.png",
+    "createdAt": 1782271942.39623,
+    "cropBox": {
+      "x": 231,
+      "y": 25,
+      "width": 504,
+      "height": 504
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "d5dcfadddba1",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 216,
+    "azimuth": 57.153358915991944,
+    "elevation": 15.235177028421091,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d5dcfadddba1.png",
+    "createdAt": 1782271942.0704892,
+    "cropBox": {
+      "x": 217,
+      "y": 22,
+      "width": 503,
+      "height": 503
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "be47d5ac449b",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 213,
+    "azimuth": 56.214221283077066,
+    "elevation": 15.542907622693363,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/be47d5ac449b.png",
+    "createdAt": 1782271941.803722,
+    "cropBox": {
+      "x": 207,
+      "y": 12,
+      "width": 512,
+      "height": 512
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "dbf77617e046",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 210,
+    "azimuth": 55.19037218024893,
+    "elevation": 15.872835289914832,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/dbf77617e046.png",
+    "createdAt": 1782271941.5092468,
+    "cropBox": {
+      "x": 207,
+      "y": 14,
+      "width": 517,
+      "height": 517
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "d31bb58bc6d7",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 207,
+    "azimuth": 54.110769477293026,
+    "elevation": 16.214365032441236,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d31bb58bc6d7.png",
+    "createdAt": 1782271941.235928,
+    "cropBox": {
+      "x": 205,
+      "y": 7,
+      "width": 521,
+      "height": 521
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "ae6c75a775cb",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 204,
+    "azimuth": 53.00192239780319,
+    "elevation": 16.558258962478533,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ae6c75a775cb.png",
+    "createdAt": 1782271940.9286973,
+    "cropBox": {
+      "x": 195,
+      "y": 4,
+      "width": 519,
+      "height": 519
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "fc6ac700cdb5",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 201,
+    "azimuth": 51.88734614765334,
+    "elevation": 16.896810626118196,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/fc6ac700cdb5.png",
+    "createdAt": 1782271940.5899785,
+    "cropBox": {
+      "x": 195,
+      "y": 19,
+      "width": 502,
+      "height": 502
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "c65c41194c87",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 198,
+    "azimuth": 50.787309919173936,
+    "elevation": 17.223867774072914,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c65c41194c87.png",
+    "createdAt": 1782271940.2668865,
+    "cropBox": {
+      "x": 196,
+      "y": 31,
+      "width": 490,
+      "height": 490
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "5bfa19537308",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 195,
+    "azimuth": 49.71883613376487,
+    "elevation": 17.53473899208538,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/5bfa19537308.png",
+    "createdAt": 1782271939.9471443,
+    "cropBox": {
+      "x": 181,
+      "y": 32,
+      "width": 488,
+      "height": 488
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b0938fd30aeb",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 192,
+    "azimuth": 48.69589624714024,
+    "elevation": 17.826022616949558,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b0938fd30aeb.png",
+    "createdAt": 1782271939.6611388,
+    "cropBox": {
+      "x": 179,
+      "y": 32,
+      "width": 491,
+      "height": 491
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b91674470b06",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 189,
+    "azimuth": 47.72974581233721,
+    "elevation": 18.095393100449627,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b91674470b06.png",
+    "createdAt": 1782271939.4241226,
+    "cropBox": {
+      "x": 160,
+      "y": 36,
+      "width": 482,
+      "height": 482
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "c1ad05309304",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 186,
+    "azimuth": 46.82934676330989,
+    "elevation": 18.34137286399006,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c1ad05309304.png",
+    "createdAt": 1782271939.1035988,
+    "cropBox": {
+      "x": 152,
+      "y": 46,
+      "width": 465,
+      "height": 465
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "15ef7a33c531",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 183,
+    "azimuth": 46.001835197610355,
+    "elevation": 18.563109088409746,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/15ef7a33c531.png",
+    "createdAt": 1782271938.836291,
+    "cropBox": {
+      "x": 136,
+      "y": 47,
+      "width": 486,
+      "height": 486
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "3c96b41b5f0e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 180,
+    "azimuth": 45.25300556987052,
+    "elevation": 18.760166570679488,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/3c96b41b5f0e.png",
+    "createdAt": 1782271938.5494657,
+    "cropBox": {
+      "x": 98,
+      "y": 42,
+      "width": 507,
+      "height": 507
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "0d9dccb5e92d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 177,
+    "azimuth": 44.587795148744874,
+    "elevation": 18.93234071888007,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0d9dccb5e92d.png",
+    "createdAt": 1782271938.2743106,
+    "cropBox": {
+      "x": 101,
+      "y": 55,
+      "width": 491,
+      "height": 491
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "d7083343ee64",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 174,
+    "azimuth": 44.010764772835714,
+    "elevation": 19.079489206639693,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d7083343ee64.png",
+    "createdAt": 1782271937.9839938,
+    "cropBox": {
+      "x": 104,
+      "y": 64,
+      "width": 479,
+      "height": 479
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "6f58e664e669",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 171,
+    "azimuth": 43.52658321282171,
+    "elevation": 19.20137651506265,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6f58e664e669.png",
+    "createdAt": 1782271937.6703346,
+    "cropBox": {
+      "x": 113,
+      "y": 51,
+      "width": 492,
+      "height": 492
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "bf20620f08a8",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 168,
+    "azimuth": 43.140533447265604,
+    "elevation": 19.297521972656256,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/bf20620f08a8.png",
+    "createdAt": 1782271937.3722308,
+    "cropBox": {
+      "x": 126,
+      "y": 35,
+      "width": 502,
+      "height": 502
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "dd103b117ea6",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 165,
+    "azimuth": 42.63390389034779,
+    "elevation": 19.49220062786445,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/dd103b117ea6.png",
+    "createdAt": 1782271937.057096,
+    "cropBox": {
+      "x": 164,
+      "y": 37,
+      "width": 469,
+      "height": 469
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "e37671842b09",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 162,
+    "azimuth": 42.826484659891506,
+    "elevation": 19.609710197605153,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e37671842b09.png",
+    "createdAt": 1782271936.6986084,
+    "cropBox": {
+      "x": 132,
+      "y": 35,
+      "width": 488,
+      "height": 488
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "1dc7d0f4c330",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 159,
+    "azimuth": 43.40984905160503,
+    "elevation": 19.65665311469654,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1dc7d0f4c330.png",
+    "createdAt": 1782271936.4173963,
+    "cropBox": {
+      "x": 95,
+      "y": 22,
+      "width": 527,
+      "height": 527
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "ea28e995837e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 156,
+    "azimuth": 44.04656949218023,
+    "elevation": 19.631412533201114,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ea28e995837e.png",
+    "createdAt": 1782271936.0953875,
+    "cropBox": {
+      "x": 50,
+      "y": 9,
+      "width": 564,
+      "height": 564
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "1a5211e9423e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 153,
+    "azimuth": 44.307607670670194,
+    "elevation": 19.533782698997882,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1a5211e9423e.png",
+    "createdAt": 1782271935.7915158,
+    "cropBox": {
+      "x": 17,
+      "y": 2,
+      "width": 574,
+      "height": 574
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "0cb70975a527",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 150,
+    "azimuth": 43.65838328470151,
+    "elevation": 19.367818019097584,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0cb70975a527.png",
+    "createdAt": 1782271935.4899108,
+    "cropBox": {
+      "x": 0,
+      "y": 6,
+      "width": 569,
+      "height": 569
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "08a8697463c4",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 147,
+    "azimuth": 42.36188955393948,
+    "elevation": 19.200464109479285,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/08a8697463c4.png",
+    "createdAt": 1782271935.2290297,
+    "cropBox": {
+      "x": 12,
+      "y": 11,
+      "width": 564,
+      "height": 564
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "a1df510e818c",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 144,
+    "azimuth": 40.73431603727077,
+    "elevation": 18.986598193776814,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a1df510e818c.png",
+    "createdAt": 1782271934.9260082,
+    "cropBox": {
+      "x": 49,
+      "y": 12,
+      "width": 563,
+      "height": 563
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "ee1e55566585",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 141,
+    "azimuth": 38.6816100398715,
+    "elevation": 18.69575862755927,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ee1e55566585.png",
+    "createdAt": 1782271934.62882,
+    "cropBox": {
+      "x": 95,
+      "y": 21,
+      "width": 555,
+      "height": 555
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "9ea2d09b5b7f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 138,
+    "azimuth": 36.35247394743608,
+    "elevation": 18.33741217056715,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/9ea2d09b5b7f.png",
+    "createdAt": 1782271934.24853,
+    "cropBox": {
+      "x": 104,
+      "y": 32,
+      "width": 543,
+      "height": 543
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "832d3c5dfc99",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 135,
+    "azimuth": 33.88861216246207,
+    "elevation": 17.925815957373104,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/832d3c5dfc99.png",
+    "createdAt": 1782271933.9630637,
+    "cropBox": {
+      "x": 121,
+      "y": 36,
+      "width": 539,
+      "height": 539
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "0b30147f14ba",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 132,
+    "azimuth": 31.413277942263193,
+    "elevation": 17.478979013057923,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0b30147f14ba.png",
+    "createdAt": 1782271933.6647058,
+    "cropBox": {
+      "x": 158,
+      "y": 31,
+      "width": 545,
+      "height": 545
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "c3e36d4ad04f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 129,
+    "azimuth": 29.025125073198197,
+    "elevation": 17.01660456070475,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c3e36d4ad04f.png",
+    "createdAt": 1782271933.3773468,
+    "cropBox": {
+      "x": 204,
+      "y": 40,
+      "width": 500,
+      "height": 500
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b43795870dc1",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 126,
+    "azimuth": 26.797430662496787,
+    "elevation": 16.55798440358822,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b43795870dc1.png",
+    "createdAt": 1782271933.1133757,
+    "cropBox": {
+      "x": 219,
+      "y": 59,
+      "width": 488,
+      "height": 488
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "08627067da24",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 123,
+    "azimuth": 24.781521550514693,
+    "elevation": 16.120573687941828,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/08627067da24.png",
+    "createdAt": 1782271932.8421013,
+    "cropBox": {
+      "x": 232,
+      "y": 79,
+      "width": 478,
+      "height": 478
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "79cc3faeadf6",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 120,
+    "azimuth": 23.01281470585388,
+    "elevation": 15.719542519311574,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/79cc3faeadf6.png",
+    "createdAt": 1782271932.586098,
+    "cropBox": {
+      "x": 245,
+      "y": 83,
+      "width": 481,
+      "height": 481
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "701aeab4cf5a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 117,
+    "azimuth": 21.518262218549204,
+    "elevation": 15.368282531704466,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/701aeab4cf5a.png",
+    "createdAt": 1782271932.2796328,
+    "cropBox": {
+      "x": 269,
+      "y": 83,
+      "width": 457,
+      "height": 457
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "339fcaea6c89",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 114,
+    "azimuth": 20.324897430919982,
+    "elevation": 15.07977185694547,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/339fcaea6c89.png",
+    "createdAt": 1782271932.0120635,
+    "cropBox": {
+      "x": 298,
+      "y": 94,
+      "width": 419,
+      "height": 419
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "d6cedaf58328",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 111,
+    "azimuth": 19.810766090933484,
+    "elevation": 14.95329754185336,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d6cedaf58328.png",
+    "createdAt": 1782271931.7222927,
+    "cropBox": {
+      "x": 322,
+      "y": 100,
+      "width": 402,
+      "height": 402
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "274b5f52fa84",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 108,
+    "azimuth": 19.54669618192763,
+    "elevation": 14.887831293815097,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/274b5f52fa84.png",
+    "createdAt": 1782271931.3928704,
+    "cropBox": {
+      "x": 346,
+      "y": 93,
+      "width": 392,
+      "height": 392
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "15f564f880c8",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 105,
+    "azimuth": 19.3050881180938,
+    "elevation": 14.827633834887237,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/15f564f880c8.png",
+    "createdAt": 1782271931.047686,
+    "cropBox": {
+      "x": 374,
+      "y": 92,
+      "width": 371,
+      "height": 371
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "a9efb7bd2168",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 102,
+    "azimuth": 19.08465286807594,
+    "elevation": 14.772462399028413,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a9efb7bd2168.png",
+    "createdAt": 1782271930.7769105,
+    "cropBox": {
+      "x": 409,
+      "y": 104,
+      "width": 336,
+      "height": 336
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "3bfe5f0f9689",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 99,
+    "azimuth": 18.88424426190727,
+    "elevation": 14.722097412309594,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/3bfe5f0f9689.png",
+    "createdAt": 1782271930.4340563,
+    "cropBox": {
+      "x": 415,
+      "y": 101,
+      "width": 344,
+      "height": 344
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b382706da77b",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 96,
+    "azimuth": 18.702844012512532,
+    "elevation": 14.676340737439318,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b382706da77b.png",
+    "createdAt": 1782271930.0663333,
+    "cropBox": {
+      "x": 426,
+      "y": 94,
+      "width": 334,
+      "height": 334
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "7d0bb804c2f9",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 93,
+    "azimuth": 18.53954876524371,
+    "elevation": 14.63501407014921,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/7d0bb804c2f9.png",
+    "createdAt": 1782271929.7820718,
+    "cropBox": {
+      "x": 451,
+      "y": 101,
+      "width": 306,
+      "height": 306
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "57f2f6a569c6",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 90,
+    "azimuth": 18.39355887554504,
+    "elevation": 14.597957477989269,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/57f2f6a569c6.png",
+    "createdAt": 1782271929.3593993,
+    "cropBox": {
+      "x": 473,
+      "y": 107,
+      "width": 285,
+      "height": 285
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "403dbb36fc6a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 87,
+    "azimuth": 18.264168660181515,
+    "elevation": 14.565028070081667,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/403dbb36fc6a.png",
+    "createdAt": 1782271929.0123594,
+    "cropBox": {
+      "x": 481,
+      "y": 98,
+      "width": 293,
+      "height": 293
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "c813aaa2673b",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 84,
+    "azimuth": 18.150757903983152,
+    "elevation": 14.536098785006445,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c813aaa2673b.png",
+    "createdAt": 1782271928.5985017,
+    "cropBox": {
+      "x": 496,
+      "y": 97,
+      "width": 279,
+      "height": 279
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "f5d941e94a45",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 81,
+    "azimuth": 18.052784432999754,
+    "elevation": 14.511057282915132,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/f5d941e94a45.png",
+    "createdAt": 1782271928.176547,
+    "cropBox": {
+      "x": 510,
+      "y": 105,
+      "width": 260,
+      "height": 260
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "c2c37f9770f7",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 78,
+    "azimuth": 17.96977758721045,
+    "elevation": 14.489804926922574,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c2c37f9770f7.png",
+    "createdAt": 1782271927.8597639,
+    "cropBox": {
+      "x": 512,
+      "y": 103,
+      "width": 264,
+      "height": 264
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "e33fe84269ba",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 75,
+    "azimuth": 17.901332442023016,
+    "elevation": 14.472255837571453,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e33fe84269ba.png",
+    "createdAt": 1782271927.5552008,
+    "cropBox": {
+      "x": 517,
+      "y": 98,
+      "width": 260,
+      "height": 260
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "90944a53cc37",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 72,
+    "azimuth": 17.847104637911215,
+    "elevation": 14.45833600246327,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/90944a53cc37.png",
+    "createdAt": 1782271927.2225409,
+    "cropBox": {
+      "x": 531,
+      "y": 104,
+      "width": 241,
+      "height": 241
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "fc4c875c1311",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 69,
+    "azimuth": 17.806805681463068,
+    "elevation": 14.44798242073324,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/fc4c875c1311.png",
+    "createdAt": 1782271926.9838812,
+    "cropBox": {
+      "x": 545,
+      "y": 109,
+      "width": 227,
+      "height": 227
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "1cee9f904862",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 66,
+    "azimuth": 17.78019857816394,
+    "elevation": 14.441142258584591,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1cee9f904862.png",
+    "createdAt": 1782271926.7093527,
+    "cropBox": {
+      "x": 550,
+      "y": 102,
+      "width": 236,
+      "height": 236
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "6b61ac6349b7",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 63,
+    "azimuth": 17.767093646117644,
+    "elevation": 14.437771987150697,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6b61ac6349b7.png",
+    "createdAt": 1782271926.4381757,
+    "cropBox": {
+      "x": 560,
+      "y": 100,
+      "width": 226,
+      "height": 226
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "897aedb506d8",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 60,
+    "azimuth": 17.76734433847783,
+    "elevation": 14.437836466908294,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/897aedb506d8.png",
+    "createdAt": 1782271926.172657,
+    "cropBox": {
+      "x": 570,
+      "y": 106,
+      "width": 213,
+      "height": 213
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "3281e7040e44",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 57,
+    "azimuth": 17.780842867273794,
+    "elevation": 14.441307932853135,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/3281e7040e44.png",
+    "createdAt": 1782271925.8428633,
+    "cropBox": {
+      "x": 571,
+      "y": 104,
+      "width": 217,
+      "height": 217
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "1d23a7fceac9",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 54,
+    "azimuth": 17.80751536744725,
+    "elevation": 14.448164820391298,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1d23a7fceac9.png",
+    "createdAt": 1782271925.4638145,
+    "cropBox": {
+      "x": 575,
+      "y": 100,
+      "width": 217,
+      "height": 217
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "7e7f2533541f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 51,
+    "azimuth": 17.847316259440912,
+    "elevation": 14.458390351500569,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/7e7f2533541f.png",
+    "createdAt": 1782271925.1420567,
+    "cropBox": {
+      "x": 587,
+      "y": 103,
+      "width": 207,
+      "height": 207
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "52442636706f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 48,
+    "azimuth": 17.90022134958894,
+    "elevation": 14.47197077129924,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/52442636706f.png",
+    "createdAt": 1782271924.8128014,
+    "cropBox": {
+      "x": 601,
+      "y": 109,
+      "width": 191,
+      "height": 191
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b5920914bdb9",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 45,
+    "azimuth": 17.966219031228,
+    "elevation": 14.488893082304486,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b5920914bdb9.png",
+    "createdAt": 1782271924.5547957,
+    "cropBox": {
+      "x": 603,
+      "y": 105,
+      "width": 198,
+      "height": 198
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "88ae3b00878f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 42,
+    "azimuth": 18.04529868657649,
+    "elevation": 14.5091420604288,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/88ae3b00878f.png",
+    "createdAt": 1782271924.2470915,
+    "cropBox": {
+      "x": 612,
+      "y": 102,
+      "width": 193,
+      "height": 193
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "80d24b880f1a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 39,
+    "azimuth": 18.137434993129183,
+    "elevation": 14.532696242063125,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/80d24b880f1a.png",
+    "createdAt": 1782271924.0122035,
+    "cropBox": {
+      "x": 623,
+      "y": 107,
+      "width": 181,
+      "height": 181
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "9a7e67318493",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 36,
+    "azimuth": 18.242566232050535,
+    "elevation": 14.559522427321426,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/9a7e67318493.png",
+    "createdAt": 1782271923.7651021,
+    "cropBox": {
+      "x": 628,
+      "y": 111,
+      "width": 179,
+      "height": 179
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "a160e6157394",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 33,
+    "azimuth": 18.360563752097843,
+    "elevation": 14.589568020409018,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a160e6157394.png",
+    "createdAt": 1782271923.5238109,
+    "cropBox": {
+      "x": 629,
+      "y": 108,
+      "width": 183,
+      "height": 183
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "12da7967b546",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 30,
+    "azimuth": 18.491188242462872,
+    "elevation": 14.622750172221743,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/12da7967b546.png",
+    "createdAt": 1782271923.274763,
+    "cropBox": {
+      "x": 631,
+      "y": 104,
+      "width": 187,
+      "height": 187
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8881344f6da1",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 27,
+    "azimuth": 18.634026027279955,
+    "elevation": 14.658940111102439,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8881344f6da1.png",
+    "createdAt": 1782271923.025128,
+    "cropBox": {
+      "x": 632,
+      "y": 99,
+      "width": 189,
+      "height": 189
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "014a2b069a2d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 24,
+    "azimuth": 18.788394516191826,
+    "elevation": 14.697940078335492,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/014a2b069a2d.png",
+    "createdAt": 1782271922.7723298,
+    "cropBox": {
+      "x": 636,
+      "y": 94,
+      "width": 193,
+      "height": 193
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "d7481e9ab8fc",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 21,
+    "azimuth": 18.95319891944238,
+    "elevation": 14.73944861047292,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d7481e9ab8fc.png",
+    "createdAt": 1782271922.557201,
+    "cropBox": {
+      "x": 639,
+      "y": 91,
+      "width": 194,
+      "height": 194
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "bbf45d8a5add",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 18,
+    "azimuth": 19.126709802479812,
+    "elevation": 14.783006911745005,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/bbf45d8a5add.png",
+    "createdAt": 1782271922.3270493,
+    "cropBox": {
+      "x": 641,
+      "y": 88,
+      "width": 200,
+      "height": 200
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "4e2d296e415a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 15,
+    "azimuth": 19.30620777969106,
+    "elevation": 14.827913461822334,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/4e2d296e415a.png",
+    "createdAt": 1782271922.0777745,
+    "cropBox": {
+      "x": 645,
+      "y": 85,
+      "width": 204,
+      "height": 204
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8eb50b2af2dc",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 12,
+    "azimuth": 19.48739635567706,
+    "elevation": 14.8730830391045,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8eb50b2af2dc.png",
+    "createdAt": 1782271921.8581681,
+    "cropBox": {
+      "x": 650,
+      "y": 83,
+      "width": 207,
+      "height": 207
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "f75c66b85363",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 9,
+    "azimuth": 19.66339081305916,
+    "elevation": 14.916803612108737,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/f75c66b85363.png",
+    "createdAt": 1782271921.6314158,
+    "cropBox": {
+      "x": 652,
+      "y": 82,
+      "width": 212,
+      "height": 212
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "ebcc957b3135",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 6,
+    "azimuth": 19.82288666519348,
+    "elevation": 14.956294155180842,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ebcc957b3135.png",
+    "createdAt": 1782271921.3938081,
+    "cropBox": {
+      "x": 655,
+      "y": 80,
+      "width": 215,
+      "height": 215
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "e83ba17bc03d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 3,
+    "azimuth": 19.946625376883308,
+    "elevation": 14.986845138401492,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e83ba17bc03d.png",
+    "createdAt": 1782271921.1788437,
+    "cropBox": {
+      "x": 656,
+      "y": 79,
+      "width": 218,
+      "height": 218
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "e8ed6c738b77",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 0,
+    "azimuth": 19.999999999999986,
+    "elevation": 14.999999999999986,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e8ed6c738b77.png",
+    "createdAt": 1782271920.9086459,
+    "cropBox": {
+      "x": 658,
+      "y": 79,
+      "width": 221,
+      "height": 221
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "9845846f67ba",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 354,
+    "azimuth": -159.42147827148435,
+    "elevation": 7.39670410156252,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/9845846f67ba.png",
+    "createdAt": 1782271673.3176448,
+    "cropBox": {
+      "x": 664,
+      "y": 108,
+      "width": 252,
+      "height": 252
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "4396a513fce9",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 351,
+    "azimuth": -159.42147827148435,
+    "elevation": 7.39670410156252,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/4396a513fce9.png",
+    "createdAt": 1782271673.0557468,
+    "cropBox": {
+      "x": 662,
+      "y": 107,
+      "width": 254,
+      "height": 254
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "0aa0fd78b494",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 348,
+    "azimuth": -159.42147827148435,
+    "elevation": 7.39670410156252,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0aa0fd78b494.png",
+    "createdAt": 1782271672.7559958,
+    "cropBox": {
+      "x": 660,
+      "y": 107,
+      "width": 253,
+      "height": 253
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "a0569180f128",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 345,
+    "azimuth": -159.42147827148435,
+    "elevation": 7.39670410156252,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a0569180f128.png",
+    "createdAt": 1782271672.4999626,
+    "cropBox": {
+      "x": 659,
+      "y": 111,
+      "width": 249,
+      "height": 249
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "518343856d01",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 342,
+    "azimuth": -166.2340828235207,
+    "elevation": 9.631949908255478,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/518343856d01.png",
+    "createdAt": 1782271672.2523167,
+    "cropBox": {
+      "x": 622,
+      "y": 96,
+      "width": 267,
+      "height": 267
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "2f8e004114ba",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 339,
+    "azimuth": 178.15331969557764,
+    "elevation": 13.951426111316025,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/2f8e004114ba.png",
+    "createdAt": 1782271671.973008,
+    "cropBox": {
+      "x": 538,
+      "y": 69,
+      "width": 294,
+      "height": 294
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "76e7969d3169",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 336,
+    "azimuth": 156.44922677275096,
+    "elevation": 18.04030583425724,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/76e7969d3169.png",
+    "createdAt": 1782271671.6968338,
+    "cropBox": {
+      "x": 425,
+      "y": 52,
+      "width": 316,
+      "height": 316
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "5795ac453854",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 333,
+    "azimuth": 134.1557266515179,
+    "elevation": 19.759289106796786,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/5795ac453854.png",
+    "createdAt": 1782271671.106964,
+    "cropBox": {
+      "x": 334,
+      "y": 59,
+      "width": 331,
+      "height": 331
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "3c4d5d800420",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 330,
+    "azimuth": 116.86650483659598,
+    "elevation": 19.44994135758411,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/3c4d5d800420.png",
+    "createdAt": 1782271670.3200824,
+    "cropBox": {
+      "x": 298,
+      "y": 76,
+      "width": 343,
+      "height": 343
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "26f4ba12c1c5",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 327,
+    "azimuth": 104.71078491210938,
+    "elevation": 18.63636474609372,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/26f4ba12c1c5.png",
+    "createdAt": 1782271669.801699,
+    "cropBox": {
+      "x": 295,
+      "y": 97,
+      "width": 350,
+      "height": 350
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b4b2efc74dca",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 324,
+    "azimuth": 93.56877758993728,
+    "elevation": 17.931752358310717,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b4b2efc74dca.png",
+    "createdAt": 1782271669.2785141,
+    "cropBox": {
+      "x": 296,
+      "y": 109,
+      "width": 357,
+      "height": 357
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "aee31e23cc63",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 321,
+    "azimuth": 82.88001409281286,
+    "elevation": 17.281092171074263,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/aee31e23cc63.png",
+    "createdAt": 1782271669.0205443,
+    "cropBox": {
+      "x": 288,
+      "y": 105,
+      "width": 374,
+      "height": 374
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "81b951f4deb5",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 318,
+    "azimuth": 72.78576134679402,
+    "elevation": 16.471070565927633,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/81b951f4deb5.png",
+    "createdAt": 1782271668.6758435,
+    "cropBox": {
+      "x": 288,
+      "y": 83,
+      "width": 406,
+      "height": 406
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "dc1efe50886b",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 315,
+    "azimuth": 64.31406992547713,
+    "elevation": 15.52371151080466,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/dc1efe50886b.png",
+    "createdAt": 1782271668.3378294,
+    "cropBox": {
+      "x": 297,
+      "y": 64,
+      "width": 429,
+      "height": 429
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "669cc020f2c6",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 312,
+    "azimuth": 58.843017578124986,
+    "elevation": 14.66943359375,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/669cc020f2c6.png",
+    "createdAt": 1782271667.811292,
+    "cropBox": {
+      "x": 315,
+      "y": 55,
+      "width": 436,
+      "height": 436
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "0aaa44faa537",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 309,
+    "azimuth": 58.30190221809471,
+    "elevation": 14.554356547518566,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0aaa44faa537.png",
+    "createdAt": 1782271666.9877815,
+    "cropBox": {
+      "x": 317,
+      "y": 54,
+      "width": 436,
+      "height": 436
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "540b22e0ab88",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 306,
+    "azimuth": 57.85607340005416,
+    "elevation": 14.448255973177382,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/540b22e0ab88.png",
+    "createdAt": 1782271666.324197,
+    "cropBox": {
+      "x": 320,
+      "y": 53,
+      "width": 436,
+      "height": 436
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8567ba863b4a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 303,
+    "azimuth": 57.49706585206954,
+    "elevation": 14.351010605834688,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8567ba863b4a.png",
+    "createdAt": 1782271665.5559723,
+    "cropBox": {
+      "x": 321,
+      "y": 51,
+      "width": 437,
+      "height": 437
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "595b713159b0",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 300,
+    "azimuth": 57.2173091579729,
+    "elevation": 14.262455074603793,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/595b713159b0.png",
+    "createdAt": 1782271664.9434912,
+    "cropBox": {
+      "x": 322,
+      "y": 50,
+      "width": 439,
+      "height": 439
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "e945ba732710",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 297,
+    "azimuth": 57.00996651487714,
+    "elevation": 14.182402491440499,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e945ba732710.png",
+    "createdAt": 1782271664.5558167,
+    "cropBox": {
+      "x": 324,
+      "y": 50,
+      "width": 440,
+      "height": 440
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "308e4f344634",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 294,
+    "azimuth": 56.86879132120404,
+    "elevation": 14.110660638398542,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/308e4f344634.png",
+    "createdAt": 1782271664.1407073,
+    "cropBox": {
+      "x": 324,
+      "y": 48,
+      "width": 442,
+      "height": 442
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "2114fb9f9dc2",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 291,
+    "azimuth": 56.78799917441741,
+    "elevation": 14.047043534303015,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/2114fb9f9dc2.png",
+    "createdAt": 1782271663.5412939,
+    "cropBox": {
+      "x": 324,
+      "y": 47,
+      "width": 444,
+      "height": 444
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8d7cc6d97af2",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 288,
+    "azimuth": 56.762153062718205,
+    "elevation": 13.991379671581527,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8d7cc6d97af2.png",
+    "createdAt": 1782271662.8710608,
+    "cropBox": {
+      "x": 323,
+      "y": 45,
+      "width": 447,
+      "height": 447
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "c7b42eef1416",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 285,
+    "azimuth": 56.78605985031144,
+    "elevation": 13.943517849697656,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c7b42eef1416.png",
+    "createdAt": 1782271662.458995,
+    "cropBox": {
+      "x": 326,
+      "y": 45,
+      "width": 449,
+      "height": 449
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b05a48524500",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 282,
+    "azimuth": 56.85467652423699,
+    "elevation": 13.903331259052322,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b05a48524500.png",
+    "createdAt": 1782271662.2221317,
+    "cropBox": {
+      "x": 330,
+      "y": 44,
+      "width": 451,
+      "height": 451
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "3189e167c235",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 279,
+    "azimuth": 56.96302506031387,
+    "elevation": 13.870720262325733,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/3189e167c235.png",
+    "createdAt": 1782271661.995317,
+    "cropBox": {
+      "x": 331,
+      "y": 45,
+      "width": 451,
+      "height": 451
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "c1f6173e1120",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 276,
+    "azimuth": 57.10611515904848,
+    "elevation": 13.845614159606683,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c1f6173e1120.png",
+    "createdAt": 1782271661.7449644,
+    "cropBox": {
+      "x": 330,
+      "y": 49,
+      "width": 449,
+      "height": 449
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "967916efbbcf",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 273,
+    "azimuth": 57.2788744894845,
+    "elevation": 13.82797209506981,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/967916efbbcf.png",
+    "createdAt": 1782271661.5044923,
+    "cropBox": {
+      "x": 335,
+      "y": 53,
+      "width": 445,
+      "height": 445
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "2d1ee36b2867",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 270,
+    "azimuth": 57.4760864531888,
+    "elevation": 13.817783156270607,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/2d1ee36b2867.png",
+    "createdAt": 1782271661.218614,
+    "cropBox": {
+      "x": 338,
+      "y": 47,
+      "width": 455,
+      "height": 455
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "4baeb4d50fb8",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 267,
+    "azimuth": 57.6923358357238,
+    "elevation": 13.815065625487918,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/4baeb4d50fb8.png",
+    "createdAt": 1782271660.9152904,
+    "cropBox": {
+      "x": 348,
+      "y": 40,
+      "width": 465,
+      "height": 465
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8db73f012dd6",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 264,
+    "azimuth": 57.921963041985876,
+    "elevation": 13.819865261873716,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8db73f012dd6.png",
+    "createdAt": 1782271660.6394558,
+    "cropBox": {
+      "x": 349,
+      "y": 40,
+      "width": 466,
+      "height": 466
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "6b55db4fe552",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 261,
+    "azimuth": 58.15902790609778,
+    "elevation": 13.832252421841218,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6b55db4fe552.png",
+    "createdAt": 1782271660.401808,
+    "cropBox": {
+      "x": 353,
+      "y": 34,
+      "width": 476,
+      "height": 476
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "6ddf15579882",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 258,
+    "azimuth": 58.39728431598875,
+    "elevation": 13.852317763781969,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6ddf15579882.png",
+    "createdAt": 1782271660.1107085,
+    "cropBox": {
+      "x": 369,
+      "y": 36,
+      "width": 458,
+      "height": 458
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "d9811d4d7694",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 255,
+    "azimuth": 58.630167086175454,
+    "elevation": 13.88016623465765,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d9811d4d7694.png",
+    "createdAt": 1782271659.852405,
+    "cropBox": {
+      "x": 384,
+      "y": 51,
+      "width": 423,
+      "height": 423
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "34e8572b7ede",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 252,
+    "azimuth": 58.8507926380925,
+    "elevation": 13.915909005141103,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/34e8572b7ede.png",
+    "createdAt": 1782271659.600013,
+    "cropBox": {
+      "x": 396,
+      "y": 52,
+      "width": 424,
+      "height": 424
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b0f923b690a8",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 249,
+    "azimuth": 59.051975094741,
+    "elevation": 13.95965301357188,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b0f923b690a8.png",
+    "createdAt": 1782271659.2764022,
+    "cropBox": {
+      "x": 398,
+      "y": 52,
+      "width": 426,
+      "height": 426
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "bc019856ba05",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 246,
+    "azimuth": 59.22625935584629,
+    "elevation": 14.011487805457705,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/bc019856ba05.png",
+    "createdAt": 1782271658.890928,
+    "cropBox": {
+      "x": 395,
+      "y": 55,
+      "width": 423,
+      "height": 423
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "4f7f73d5f672",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 243,
+    "azimuth": 59.36597258302149,
+    "elevation": 14.071469424183661,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/4f7f73d5f672.png",
+    "createdAt": 1782271658.5522988,
+    "cropBox": {
+      "x": 382,
+      "y": 40,
+      "width": 441,
+      "height": 441
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "cacee0fb0e20",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 240,
+    "azimuth": 59.46329528433179,
+    "elevation": 14.139601230025718,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/cacee0fb0e20.png",
+    "createdAt": 1782271658.1918716,
+    "cropBox": {
+      "x": 379,
+      "y": 32,
+      "width": 449,
+      "height": 449
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "d90e991b1551",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 237,
+    "azimuth": 59.510352836118855,
+    "elevation": 14.215811707949953,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d90e991b1551.png",
+    "createdAt": 1782271657.8196971,
+    "cropBox": {
+      "x": 374,
+      "y": 40,
+      "width": 440,
+      "height": 440
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "1d85f0f96ece",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 234,
+    "azimuth": 59.4993278058656,
+    "elevation": 14.299929577371344,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1d85f0f96ece.png",
+    "createdAt": 1782271657.4920971,
+    "cropBox": {
+      "x": 341,
+      "y": 40,
+      "width": 458,
+      "height": 458
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "f753949aaa5e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 231,
+    "azimuth": 59.42259282652307,
+    "elevation": 14.391656842237154,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/f753949aaa5e.png",
+    "createdAt": 1782271657.192912,
+    "cropBox": {
+      "x": 304,
+      "y": 31,
+      "width": 494,
+      "height": 494
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "523ca22c2cff",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 228,
+    "azimuth": 59.27286299612313,
+    "elevation": 14.490540813739983,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/523ca22c2cff.png",
+    "createdAt": 1782271656.869812,
+    "cropBox": {
+      "x": 275,
+      "y": 20,
+      "width": 513,
+      "height": 513
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "29bb0dee1492",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 225,
+    "azimuth": 59.04336580644398,
+    "elevation": 14.595946586429875,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/29bb0dee1492.png",
+    "createdAt": 1782271656.6199508,
+    "cropBox": {
+      "x": 262,
+      "y": 16,
+      "width": 517,
+      "height": 517
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "aa08977b7071",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 222,
+    "azimuth": 58.65487688751252,
+    "elevation": 14.733187936384198,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/aa08977b7071.png",
+    "createdAt": 1782271656.3266509,
+    "cropBox": {
+      "x": 248,
+      "y": 17,
+      "width": 515,
+      "height": 515
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "e1ab61611b5c",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 219,
+    "azimuth": 57.977236850277755,
+    "elevation": 14.961245187154347,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e1ab61611b5c.png",
+    "createdAt": 1782271656.1034448,
+    "cropBox": {
+      "x": 231,
+      "y": 25,
+      "width": 504,
+      "height": 504
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "478f639ba651",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 216,
+    "azimuth": 57.153358915991944,
+    "elevation": 15.235177028421091,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/478f639ba651.png",
+    "createdAt": 1782271655.8567522,
+    "cropBox": {
+      "x": 217,
+      "y": 22,
+      "width": 503,
+      "height": 503
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "ab5c71833357",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 213,
+    "azimuth": 56.214221283077066,
+    "elevation": 15.542907622693363,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ab5c71833357.png",
+    "createdAt": 1782271655.5714045,
+    "cropBox": {
+      "x": 207,
+      "y": 12,
+      "width": 512,
+      "height": 512
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b9558b0fb06f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 210,
+    "azimuth": 55.19037218024893,
+    "elevation": 15.872835289914832,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b9558b0fb06f.png",
+    "createdAt": 1782271655.338517,
+    "cropBox": {
+      "x": 207,
+      "y": 14,
+      "width": 517,
+      "height": 517
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "abaeef217754",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 207,
+    "azimuth": 54.110769477293026,
+    "elevation": 16.214365032441236,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/abaeef217754.png",
+    "createdAt": 1782271655.1260798,
+    "cropBox": {
+      "x": 205,
+      "y": 7,
+      "width": 521,
+      "height": 521
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "0aa46df0b50e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 204,
+    "azimuth": 53.00192239780319,
+    "elevation": 16.558258962478533,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0aa46df0b50e.png",
+    "createdAt": 1782271654.8949142,
+    "cropBox": {
+      "x": 195,
+      "y": 4,
+      "width": 519,
+      "height": 519
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "5621c6c85973",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 201,
+    "azimuth": 51.88734614765334,
+    "elevation": 16.896810626118196,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/5621c6c85973.png",
+    "createdAt": 1782271654.6284142,
+    "cropBox": {
+      "x": 195,
+      "y": 19,
+      "width": 502,
+      "height": 502
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "ec6961dc8e74",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 198,
+    "azimuth": 50.787309919173936,
+    "elevation": 17.223867774072914,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ec6961dc8e74.png",
+    "createdAt": 1782271654.3710632,
+    "cropBox": {
+      "x": 196,
+      "y": 31,
+      "width": 490,
+      "height": 490
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "81f25e67f1cd",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 195,
+    "azimuth": 49.71883613376487,
+    "elevation": 17.53473899208538,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/81f25e67f1cd.png",
+    "createdAt": 1782271654.0946455,
+    "cropBox": {
+      "x": 181,
+      "y": 32,
+      "width": 488,
+      "height": 488
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8841281d4e43",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 192,
+    "azimuth": 48.69589624714024,
+    "elevation": 17.826022616949558,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8841281d4e43.png",
+    "createdAt": 1782271653.7532938,
+    "cropBox": {
+      "x": 179,
+      "y": 32,
+      "width": 491,
+      "height": 491
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "bebbe35d38b7",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 189,
+    "azimuth": 47.72974581233721,
+    "elevation": 18.095393100449627,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/bebbe35d38b7.png",
+    "createdAt": 1782271653.4890556,
+    "cropBox": {
+      "x": 160,
+      "y": 36,
+      "width": 482,
+      "height": 482
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "60f39f08add9",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 186,
+    "azimuth": 46.82934676330989,
+    "elevation": 18.34137286399006,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/60f39f08add9.png",
+    "createdAt": 1782271653.2467937,
+    "cropBox": {
+      "x": 152,
+      "y": 46,
+      "width": 465,
+      "height": 465
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "fae1fad4b7ea",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 183,
+    "azimuth": 46.001835197610355,
+    "elevation": 18.563109088409746,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/fae1fad4b7ea.png",
+    "createdAt": 1782271653.0222242,
+    "cropBox": {
+      "x": 136,
+      "y": 47,
+      "width": 486,
+      "height": 486
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "bcc7ab5f1107",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 180,
+    "azimuth": 45.25300556987052,
+    "elevation": 18.760166570679488,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/bcc7ab5f1107.png",
+    "createdAt": 1782271652.770729,
+    "cropBox": {
+      "x": 98,
+      "y": 42,
+      "width": 507,
+      "height": 507
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "cff0671f0a49",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 177,
+    "azimuth": 44.587795148744874,
+    "elevation": 18.93234071888007,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/cff0671f0a49.png",
+    "createdAt": 1782271652.5484107,
+    "cropBox": {
+      "x": 101,
+      "y": 55,
+      "width": 491,
+      "height": 491
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "a4ad857611aa",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 174,
+    "azimuth": 44.010764772835714,
+    "elevation": 19.079489206639693,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a4ad857611aa.png",
+    "createdAt": 1782271652.2283442,
+    "cropBox": {
+      "x": 104,
+      "y": 64,
+      "width": 479,
+      "height": 479
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "0d879c2d10ce",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 171,
+    "azimuth": 43.52658321282171,
+    "elevation": 19.20137651506265,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0d879c2d10ce.png",
+    "createdAt": 1782271651.975152,
+    "cropBox": {
+      "x": 113,
+      "y": 51,
+      "width": 492,
+      "height": 492
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "c71a017a2a63",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 168,
+    "azimuth": 43.140533447265604,
+    "elevation": 19.297521972656256,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c71a017a2a63.png",
+    "createdAt": 1782271651.66773,
+    "cropBox": {
+      "x": 126,
+      "y": 35,
+      "width": 502,
+      "height": 502
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "a793d4b409e1",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 165,
+    "azimuth": 42.63390389034779,
+    "elevation": 19.49220062786445,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a793d4b409e1.png",
+    "createdAt": 1782271651.2856905,
+    "cropBox": {
+      "x": 164,
+      "y": 37,
+      "width": 469,
+      "height": 469
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8b321c2a9a12",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 162,
+    "azimuth": 42.826484659891506,
+    "elevation": 19.609710197605153,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8b321c2a9a12.png",
+    "createdAt": 1782271650.9440942,
+    "cropBox": {
+      "x": 132,
+      "y": 35,
+      "width": 488,
+      "height": 488
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "f5201971102d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 159,
+    "azimuth": 43.40984905160503,
+    "elevation": 19.65665311469654,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/f5201971102d.png",
+    "createdAt": 1782271650.614981,
+    "cropBox": {
+      "x": 95,
+      "y": 22,
+      "width": 527,
+      "height": 527
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "4275a58f5aa8",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 156,
+    "azimuth": 44.04656949218023,
+    "elevation": 19.631412533201114,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/4275a58f5aa8.png",
+    "createdAt": 1782271650.3151772,
+    "cropBox": {
+      "x": 50,
+      "y": 9,
+      "width": 564,
+      "height": 564
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8e4653d0291b",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 153,
+    "azimuth": 44.307607670670194,
+    "elevation": 19.533782698997882,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8e4653d0291b.png",
+    "createdAt": 1782271650.0174859,
+    "cropBox": {
+      "x": 17,
+      "y": 2,
+      "width": 574,
+      "height": 574
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "2fc97c6a511e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 150,
+    "azimuth": 43.65838328470151,
+    "elevation": 19.367818019097584,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/2fc97c6a511e.png",
+    "createdAt": 1782271649.78663,
+    "cropBox": {
+      "x": 0,
+      "y": 6,
+      "width": 569,
+      "height": 569
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "63e004f8f0be",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 147,
+    "azimuth": 42.36188955393948,
+    "elevation": 19.200464109479285,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/63e004f8f0be.png",
+    "createdAt": 1782271649.5023637,
+    "cropBox": {
+      "x": 12,
+      "y": 11,
+      "width": 564,
+      "height": 564
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "f1ee4799c3a0",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 144,
+    "azimuth": 40.73431603727077,
+    "elevation": 18.986598193776814,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/f1ee4799c3a0.png",
+    "createdAt": 1782271649.150326,
+    "cropBox": {
+      "x": 49,
+      "y": 12,
+      "width": 563,
+      "height": 563
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "9331abf1b4e4",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 141,
+    "azimuth": 38.6816100398715,
+    "elevation": 18.69575862755927,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/9331abf1b4e4.png",
+    "createdAt": 1782271648.8327463,
+    "cropBox": {
+      "x": 95,
+      "y": 21,
+      "width": 555,
+      "height": 555
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "35384d315ded",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 138,
+    "azimuth": 36.35247394743608,
+    "elevation": 18.33741217056715,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/35384d315ded.png",
+    "createdAt": 1782271648.4871726,
+    "cropBox": {
+      "x": 104,
+      "y": 32,
+      "width": 543,
+      "height": 543
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "bfb9ec7faaa7",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 135,
+    "azimuth": 33.88861216246207,
+    "elevation": 17.925815957373104,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/bfb9ec7faaa7.png",
+    "createdAt": 1782271648.157734,
+    "cropBox": {
+      "x": 121,
+      "y": 36,
+      "width": 539,
+      "height": 539
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b0e4d4dd585f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 132,
+    "azimuth": 31.413277942263193,
+    "elevation": 17.478979013057923,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b0e4d4dd585f.png",
+    "createdAt": 1782271647.754143,
+    "cropBox": {
+      "x": 158,
+      "y": 31,
+      "width": 545,
+      "height": 545
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "e1c998fc04b6",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 129,
+    "azimuth": 29.025125073198197,
+    "elevation": 17.01660456070475,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e1c998fc04b6.png",
+    "createdAt": 1782271647.347809,
+    "cropBox": {
+      "x": 204,
+      "y": 40,
+      "width": 500,
+      "height": 500
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "413d37e31a3b",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 126,
+    "azimuth": 26.797430662496787,
+    "elevation": 16.55798440358822,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/413d37e31a3b.png",
+    "createdAt": 1782271647.0732012,
+    "cropBox": {
+      "x": 219,
+      "y": 59,
+      "width": 488,
+      "height": 488
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "453ee2136273",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 123,
+    "azimuth": 24.781521550514693,
+    "elevation": 16.120573687941828,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/453ee2136273.png",
+    "createdAt": 1782271646.777163,
+    "cropBox": {
+      "x": 232,
+      "y": 79,
+      "width": 478,
+      "height": 478
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "1d131be913d8",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 120,
+    "azimuth": 23.01281470585388,
+    "elevation": 15.719542519311574,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1d131be913d8.png",
+    "createdAt": 1782271646.5202065,
+    "cropBox": {
+      "x": 245,
+      "y": 83,
+      "width": 481,
+      "height": 481
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "1beadbab219d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 117,
+    "azimuth": 21.518262218549204,
+    "elevation": 15.368282531704466,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1beadbab219d.png",
+    "createdAt": 1782271646.2391474,
+    "cropBox": {
+      "x": 269,
+      "y": 83,
+      "width": 457,
+      "height": 457
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "d8a353407d27",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 114,
+    "azimuth": 20.324897430919982,
+    "elevation": 15.07977185694547,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d8a353407d27.png",
+    "createdAt": 1782271645.8635442,
+    "cropBox": {
+      "x": 298,
+      "y": 94,
+      "width": 419,
+      "height": 419
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "c56bee6ed90e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 111,
+    "azimuth": 19.810766090933484,
+    "elevation": 14.95329754185336,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c56bee6ed90e.png",
+    "createdAt": 1782271645.5402722,
+    "cropBox": {
+      "x": 322,
+      "y": 100,
+      "width": 402,
+      "height": 402
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "2b262a214829",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 108,
+    "azimuth": 19.54669618192763,
+    "elevation": 14.887831293815097,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/2b262a214829.png",
+    "createdAt": 1782271645.2537878,
+    "cropBox": {
+      "x": 346,
+      "y": 93,
+      "width": 392,
+      "height": 392
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "95a70133196a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 105,
+    "azimuth": 19.3050881180938,
+    "elevation": 14.827633834887237,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/95a70133196a.png",
+    "createdAt": 1782271644.9750416,
+    "cropBox": {
+      "x": 374,
+      "y": 92,
+      "width": 371,
+      "height": 371
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "5edb94df3564",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 102,
+    "azimuth": 19.08465286807594,
+    "elevation": 14.772462399028413,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/5edb94df3564.png",
+    "createdAt": 1782271644.7423594,
+    "cropBox": {
+      "x": 409,
+      "y": 104,
+      "width": 336,
+      "height": 336
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8c9a65c231b5",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 99,
+    "azimuth": 18.88424426190727,
+    "elevation": 14.722097412309594,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8c9a65c231b5.png",
+    "createdAt": 1782271644.5317893,
+    "cropBox": {
+      "x": 415,
+      "y": 101,
+      "width": 344,
+      "height": 344
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8231743734c4",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 96,
+    "azimuth": 18.702844012512532,
+    "elevation": 14.676340737439318,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8231743734c4.png",
+    "createdAt": 1782271644.2905118,
+    "cropBox": {
+      "x": 426,
+      "y": 94,
+      "width": 334,
+      "height": 334
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "d9dc82fe58fa",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 93,
+    "azimuth": 18.53954876524371,
+    "elevation": 14.63501407014921,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d9dc82fe58fa.png",
+    "createdAt": 1782271643.9641407,
+    "cropBox": {
+      "x": 451,
+      "y": 101,
+      "width": 306,
+      "height": 306
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "2415f23c2ec0",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 90,
+    "azimuth": 18.39355887554504,
+    "elevation": 14.597957477989269,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/2415f23c2ec0.png",
+    "createdAt": 1782271643.683285,
+    "cropBox": {
+      "x": 473,
+      "y": 107,
+      "width": 285,
+      "height": 285
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "6faf37ce36f4",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 87,
+    "azimuth": 18.264168660181515,
+    "elevation": 14.565028070081667,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6faf37ce36f4.png",
+    "createdAt": 1782271643.387807,
+    "cropBox": {
+      "x": 481,
+      "y": 98,
+      "width": 293,
+      "height": 293
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "9c00cbf2afe9",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 84,
+    "azimuth": 18.150757903983152,
+    "elevation": 14.536098785006445,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/9c00cbf2afe9.png",
+    "createdAt": 1782271643.10806,
+    "cropBox": {
+      "x": 496,
+      "y": 97,
+      "width": 279,
+      "height": 279
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "c2f762cfaec6",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 81,
+    "azimuth": 18.052784432999754,
+    "elevation": 14.511057282915132,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c2f762cfaec6.png",
+    "createdAt": 1782271642.8074515,
+    "cropBox": {
+      "x": 510,
+      "y": 105,
+      "width": 260,
+      "height": 260
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "86155577af73",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 78,
+    "azimuth": 17.96977758721045,
+    "elevation": 14.489804926922574,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/86155577af73.png",
+    "createdAt": 1782271642.478268,
+    "cropBox": {
+      "x": 512,
+      "y": 103,
+      "width": 264,
+      "height": 264
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "4cbe04941605",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 75,
+    "azimuth": 17.901332442023016,
+    "elevation": 14.472255837571453,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/4cbe04941605.png",
+    "createdAt": 1782271642.2244592,
+    "cropBox": {
+      "x": 517,
+      "y": 98,
+      "width": 260,
+      "height": 260
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "ba7d11ea6bda",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 72,
+    "azimuth": 17.847104637911215,
+    "elevation": 14.45833600246327,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ba7d11ea6bda.png",
+    "createdAt": 1782271641.9419801,
+    "cropBox": {
+      "x": 531,
+      "y": 104,
+      "width": 241,
+      "height": 241
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "ac9871e0ec0f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 69,
+    "azimuth": 17.806805681463068,
+    "elevation": 14.44798242073324,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ac9871e0ec0f.png",
+    "createdAt": 1782271641.6725342,
+    "cropBox": {
+      "x": 545,
+      "y": 109,
+      "width": 227,
+      "height": 227
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "8b68eff0799b",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 66,
+    "azimuth": 17.78019857816394,
+    "elevation": 14.441142258584591,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8b68eff0799b.png",
+    "createdAt": 1782271641.406619,
+    "cropBox": {
+      "x": 550,
+      "y": 102,
+      "width": 236,
+      "height": 236
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "ddc7e00ee090",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 63,
+    "azimuth": 17.767093646117644,
+    "elevation": 14.437771987150697,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ddc7e00ee090.png",
+    "createdAt": 1782271641.1733937,
+    "cropBox": {
+      "x": 560,
+      "y": 100,
+      "width": 226,
+      "height": 226
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "f85b6f0be70a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 60,
+    "azimuth": 17.76734433847783,
+    "elevation": 14.437836466908294,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/f85b6f0be70a.png",
+    "createdAt": 1782271640.9711814,
+    "cropBox": {
+      "x": 570,
+      "y": 106,
+      "width": 213,
+      "height": 213
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "fb3ff6b88098",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 57,
+    "azimuth": 17.780842867273794,
+    "elevation": 14.441307932853135,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/fb3ff6b88098.png",
+    "createdAt": 1782271640.7540066,
+    "cropBox": {
+      "x": 571,
+      "y": 104,
+      "width": 217,
+      "height": 217
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "88fa007a4b7f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 54,
+    "azimuth": 17.80751536744725,
+    "elevation": 14.448164820391298,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/88fa007a4b7f.png",
+    "createdAt": 1782271640.5102115,
+    "cropBox": {
+      "x": 575,
+      "y": 100,
+      "width": 217,
+      "height": 217
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "0cc7c7078dc5",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 51,
+    "azimuth": 17.847316259440912,
+    "elevation": 14.458390351500569,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0cc7c7078dc5.png",
+    "createdAt": 1782271640.2892694,
+    "cropBox": {
+      "x": 587,
+      "y": 103,
+      "width": 207,
+      "height": 207
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b797543aba66",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 48,
+    "azimuth": 17.90022134958894,
+    "elevation": 14.47197077129924,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b797543aba66.png",
+    "createdAt": 1782271640.0806553,
+    "cropBox": {
+      "x": 601,
+      "y": 109,
+      "width": 191,
+      "height": 191
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "04e2eca7f865",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 45,
+    "azimuth": 17.966219031228,
+    "elevation": 14.488893082304486,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/04e2eca7f865.png",
+    "createdAt": 1782271639.8950412,
+    "cropBox": {
+      "x": 603,
+      "y": 105,
+      "width": 198,
+      "height": 198
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "e4e6481b1ad1",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 42,
+    "azimuth": 18.04529868657649,
+    "elevation": 14.5091420604288,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e4e6481b1ad1.png",
+    "createdAt": 1782271639.6884494,
+    "cropBox": {
+      "x": 612,
+      "y": 102,
+      "width": 193,
+      "height": 193
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "1776a1e8359f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 39,
+    "azimuth": 18.137434993129183,
+    "elevation": 14.532696242063125,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1776a1e8359f.png",
+    "createdAt": 1782271639.455284,
+    "cropBox": {
+      "x": 623,
+      "y": 107,
+      "width": 181,
+      "height": 181
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "54d3f5105870",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 36,
+    "azimuth": 18.242566232050535,
+    "elevation": 14.559522427321426,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/54d3f5105870.png",
+    "createdAt": 1782271639.2584608,
+    "cropBox": {
+      "x": 628,
+      "y": 111,
+      "width": 179,
+      "height": 179
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "c55cc99db0de",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 33,
+    "azimuth": 18.360563752097843,
+    "elevation": 14.589568020409018,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c55cc99db0de.png",
+    "createdAt": 1782271639.0186868,
+    "cropBox": {
+      "x": 629,
+      "y": 108,
+      "width": 183,
+      "height": 183
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "584c52713e98",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 30,
+    "azimuth": 18.491188242462872,
+    "elevation": 14.622750172221743,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/584c52713e98.png",
+    "createdAt": 1782271638.8232164,
+    "cropBox": {
+      "x": 631,
+      "y": 104,
+      "width": 187,
+      "height": 187
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "158218b89036",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 27,
+    "azimuth": 18.634026027279955,
+    "elevation": 14.658940111102439,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/158218b89036.png",
+    "createdAt": 1782271638.5916398,
+    "cropBox": {
+      "x": 632,
+      "y": 99,
+      "width": 189,
+      "height": 189
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "83d74cd077b5",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 24,
+    "azimuth": 18.788394516191826,
+    "elevation": 14.697940078335492,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/83d74cd077b5.png",
+    "createdAt": 1782271638.3197236,
+    "cropBox": {
+      "x": 636,
+      "y": 94,
+      "width": 193,
+      "height": 193
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "e69379adbce9",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 21,
+    "azimuth": 18.95319891944238,
+    "elevation": 14.73944861047292,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e69379adbce9.png",
+    "createdAt": 1782271637.788242,
+    "cropBox": {
+      "x": 639,
+      "y": 91,
+      "width": 194,
+      "height": 194
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "1c2bb17595d1",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 18,
+    "azimuth": 19.126709802479812,
+    "elevation": 14.783006911745005,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1c2bb17595d1.png",
+    "createdAt": 1782271637.602499,
+    "cropBox": {
+      "x": 641,
+      "y": 88,
+      "width": 200,
+      "height": 200
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "b63c2c4a2ae4",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 15,
+    "azimuth": 19.30620777969106,
+    "elevation": 14.827913461822334,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b63c2c4a2ae4.png",
+    "createdAt": 1782271637.4351342,
+    "cropBox": {
+      "x": 645,
+      "y": 85,
+      "width": 204,
+      "height": 204
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "cb0a1ce76fc1",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 12,
+    "azimuth": 19.48739635567706,
+    "elevation": 14.8730830391045,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/cb0a1ce76fc1.png",
+    "createdAt": 1782271637.222164,
+    "cropBox": {
+      "x": 650,
+      "y": 83,
+      "width": 207,
+      "height": 207
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "1e002328fa87",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 9,
+    "azimuth": 19.66339081305916,
+    "elevation": 14.916803612108737,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1e002328fa87.png",
+    "createdAt": 1782271637.025071,
+    "cropBox": {
+      "x": 652,
+      "y": 82,
+      "width": 212,
+      "height": 212
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "f85626404843",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 6,
+    "azimuth": 19.82288666519348,
+    "elevation": 14.956294155180842,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/f85626404843.png",
+    "createdAt": 1782271636.8379254,
+    "cropBox": {
+      "x": 655,
+      "y": 80,
+      "width": 215,
+      "height": 215
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "3652c4b0299c",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 3,
+    "azimuth": 19.946625376883308,
+    "elevation": 14.986845138401492,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/3652c4b0299c.png",
+    "createdAt": 1782271636.576502,
+    "cropBox": {
+      "x": 656,
+      "y": 79,
+      "width": 218,
+      "height": 218
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "43237b50c15a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 0,
+    "azimuth": 19.999999999999986,
+    "elevation": 14.999999999999986,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/43237b50c15a.png",
+    "createdAt": 1782271636.3219452,
+    "cropBox": {
+      "x": 658,
+      "y": 79,
+      "width": 221,
+      "height": 221
+    },
+    "imageWidth": 1024,
+    "imageHeight": 576
+  },
+  {
+    "id": "828bc87659fe",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 354,
+    "azimuth": -159.42147827148435,
+    "elevation": 7.39670410156252,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/828bc87659fe.png",
+    "createdAt": 1782269274.2487261,
+    "cropBox": {
+      "x": 803,
+      "y": 131,
+      "width": 305,
+      "height": 305
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "a04363509dd4",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 351,
+    "azimuth": -159.42147827148435,
+    "elevation": 7.39670410156252,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a04363509dd4.png",
+    "createdAt": 1782269273.787745,
+    "cropBox": {
+      "x": 801,
+      "y": 129,
+      "width": 307,
+      "height": 307
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "a2bba2195c54",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 348,
+    "azimuth": -159.42147827148435,
+    "elevation": 7.39670410156252,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a2bba2195c54.png",
+    "createdAt": 1782269273.3156528,
+    "cropBox": {
+      "x": 798,
+      "y": 130,
+      "width": 306,
+      "height": 306
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "551c574a59ff",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 345,
+    "azimuth": -159.42147827148435,
+    "elevation": 7.39670410156252,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/551c574a59ff.png",
+    "createdAt": 1782269272.8363097,
+    "cropBox": {
+      "x": 797,
+      "y": 134,
+      "width": 301,
+      "height": 301
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "0fe37d2d7a98",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 342,
+    "azimuth": -166.2340828235207,
+    "elevation": 9.631949908255478,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0fe37d2d7a98.png",
+    "createdAt": 1782269272.3508174,
+    "cropBox": {
+      "x": 753,
+      "y": 116,
+      "width": 323,
+      "height": 323
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "db9e91b44ace",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 339,
+    "azimuth": 178.15331969557764,
+    "elevation": 13.951426111316025,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/db9e91b44ace.png",
+    "createdAt": 1782269271.861409,
+    "cropBox": {
+      "x": 651,
+      "y": 84,
+      "width": 356,
+      "height": 356
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "c52a78304cf2",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 336,
+    "azimuth": 156.44922677275096,
+    "elevation": 18.04030583425724,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c52a78304cf2.png",
+    "createdAt": 1782269271.3913698,
+    "cropBox": {
+      "x": 514,
+      "y": 63,
+      "width": 382,
+      "height": 382
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "6f3bf1c84e1e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 333,
+    "azimuth": 134.1557266515179,
+    "elevation": 19.759289106796786,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6f3bf1c84e1e.png",
+    "createdAt": 1782269270.901665,
+    "cropBox": {
+      "x": 404,
+      "y": 71,
+      "width": 400,
+      "height": 400
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "f04049b7d699",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 330,
+    "azimuth": 116.86650483659598,
+    "elevation": 19.44994135758411,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/f04049b7d699.png",
+    "createdAt": 1782269270.4142094,
+    "cropBox": {
+      "x": 361,
+      "y": 92,
+      "width": 415,
+      "height": 415
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "13e41245464c",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 327,
+    "azimuth": 104.71078491210938,
+    "elevation": 18.63636474609372,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/13e41245464c.png",
+    "createdAt": 1782269269.931272,
+    "cropBox": {
+      "x": 357,
+      "y": 117,
+      "width": 423,
+      "height": 423
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "7bbc86df150a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 324,
+    "azimuth": 93.56877758993728,
+    "elevation": 17.931752358310717,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/7bbc86df150a.png",
+    "createdAt": 1782269269.3989253,
+    "cropBox": {
+      "x": 358,
+      "y": 132,
+      "width": 432,
+      "height": 432
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "c69bf78a096a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 321,
+    "azimuth": 82.88001409281286,
+    "elevation": 17.281092171074263,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c69bf78a096a.png",
+    "createdAt": 1782269268.6704311,
+    "cropBox": {
+      "x": 348,
+      "y": 127,
+      "width": 452,
+      "height": 452
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "22c5fbf91caa",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 318,
+    "azimuth": 72.78576134679402,
+    "elevation": 16.471070565927633,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/22c5fbf91caa.png",
+    "createdAt": 1782269268.1743977,
+    "cropBox": {
+      "x": 348,
+      "y": 101,
+      "width": 491,
+      "height": 491
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "1b10c848f6c1",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 315,
+    "azimuth": 64.31406992547713,
+    "elevation": 15.52371151080466,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1b10c848f6c1.png",
+    "createdAt": 1782269267.6854951,
+    "cropBox": {
+      "x": 359,
+      "y": 78,
+      "width": 519,
+      "height": 519
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "416a82fe3467",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 312,
+    "azimuth": 58.843017578124986,
+    "elevation": 14.66943359375,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/416a82fe3467.png",
+    "createdAt": 1782269267.1813815,
+    "cropBox": {
+      "x": 381,
+      "y": 66,
+      "width": 527,
+      "height": 527
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "ca8acdff026f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 309,
+    "azimuth": 58.30190221809471,
+    "elevation": 14.554356547518566,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ca8acdff026f.png",
+    "createdAt": 1782269266.6605465,
+    "cropBox": {
+      "x": 384,
+      "y": 65,
+      "width": 527,
+      "height": 527
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "06044b7b6622",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 306,
+    "azimuth": 57.85607340005416,
+    "elevation": 14.448255973177382,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/06044b7b6622.png",
+    "createdAt": 1782269266.08131,
+    "cropBox": {
+      "x": 387,
+      "y": 64,
+      "width": 528,
+      "height": 528
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "d928939a5d9d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 303,
+    "azimuth": 57.49706585206954,
+    "elevation": 14.351010605834688,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d928939a5d9d.png",
+    "createdAt": 1782269265.5830688,
+    "cropBox": {
+      "x": 389,
+      "y": 62,
+      "width": 529,
+      "height": 529
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "3a8994a9d708",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 300,
+    "azimuth": 57.2173091579729,
+    "elevation": 14.262455074603793,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/3a8994a9d708.png",
+    "createdAt": 1782269265.0323253,
+    "cropBox": {
+      "x": 390,
+      "y": 61,
+      "width": 531,
+      "height": 531
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "61a135ab1203",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 297,
+    "azimuth": 57.00996651487714,
+    "elevation": 14.182402491440499,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/61a135ab1203.png",
+    "createdAt": 1782269264.5318198,
+    "cropBox": {
+      "x": 392,
+      "y": 60,
+      "width": 532,
+      "height": 532
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "6db4704e90f9",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 294,
+    "azimuth": 56.86879132120404,
+    "elevation": 14.110660638398542,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6db4704e90f9.png",
+    "createdAt": 1782269263.9458497,
+    "cropBox": {
+      "x": 392,
+      "y": 58,
+      "width": 535,
+      "height": 535
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "2bda816da01c",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 291,
+    "azimuth": 56.78799917441741,
+    "elevation": 14.047043534303015,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/2bda816da01c.png",
+    "createdAt": 1782269263.3995314,
+    "cropBox": {
+      "x": 392,
+      "y": 57,
+      "width": 537,
+      "height": 537
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "fa9c473c71c9",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 288,
+    "azimuth": 56.762153062718205,
+    "elevation": 13.991379671581527,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/fa9c473c71c9.png",
+    "createdAt": 1782269262.8783808,
+    "cropBox": {
+      "x": 391,
+      "y": 55,
+      "width": 541,
+      "height": 541
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "22fce105d075",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 285,
+    "azimuth": 56.78605985031144,
+    "elevation": 13.943517849697656,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/22fce105d075.png",
+    "createdAt": 1782269262.3033643,
+    "cropBox": {
+      "x": 394,
+      "y": 54,
+      "width": 543,
+      "height": 543
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "b58fc94a08be",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 282,
+    "azimuth": 56.85467652423699,
+    "elevation": 13.903331259052322,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b58fc94a08be.png",
+    "createdAt": 1782269261.7860184,
+    "cropBox": {
+      "x": 399,
+      "y": 53,
+      "width": 546,
+      "height": 546
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "e083a1cc21e2",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 279,
+    "azimuth": 56.96302506031387,
+    "elevation": 13.870720262325733,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e083a1cc21e2.png",
+    "createdAt": 1782269261.2221982,
+    "cropBox": {
+      "x": 401,
+      "y": 55,
+      "width": 546,
+      "height": 546
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "ef0e825b905e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 276,
+    "azimuth": 57.10611515904848,
+    "elevation": 13.845614159606683,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ef0e825b905e.png",
+    "createdAt": 1782269260.6796892,
+    "cropBox": {
+      "x": 399,
+      "y": 59,
+      "width": 543,
+      "height": 543
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "df490c7e8d9d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 273,
+    "azimuth": 57.2788744894845,
+    "elevation": 13.82797209506981,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/df490c7e8d9d.png",
+    "createdAt": 1782269260.155642,
+    "cropBox": {
+      "x": 405,
+      "y": 64,
+      "width": 539,
+      "height": 539
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "160a30a6789b",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 270,
+    "azimuth": 57.4760864531888,
+    "elevation": 13.817783156270607,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/160a30a6789b.png",
+    "createdAt": 1782269259.6495647,
+    "cropBox": {
+      "x": 409,
+      "y": 57,
+      "width": 550,
+      "height": 550
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "42eb48adc3be",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 267,
+    "azimuth": 57.6923358357238,
+    "elevation": 13.815065625487918,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/42eb48adc3be.png",
+    "createdAt": 1782269259.152271,
+    "cropBox": {
+      "x": 421,
+      "y": 48,
+      "width": 563,
+      "height": 563
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "5df06335909a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 264,
+    "azimuth": 57.921963041985876,
+    "elevation": 13.819865261873716,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/5df06335909a.png",
+    "createdAt": 1782269258.6507494,
+    "cropBox": {
+      "x": 422,
+      "y": 49,
+      "width": 564,
+      "height": 564
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "25fcfb1b7ad0",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 261,
+    "azimuth": 58.15902790609778,
+    "elevation": 13.832252421841218,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/25fcfb1b7ad0.png",
+    "createdAt": 1782269258.1349115,
+    "cropBox": {
+      "x": 427,
+      "y": 41,
+      "width": 576,
+      "height": 576
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "18da77f1d050",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 258,
+    "azimuth": 58.39728431598875,
+    "elevation": 13.852317763781969,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/18da77f1d050.png",
+    "createdAt": 1782269257.6156669,
+    "cropBox": {
+      "x": 446,
+      "y": 44,
+      "width": 554,
+      "height": 554
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "8343570da989",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 255,
+    "azimuth": 58.630167086175454,
+    "elevation": 13.88016623465765,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8343570da989.png",
+    "createdAt": 1782269257.1189697,
+    "cropBox": {
+      "x": 465,
+      "y": 62,
+      "width": 512,
+      "height": 512
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "427c842b2623",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 252,
+    "azimuth": 58.8507926380925,
+    "elevation": 13.915909005141103,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/427c842b2623.png",
+    "createdAt": 1782269256.6027763,
+    "cropBox": {
+      "x": 479,
+      "y": 63,
+      "width": 513,
+      "height": 513
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "833f31af99ac",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 249,
+    "azimuth": 59.051975094741,
+    "elevation": 13.95965301357188,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/833f31af99ac.png",
+    "createdAt": 1782269256.0673134,
+    "cropBox": {
+      "x": 481,
+      "y": 63,
+      "width": 515,
+      "height": 515
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "b86604357acc",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 246,
+    "azimuth": 59.22625935584629,
+    "elevation": 14.011487805457705,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b86604357acc.png",
+    "createdAt": 1782269255.577131,
+    "cropBox": {
+      "x": 478,
+      "y": 67,
+      "width": 512,
+      "height": 512
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "dcbaf1cc2386",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 243,
+    "azimuth": 59.36597258302149,
+    "elevation": 14.071469424183661,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/dcbaf1cc2386.png",
+    "createdAt": 1782269255.0959268,
+    "cropBox": {
+      "x": 462,
+      "y": 48,
+      "width": 534,
+      "height": 534
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "c7351cf5b8ac",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 240,
+    "azimuth": 59.46329528433179,
+    "elevation": 14.139601230025718,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c7351cf5b8ac.png",
+    "createdAt": 1782269254.4057577,
+    "cropBox": {
+      "x": 458,
+      "y": 39,
+      "width": 543,
+      "height": 543
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "9ebcafa28150",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 237,
+    "azimuth": 59.510352836118855,
+    "elevation": 14.215811707949953,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/9ebcafa28150.png",
+    "createdAt": 1782269253.749756,
+    "cropBox": {
+      "x": 453,
+      "y": 48,
+      "width": 532,
+      "height": 532
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "ec238c9fe2f8",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 234,
+    "azimuth": 59.4993278058656,
+    "elevation": 14.299929577371344,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ec238c9fe2f8.png",
+    "createdAt": 1782269253.2391365,
+    "cropBox": {
+      "x": 413,
+      "y": 49,
+      "width": 554,
+      "height": 554
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "f7c080dc45fb",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 231,
+    "azimuth": 59.42259282652307,
+    "elevation": 14.391656842237154,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/f7c080dc45fb.png",
+    "createdAt": 1782269252.5434697,
+    "cropBox": {
+      "x": 368,
+      "y": 38,
+      "width": 598,
+      "height": 598
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "addd495adf9f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 228,
+    "azimuth": 59.27286299612313,
+    "elevation": 14.490540813739983,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/addd495adf9f.png",
+    "createdAt": 1782269252.038197,
+    "cropBox": {
+      "x": 333,
+      "y": 24,
+      "width": 621,
+      "height": 621
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "49e61a422bc2",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 225,
+    "azimuth": 59.04336580644398,
+    "elevation": 14.595946586429875,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/49e61a422bc2.png",
+    "createdAt": 1782269251.5142887,
+    "cropBox": {
+      "x": 317,
+      "y": 19,
+      "width": 626,
+      "height": 626
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "c4d261df27a5",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 222,
+    "azimuth": 58.65487688751252,
+    "elevation": 14.733187936384198,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c4d261df27a5.png",
+    "createdAt": 1782269251.0034702,
+    "cropBox": {
+      "x": 300,
+      "y": 21,
+      "width": 623,
+      "height": 623
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "a6c03d29bf5d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 219,
+    "azimuth": 57.977236850277755,
+    "elevation": 14.961245187154347,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a6c03d29bf5d.png",
+    "createdAt": 1782269250.4948738,
+    "cropBox": {
+      "x": 279,
+      "y": 30,
+      "width": 610,
+      "height": 610
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "ebbc5dddfe5d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 216,
+    "azimuth": 57.153358915991944,
+    "elevation": 15.235177028421091,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ebbc5dddfe5d.png",
+    "createdAt": 1782269249.9944584,
+    "cropBox": {
+      "x": 263,
+      "y": 27,
+      "width": 609,
+      "height": 609
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "06e2d1f7c127",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 213,
+    "azimuth": 56.214221283077066,
+    "elevation": 15.542907622693363,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/06e2d1f7c127.png",
+    "createdAt": 1782269249.463854,
+    "cropBox": {
+      "x": 251,
+      "y": 15,
+      "width": 619,
+      "height": 619
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "1f446de78019",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 210,
+    "azimuth": 55.19037218024893,
+    "elevation": 15.872835289914832,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1f446de78019.png",
+    "createdAt": 1782269248.9814856,
+    "cropBox": {
+      "x": 250,
+      "y": 17,
+      "width": 626,
+      "height": 626
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "e600a010e866",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 207,
+    "azimuth": 54.110769477293026,
+    "elevation": 16.214365032441236,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e600a010e866.png",
+    "createdAt": 1782269248.5083766,
+    "cropBox": {
+      "x": 248,
+      "y": 8,
+      "width": 630,
+      "height": 630
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "8ef6420d87f2",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 204,
+    "azimuth": 53.00192239780319,
+    "elevation": 16.558258962478533,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8ef6420d87f2.png",
+    "createdAt": 1782269247.9508317,
+    "cropBox": {
+      "x": 236,
+      "y": 5,
+      "width": 628,
+      "height": 628
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "3248b2702a39",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 201,
+    "azimuth": 51.88734614765334,
+    "elevation": 16.896810626118196,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/3248b2702a39.png",
+    "createdAt": 1782269247.2623973,
+    "cropBox": {
+      "x": 236,
+      "y": 23,
+      "width": 607,
+      "height": 607
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "55a70996d0e2",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 198,
+    "azimuth": 50.787309919173936,
+    "elevation": 17.223867774072914,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/55a70996d0e2.png",
+    "createdAt": 1782269246.7365398,
+    "cropBox": {
+      "x": 237,
+      "y": 38,
+      "width": 593,
+      "height": 593
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "2d5afc2dce89",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 195,
+    "azimuth": 49.71883613376487,
+    "elevation": 17.53473899208538,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/2d5afc2dce89.png",
+    "createdAt": 1782269246.2873247,
+    "cropBox": {
+      "x": 219,
+      "y": 39,
+      "width": 590,
+      "height": 590
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "448551973e08",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 192,
+    "azimuth": 48.69589624714024,
+    "elevation": 17.826022616949558,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/448551973e08.png",
+    "createdAt": 1782269245.7501307,
+    "cropBox": {
+      "x": 217,
+      "y": 39,
+      "width": 594,
+      "height": 594
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "5e768f755dce",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 189,
+    "azimuth": 47.72974581233721,
+    "elevation": 18.095393100449627,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/5e768f755dce.png",
+    "createdAt": 1782269245.1792521,
+    "cropBox": {
+      "x": 193,
+      "y": 43,
+      "width": 583,
+      "height": 583
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "55eb912eaa69",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 186,
+    "azimuth": 46.82934676330989,
+    "elevation": 18.34137286399006,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/55eb912eaa69.png",
+    "createdAt": 1782269244.6002672,
+    "cropBox": {
+      "x": 184,
+      "y": 56,
+      "width": 563,
+      "height": 563
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "cb6f7445e4ce",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 183,
+    "azimuth": 46.001835197610355,
+    "elevation": 18.563109088409746,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/cb6f7445e4ce.png",
+    "createdAt": 1782269244.0506153,
+    "cropBox": {
+      "x": 164,
+      "y": 57,
+      "width": 588,
+      "height": 588
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "6b2144f8e3c7",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 180,
+    "azimuth": 45.25300556987052,
+    "elevation": 18.760166570679488,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6b2144f8e3c7.png",
+    "createdAt": 1782269243.5202274,
+    "cropBox": {
+      "x": 118,
+      "y": 51,
+      "width": 613,
+      "height": 613
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "77dc33307a24",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 177,
+    "azimuth": 44.587795148744874,
+    "elevation": 18.93234071888007,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/77dc33307a24.png",
+    "createdAt": 1782269242.824735,
+    "cropBox": {
+      "x": 122,
+      "y": 66,
+      "width": 594,
+      "height": 594
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "a8ab7fb93475",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 174,
+    "azimuth": 44.010764772835714,
+    "elevation": 19.079489206639693,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a8ab7fb93475.png",
+    "createdAt": 1782269242.2623672,
+    "cropBox": {
+      "x": 126,
+      "y": 77,
+      "width": 579,
+      "height": 579
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "e50711035278",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 171,
+    "azimuth": 43.52658321282171,
+    "elevation": 19.20137651506265,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e50711035278.png",
+    "createdAt": 1782269241.734315,
+    "cropBox": {
+      "x": 137,
+      "y": 62,
+      "width": 595,
+      "height": 595
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "4a9740b5a324",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 168,
+    "azimuth": 43.140533447265604,
+    "elevation": 19.297521972656256,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/4a9740b5a324.png",
+    "createdAt": 1782269241.2353287,
+    "cropBox": {
+      "x": 152,
+      "y": 42,
+      "width": 608,
+      "height": 608
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "1904e4638072",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 165,
+    "azimuth": 42.63390389034779,
+    "elevation": 19.49220062786445,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1904e4638072.png",
+    "createdAt": 1782269240.5759985,
+    "cropBox": {
+      "x": 198,
+      "y": 45,
+      "width": 568,
+      "height": 568
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "dcc1012900a8",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 162,
+    "azimuth": 42.826484659891506,
+    "elevation": 19.609710197605153,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/dcc1012900a8.png",
+    "createdAt": 1782269239.9985063,
+    "cropBox": {
+      "x": 160,
+      "y": 42,
+      "width": 591,
+      "height": 591
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "c9e8fbe22b6c",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 159,
+    "azimuth": 43.40984905160503,
+    "elevation": 19.65665311469654,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c9e8fbe22b6c.png",
+    "createdAt": 1782269239.532249,
+    "cropBox": {
+      "x": 115,
+      "y": 27,
+      "width": 638,
+      "height": 638
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "ae1af7259876",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 156,
+    "azimuth": 44.04656949218023,
+    "elevation": 19.631412533201114,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ae1af7259876.png",
+    "createdAt": 1782269238.9784093,
+    "cropBox": {
+      "x": 60,
+      "y": 11,
+      "width": 683,
+      "height": 683
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "3fd1e08b76a5",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 153,
+    "azimuth": 44.307607670670194,
+    "elevation": 19.533782698997882,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/3fd1e08b76a5.png",
+    "createdAt": 1782269238.4489653,
+    "cropBox": {
+      "x": 20,
+      "y": 2,
+      "width": 694,
+      "height": 694
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "73d5112fb5b8",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 150,
+    "azimuth": 43.65838328470151,
+    "elevation": 19.367818019097584,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/73d5112fb5b8.png",
+    "createdAt": 1782269237.8765447,
+    "cropBox": {
+      "x": 0,
+      "y": 7,
+      "width": 689,
+      "height": 689
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "c389dabb5e2a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 147,
+    "azimuth": 42.36188955393948,
+    "elevation": 19.200464109479285,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c389dabb5e2a.png",
+    "createdAt": 1782269237.054543,
+    "cropBox": {
+      "x": 14,
+      "y": 13,
+      "width": 683,
+      "height": 683
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "e2e138f8b1a2",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 144,
+    "azimuth": 40.73431603727077,
+    "elevation": 18.986598193776814,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e2e138f8b1a2.png",
+    "createdAt": 1782269236.4712718,
+    "cropBox": {
+      "x": 59,
+      "y": 15,
+      "width": 681,
+      "height": 681
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "fe2f8100fb2d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 141,
+    "azimuth": 38.6816100398715,
+    "elevation": 18.69575862755927,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/fe2f8100fb2d.png",
+    "createdAt": 1782269235.893721,
+    "cropBox": {
+      "x": 115,
+      "y": 25,
+      "width": 671,
+      "height": 671
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "88f87a01c40a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 138,
+    "azimuth": 36.35247394743608,
+    "elevation": 18.33741217056715,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/88f87a01c40a.png",
+    "createdAt": 1782269235.3692613,
+    "cropBox": {
+      "x": 126,
+      "y": 39,
+      "width": 657,
+      "height": 657
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "7268cd8bb0ba",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 135,
+    "azimuth": 33.88861216246207,
+    "elevation": 17.925815957373104,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/7268cd8bb0ba.png",
+    "createdAt": 1782269234.8686728,
+    "cropBox": {
+      "x": 146,
+      "y": 44,
+      "width": 652,
+      "height": 652
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "147d0f90642c",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 132,
+    "azimuth": 31.413277942263193,
+    "elevation": 17.478979013057923,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/147d0f90642c.png",
+    "createdAt": 1782269234.3332853,
+    "cropBox": {
+      "x": 191,
+      "y": 37,
+      "width": 659,
+      "height": 659
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "a6432dec60b9",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 129,
+    "azimuth": 29.025125073198197,
+    "elevation": 17.01660456070475,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/a6432dec60b9.png",
+    "createdAt": 1782269233.7133524,
+    "cropBox": {
+      "x": 247,
+      "y": 48,
+      "width": 605,
+      "height": 605
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "28b5dab54c28",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 126,
+    "azimuth": 26.797430662496787,
+    "elevation": 16.55798440358822,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/28b5dab54c28.png",
+    "createdAt": 1782269233.2326026,
+    "cropBox": {
+      "x": 265,
+      "y": 71,
+      "width": 590,
+      "height": 590
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "6bddc9304fb7",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 123,
+    "azimuth": 24.781521550514693,
+    "elevation": 16.120573687941828,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6bddc9304fb7.png",
+    "createdAt": 1782269232.7355342,
+    "cropBox": {
+      "x": 281,
+      "y": 95,
+      "width": 578,
+      "height": 578
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "936d69ca7a72",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 120,
+    "azimuth": 23.01281470585388,
+    "elevation": 15.719542519311574,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/936d69ca7a72.png",
+    "createdAt": 1782269231.8349466,
+    "cropBox": {
+      "x": 296,
+      "y": 100,
+      "width": 582,
+      "height": 582
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "e5bee1befc2a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 117,
+    "azimuth": 21.518262218549204,
+    "elevation": 15.368282531704466,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e5bee1befc2a.png",
+    "createdAt": 1782269231.3116279,
+    "cropBox": {
+      "x": 325,
+      "y": 100,
+      "width": 553,
+      "height": 553
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "0a9958c5d6ab",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 114,
+    "azimuth": 20.324897430919982,
+    "elevation": 15.07977185694547,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0a9958c5d6ab.png",
+    "createdAt": 1782269230.6546128,
+    "cropBox": {
+      "x": 361,
+      "y": 114,
+      "width": 507,
+      "height": 507
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "5f30903c099e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 111,
+    "azimuth": 19.810766090933484,
+    "elevation": 14.95329754185336,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/5f30903c099e.png",
+    "createdAt": 1782269229.983097,
+    "cropBox": {
+      "x": 390,
+      "y": 121,
+      "width": 486,
+      "height": 486
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "34b2fe76023e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 108,
+    "azimuth": 19.54669618192763,
+    "elevation": 14.887831293815097,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/34b2fe76023e.png",
+    "createdAt": 1782269229.411989,
+    "cropBox": {
+      "x": 419,
+      "y": 112,
+      "width": 474,
+      "height": 474
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "40651513355f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 105,
+    "azimuth": 19.3050881180938,
+    "elevation": 14.827633834887237,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/40651513355f.png",
+    "createdAt": 1782269228.7595992,
+    "cropBox": {
+      "x": 453,
+      "y": 111,
+      "width": 449,
+      "height": 449
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "554ac9f3a6bd",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 102,
+    "azimuth": 19.08465286807594,
+    "elevation": 14.772462399028413,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/554ac9f3a6bd.png",
+    "createdAt": 1782269228.230994,
+    "cropBox": {
+      "x": 495,
+      "y": 126,
+      "width": 406,
+      "height": 406
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "ab47526156bf",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 99,
+    "azimuth": 18.88424426190727,
+    "elevation": 14.722097412309594,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ab47526156bf.png",
+    "createdAt": 1782269227.7393842,
+    "cropBox": {
+      "x": 502,
+      "y": 122,
+      "width": 416,
+      "height": 416
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "0ceef168f5f3",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 96,
+    "azimuth": 18.702844012512532,
+    "elevation": 14.676340737439318,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/0ceef168f5f3.png",
+    "createdAt": 1782269227.0212507,
+    "cropBox": {
+      "x": 515,
+      "y": 114,
+      "width": 404,
+      "height": 404
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "d9ef291eaef2",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 93,
+    "azimuth": 18.53954876524371,
+    "elevation": 14.63501407014921,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d9ef291eaef2.png",
+    "createdAt": 1782269226.5675735,
+    "cropBox": {
+      "x": 546,
+      "y": 122,
+      "width": 370,
+      "height": 370
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "b38caff2a531",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 90,
+    "azimuth": 18.39355887554504,
+    "elevation": 14.597957477989269,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/b38caff2a531.png",
+    "createdAt": 1782269226.1141727,
+    "cropBox": {
+      "x": 572,
+      "y": 130,
+      "width": 345,
+      "height": 345
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "56211766df62",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 87,
+    "azimuth": 18.264168660181515,
+    "elevation": 14.565028070081667,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/56211766df62.png",
+    "createdAt": 1782269225.4452467,
+    "cropBox": {
+      "x": 582,
+      "y": 119,
+      "width": 354,
+      "height": 354
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "481dbc90259f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 84,
+    "azimuth": 18.150757903983152,
+    "elevation": 14.536098785006445,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/481dbc90259f.png",
+    "createdAt": 1782269224.9894726,
+    "cropBox": {
+      "x": 600,
+      "y": 117,
+      "width": 337,
+      "height": 337
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "ec505c733a38",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 81,
+    "azimuth": 18.052784432999754,
+    "elevation": 14.511057282915132,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ec505c733a38.png",
+    "createdAt": 1782269224.5364244,
+    "cropBox": {
+      "x": 617,
+      "y": 127,
+      "width": 314,
+      "height": 314
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "71f52f2b4ce9",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 78,
+    "azimuth": 17.96977758721045,
+    "elevation": 14.489804926922574,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/71f52f2b4ce9.png",
+    "createdAt": 1782269224.0748837,
+    "cropBox": {
+      "x": 619,
+      "y": 125,
+      "width": 320,
+      "height": 320
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "d7258849725a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 75,
+    "azimuth": 17.901332442023016,
+    "elevation": 14.472255837571453,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/d7258849725a.png",
+    "createdAt": 1782269223.6573422,
+    "cropBox": {
+      "x": 625,
+      "y": 119,
+      "width": 314,
+      "height": 314
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "8f643071275f",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 72,
+    "azimuth": 17.847104637911215,
+    "elevation": 14.45833600246327,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/8f643071275f.png",
+    "createdAt": 1782269223.1551182,
+    "cropBox": {
+      "x": 643,
+      "y": 126,
+      "width": 292,
+      "height": 292
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "610b9c9ef0c2",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 69,
+    "azimuth": 17.806805681463068,
+    "elevation": 14.44798242073324,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/610b9c9ef0c2.png",
+    "createdAt": 1782269222.8036892,
+    "cropBox": {
+      "x": 660,
+      "y": 132,
+      "width": 275,
+      "height": 275
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "1bd689cf98fc",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 66,
+    "azimuth": 17.78019857816394,
+    "elevation": 14.441142258584591,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/1bd689cf98fc.png",
+    "createdAt": 1782269222.436437,
+    "cropBox": {
+      "x": 665,
+      "y": 123,
+      "width": 286,
+      "height": 286
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "4cfa788c64c3",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 63,
+    "azimuth": 17.767093646117644,
+    "elevation": 14.437771987150697,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/4cfa788c64c3.png",
+    "createdAt": 1782269222.0760307,
+    "cropBox": {
+      "x": 677,
+      "y": 121,
+      "width": 274,
+      "height": 274
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "ae59cf3bf219",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 60,
+    "azimuth": 17.76734433847783,
+    "elevation": 14.437836466908294,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/ae59cf3bf219.png",
+    "createdAt": 1782269221.70477,
+    "cropBox": {
+      "x": 690,
+      "y": 128,
+      "width": 258,
+      "height": 258
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "daa903db3eea",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 57,
+    "azimuth": 17.780842867273794,
+    "elevation": 14.441307932853135,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/daa903db3eea.png",
+    "createdAt": 1782269221.1083317,
+    "cropBox": {
+      "x": 691,
+      "y": 126,
+      "width": 262,
+      "height": 262
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "c6926d31b859",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 54,
+    "azimuth": 17.80751536744725,
+    "elevation": 14.448164820391298,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/c6926d31b859.png",
+    "createdAt": 1782269220.566863,
+    "cropBox": {
+      "x": 696,
+      "y": 121,
+      "width": 262,
+      "height": 262
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "65eb2b2cdf17",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 51,
+    "azimuth": 17.847316259440912,
+    "elevation": 14.458390351500569,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/65eb2b2cdf17.png",
+    "createdAt": 1782269220.1426752,
+    "cropBox": {
+      "x": 710,
+      "y": 125,
+      "width": 250,
+      "height": 250
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "9e31bd7c33c8",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 48,
+    "azimuth": 17.90022134958894,
+    "elevation": 14.47197077129924,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/9e31bd7c33c8.png",
+    "createdAt": 1782269219.6700232,
+    "cropBox": {
+      "x": 727,
+      "y": 132,
+      "width": 231,
+      "height": 231
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "78368d44e82a",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 45,
+    "azimuth": 17.966219031228,
+    "elevation": 14.488893082304486,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/78368d44e82a.png",
+    "createdAt": 1782269219.2868862,
+    "cropBox": {
+      "x": 730,
+      "y": 127,
+      "width": 239,
+      "height": 239
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "6f78b121de20",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 42,
+    "azimuth": 18.04529868657649,
+    "elevation": 14.5091420604288,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6f78b121de20.png",
+    "createdAt": 1782269218.8520536,
+    "cropBox": {
+      "x": 740,
+      "y": 124,
+      "width": 234,
+      "height": 234
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "913c46eff2e0",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 39,
+    "azimuth": 18.137434993129183,
+    "elevation": 14.532696242063125,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/913c46eff2e0.png",
+    "createdAt": 1782269218.4552958,
+    "cropBox": {
+      "x": 754,
+      "y": 130,
+      "width": 219,
+      "height": 219
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "e22c62e6798d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 36,
+    "azimuth": 18.242566232050535,
+    "elevation": 14.559522427321426,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e22c62e6798d.png",
+    "createdAt": 1782269218.0750866,
+    "cropBox": {
+      "x": 760,
+      "y": 134,
+      "width": 216,
+      "height": 216
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "5a75d7dc63c6",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 33,
+    "azimuth": 18.360563752097843,
+    "elevation": 14.589568020409018,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/5a75d7dc63c6.png",
+    "createdAt": 1782269217.703594,
+    "cropBox": {
+      "x": 761,
+      "y": 131,
+      "width": 222,
+      "height": 222
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "cb0696b9692e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 30,
+    "azimuth": 18.491188242462872,
+    "elevation": 14.622750172221743,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/cb0696b9692e.png",
+    "createdAt": 1782269217.3248374,
+    "cropBox": {
+      "x": 764,
+      "y": 126,
+      "width": 226,
+      "height": 226
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "05c76f7ee96d",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 27,
+    "azimuth": 18.634026027279955,
+    "elevation": 14.658940111102439,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/05c76f7ee96d.png",
+    "createdAt": 1782269216.957262,
+    "cropBox": {
+      "x": 765,
+      "y": 120,
+      "width": 229,
+      "height": 229
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "21a2be1a7973",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 24,
+    "azimuth": 18.788394516191826,
+    "elevation": 14.697940078335492,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/21a2be1a7973.png",
+    "createdAt": 1782269216.6175582,
+    "cropBox": {
+      "x": 769,
+      "y": 114,
+      "width": 233,
+      "height": 233
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "58c8ecee88a0",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 21,
+    "azimuth": 18.95319891944238,
+    "elevation": 14.73944861047292,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/58c8ecee88a0.png",
+    "createdAt": 1782269216.187525,
+    "cropBox": {
+      "x": 773,
+      "y": 110,
+      "width": 235,
+      "height": 235
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "6ad6f4ec72cd",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 18,
+    "azimuth": 19.126709802479812,
+    "elevation": 14.783006911745005,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/6ad6f4ec72cd.png",
+    "createdAt": 1782269215.829002,
+    "cropBox": {
+      "x": 776,
+      "y": 106,
+      "width": 242,
+      "height": 242
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "712f168a1717",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 15,
+    "azimuth": 19.30620777969106,
+    "elevation": 14.827913461822334,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/712f168a1717.png",
+    "createdAt": 1782269215.4676964,
+    "cropBox": {
+      "x": 781,
+      "y": 103,
+      "width": 247,
+      "height": 247
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "e5c41bf77793",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 12,
+    "azimuth": 19.48739635567706,
+    "elevation": 14.8730830391045,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/e5c41bf77793.png",
+    "createdAt": 1782269215.0996747,
+    "cropBox": {
+      "x": 786,
+      "y": 101,
+      "width": 251,
+      "height": 251
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "65df886a79ca",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 9,
+    "azimuth": 19.66339081305916,
+    "elevation": 14.916803612108737,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/65df886a79ca.png",
+    "createdAt": 1782269214.7655308,
+    "cropBox": {
+      "x": 789,
+      "y": 99,
+      "width": 256,
+      "height": 256
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "014ac6158c0e",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 6,
+    "azimuth": 19.82288666519348,
+    "elevation": 14.956294155180842,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/014ac6158c0e.png",
+    "createdAt": 1782269214.4075172,
+    "cropBox": {
+      "x": 792,
+      "y": 97,
+      "width": 260,
+      "height": 260
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "9d7044a9353c",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 3,
+    "azimuth": 19.946625376883308,
+    "elevation": 14.986845138401492,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/9d7044a9353c.png",
+    "createdAt": 1782269214.0351155,
+    "cropBox": {
+      "x": 794,
+      "y": 96,
+      "width": 264,
+      "height": 264
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
+    "id": "7477e31aee22",
+    "motionKey": "A_person_is_sprinting_at_max_speed_6",
+    "frameIndex": 0,
+    "azimuth": 19.999999999999986,
+    "elevation": 14.999999999999986,
+    "relPath": "motion_refs/A_person_is_sprinting_at_max_speed_6/shots/7477e31aee22.png",
+    "createdAt": 1782269213.6969981,
+    "cropBox": {
+      "x": 796,
+      "y": 95,
+      "width": 267,
+      "height": 267
+    },
+    "imageWidth": 1239,
+    "imageHeight": 696
+  },
+  {
     "id": "1224b6ac3a6d",
     "motionKey": "walking_with_hands_in_pockets",
     "frameIndex": 182,

@@ -163,6 +163,8 @@ def _folder_dict_for_api(folder: dict[str, Any]) -> dict[str, Any]:
     linked = folder.get("linkedPoseFolderId")
     if linked:
         out["linkedPoseFolderId"] = str(linked)
+    if folder.get("createdAt") is not None:
+        out["createdAt"] = float(folder["createdAt"])
     return out
 
 
@@ -516,7 +518,7 @@ def create_shot_folder(
         raise ValueError("Parent folder not found.")
 
     fid = _new_id()
-    folder: dict[str, Any] = {"id": fid, "name": label}
+    folder: dict[str, Any] = {"id": fid, "name": label, "createdAt": time.time()}
     if parent:
         folder["parentId"] = parent
     layout["folders"].append(folder)
@@ -527,9 +529,9 @@ def create_shot_folder(
     if parent:
         parent_order = layout["folderOrder"].setdefault(parent, [])
         if tok not in parent_order:
-            parent_order.append(tok)
+            parent_order.insert(0, tok)
     elif tok not in layout["rootOrder"]:
-        layout["rootOrder"].append(tok)
+        layout["rootOrder"].insert(0, tok)
     _write_ui_layout(layout)
     return _folder_dict_for_api(folder)
 
@@ -569,7 +571,7 @@ def assign_shots_to_folder(folder_id: str | None, item_ids: list[str]) -> None:
         merged = existing + [i for i in ids if i not in existing]
         layout["folderOrder"][fid] = merged
         if _folder_token(fid) not in layout["rootOrder"]:
-            layout["rootOrder"].append(_folder_token(fid))
+            layout["rootOrder"].insert(0, _folder_token(fid))
     else:
         for iid in ids:
             for fk in list(layout["folderOrder"].keys()):

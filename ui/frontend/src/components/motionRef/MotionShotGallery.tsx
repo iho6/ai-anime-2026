@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   apiMotionRefShotsReorderFolder,
   apiMotionRefShotsReorderRoot,
@@ -68,6 +68,7 @@ export function MotionShotGallery(props: {
     y: number;
     items: ContextMenuItem[];
   }>({ open: false, x: 0, y: 0, items: [] });
+  const [previewShotId, setPreviewShotId] = useState<string | null>(null);
 
   const itemById = useMemo(
     () => new Map(layout.items.map((x) => [x.id, x])),
@@ -89,6 +90,35 @@ export function MotionShotGallery(props: {
   );
 
   const shotIdSet = useMemo(() => new Set(layout.items.map((x) => x.id)), [layout.items]);
+
+  const shotOrderInViewRef = useRef(shotOrderInView);
+  shotOrderInViewRef.current = shotOrderInView;
+
+  useEffect(() => {
+    if (!previewShotId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setPreviewShotId((cur) => {
+          const order = shotOrderInViewRef.current;
+          const idx = order.indexOf(cur ?? "");
+          return idx > 0 ? order[idx - 1] : cur;
+        });
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setPreviewShotId((cur) => {
+          const order = shotOrderInViewRef.current;
+          const idx = order.indexOf(cur ?? "");
+          return idx >= 0 && idx < order.length - 1 ? order[idx + 1] : cur;
+        });
+      } else if (e.key === "Escape") {
+        setPreviewShotId(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewShotId]);
+
   const isLeaf = useCallback(
     (token: string) => isShotGridLeaf(token, shotIdSet),
     [shotIdSet]
@@ -251,6 +281,11 @@ export function MotionShotGallery(props: {
               .filter((r): r is string => Boolean(r))
           : [];
       const items: ContextMenuItem[] = [
+        {
+          key: "preview",
+          label: "Preview",
+          onSelect: () => setPreviewShotId(shot.id),
+        },
         {
           key: "add",
           label: "Add to Pose",
@@ -540,6 +575,82 @@ export function MotionShotGallery(props: {
           runFramesVideoExport(pending.relPaths, fps, pending.filenameBase);
         }}
       />
+
+      {previewShotId && (() => {
+        const shot = itemById.get(previewShotId);
+        if (!shot) return null;
+        const idx = shotOrderInView.indexOf(previewShotId);
+        const hasPrev = idx > 0;
+        const hasNext = idx >= 0 && idx < shotOrderInView.length - 1;
+        return (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.88)",
+              zIndex: 10800,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={() => setPreviewShotId(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 12,
+                maxWidth: "92vw",
+              }}
+            >
+              <img
+                src={assetUrlFromRelPath(shot.relPath)}
+                style={{
+                  maxWidth: "82vw",
+                  maxHeight: "78vh",
+                  objectFit: "contain",
+                  display: "block",
+                  background: "#111",
+                  outline: "1px solid rgba(255,255,255,0.35)",
+                }}
+              />
+              <div style={{ color: "#aaa", fontSize: 12 }}>
+                f{shot.frameIndex}
+                {idx >= 0 ? ` · ${idx + 1} / ${shotOrderInView.length}` : ""}
+                {"  ·  ← → to navigate · Esc to close"}
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  type="button"
+                  disabled={!hasPrev}
+                  onClick={() => setPreviewShotId(shotOrderInView[idx - 1])}
+                  style={{ ...navBtn, opacity: hasPrev ? 1 : 0.3 }}
+                >
+                  ← Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewShotId(null)}
+                  style={navBtn}
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  disabled={!hasNext}
+                  onClick={() => setPreviewShotId(shotOrderInView[idx + 1])}
+                  style={{ ...navBtn, opacity: hasNext ? 1 : 0.3 }}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

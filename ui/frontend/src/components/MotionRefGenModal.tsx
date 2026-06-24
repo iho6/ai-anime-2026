@@ -28,6 +28,8 @@ import {
   apiMotionRefPlaybackRangeSave,
   apiMotionRefV2PoseSeqStart,
   apiMotionRefV2PoseSeqFrame,
+  apiMotionRefDiagShotsStart,
+  apiMotionRefDiagShotsFrame,
   apiUploadStaging,
   MotionRefManifest,
   MotionRefListItem,
@@ -210,6 +212,7 @@ export function MotionRefGenModal(props: {
     sampleFps: V2PoseSeqSampleFps;
     folderName: string;
     useVideoKeypointService: boolean;
+    noSdpose: boolean;
   } | null>(null);
   const [fpsExportPending, setFpsExportPending] = useState<{
     motionKey: string;
@@ -1504,6 +1507,51 @@ export function MotionRefGenModal(props: {
     }
   }
 
+  async function runV2PoseDiagShots(
+    motionKey: string,
+    item: MotionRefListItem,
+    sampleFps: V2PoseSeqSampleFps
+  ) {
+    setV2poseDialog(null);
+    beginSession({
+      title: "V2Pose Diag Shots",
+      clearLog: true,
+      runningStatus: "Capturing frames…",
+    });
+    await Promise.resolve();
+    try {
+      const captured = await captureMotionViewerFrames(motionKey, item, sampleFps, {
+        mode: "v2pose",
+        pushLog,
+        setRunningStatus,
+      });
+      if (captured.mode !== "v2pose") throw new Error("Unexpected capture mode.");
+      const { captures, skippedFrames } = captured;
+      if (skippedFrames.length) {
+        pushLog(`Skipped ${skippedFrames.length} frame(s) with figure out of frame.`);
+      }
+      if (!captures.length) {
+        throw new Error("No frames captured — figure was out of frame for the whole range.");
+      }
+      const now = new Date();
+      const pad2 = (n: number) => String(n).padStart(2, "0");
+      const folderName = `diag ${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+      const { folderId, folderName: savedFolder } = await apiMotionRefDiagShotsStart(motionKey, folderName);
+      pushLog(`Saving ${captures.length} diagnostic shots to "${savedFolder}"…`);
+      for (let i = 0; i < captures.length; i++) {
+        setRunningStatus(`Saving shot ${i + 1}/${captures.length}…`);
+        await apiMotionRefDiagShotsFrame(motionKey, folderId, captures[i]);
+      }
+      await loadShotsLayout();
+      pushLog(
+        `Done — ${captures.length} composite shots in Shots gallery folder "${savedFolder}". Right-click the folder to rename.`
+      );
+      endSession();
+    } catch (e) {
+      failSession(e, "Diag shots failed.");
+    }
+  }
+
   const timeLabel = useMemo(() => {
     if (totalFrames === 0) return "— / —";
     const fps = manifest?.fps ?? 30;
@@ -1932,6 +1980,7 @@ export function MotionRefGenModal(props: {
                 sampleFps: "source",
                 folderName: `v2pose_${item.motionKey.slice(0, 20)}_${Date.now()}`,
                 useVideoKeypointService: false,
+                noSdpose: false,
               });
             }}
             style={ctxMenuBtn}
@@ -2021,23 +2070,54 @@ export function MotionRefGenModal(props: {
             >
               <input
                 type="checkbox"
-                checked={v2poseDialog.useVideoKeypointService}
+                checked={v2poseDialog.noSdpose}
                 onChange={(e) =>
                   setV2poseDialog((d) =>
-                    d ? { ...d, useVideoKeypointService: e.target.checked } : d
+                    d ? { ...d, noSdpose: e.target.checked } : d
                   )
                 }
                 style={{ marginTop: 2 }}
               />
               <span>
-                Use video keypoint service (creates video row)
+                No SDPose (diagnostic shots only)
                 <span style={{ display: "block", color: "#888", marginTop: 4 }}>
-                  Faster for long trims; one SDPose pass on cropped-square video with per-frame
-                  placement restored. Inspect via the video keypoint sequence editor.
+                  Saves composite previews (zoom pasted at crop position on full canvas) to the
+                  Shots gallery as a dated folder. Use to verify zoom and placement before
+                  running SDPose. Right-click the folder to rename.
                 </span>
               </span>
             </label>
-            {!v2poseDialog.useVideoKeypointService ? (
+            {!v2poseDialog.noSdpose && (
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  fontSize: 11,
+                  marginBottom: 12,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={v2poseDialog.useVideoKeypointService}
+                  onChange={(e) =>
+                    setV2poseDialog((d) =>
+                      d ? { ...d, useVideoKeypointService: e.target.checked } : d
+                    )
+                  }
+                  style={{ marginTop: 2 }}
+                />
+                <span>
+                  Use video keypoint service (creates video row)
+                  <span style={{ display: "block", color: "#888", marginTop: 4 }}>
+                    Faster for long trims; one SDPose pass on cropped-square video with per-frame
+                    placement restored. Inspect via the video keypoint sequence editor.
+                  </span>
+                </span>
+              </label>
+            )}
+            {!v2poseDialog.noSdpose && !v2poseDialog.useVideoKeypointService ? (
               <>
                 <label style={{ display: "block", fontSize: 11, marginBottom: 6 }}>Pose folder name</label>
                 <input
@@ -2057,19 +2137,29 @@ export function MotionRefGenModal(props: {
                 type="button"
                 disabled={
                   busy ||
-                  (!v2poseDialog.useVideoKeypointService && !v2poseDialog.folderName.trim())
+                  (!v2poseDialog.noSdpose &&
+                    !v2poseDialog.useVideoKeypointService &&
+                    !v2poseDialog.folderName.trim())
                 }
                 onClick={() => {
                   const item = motions.find((m) => m.motionKey === v2poseDialog.motionKey);
                   if (!item) return;
-                  void runV2PoseSeq(
-                    v2poseDialog.motionKey,
-                    item,
-                    v2poseDialog.folderName.trim() ||
-                      `v2pose_${v2poseDialog.motionKey.slice(0, 20)}`,
-                    v2poseDialog.sampleFps,
-                    v2poseDialog.useVideoKeypointService
-                  );
+                  if (v2poseDialog.noSdpose) {
+                    void runV2PoseDiagShots(
+                      v2poseDialog.motionKey,
+                      item,
+                      v2poseDialog.sampleFps
+                    );
+                  } else {
+                    void runV2PoseSeq(
+                      v2poseDialog.motionKey,
+                      item,
+                      v2poseDialog.folderName.trim() ||
+                        `v2pose_${v2poseDialog.motionKey.slice(0, 20)}`,
+                      v2poseDialog.sampleFps,
+                      v2poseDialog.useVideoKeypointService
+                    );
+                  }
                 }}
                 style={{ ...actionBtn, background: MOTION_REF_ACCENT_BTN_BG }}
               >

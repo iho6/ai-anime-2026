@@ -307,6 +307,48 @@ def motion_ref_v2pose_seq_frame(
     return {"item": item}
 
 
+class DiagShotsStartBody(BaseModel):
+    folderName: str
+
+
+class DiagShotsFrameBody(BaseModel):
+    frameIndex: int
+    pngBase64: str
+    cropBox: dict[str, int] | None = None
+    imageWidth: int | None = None
+    imageHeight: int | None = None
+    azimuth: float | None = None
+    elevation: float | None = None
+
+
+@router.post("/motion_ref/{motion_key}/v2pose_diag_shots/start")
+def motion_ref_v2pose_diag_shots_start(
+    motion_key: str, body: DiagShotsStartBody
+) -> dict[str, Any]:
+    if not _motion_dir(motion_key).is_dir():
+        raise HTTPException(404, "Motion not found.")
+    from services.motion_ref_pose_batch import create_diag_folder
+
+    try:
+        return create_diag_folder(body.folderName, motion_key=motion_key)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.post("/motion_ref/{motion_key}/v2pose_diag_shots/{folder_id}/frame")
+def motion_ref_v2pose_diag_shots_frame(
+    motion_key: str, folder_id: str, body: DiagShotsFrameBody
+) -> dict[str, Any]:
+    if not _motion_dir(motion_key).is_dir():
+        raise HTTPException(404, "Motion not found.")
+    from services.motion_ref_pose_batch import save_diag_shot
+
+    try:
+        return save_diag_shot(motion_key, folder_id, body.model_dump())
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 @router.get("/motion_ref/{motion_key}/camera_trajectory")
 def motion_ref_camera_trajectory_get(motion_key: str) -> dict[str, Any]:
     if not _motion_dir(motion_key).is_dir():
