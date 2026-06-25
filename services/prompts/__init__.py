@@ -169,40 +169,30 @@ NO_TEXT_IN_IMAGE_CONSTRAINT = (
     "anywhere in the image"
 )
 
-KEYPOINT_POSE_EDIT_PROMPT_WITH_CLOSEUP = (
-    "Return a single full-body image of the same character as in the first input reference "
-    "(1st starting image), posed exactly as the keypoint skeleton (3rd image). "
-    "Return only a full body image, no close-up reference. "
-    "Follow the keypoint pose (3rd image) without distorting the proportion of the character. "
-    "Do not enlarge head. "
-    "Ensure the number of limbs in output is consistent with the first input reference (1st starting image). "
-    "Ensure the output is wearing the same clothes and facial details are consistent with the "
-    "2nd reference image (2nd image). "
-    "Ensure a flat plain white background with no shadow on the ground, only one character in the output image. "
-    "Exactly one character in the output, no text, numbers, watermarks, logos. "
-    "No shadow on the ground. "
-    "One character in the output only. "
-    "Keep pose exactly the same as the 3rd reference image's keypoint while preserving the "
-    "natural proportion of the character."
-    "DO NOT EVER PUT THE CLOSEUPS FROM IMAGE 3 INTO THE OUTPUT IMAGE. DO NOT EVER DUPLICATE THE CLOSEUPS FROM IMAGE 3 INTO THE OUTPUT IMAGE BACKGROUND. KEEP BACKGROUND COMPLETELY BLANK AND WHITE."
-    "I repeat. DO NOT EVER PUT CLOSEUPS INTO THE BACKGROUND. HAVE JUST ONE SINGLE CHARACTER IN THE OUTPUT IMAGE. SOLO, ONE CHARACTER ONLY."
+KEYPOINT_POSE_EDIT_PROMPT_NO_CLOSEUP = (
+    "Draw the character from Picture 1 in the exact pose shown by the keypoint skeleton in Picture 2. "
+    "Do not show Picture 1 as a separate panel or figure in the output. "
+    "Keep the face, clothing, and body proportions exactly as they appear in Picture 1. "
+    "Follow the skeleton pose from Picture 2 without changing the character's natural proportions "
+    "— do not enlarge the head or alter limb lengths. "
+    "Make sure the output has the same number of limbs as Picture 1. "
+    "No objects in the hands; match hand pose to Picture 2. "
+    "Completely plain white background — no furniture, no objects, no ground shadow, nothing except the character. "
+    "Exactly one character in the output, no text or watermarks."
 )
 
-KEYPOINT_POSE_EDIT_PROMPT_NO_CLOSEUP = (
-    "Return a single full-body image of the same character as in the first input reference "
-    "(1st starting image), posed exactly as the keypoint skeleton (2nd image). "
-    "Return only a full body image, no close-up reference. "
-    "Follow the keypoint pose (2nd image) without distorting the proportion of the character. "
-    "Do not enlarge head. "
-    "Ensure the number of limbs in output is consistent with the first input reference (1st starting image). "
-    "Ensure the output is wearing the same clothes and facial details are consistent with the "
-    "first input reference (1st starting image). "
-    "Ensure a flat plain white background with no shadow on the ground, only one character in the output image. "
-    "Exactly one character in the output, no text, numbers, watermarks, logos. "
-    "No shadow on the ground. "
-    "One character in the output only. "
-    "Keep pose exactly the same as the 2nd reference image's keypoint while preserving the "
-    "natural proportion of the character."
+KEYPOINT_POSE_EDIT_PROMPT_WITH_CLOSEUP = (
+    "Draw the character from Picture 1 in the exact pose shown by the keypoint skeleton in Picture 3. "
+    "Do not show Picture 1 or Picture 2 as panels, figures, or insets in the output "
+    "— the output shows only the generated full-body character. "
+    "Keep the face, clothing, and body proportions exactly as they appear in Picture 1. "
+    "Use Picture 2 only to sharpen facial feature accuracy; do not render it. "
+    "Follow the skeleton pose from Picture 3 without changing the character's natural proportions "
+    "— do not enlarge the head or alter limb lengths. "
+    "Make sure the output has the same number of limbs as Picture 1. "
+    "No objects in the hands; match hand pose to Picture 3. "
+    "Completely plain white background — no furniture, no objects, no ground shadow, nothing except the character. "
+    "Exactly one character in the output, no text or watermarks."
 )
 
 _KEYPOINT_USER_CATALOG_WRAP_RE = (
@@ -243,7 +233,11 @@ def compose_keypoint_pose_edit_prompt(
     No closeup: keypoint is 2nd image. With closeup: face ref is 2nd, keypoint is 3rd.
     """
     u = normalize_keypoint_user_description(user_description)
-    body = KEYPOINT_POSE_EDIT_PROMPT_WITH_CLOSEUP if with_closeup_sheet else KEYPOINT_POSE_EDIT_PROMPT_NO_CLOSEUP
+    body = (
+        KEYPOINT_POSE_EDIT_PROMPT_WITH_CLOSEUP
+        if with_closeup_sheet
+        else KEYPOINT_POSE_EDIT_PROMPT_NO_CLOSEUP
+    )
     if not u:
         return body
     return f"{body} {u}."
