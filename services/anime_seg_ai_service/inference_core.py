@@ -60,7 +60,6 @@ def _load_model(
     )
     model.eval()
     model.to(dev)
-    model.device = dev  # type: ignore[attr-defined]
     _MODEL_CACHE[key] = model
     return model
 
