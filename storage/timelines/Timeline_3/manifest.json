@@ -12,11 +12,11 @@
           "id": "clip_mqs6oqx4_1",
           "type": "video",
           "srcRelPath": "timelines/Timeline_3/clips/clip_8d3841bd3bd145d3bbc89d2688888b22.mp4",
-          "start": 0,
+          "start": 8.254130554199218,
           "inPoint": 0,
-          "outPoint": 4.9583,
+          "outPoint": 4.896316891479493,
           "speed": 0.5,
-          "duration": 9.9166,
+          "duration": 9.792633782958985,
           "srcDuration": 4.9583,
           "naturalW": 1920,
           "naturalH": 1080,
@@ -518,7 +518,667 @@
       "id": "trk_mqpdmfb9_3",
       "name": "Video 1",
       "kind": "video",
-      "clips": []
+      "clips": [
+        {
+          "id": "clip_mqss1osv_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3/clips/clip_ec3423643f1c4d959235e2e6335c2b69.mp4",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 6.5,
+          "speed": 1,
+          "duration": 6.5,
+          "srcDuration": 6.5,
+          "naturalW": 1080,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "6_25_temp_rec",
+            "galleryItemId": "64bb437bf98b"
+          },
+          "reversed": true,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 0.9924531372618963,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "frameSequence": {
+            "sequenceGroupId": "clip_mqss1osv_1",
+            "strip": [
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000001.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000002.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000003.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000004.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000005.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000006.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000007.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000008.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000009.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000010.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000011.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000012.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000013.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000014.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000015.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000016.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000017.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000018.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000019.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000020.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000021.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000022.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000023.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000024.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000025.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000026.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000027.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000028.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000029.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000030.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000031.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000032.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000033.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000034.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000035.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000036.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000037.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000038.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000039.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000040.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000041.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000042.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000043.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000044.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000045.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000046.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000047.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000048.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000049.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000050.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000051.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000052.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000053.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000054.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000055.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000056.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000057.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000058.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000059.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000060.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000061.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000062.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000063.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000064.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000065.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000066.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000067.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000068.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000069.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000070.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000071.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000072.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000073.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000074.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000075.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000076.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000077.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000078.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000079.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000080.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000081.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000082.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000083.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000084.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000085.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000086.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000087.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000088.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000089.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000090.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000091.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000092.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000093.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000094.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000095.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000096.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000097.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000098.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000099.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000100.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000101.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000102.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000103.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000104.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000105.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000106.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000107.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000108.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000109.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000110.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000111.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000112.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000113.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000114.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000115.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000116.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000117.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000118.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000119.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000120.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000121.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000122.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000123.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000124.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000125.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000126.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000127.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000128.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000129.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000130.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000131.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000132.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000133.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000134.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000135.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000136.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000137.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000138.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000139.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000140.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000141.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000142.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000143.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000144.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000145.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000146.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000147.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000148.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000149.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000150.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000151.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000152.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000153.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000154.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000155.png"
+              },
+              {
+                "kind": "image",
+                "relPath": "timelines/Timeline_3/frames/clip_mqss1osv_1/frame_000156.png"
+              }
+            ],
+            "hidden": []
+          },
+          "frameEdit": {
+            "framesDirRel": "timelines/Timeline_3/frames/clip_mqss1osv_1"
+          }
+        }
+      ]
     }
   ]
 }

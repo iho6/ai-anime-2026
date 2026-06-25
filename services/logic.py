@@ -4075,6 +4075,86 @@ def generate_pose_starting_images_from_prompts(
     return created
 
 
+def _canvas_to_preview_aspect(w: int, h: int) -> str:
+    """Snap canvas w×h to the nearest SequencePreviewAspect string."""
+    if w <= 0 or h <= 0:
+        return "16:9"
+    ratio = w / h
+    options = [("1:1", 1.0), ("4:3", 4 / 3), ("16:9", 16 / 9), ("9:16", 9 / 16)]
+    return min(options, key=lambda o: abs(ratio - o[1]))[0]
+
+
+def _placed_figure_from_keypoint_image(kp_abs: str) -> dict[str, Any] | None:
+    """
+    Derive a ``placedFigure`` from the keypoint image's own pixel dimensions.
+
+    Used as a fallback when no stored ``placedFigure`` exists, or when the
+    stored canvas does not match the actual keypoint file.  Non-square images
+    (full-canvas composites) get a centered-square placement within their
+    canvas.  Square images are returned as-is (full-canvas = full-square).
+    """
+    from PIL import Image as _PIL
+
+    from services.figure_crop import MIN_SQUARE_WORKING_SIZE, centered_square_placement
+
+    try:
+        with _PIL.open(kp_abs) as im:
+            kw, kh = im.size
+    except Exception:
+        return None
+    if kw <= 0 or kh <= 0:
+        return None
+    placement = centered_square_placement(kw, kh)
+    return {
+        "canvas": {"width": kw, "height": kh},
+        "placement": placement,
+        "workingSquareSize": MIN_SQUARE_WORKING_SIZE,
+    }
+
+
+def _resolve_placed_figure_for_keypoint(
+    kp_abs: str,
+    stored: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """
+    Return the best ``placedFigure`` for ``kp_abs``, guaranteeing that the
+    ``canvas`` dimensions match the keypoint image on disk.
+
+    • If ``stored`` is valid and its canvas already matches the file → return it.
+    • If ``stored`` exists but its canvas is wrong (e.g. zoomed-square 1024×1024
+      stored instead of the intended 16:9 1024×576) → override canvas with the
+      real file dimensions while keeping the stored placement coordinates, which
+      are always expressed in the composite-image pixel space.
+    • If ``stored`` is None and the keypoint is non-square → synthesise a
+      centred-square placement within the image canvas so compositing can still
+      happen.
+    • If all else fails → return None (caller falls back to raw Qwen output).
+    """
+    from PIL import Image as _PIL
+
+    try:
+        with _PIL.open(kp_abs) as im:
+            kw, kh = im.size
+    except Exception:
+        return stored  # can't open → trust whatever is stored
+
+    if kw <= 0 or kh <= 0:
+        return stored
+
+    if stored and stored.get("placement") and stored.get("canvas"):
+        sc = stored["canvas"]
+        if int(sc.get("width", 0)) != kw or int(sc.get("height", 0)) != kh:
+            # Canvas stored under wrong dimensions — override with actual image size.
+            return {**stored, "canvas": {"width": kw, "height": kh}}
+        return stored
+
+    # No valid stored placed_figure — synthesise from keypoint image dimensions.
+    if kw == kh:
+        # Square keypoint: no canvas context to infer; compositing won't add value.
+        return None
+    return _placed_figure_from_keypoint_image(kp_abs)
+
+
 def _generate_pose_image_edit_url(
     character_name: str,
     base_image_path: str,
@@ -4097,8 +4177,9 @@ def _generate_pose_image_edit_url(
 
     from services import reference_storage
 
-    placed = reference_storage.find_placed_figure_for_keypoint_abs(kp) if kp else None
+    stored_placed = reference_storage.find_placed_figure_for_keypoint_abs(kp) if kp else None
     kp_entry = reference_storage.find_keypoint_by_keypoint_abs(kp) if kp else None
+    placed = _resolve_placed_figure_for_keypoint(kp, stored_placed) if kp else None
     if placed and placed.get("placement") and placed.get("canvas"):
         return _run_keypoint_image_edit_with_plate(
             character_name,
@@ -4187,6 +4268,15 @@ def generate_pose_sequence_from_keypoints(
     if not paths:
         raise ValueError("No keypoint frames provided.")
 
+    # Detect canvas aspect from the first keypoint so the manifest matches the frames.
+    from services import reference_storage as _ref_stor
+
+    _stored0 = _ref_stor.find_placed_figure_for_keypoint_abs(paths[0])
+    _pf0 = _resolve_placed_figure_for_keypoint(paths[0], _stored0)
+    _canvas0 = (_pf0 or {}).get("canvas") or {}
+    _cw0, _ch0 = int(_canvas0.get("width") or 0), int(_canvas0.get("height") or 0)
+    preview_aspect = _canvas_to_preview_aspect(_cw0, _ch0) if _cw0 and _ch0 else "16:9"
+
     prompt = _first_prompt_text(prompt_texts)
     seq_name = _allocate_sequence_name(char_key, seq_name_prefix)
     character = get_character_paths(char_key)
@@ -4202,7 +4292,7 @@ def generate_pose_sequence_from_keypoints(
             "fps": int(fps) if fps else 24,
             "gallery": [],
             "frames": [],
-            "previewAspect": "16:9",
+            "previewAspect": preview_aspect,
             "timelineViewStep": 1,
         },
     )

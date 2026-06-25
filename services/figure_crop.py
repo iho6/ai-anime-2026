@@ -325,7 +325,9 @@ def placed_figure_from_crop_meta(
     }
     if image_width and image_height:
         return build_placed_figure_meta(int(image_width), int(image_height), placement)
-    return {"placement": placement}
+    # Canvas dimensions are required for correct compositing; without them we
+    # cannot know which canvas space the cropBox belongs to, so discard.
+    return None
 
 
 def paste_working_keypoint_onto_canvas(

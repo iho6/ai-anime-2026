@@ -169,51 +169,38 @@ NO_TEXT_IN_IMAGE_CONSTRAINT = (
     "anywhere in the image"
 )
 
-# Role declaration preamble — must open the prompt so Qwen anchors each Picture
-# token to its role before reading any instruction. Labels match exactly what
-# nodes_qwen.py emits ("Picture 1", "Picture 2", "Picture 3").
-
-KEYPOINT_ROLE_PREAMBLE_NO_CLOSEUP = (
-    "Picture 1 is the character identity reference: appearance, clothing, face, hair, "
-    "and body proportions come from Picture 1. "
-    "Picture 2 is the keypoint skeleton pose reference: it is the primary authority for "
-    "body pose, limb positions, stance, facing direction, and head orientation."
+KEYPOINT_POSE_EDIT_PROMPT_WITH_CLOSEUP = (
+    "Return a single full-body image of the same character as in the first input reference "
+    "(1st starting image), posed exactly as the keypoint skeleton (3rd image). "
+    "Return only a full body image, no close-up reference. "
+    "Follow the keypoint pose (3rd image) without distorting the proportion of the character. "
+    "Do not enlarge head. "
+    "Ensure the number of limbs in output is consistent with the first input reference (1st starting image). "
+    "Ensure the output is wearing the same clothes and facial details are consistent with the "
+    "2nd reference image (2nd image). "
+    "Ensure a flat plain white background with no shadow on the ground, only one character in the output image. "
+    "Exactly one character in the output, no text, numbers, watermarks, logos. "
+    "No shadow on the ground. "
+    "One character in the output only. "
+    "Keep pose exactly the same as the 3rd reference image's keypoint while preserving the "
+    "natural proportion of the character."
 )
 
-KEYPOINT_ROLE_PREAMBLE_WITH_CLOSEUP = (
-    "Picture 1 is the character identity reference: appearance, clothing, face, hair, "
-    "and body proportions come from Picture 1. "
-    "Picture 2 is a multi-angle facial closeup reference: use it only to improve facial "
-    "feature accuracy. Do not render Picture 2 as a figure, floating head, or any visual "
-    "element in the output — it is reference data only, invisible in the result. "
-    "Picture 3 is the keypoint skeleton pose reference: it is the primary authority for "
-    "body pose, limb positions, stance, facing direction, and head orientation."
-)
-
-# Generation instruction body — references Pictures by exact number.
-
-KEYPOINT_GENERATION_BODY_NO_CLOSEUP = (
-    "Generate a single full-body image of the character from Picture 1, posed exactly "
-    "as shown in the skeleton in Picture 2. Change limbs, torso, and stance to match "
-    "Picture 2 even when different from Picture 1. "
-    "Keep the character's identity, face, proportions, and clothing from Picture 1. "
-    "Ensure clothing details, colors, and style are consistent with Picture 1. "
-    "No objects in the hands; match the hand pose exactly to Picture 2. "
-    "Preserve natural body proportions from Picture 1; do not enlarge the head, distort "
-    "limb lengths, or repeat any limb. "
-    "No background scenery; use a flat plain white background only."
-)
-
-KEYPOINT_GENERATION_BODY_WITH_CLOSEUP = (
-    "Generate a single full-body image of the character from Picture 1, posed exactly "
-    "as shown in the skeleton in Picture 3. Change limbs, torso, and stance to match "
-    "Picture 3 even when different from Picture 1. "
-    "Keep the character's identity, face, proportions, and clothing from Picture 1. "
-    "Ensure clothing details, colors, and style are consistent with Picture 1. "
-    "No objects in the hands; match the hand pose exactly to Picture 3. "
-    "Preserve natural body proportions from Picture 1; do not enlarge the head, distort "
-    "limb lengths, or repeat any limb. "
-    "No background scenery; use a flat plain white background only."
+KEYPOINT_POSE_EDIT_PROMPT_NO_CLOSEUP = (
+    "Return a single full-body image of the same character as in the first input reference "
+    "(1st starting image), posed exactly as the keypoint skeleton (2nd image). "
+    "Return only a full body image, no close-up reference. "
+    "Follow the keypoint pose (2nd image) without distorting the proportion of the character. "
+    "Do not enlarge head. "
+    "Ensure the number of limbs in output is consistent with the first input reference (1st starting image). "
+    "Ensure the output is wearing the same clothes and facial details are consistent with the "
+    "first input reference (1st starting image). "
+    "Ensure a flat plain white background with no shadow on the ground, only one character in the output image. "
+    "Exactly one character in the output, no text, numbers, watermarks, logos. "
+    "No shadow on the ground. "
+    "One character in the output only. "
+    "Keep pose exactly the same as the 2nd reference image's keypoint while preserving the "
+    "natural proportion of the character."
 )
 
 _KEYPOINT_USER_CATALOG_WRAP_RE = (
@@ -251,20 +238,13 @@ def compose_keypoint_pose_edit_prompt(
     Full Qwen image-edit prompt for starting-image + keypoint auxiliary generation.
 
     ``with_closeup_sheet`` is True when a closeup composite is passed as an extra auxiliary.
-    Structure: role declarations → generation instruction → constraints → optional mood.
+    No closeup: keypoint is 2nd image. With closeup: face ref is 2nd, keypoint is 3rd.
     """
     u = normalize_keypoint_user_description(user_description)
-    if with_closeup_sheet:
-        preamble = KEYPOINT_ROLE_PREAMBLE_WITH_CLOSEUP
-        generation = KEYPOINT_GENERATION_BODY_WITH_CLOSEUP
-    else:
-        preamble = KEYPOINT_ROLE_PREAMBLE_NO_CLOSEUP
-        generation = KEYPOINT_GENERATION_BODY_NO_CLOSEUP
-    formatting = f"{SOLO_CHARACTER_EDIT_CONSTRAINTS} {NO_TEXT_IN_IMAGE_CONSTRAINT}"
-    body = f"{preamble} {generation} {formatting}"
+    body = KEYPOINT_POSE_EDIT_PROMPT_WITH_CLOSEUP if with_closeup_sheet else KEYPOINT_POSE_EDIT_PROMPT_NO_CLOSEUP
     if not u:
         return body
-    return f"{body} Optional action or mood: {u}."
+    return f"{body} {u}."
 
 
 # ============================================================================

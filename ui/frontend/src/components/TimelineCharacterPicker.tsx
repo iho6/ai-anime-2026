@@ -777,7 +777,7 @@ export function TimelineCharacterPicker(props: {
                                   );
                                 }}
                                 onPrimaryClick={() => openSequencePreview(seq)}
-                                topRightBadge="Vid"
+                                onPlayClick={() => void openSequencePlayPreview(seq.name)}
                                 onContextMenu={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
