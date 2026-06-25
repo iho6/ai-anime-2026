@@ -280,6 +280,10 @@ async def pose_job_ws(ws: WebSocket, char_key: str) -> None:
                 raise ValueError("prompts must be a list")
             texts = [str(p).strip() for p in prompts if str(p).strip()]
             input_abs = base_abs_from_msg()
+            _skip_closeup_seq = bool(msg.get("skipCloseup", False))
+            _extra_pad_seq = max(0.0, min(0.5, float(msg.get("cropPadding", 0.0))))
+            _cfg_raw_seq = msg.get("qwenCfg")
+            _cfg_seq = max(1.0, min(4.0, float(_cfg_raw_seq))) if _cfg_raw_seq is not None else None
 
             def work_video_seq(log_cb):
                 return logic.generate_pose_sequence_from_video_ref(
@@ -288,6 +292,9 @@ async def pose_job_ws(ws: WebSocket, char_key: str) -> None:
                     input_abs,
                     texts,
                     log_cb=log_cb,
+                    skip_closeup=_skip_closeup_seq,
+                    extra_pad_frac=_extra_pad_seq,
+                    cfg_scale=_cfg_seq,
                 )
 
             result, err = await run_with_log_stream(ws, work_video_seq)
@@ -307,6 +314,10 @@ async def pose_job_ws(ws: WebSocket, char_key: str) -> None:
                 raise ValueError("prompts must be a list")
             texts = [str(p).strip() for p in prompts if str(p).strip()]
             input_abs = base_abs_from_msg()
+            _skip_closeup_fld = bool(msg.get("skipCloseup", False))
+            _extra_pad_fld = max(0.0, min(0.5, float(msg.get("cropPadding", 0.0))))
+            _cfg_raw_fld = msg.get("qwenCfg")
+            _cfg_fld = max(1.0, min(4.0, float(_cfg_raw_fld))) if _cfg_raw_fld is not None else None
 
             def work_folder_seq(log_cb):
                 return logic.generate_pose_sequence_from_folder_ref(
@@ -315,6 +326,9 @@ async def pose_job_ws(ws: WebSocket, char_key: str) -> None:
                     input_abs,
                     texts,
                     log_cb=log_cb,
+                    skip_closeup=_skip_closeup_fld,
+                    extra_pad_frac=_extra_pad_fld,
+                    cfg_scale=_cfg_fld,
                 )
 
             result, err = await run_with_log_stream(ws, work_folder_seq)
@@ -332,6 +346,10 @@ async def pose_job_ws(ws: WebSocket, char_key: str) -> None:
             texts = [str(p).strip() for p in prompts if str(p).strip()]
             input_abs = base_abs_from_msg()
             keypoint_abs = keypoint_abs_from_msg()
+            skip_closeup = bool(msg.get("skipCloseup", False))
+            extra_pad_frac = max(0.0, min(0.5, float(msg.get("cropPadding", 0.0))))
+            cfg_scale_raw = msg.get("qwenCfg")
+            cfg_scale = max(1.0, min(4.0, float(cfg_scale_raw))) if cfg_scale_raw is not None else None
             if not texts and not keypoint_abs:
                 raise ValueError("No prompts provided.")
 
@@ -342,6 +360,9 @@ async def pose_job_ws(ws: WebSocket, char_key: str) -> None:
                     texts,
                     log_cb=log_cb,
                     keypoint_image_path=keypoint_abs,
+                    skip_closeup=skip_closeup,
+                    extra_pad_frac=extra_pad_frac,
+                    cfg_scale=cfg_scale,
                 )
                 last_abs = rows[-1][0] if rows else input_abs
                 rels = [r[1] for r in rows]

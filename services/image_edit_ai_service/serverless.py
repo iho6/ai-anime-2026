@@ -243,6 +243,7 @@ def run_one_prompt(
     server_address: str,
     *,
     auxiliary_comfy_refs: list[str] | None = None,
+    cfg: float | None = None,
 ) -> str:
     w = deepcopy(api_workflow)
     load_ids = _find_load_image_nodes_ordered(w)
@@ -253,6 +254,8 @@ def run_one_prompt(
     w[load_ids[0]]["inputs"]["image"] = _normalize_comfy_image_input_ref(
         image_input_ref
     )
+    if cfg is not None:
+        w.setdefault("433:3", {}).setdefault("inputs", {})["cfg"] = float(cfg)
 
     aux = list(auxiliary_comfy_refs or [])[:2]
     if aux:
@@ -314,6 +317,10 @@ def run_image_edit_job(
                 f"Workflow {WORKFLOW_STEM} not loaded; add workflows/{WORKFLOW_STEM}.json"
             )
 
+        cfg = task.get("cfg")
+        if cfg is not None:
+            cfg = float(cfg)
+
         aux_url_list = _parse_auxiliary_image_urls(task)
         aux_comfy_refs: list[str] = []
         for aux_u in aux_url_list:
@@ -352,6 +359,7 @@ def run_image_edit_job(
                         prompt_text,
                         server_address,
                         auxiliary_comfy_refs=aux_comfy_refs or None,
+                        cfg=cfg,
                     )
                     waiting_for_results(pid, server_address, timeout_seconds=TIMEOUT)
                     with urllib.request.urlopen(
@@ -492,6 +500,12 @@ def _parse_args() -> argparse.Namespace:
             "keypoint-only. Example: '[\"/path/to/closeup.png\", \"/path/to/kp.png\"]'."
         ),
     )
+    parser.add_argument(
+        "--cfg",
+        type=float,
+        default=None,
+        help="Override KSampler cfg scale (default: 1.0 from workflow).",
+    )
     return parser.parse_args()
 
 
@@ -537,6 +551,9 @@ def _run_test_mode(args: argparse.Namespace) -> None:
             )
             sys.exit(1)
         inp["auxiliary_image_urls"] = aux
+
+    if args.cfg is not None:
+        inp["cfg"] = args.cfg
 
     apply_upload_local_paths_to_comfy_in_task(
         inp, local_servers["default"], subfolder="anime2026_image_edit_test"

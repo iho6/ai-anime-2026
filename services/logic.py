@@ -3557,6 +3557,8 @@ def character_base_closeup_composite_abs_path(char_key: str) -> str | None:
 def _image_edit_aux_keypoint_cli_args(
     character_name: str,
     keypoint_image_path: str | None,
+    *,
+    skip_closeup: bool = False,
 ) -> list[str]:
     """Optional ``--auxiliary-image-urls-json``: ``[closeup_composite, keypoint]`` or ``[keypoint]`` only."""
     kp = (keypoint_image_path or "").strip()
@@ -3564,7 +3566,7 @@ def _image_edit_aux_keypoint_cli_args(
         return []
     urls: list[str] = []
     close_abs = character_base_closeup_composite_abs_path(character_name)
-    if close_abs:
+    if close_abs and not skip_closeup:
         urls.append(close_abs)
     urls.append(kp)
     return ["--auxiliary-image-urls-json", json.dumps(urls)]
@@ -3573,6 +3575,8 @@ def _image_edit_aux_keypoint_cli_args(
 def _image_edit_aux_cropped_keypoint_cli_args(
     character_name: str,
     keypoint_crop_abs: str,
+    *,
+    skip_closeup: bool = False,
 ) -> list[str]:
     """Aux args when keypoint is already cropped; closeup composite stays full-size."""
     kp = (keypoint_crop_abs or "").strip()
@@ -3580,7 +3584,7 @@ def _image_edit_aux_cropped_keypoint_cli_args(
         return []
     urls: list[str] = []
     close_abs = character_base_closeup_composite_abs_path(character_name)
-    if close_abs:
+    if close_abs and not skip_closeup:
         urls.append(close_abs)
     urls.append(kp)
     return ["--auxiliary-image-urls-json", json.dumps(urls)]
@@ -3590,6 +3594,8 @@ def _keypoint_crop_abs_for_placed_figure(
     keypoint_abs: str,
     placed_figure: dict[str, Any],
     dest_dir: Path,
+    *,
+    extra_pad_frac: float = 0.0,
 ) -> tuple[Path, str]:
     """Build or copy the 1024² keypoint placement crop for Qwen auxiliary input."""
     from services import reference_storage
@@ -3602,14 +3608,14 @@ def _keypoint_crop_abs_for_placed_figure(
 
     square_kp_rel = placed_figure.get("squareKeypointCropRelPath")
     kp_source = "extracted"
-    if square_kp_rel:
+    if square_kp_rel and extra_pad_frac <= 0:
         kp_src = reference_storage.resolve_rel(str(square_kp_rel))
         if kp_src.is_file():
             shutil.copy2(kp_src, kp_crop)
             kp_source = "cached"
     if kp_source == "extracted":
         extract_square_working_crop_path(
-            keypoint_abs, placement, kp_crop, min_side=min_side
+            keypoint_abs, placement, kp_crop, min_side=min_side, extra_pad_frac=extra_pad_frac
         )
     return kp_crop, kp_source
 
@@ -3628,6 +3634,32 @@ def _log_composed_prompt_snippet(
     log_cb(f"{label}: {snip}")
 
 
+def _log_qwen_inputs(
+    primary_abs: str,
+    aux_paths: list[str],
+    log_cb: Callable[[str], None],
+    *,
+    extra: str = "",
+) -> None:
+    """Log pixel dimensions of every image being sent to Qwen image-edit."""
+    from PIL import Image as _PIL_dim
+
+    def _dim(p: str) -> str:
+        try:
+            with _PIL_dim.open(p) as _im:
+                return f"{_im.width}×{_im.height}"
+        except Exception:
+            return "?×?"
+
+    log_cb("── QWEN INPUTS ─────────────────────────────────")
+    log_cb(f"  [1] primary : {_dim(primary_abs)}px  {primary_abs}")
+    for i, p in enumerate(aux_paths, start=2):
+        log_cb(f"  [{i}] aux     : {_dim(p)}px  {p}")
+    if extra:
+        log_cb(f"  {extra}")
+    log_cb("────────────────────────────────────────────────")
+
+
 def _run_keypoint_image_edit_with_plate(
     character_name: str,
     primary_abs: str,
@@ -3637,6 +3669,9 @@ def _run_keypoint_image_edit_with_plate(
     log_cb: Callable[[str], None] | None = None,
     *,
     keypoint_id: str | None = None,
+    skip_closeup: bool = False,
+    extra_pad_frac: float = 0.0,
+    cfg_scale: float | None = None,
 ) -> str:
     """
     Run Qwen image-edit on the full base identity image with a cropped keypoint aux,
@@ -3658,12 +3693,16 @@ def _run_keypoint_image_edit_with_plate(
     tmp_dir = Path(tempfile.gettempdir()) / f"placed_{unique_suffix()}"
     tmp_dir.mkdir(parents=True, exist_ok=True)
     kp_crop, kp_source = _keypoint_crop_abs_for_placed_figure(
-        keypoint_abs, placed_figure, tmp_dir
+        keypoint_abs, placed_figure, tmp_dir, extra_pad_frac=extra_pad_frac
     )
 
     if log_cb:
-        log_cb(f"Qwen primary: {primary_abs} (full base image, no crop)")
-        log_cb(f"Qwen keypoint aux: {kp_source} → {kp_crop} ({min_side}×{min_side})")
+        close_abs = character_base_closeup_composite_abs_path(character_name)
+        aux_log = (([close_abs] if close_abs else []) if not skip_closeup else []) + [str(kp_crop)]
+        _log_qwen_inputs(
+            primary_abs, aux_log, log_cb,
+            extra=f"canvas: {c_w}×{c_h}px  placement: {placement}  kp-source: {kp_source}  pad: {extra_pad_frac}  cfg: {cfg_scale}",
+        )
 
     _log_composed_prompt_snippet(prompt_text, log_cb)
 
@@ -3680,7 +3719,8 @@ def _run_keypoint_image_edit_with_plate(
             "inline",
             "--prompts-json",
             json.dumps([prompt_text]),
-            *_image_edit_aux_cropped_keypoint_cli_args(character_name, str(kp_crop)),
+            *_image_edit_aux_cropped_keypoint_cli_args(character_name, str(kp_crop), skip_closeup=skip_closeup),
+            *(["--cfg", str(cfg_scale)] if cfg_scale is not None else []),
             "--convert-local-to-url",
         ],
         log_cb=log_cb,
@@ -3873,6 +3913,8 @@ def generate_pose_starting_image_from_prompt(
     log_cb: Callable[[str], None] | None = None,
     *,
     keypoint_image_path: str | None = None,
+    skip_closeup: bool = False,
+    cfg_scale: float | None = None,
 ) -> tuple[str, str]:
     """
     Generate a pose starting image using `prompt_source=inline` so the typed prompt can override
@@ -3889,11 +3931,16 @@ def generate_pose_starting_image_from_prompt(
     if not effective:
         effective = pose_opt.prompt_text
     kp = (keypoint_image_path or "").strip()
-    use_closeup_sheet = bool(kp and character_base_closeup_composite_abs_path(character_name))
+    close_abs = character_base_closeup_composite_abs_path(character_name) if kp else None
+    use_closeup_sheet = bool(kp and close_abs and not skip_closeup)
     if kp:
         effective = compose_keypoint_pose_edit_prompt(
             effective, with_closeup_sheet=use_closeup_sheet
         )
+
+    if log_cb:
+        aux_log = (([close_abs] if close_abs else []) if not skip_closeup else []) + ([kp] if kp else [])
+        _log_qwen_inputs(base_image_path, aux_log, log_cb)
 
     body = _run_service_testmode(
         "services.image_edit_ai_service.serverless",
@@ -3908,7 +3955,8 @@ def generate_pose_starting_image_from_prompt(
             "inline",
             "--prompts-json",
             json.dumps([effective]),
-            *_image_edit_aux_keypoint_cli_args(character_name, keypoint_image_path),
+            *_image_edit_aux_keypoint_cli_args(character_name, keypoint_image_path, skip_closeup=skip_closeup),
+            *(["--cfg", str(cfg_scale)] if cfg_scale is not None else []),
             "--convert-local-to-url",
         ],
         log_cb=log_cb,
@@ -3951,6 +3999,9 @@ def generate_pose_starting_images_from_prompts(
     log_cb: Callable[[str], None] | None = None,
     *,
     keypoint_image_path: str | None = None,
+    skip_closeup: bool = False,
+    extra_pad_frac: float = 0.0,
+    cfg_scale: float | None = None,
 ) -> list[tuple[str, str]]:
     """
     Generate one flat ``poses/angle_*`` file per prompt text.
@@ -3963,7 +4014,7 @@ def generate_pose_starting_images_from_prompts(
     raw_prompts = [(p or "").strip() for p in prompt_texts]
     nonempty_prompts = [p for p in raw_prompts if p]
     kp = (keypoint_image_path or "").strip()
-    use_closeup_sheet = bool(kp and character_base_closeup_composite_abs_path(character_name))
+    use_closeup_sheet = bool(kp and not skip_closeup and character_base_closeup_composite_abs_path(character_name))
 
     def _composed_for_batch(user_prompts: list[str]) -> list[str]:
         if not user_prompts:
@@ -4011,19 +4062,21 @@ def generate_pose_starting_images_from_prompts(
     if kp:
         if has_placed:
             kp_crop, kp_source = _keypoint_crop_abs_for_placed_figure(
-                kp, placed, batch_work
+                kp, placed, batch_work, extra_pad_frac=extra_pad_frac
             )
-            min_side = int(placed.get("workingSquareSize") or 1024)
-            if log_cb:
-                log_cb(f"Qwen primary: {base_image_path} (full base image, no crop)")
-                log_cb(
-                    f"Qwen keypoint aux: {kp_source} → {kp_crop} ({min_side}×{min_side})"
-                )
             aux_args = _image_edit_aux_cropped_keypoint_cli_args(
-                character_name, str(kp_crop)
+                character_name, str(kp_crop), skip_closeup=skip_closeup
             )
+            if log_cb:
+                close_abs = character_base_closeup_composite_abs_path(character_name)
+                aux_log = (([close_abs] if close_abs else []) if not skip_closeup else []) + [str(kp_crop)]
+                _log_qwen_inputs(base_image_path, aux_log, log_cb, extra=f"kp-source: {kp_source}  pad: {extra_pad_frac}  cfg: {cfg_scale}")
         else:
-            aux_args = _image_edit_aux_keypoint_cli_args(character_name, keypoint_image_path)
+            aux_args = _image_edit_aux_keypoint_cli_args(character_name, keypoint_image_path, skip_closeup=skip_closeup)
+            if log_cb:
+                close_abs = character_base_closeup_composite_abs_path(character_name)
+                aux_log = (([close_abs] if close_abs else []) if not skip_closeup else []) + ([kp] if kp else [])
+                _log_qwen_inputs(base_image_path, aux_log, log_cb, extra=f"pad: {extra_pad_frac}  cfg: {cfg_scale}")
 
     body = _run_service_testmode(
         "services.image_edit_ai_service.serverless",
@@ -4039,6 +4092,7 @@ def generate_pose_starting_images_from_prompts(
             "--prompts-json",
             json.dumps(prompts),
             *aux_args,
+            *(["--cfg", str(cfg_scale)] if cfg_scale is not None else []),
             "--convert-local-to-url",
         ],
         log_cb=log_cb,
@@ -4162,11 +4216,14 @@ def _generate_pose_image_edit_url(
     *,
     keypoint_image_path: str | None = None,
     log_cb: Callable[[str], None] | None = None,
+    skip_closeup: bool = False,
+    extra_pad_frac: float = 0.0,
+    cfg_scale: float | None = None,
 ) -> str:
     """Run image-edit pose generation and return the result URL (no pose gallery save)."""
     effective = (prompt_text or "").strip()
     kp = (keypoint_image_path or "").strip()
-    use_closeup_sheet = bool(kp and character_base_closeup_composite_abs_path(character_name))
+    use_closeup_sheet = bool(kp and not skip_closeup and character_base_closeup_composite_abs_path(character_name))
     if kp:
         effective = compose_keypoint_pose_edit_prompt(
             effective, with_closeup_sheet=use_closeup_sheet
@@ -4189,6 +4246,9 @@ def _generate_pose_image_edit_url(
             effective,
             log_cb,
             keypoint_id=str(kp_entry["id"]) if kp_entry else None,
+            skip_closeup=skip_closeup,
+            extra_pad_frac=extra_pad_frac,
+            cfg_scale=cfg_scale,
         )
 
     body = _run_service_testmode(
@@ -4204,7 +4264,8 @@ def _generate_pose_image_edit_url(
             "inline",
             "--prompts-json",
             json.dumps([effective]),
-            *_image_edit_aux_keypoint_cli_args(character_name, keypoint_image_path),
+            *_image_edit_aux_keypoint_cli_args(character_name, keypoint_image_path, skip_closeup=skip_closeup),
+            *(["--cfg", str(cfg_scale)] if cfg_scale is not None else []),
             "--convert-local-to-url",
         ],
         log_cb=log_cb,
@@ -4237,12 +4298,11 @@ def _first_prompt_text(prompt_texts: list[str]) -> str:
 
 
 def _allocate_sequence_name(char_key: str, prefix: str) -> str:
-    base = sanitize_for_folder(prefix) or "keypoints"
-    ts = int(time.time())
-    seq_name = f"{base}_{ts}"
+    import datetime
+    seq_name = datetime.datetime.now().strftime("%H%M_%m%d_%Y")
     existing = set(list_sequence_folder_names(char_key))
     while seq_name in existing:
-        seq_name = f"{base}_{ts}_{unique_suffix(4)}"
+        seq_name = f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{unique_suffix(4)}"
     return seq_name
 
 
@@ -4257,13 +4317,14 @@ def generate_pose_sequence_from_keypoints(
     gallery_subdir_prefix: str = "posevid",
     error_tag: str = "Pose keypoint sequence",
     log_cb: Callable[[str], None] | None = None,
+    skip_closeup: bool = False,
+    extra_pad_frac: float = 0.0,
+    cfg_scale: float | None = None,
 ) -> dict[str, Any]:
     """
     Generate one pose image per keypoint frame and store as a frameSequence strip
     inside a new auto-named character sequence.
     """
-    from services.sequence_gallery_strip import gallery_item_from_frame_urls
-
     paths = [str(p).strip() for p in keypoint_abs_paths if str(p).strip()]
     if not paths:
         raise ValueError("No keypoint frames provided.")
@@ -4283,21 +4344,32 @@ def generate_pose_sequence_from_keypoints(
     folder = character.sequence_dir(seq_name)
     if folder.exists():
         raise ValueError(f"Sequence {seq_name!r} already exists.")
-    ensure_dirs(folder, folder / "gallery", folder / "cells")
+    root = DEFAULT_STORAGE_ROOT.resolve()
+    dir_name = f"{gallery_subdir_prefix.strip().lower()}_{unique_suffix(12)}"
+    out_dir = folder / "gallery" / dir_name
+    ensure_dirs(folder, folder / "gallery", folder / "cells", out_dir)
+
+    gid = unique_suffix(12)
+    sgid = unique_suffix(12)
+    strip: list[dict[str, Any]] = []
+    gallery_item: dict[str, Any] = {
+        "id": gid,
+        "relPath": "",
+        "frameSequence": {"sequenceGroupId": sgid, "strip": strip, "hidden": []},
+    }
     write_sequence_manifest(
         char_key,
         seq_name,
         {
             "version": 1,
             "fps": int(fps) if fps else 24,
-            "gallery": [],
+            "gallery": [gallery_item],
             "frames": [],
             "previewAspect": preview_aspect,
             "timelineViewStep": 1,
         },
     )
 
-    frame_urls: list[str] = []
     for i, kp_abs in enumerate(paths):
         if log_cb:
             log_cb(f"Generating pose frame {i + 1}/{len(paths)}…")
@@ -4307,23 +4379,31 @@ def generate_pose_sequence_from_keypoints(
             prompt,
             keypoint_image_path=kp_abs,
             log_cb=log_cb,
+            skip_closeup=skip_closeup,
+            extra_pad_frac=extra_pad_frac,
+            cfg_scale=cfg_scale,
         )
-        frame_urls.append(url)
+        dest = out_dir / f"frame_{i + 1:06d}.png"
+        try:
+            download_url_to_file(url.strip(), dest)
+        except Exception as ex:
+            raise RuntimeError(
+                f"{error_tag} frame download failed (index {i}, url={url[:200]}): {ex}"
+            ) from ex
+        rel_str = str(dest.resolve().relative_to(root)).replace("\\", "/")
+        strip.append({"kind": "image", "relPath": rel_str})
+        if i == 0:
+            gallery_item["relPath"] = rel_str
+        manifest = read_sequence_manifest(char_key, seq_name)
+        for item in manifest.get("gallery") or []:
+            if item.get("id") == gid:
+                item["frameSequence"]["strip"] = list(strip)
+                if not item.get("relPath"):
+                    item["relPath"] = rel_str
+                break
+        write_sequence_manifest(char_key, seq_name, manifest)
 
-    built = gallery_item_from_frame_urls(
-        char_key=char_key,
-        sequence_name=seq_name,
-        frame_urls=frame_urls,
-        gallery_subdir_prefix=gallery_subdir_prefix,
-        error_tag=error_tag,
-    )
-    gallery_item = built["galleryItem"]
-    manifest = read_sequence_manifest(char_key, seq_name)
-    gallery = manifest.get("gallery") if isinstance(manifest.get("gallery"), list) else []
-    gallery.append(gallery_item)
-    manifest["gallery"] = gallery
-    write_sequence_manifest(char_key, seq_name, manifest)
-    return {"sequenceName": seq_name, "galleryItemId": gallery_item.get("id")}
+    return {"sequenceName": seq_name, "galleryItemId": gid}
 
 
 def generate_pose_sequence_from_folder_ref(
@@ -4334,6 +4414,9 @@ def generate_pose_sequence_from_folder_ref(
     log_cb: Callable[[str], None] | None = None,
     *,
     fps: int = 24,
+    skip_closeup: bool = False,
+    extra_pad_frac: float = 0.0,
+    cfg_scale: float | None = None,
 ) -> dict[str, Any]:
     """Generate a pose sequence from an ordered keypoint folder in the reference library."""
     from services import reference_storage
@@ -4360,6 +4443,9 @@ def generate_pose_sequence_from_folder_ref(
         gallery_subdir_prefix="posefolder",
         error_tag="Pose folder ref",
         log_cb=log_cb,
+        skip_closeup=skip_closeup,
+        extra_pad_frac=extra_pad_frac,
+        cfg_scale=cfg_scale,
     )
 
 
@@ -4369,6 +4455,10 @@ def generate_pose_sequence_from_video_ref(
     base_image_path: str,
     prompt_texts: list[str],
     log_cb: Callable[[str], None] | None = None,
+    *,
+    skip_closeup: bool = False,
+    extra_pad_frac: float = 0.0,
+    cfg_scale: float | None = None,
 ) -> dict[str, Any]:
     """
     Generate one pose image per visible video-ref keypoint frame and store as a
@@ -4406,6 +4496,9 @@ def generate_pose_sequence_from_video_ref(
         gallery_subdir_prefix="posevid",
         error_tag="Pose video ref",
         log_cb=log_cb,
+        skip_closeup=skip_closeup,
+        extra_pad_frac=extra_pad_frac,
+        cfg_scale=cfg_scale,
     )
 
 

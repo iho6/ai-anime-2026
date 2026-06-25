@@ -171,10 +171,12 @@ NO_TEXT_IN_IMAGE_CONSTRAINT = (
 
 KEYPOINT_POSE_EDIT_PROMPT_NO_CLOSEUP = (
     "Draw the character from Picture 1 in the exact pose shown by the keypoint skeleton in Picture 2. "
-    "Do not show Picture 1 as a separate panel or figure in the output. "
+    "CRITICAL: The output must contain ONLY the newly generated character in the new pose. "
+    "NEVER include Picture 1 or any copy, panel, thumbnail, inset, or trace of the starting reference image anywhere in the output — not as a background element, not as a side panel, not in any form. "
     "Keep the face, clothing, and body proportions exactly as they appear in Picture 1. "
     "Follow the skeleton pose from Picture 2 without changing the character's natural proportions "
     "— do not enlarge the head or alter limb lengths. "
+    "Preserve the character's facing direction exactly as shown by the skeleton in Picture 2 — do not mirror or flip the character. "
     "Make sure the output has the same number of limbs as Picture 1. "
     "No objects in the hands; match hand pose to Picture 2. "
     "Completely plain white background — no furniture, no objects, no ground shadow, nothing except the character. "
@@ -183,12 +185,13 @@ KEYPOINT_POSE_EDIT_PROMPT_NO_CLOSEUP = (
 
 KEYPOINT_POSE_EDIT_PROMPT_WITH_CLOSEUP = (
     "Draw the character from Picture 1 in the exact pose shown by the keypoint skeleton in Picture 3. "
-    "Do not show Picture 1 or Picture 2 as panels, figures, or insets in the output "
-    "— the output shows only the generated full-body character. "
+    "CRITICAL: The output must contain ONLY the newly generated character in the new pose. "
+    "NEVER include Picture 1, Picture 2, or any copy, panel, thumbnail, inset, or trace of any input reference image anywhere in the output — not as a background element, not as a side panel, not in any form. "
     "Keep the face, clothing, and body proportions exactly as they appear in Picture 1. "
     "Use Picture 2 only to sharpen facial feature accuracy; do not render it. "
     "Follow the skeleton pose from Picture 3 without changing the character's natural proportions "
     "— do not enlarge the head or alter limb lengths. "
+    "Preserve the character's facing direction exactly as shown by the skeleton in Picture 3 — do not mirror or flip the character. "
     "Make sure the output has the same number of limbs as Picture 1. "
     "No objects in the hands; match hand pose to Picture 3. "
     "Completely plain white background — no furniture, no objects, no ground shadow, nothing except the character. "

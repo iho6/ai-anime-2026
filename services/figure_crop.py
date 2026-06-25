@@ -208,11 +208,17 @@ def extract_square_working_crop_path(
     dest: Path | str,
     *,
     min_side: int = MIN_SQUARE_WORKING_SIZE,
+    extra_pad_frac: float = 0.0,
 ) -> Path:
     dest_p = Path(dest)
     dest_p.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(src) as im:
-        extract_square_working_crop(im, placement, min_side=min_side).save(dest_p)
+        crop_box = placement
+        if extra_pad_frac > 0:
+            x, y, w, h = int(placement["x"]), int(placement["y"]), int(placement["width"]), int(placement["height"])
+            crop_box = pad_clamp_square_bbox(float(x), float(y), float(x + w), float(y + h),
+                                             im.width, im.height, pad_frac=extra_pad_frac)
+        extract_square_working_crop(im, crop_box, min_side=min_side).save(dest_p)
     return dest_p
 
 

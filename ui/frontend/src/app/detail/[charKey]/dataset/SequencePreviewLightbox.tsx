@@ -96,7 +96,9 @@ export function SequencePreviewLightbox(props: Props) {
   const [mode, setMode] = useState<"view" | "crop">("view");
   const [cropDraft, setCropDraft] = useState<SequenceCrop>(() => defaultSequenceCrop());
   const [boxPx, setBoxPx] = useState({ w: 800, h: 450 });
+  const [loadedCount, setLoadedCount] = useState(0);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const preloadImgsRef = useRef<HTMLImageElement[]>([]);
 
   useEffect(() => {
     function measure() {
@@ -116,6 +118,27 @@ export function SequencePreviewLightbox(props: Props) {
   useEffect(() => {
     setIdx((prev) => Math.max(0, Math.min(prev, Math.max(0, paths.length - 1))));
   }, [paths.length]);
+
+  useEffect(() => {
+    setLoadedCount(0);
+    let n = 0;
+    const imgs = paths.map((url) => {
+      const img = new Image();
+      const done = () => setLoadedCount(++n);
+      img.onload = done;
+      img.onerror = done;
+      img.src = url;
+      return img;
+    });
+    preloadImgsRef.current = imgs;
+    return () => {
+      for (const img of preloadImgsRef.current) {
+        img.onload = null;
+        img.onerror = null;
+      }
+      preloadImgsRef.current = [];
+    };
+  }, [paths]);
 
   useEffect(() => {
     setMode("view");
@@ -269,6 +292,7 @@ export function SequencePreviewLightbox(props: Props) {
   if (!paths.length) return null;
   const cur = Math.max(0, Math.min(idx, paths.length - 1));
   const src = paths[cur];
+  const imagesReady = loadedCount >= paths.length;
 
   const btnStyle: React.CSSProperties = {
     color: "#eee",
@@ -373,11 +397,11 @@ export function SequencePreviewLightbox(props: Props) {
               <SquareIconButton
                 size={36}
                 aria-label={playing ? "Pause" : "Play"}
-                title={playing ? "Pause" : "Play"}
+                title={!imagesReady ? `Loading ${loadedCount}/${paths.length}…` : (playing ? "Pause" : "Play")}
                 icon={playing ? <PauseBarsIcon /> : <TimelinePlayIcon />}
                 tone="light"
                 style={btnStyle}
-                disabled={paths.length < 2}
+                disabled={paths.length < 2 || !imagesReady}
                 onClick={() => setPlaying((p) => !p)}
               />
             ) : undefined
@@ -405,7 +429,9 @@ export function SequencePreviewLightbox(props: Props) {
       )}
       {mode === "view" ? (
         <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, textAlign: "center", marginTop: 8 }}>
-          Wheel to zoom; double-click image to adjust crop (arrows / wheel in crop mode)
+          {scope === "timeline" && !imagesReady
+            ? `Loading ${loadedCount}/${paths.length} frames…`
+            : "Wheel to zoom; double-click image to adjust crop (arrows / wheel in crop mode)"}
         </div>
       ) : null}
     </LightboxModalChrome>

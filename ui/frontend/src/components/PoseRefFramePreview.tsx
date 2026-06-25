@@ -33,7 +33,9 @@ export function PoseRefFramePreview(props: Props) {
   const [idx, setIdx] = useState(0);
   const [playingInternal, setPlayingInternal] = useState(false);
   const [hover, setHover] = useState(false);
+  const [loadedCount, setLoadedCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const preloadImgsRef = useRef<HTMLImageElement[]>([]);
 
   const controlledIndex = frameIndexProp !== undefined;
   const controlledPlaying = playingProp !== undefined;
@@ -46,11 +48,35 @@ export function PoseRefFramePreview(props: Props) {
     ? Math.max(0, Math.min(paths.length - 1, frameIndexProp))
     : idx;
 
+  const pathsKey = paths.join("|");
+
   useEffect(() => {
     if (controlledIndex || controlledPlaying) return;
     setIdx(0);
     setPlayingInternal(false);
-  }, [paths.join("|"), controlledIndex, controlledPlaying]);
+  }, [pathsKey, controlledIndex, controlledPlaying]);
+
+  useEffect(() => {
+    setLoadedCount(0);
+    let n = 0;
+    const imgs = paths.map((p) => {
+      const img = new Image();
+      const done = () => setLoadedCount(++n);
+      img.onload = done;
+      img.onerror = done;
+      img.src = assetUrlFromRelPath(p);
+      return img;
+    });
+    preloadImgsRef.current = imgs;
+    return () => {
+      for (const img of preloadImgsRef.current) {
+        img.onload = null;
+        img.onerror = null;
+      }
+      preloadImgsRef.current = [];
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathsKey]);
 
   useEffect(() => {
     if (controlledPlaying || !playing || paths.length <= 1) {
@@ -92,6 +118,7 @@ export function PoseRefFramePreview(props: Props) {
 
   const src = assetUrlFromRelPath(paths[displayIdx] ?? paths[0]);
   const canPlay = paths.length > 1;
+  const imagesReady = loadedCount >= paths.length;
 
   return (
     <div
@@ -123,33 +150,55 @@ export function PoseRefFramePreview(props: Props) {
       {showPlayOverlay && canPlay ? (
         <>
           {!playing ? (
-            <button
-              type="button"
-              aria-label="Play frame preview"
-              title="Play frame preview"
-              onClick={(e) => {
-                e.stopPropagation();
-                setPlaying(true);
-              }}
-              style={{
-                position: "absolute",
-                inset: 0,
-                margin: "auto",
-                width: 36,
-                height: 36,
-                display: "grid",
-                placeItems: "center",
-                padding: 0,
-                border: "none",
-                borderRadius: 0,
-                background: "rgba(120,120,120,0.35)",
-                color: "rgba(255,255,255,0.9)",
-                cursor: "pointer",
-                zIndex: 2,
-              }}
-            >
-              <TimelinePlayIcon size={18} />
-            </button>
+            imagesReady ? (
+              <button
+                type="button"
+                aria-label="Play frame preview"
+                title="Play frame preview"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPlaying(true);
+                }}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  margin: "auto",
+                  width: 36,
+                  height: 36,
+                  display: "grid",
+                  placeItems: "center",
+                  padding: 0,
+                  border: "none",
+                  borderRadius: 0,
+                  background: "rgba(120,120,120,0.35)",
+                  color: "rgba(255,255,255,0.9)",
+                  cursor: "pointer",
+                  zIndex: 2,
+                }}
+              >
+                <TimelinePlayIcon size={18} />
+              </button>
+            ) : (
+              <span
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  margin: "auto",
+                  width: 60,
+                  height: 20,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 9,
+                  color: "rgba(255,255,255,0.8)",
+                  background: "rgba(0,0,0,0.45)",
+                  pointerEvents: "none",
+                  zIndex: 2,
+                }}
+              >
+                {loadedCount}/{paths.length}
+              </span>
+            )
           ) : null}
           {playing && hover ? (
             <button

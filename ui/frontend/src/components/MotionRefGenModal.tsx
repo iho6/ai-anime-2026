@@ -1076,7 +1076,9 @@ export function MotionRefGenModal(props: {
   }
 
   async function addShotsToPose(shots: MotionRefShot[]) {
-    const pending = shots.filter((s) => !s.keypointId);
+    const pending = shots
+      .filter((s) => !s.keypointId)
+      .sort((a, b) => a.frameIndex - b.frameIndex);
     if (!pending.length) return;
     beginSession({ title: "Add to Pose", clearLog: false, runningStatus: `0/${pending.length} complete` });
     await Promise.resolve();

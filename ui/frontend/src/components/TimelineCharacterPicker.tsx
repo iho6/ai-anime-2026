@@ -13,13 +13,14 @@ import {
   assetUrlFromRelPath,
   runDetailWsJob,
   runShotMakeAngleWsJob,
+  type SequenceFrameItem,
   type SequenceManifest,
 } from "../lib/api";
 import {
   type KeypointRefEntry,
   keypointRefHasFrames,
 } from "../lib/keypointRefGeneration";
-import { pickSingleKeypointRefFromSelection } from "../lib/referencePickerSelection";
+import { buildKeypointRefQueueFromSelection } from "../lib/referencePickerSelection";
 import { KeypointReferenceSlot } from "./KeypointReferenceSlot";
 import { CollapsibleGallerySection } from "./CollapsibleGallerySection";
 import { GalleryImageLightbox } from "./GalleryImageLightbox";
@@ -41,6 +42,10 @@ import { useAppError } from "./ErrorProvider";
 import { resolveSequenceImportGalleryItemId } from "../lib/sequenceImport";
 import { BaseCloseupWizardModal } from "./BaseCloseupWizardModal";
 import { SequencePreviewLightbox } from "../app/detail/[charKey]/dataset/SequencePreviewLightbox";
+import {
+  apiExportFramesVideo,
+  sanitizeDownloadBaseName,
+} from "../lib/downloadVideo";
 import {
   NewCharacterCreatePanel,
   type NewCharacterCreatePanelHandle,
@@ -115,6 +120,10 @@ export function TimelineCharacterPicker(props: {
   const [newPoseBaseRelPath, setNewPoseBaseRelPath] = useState<string | null>(null);
   const [newPosePrompt, setNewPosePrompt] = useState("");
   const [newPoseRef, setNewPoseRef] = useState<KeypointRefEntry | null>(null);
+  const [poseBatchQueue, setPoseBatchQueue] = useState<KeypointRefEntry[]>([]);
+  const [skipCloseup, setSkipCloseup] = useState(false);
+  const [cropPadding, setCropPadding] = useState(0.0);
+  const [qwenCfg, setQwenCfg] = useState(1.0);
   const [refPickerOpen, setRefPickerOpen] = useState(false);
   const [motionRefOpen, setMotionRefOpen] = useState(false);
 
@@ -157,6 +166,10 @@ export function TimelineCharacterPicker(props: {
     setNewPoseBaseRelPath(null);
     setNewPosePrompt("");
     setNewPoseRef(null);
+    setPoseBatchQueue([]);
+    setSkipCloseup(false);
+    setCropPadding(0.0);
+    setQwenCfg(1.0);
     setImgCtxMenu(null);
     setSeqCtxMenu(null);
     setAngleModalOpen(false);
@@ -280,77 +293,94 @@ export function TimelineCharacterPicker(props: {
     const baseRelPath = newPoseBaseRelPath;
     const charKey = selectedKey;
     if (!baseRelPath || !charKey) return;
-    const prompts = promptTrim ? [promptTrim] : [];
+
+    // Batch: run all queued refs in sequence under one session
+    if (poseBatchQueue.length > 1) {
+      const queue = poseBatchQueue;
+      const total = queue.length;
+      beginSession({ title: `Batch pose gen (${total})`, clearLog: true });
+      await Promise.resolve();
+      try {
+        for (let i = 0; i < total; i++) {
+          const ref = queue[i];
+          setNewPoseRef(ref);
+          pushLog(`[${i + 1}/${total}] Starting…`);
+          await _runPoseJobForRef(ref, baseRelPath, charKey);
+          pushLog(`[${i + 1}/${total}] Done.`);
+          void loadSections(charKey);
+        }
+        setPoseBatchQueue([]);
+        setNewPoseRef(null);
+        setNewPosePrompt("");
+        endSession();
+      } catch (e) {
+        failSession(e, "Batch pose generation failed.");
+      }
+      return;
+    }
+
+    // Single
     beginSession({ title: "Generating pose", clearLog: true });
     await Promise.resolve();
     pushLog("Starting pose generation…");
     try {
-      if (newPoseRef?.kind === "folder") {
-        const done = await runDetailWsJob<{ sequenceName: string; galleryItemId: string }>({
-          charKey,
-          pathSuffix: "/pose/ws",
-          payload: {
-            job: "generate_folder_ref_sequence",
-            folderId: newPoseRef.folderId,
-            baseRelPath,
-            prompts,
-          },
-          onLogLine: (line) => pushLog(line),
-        });
-        if (!done.ok || !done.result?.sequenceName) {
-          throw new Error(done.error ?? "Pose sequence generation failed.");
-        }
-        pushLog(`Done — sequence ${done.result.sequenceName}.`);
-        endSession();
-        setNewPosePrompt("");
-        setNewPoseRef(null);
-        void loadSections(charKey);
-        return;
-      }
-      if (newPoseRef?.kind === "video") {
-        const done = await runDetailWsJob<{ sequenceName: string; galleryItemId: string }>({
-          charKey,
-          pathSuffix: "/pose/ws",
-          payload: {
-            job: "generate_video_ref_sequence",
-            videoRefId: newPoseRef.ref.id,
-            baseRelPath,
-            prompts,
-          },
-          onLogLine: (line) => pushLog(line),
-        });
-        if (!done.ok || !done.result?.sequenceName) {
-          throw new Error(done.error ?? "Pose sequence generation failed.");
-        }
-        pushLog(`Done — sequence ${done.result.sequenceName}.`);
-        endSession();
-        setNewPosePrompt("");
-        setNewPoseRef(null);
-        void loadSections(charKey);
-        return;
-      }
-      const done = await runDetailWsJob<{ firstPoseKey: string | null; lastInputRelPath: string }>({
-        charKey,
-        pathSuffix: "/pose/ws",
-        payload: {
-          job: "generate_prompts",
-          baseRelPath,
-          prompts,
-          ...(newPoseRef?.kind === "single" && newPoseRef.ref.keypointRelPath
-            ? { keypointRelPath: newPoseRef.ref.keypointRelPath }
-            : {}),
-        },
-        onLogLine: (line) => pushLog(line),
-      });
-      if (!done.ok) throw new Error(done.error ?? "Pose generation failed.");
+      await _runPoseJobForRef(newPoseRef, baseRelPath, charKey);
       pushLog("Done. Refreshing gallery…");
       endSession();
       setNewPosePrompt("");
       setNewPoseRef(null);
+      setPoseBatchQueue([]);
       void loadSections(charKey);
     } catch (e) {
       failSession(e, "Pose generation failed.");
     }
+  }
+
+  async function _runPoseJobForRef(
+    ref: KeypointRefEntry | null,
+    baseRelPath: string,
+    charKey: string,
+  ) {
+    const prompts = newPosePrompt.trim() ? [newPosePrompt.trim()] : [];
+    if (ref?.kind === "folder") {
+      const done = await runDetailWsJob<{ sequenceName: string; galleryItemId: string }>({
+        charKey,
+        pathSuffix: "/pose/ws",
+        payload: { job: "generate_folder_ref_sequence", folderId: ref.folderId, baseRelPath, prompts, skipCloseup, cropPadding, qwenCfg },
+        onLogLine: (line) => pushLog(line),
+      });
+      if (!done.ok || !done.result?.sequenceName) throw new Error(done.error ?? "Pose sequence generation failed.");
+      pushLog(`Sequence: ${done.result.sequenceName}`);
+      return;
+    }
+    if (ref?.kind === "video") {
+      const done = await runDetailWsJob<{ sequenceName: string; galleryItemId: string }>({
+        charKey,
+        pathSuffix: "/pose/ws",
+        payload: { job: "generate_video_ref_sequence", videoRefId: ref.ref.id, baseRelPath, prompts, skipCloseup, cropPadding, qwenCfg },
+        onLogLine: (line) => pushLog(line),
+      });
+      if (!done.ok || !done.result?.sequenceName) throw new Error(done.error ?? "Pose sequence generation failed.");
+      pushLog(`Sequence: ${done.result.sequenceName}`);
+      return;
+    }
+    const done = await runDetailWsJob<{ firstPoseKey: string | null; lastInputRelPath: string }>({
+      charKey,
+      pathSuffix: "/pose/ws",
+      payload: {
+        job: "generate_prompts",
+        baseRelPath,
+        prompts,
+        ...(ref?.kind === "single" && ref.ref.keypointRelPath
+          ? { keypointRelPath: ref.ref.keypointRelPath }
+          : {}),
+        skipCloseup,
+        cropPadding,
+        qwenCfg,
+      },
+      onLogLine: (line) => pushLog(line),
+    });
+    if (!done.ok) throw new Error(done.error ?? "Pose generation failed.");
   }
 
   async function duplicateSequence(name: string) {
@@ -465,12 +495,87 @@ export function TimelineCharacterPicker(props: {
       if (!selectedKey) return;
       try {
         const m = await apiSequenceGet(selectedKey, seqName);
-        setSeqPreview({ name: seqName, manifest: m });
+        // Pose-generated sequences store frames in gallery[*].frameSequence.strip,
+        // leaving manifest.frames empty. Synthesize timeline frames so the lightbox renders.
+        let manifest: SequenceManifest = m;
+        if (!m.frames.length) {
+          const syntheticFrames: SequenceFrameItem[] = [];
+          let fi = 0;
+          for (const g of m.gallery) {
+            if (g.frameSequence?.strip) {
+              for (const slot of g.frameSequence.strip) {
+                if (slot.kind === "image" && !slot.hidden && slot.relPath) {
+                  syntheticFrames.push({
+                    index: fi,
+                    cellId: `preview-${g.id}-${fi}`,
+                    relPath: slot.relPath,
+                    ...(slot.crop ? { crop: slot.crop } : {}),
+                  });
+                  fi++;
+                }
+              }
+            } else if (g.relPath) {
+              syntheticFrames.push({
+                index: fi,
+                cellId: `preview-${g.id}-${fi}`,
+                relPath: g.relPath,
+                ...(g.crop ? { crop: g.crop } : {}),
+              });
+              fi++;
+            }
+          }
+          manifest = { ...m, frames: syntheticFrames };
+        }
+        setSeqPreview({ name: seqName, manifest });
       } catch (e) {
         showError({ message: "Could not load sequence.", error: e });
       }
     },
     [selectedKey, showError]
+  );
+
+  const downloadSequenceVideo = useCallback(
+    async (seqName: string) => {
+      if (!selectedKey) return;
+      beginSession({ title: "Downloading sequence…", clearLog: true });
+      await Promise.resolve();
+      try {
+        pushLog("Loading sequence manifest…");
+        const m = await apiSequenceGet(selectedKey, seqName);
+        const relPaths: string[] = [];
+        if (m.frames.length) {
+          for (const f of [...m.frames].sort((a, b) => a.index - b.index)) {
+            if (!f.hidden && f.relPath) relPaths.push(f.relPath);
+          }
+        } else {
+          for (const g of m.gallery) {
+            if (g.frameSequence?.strip) {
+              for (const slot of g.frameSequence.strip) {
+                if (slot.kind === "image" && !slot.hidden && slot.relPath)
+                  relPaths.push(slot.relPath);
+              }
+            } else if (g.relPath) {
+              relPaths.push(g.relPath);
+            }
+          }
+        }
+        if (!relPaths.length) {
+          failSession(new Error("Sequence has no frames to export."), "No frames");
+          return;
+        }
+        pushLog(`Encoding ${relPaths.length} frame(s) at ${Math.max(1, m.fps || 24)} fps…`);
+        await apiExportFramesVideo({
+          relPaths,
+          fps: Math.max(1, m.fps || 24),
+          filenameBase: sanitizeDownloadBaseName(seqName) || "sequence",
+        });
+        pushLog("Download started.");
+        endSession();
+      } catch (e) {
+        failSession(e, "Could not download sequence.");
+      }
+    },
+    [selectedKey, beginSession, pushLog, endSession, failSession]
   );
 
   if (!open) return null;
@@ -660,7 +765,7 @@ export function TimelineCharacterPicker(props: {
                         onClear={() => setNewPoseRef(null)}
                       />
                       {/* Prompt + generate */}
-                      <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+                      <div style={{ flex: 1, minWidth: 0, position: "relative", alignSelf: "flex-start", height: 80 }}>
                         <textarea
                           value={newPosePrompt}
                           disabled={poseBusy}
@@ -688,13 +793,12 @@ export function TimelineCharacterPicker(props: {
                           disabled={poseBusy || !newPoseBaseRelPath || (!newPosePrompt.trim() && !keypointRefHasFrames(newPoseRef))}
                           style={{
                             position: "absolute",
-                            bottom: 4,
-                            right: 4,
+                            bottom: 1,
+                            right: 1,
                             border: "1px solid rgba(255,255,255,0.35)",
-                            background:
-                              poseBusy || !newPoseBaseRelPath || (!newPosePrompt.trim() && !keypointRefHasFrames(newPoseRef))
-                                ? "rgba(255,255,255,0.05)"
-                                : "rgba(100,200,100,0.12)",
+                            borderRight: "none",
+                            borderBottom: "none",
+                            background: "rgba(255,255,255,0.05)",
                             color: "#eee",
                             padding: "2px 8px",
                             cursor:
@@ -706,8 +810,34 @@ export function TimelineCharacterPicker(props: {
                             fontWeight: 400,
                           }}
                         >
-                          Generate Pose
+                          {poseBatchQueue.length > 1 ? `Generate Pose (${poseBatchQueue.length})` : "Generate Pose"}
                         </button>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
+                        <label style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", display: "flex", alignItems: "center", gap: 4, userSelect: "none" }}>
+                          <input type="checkbox" checked={skipCloseup} onChange={(e) => setSkipCloseup(e.target.checked)} disabled={poseBusy} />
+                          Skip closeup
+                        </label>
+                        <label style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", display: "flex", alignItems: "center", gap: 4, userSelect: "none" }}>
+                          Pad:
+                          <input
+                            type="number" min={0} max={0.5} step={0.05}
+                            value={cropPadding}
+                            onChange={(e) => setCropPadding(Math.max(0, Math.min(0.5, parseFloat(e.target.value) || 0)))}
+                            disabled={poseBusy}
+                            style={{ width: 52, fontSize: 11, background: "transparent", color: "#ccc", border: "1px solid rgba(255,255,255,0.2)", padding: "1px 3px" }}
+                          />
+                        </label>
+                        <label style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", display: "flex", alignItems: "center", gap: 4, userSelect: "none" }}>
+                          CFG:
+                          <input
+                            type="number" min={1} max={4} step={0.5}
+                            value={qwenCfg}
+                            onChange={(e) => setQwenCfg(Math.max(1, Math.min(4, parseFloat(e.target.value) || 1)))}
+                            disabled={poseBusy}
+                            style={{ width: 44, fontSize: 11, background: "transparent", color: "#ccc", border: "1px solid rgba(255,255,255,0.2)", padding: "1px 3px" }}
+                          />
+                        </label>
                       </div>
                     </div>
 
@@ -777,7 +907,7 @@ export function TimelineCharacterPicker(props: {
                                   );
                                 }}
                                 onPrimaryClick={() => openSequencePreview(seq)}
-                                onPlayClick={() => void openSequencePlayPreview(seq.name)}
+                                topRightBadge="Vid"
                                 onContextMenu={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
@@ -939,6 +1069,52 @@ export function TimelineCharacterPicker(props: {
             onClick={() => {
               const { name } = seqCtxMenu;
               setSeqCtxMenu(null);
+              void openSequencePlayPreview(name);
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "8px 14px",
+              background: "transparent",
+              color: "#eee",
+              border: "none",
+              textAlign: "left",
+              cursor: "pointer",
+              font: "inherit",
+              fontSize: 13,
+            }}
+          >
+            Preview
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              const { name } = seqCtxMenu;
+              setSeqCtxMenu(null);
+              void downloadSequenceVideo(name);
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "8px 14px",
+              background: "transparent",
+              color: "#eee",
+              border: "none",
+              textAlign: "left",
+              cursor: "pointer",
+              font: "inherit",
+              fontSize: 13,
+            }}
+          >
+            Download as Video
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              const { name } = seqCtxMenu;
+              setSeqCtxMenu(null);
               void duplicateSequence(name);
             }}
             style={{
@@ -977,9 +1153,11 @@ export function TimelineCharacterPicker(props: {
         busy={poseBusy}
         onCancel={() => setRefPickerOpen(false)}
         onUseSelected={(sel) => {
-          const ref = pickSingleKeypointRefFromSelection(sel);
-          if (ref) setNewPoseRef(ref);
           setRefPickerOpen(false);
+          const queue = buildKeypointRefQueueFromSelection(sel);
+          if (!queue.length) return;
+          setNewPoseRef(queue[0]);
+          setPoseBatchQueue(queue.length > 1 ? queue : []);
         }}
         onPickNew={() => setRefPickerOpen(false)}
         onGenerateBase={() => setRefPickerOpen(false)}

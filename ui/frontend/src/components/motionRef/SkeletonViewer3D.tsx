@@ -844,8 +844,10 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         try {
           const wasGizmoVisible = t.gizmoGroup.visible;
           t.gizmoGroup.visible = false;
+          t.grid.visible = false;
           t.renderer.render(t.scene, t.camera);
           const dataUrl = t.renderer.domElement.toDataURL("image/png");
+          t.grid.visible = true;
           t.gizmoGroup.visible = wasGizmoVisible && gizmosVisibleRef.current;
           return dataUrl;
         } catch {
@@ -879,7 +881,9 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
 
           const wasGizmoVisible = t.gizmoGroup.visible;
           t.gizmoGroup.visible = false;
+          t.grid.visible = false;
           t.renderer.render(t.scene, t.camera);
+          t.grid.visible = true;
           t.gizmoGroup.visible = wasGizmoVisible && gizmosVisibleRef.current;
 
           const screenBbox = _computeFigureScreenBbox();
@@ -928,7 +932,9 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           t.camera.projectionMatrix.premultiply(tileMatrix);
 
           t.gizmoGroup.visible = false;
+          t.grid.visible = false;
           t.renderer.render(t.scene, t.camera);
+          t.grid.visible = true;
           t.gizmoGroup.visible = wasGizmoVisible && gizmosVisibleRef.current;
 
           t.camera.projectionMatrix.copy(savedProjMatrix);
@@ -980,8 +986,10 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
 
           const wasGizmoVisible = t.gizmoGroup.visible;
           t.gizmoGroup.visible = false;
+          t.grid.visible = false;
           t.renderer.render(t.scene, t.camera);
           const dataUrl = t.renderer.domElement.toDataURL("image/png");
+          t.grid.visible = true;
           t.gizmoGroup.visible = wasGizmoVisible && gizmosVisibleRef.current;
 
           const rawBbox = _computeFigureScreenBbox();
