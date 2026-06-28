@@ -63,7 +63,7 @@ export function GalleryImageLightbox(props: GalleryImageLightboxProps) {
   return (
     <LightboxModalChrome title={title} onBackdropMouseDown={onClose}>
       {nbItem ? (
-        <TransparentCanvasOverlay squareSrc={nbItem.squareSrc} placedFigure={nbItem.placedFigure} style={{ maxWidth: "100%", maxHeight: "100%" }} />
+        <TransparentCanvasOverlay squareSrc={nbItem.squareSrc} placedFigure={nbItem.placedFigure} style={{ width: "min(90vw, 80vh)" }} />
       ) : (
         <ZoomableImage src={paths[cur]} />
       )}
