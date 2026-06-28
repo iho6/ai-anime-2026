@@ -129,70 +129,6 @@ const FALLBACK_H = 320;
 const FIGURE_CROP_PAD_FRAC = 0.15;
 const MIN_CROP_SIZE = 64;
 
-function padClampFigureBbox(
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  imgW: number,
-  imgH: number
-): { x: number; y: number; width: number; height: number } {
-  let minX = Math.min(x1, x2);
-  let minY = Math.min(y1, y2);
-  let maxX = Math.max(x1, x2);
-  let maxY = Math.max(y1, y2);
-  const bw = Math.max(maxX - minX, 1);
-  const bh = Math.max(maxY - minY, 1);
-  const padX = bw * FIGURE_CROP_PAD_FRAC;
-  const padY = bh * FIGURE_CROP_PAD_FRAC;
-  minX -= padX;
-  minY -= padY;
-  maxX += padX;
-  maxY += padY;
-  let ix1 = Math.max(0, Math.min(imgW - 1, Math.round(minX)));
-  let iy1 = Math.max(0, Math.min(imgH - 1, Math.round(minY)));
-  let ix2 = Math.max(ix1 + 1, Math.min(imgW, Math.round(maxX)));
-  let iy2 = Math.max(iy1 + 1, Math.min(imgH, Math.round(maxY)));
-  let w = ix2 - ix1;
-  let h = iy2 - iy1;
-  if (w < MIN_CROP_SIZE) {
-    const extra = MIN_CROP_SIZE - w;
-    ix1 = Math.max(0, ix1 - Math.floor(extra / 2));
-    ix2 = Math.min(imgW, ix1 + MIN_CROP_SIZE);
-    ix1 = Math.max(0, ix2 - MIN_CROP_SIZE);
-    w = ix2 - ix1;
-  }
-  if (h < MIN_CROP_SIZE) {
-    const extra = MIN_CROP_SIZE - h;
-    iy1 = Math.max(0, iy1 - Math.floor(extra / 2));
-    iy2 = Math.min(imgH, iy1 + MIN_CROP_SIZE);
-    iy1 = Math.max(0, iy2 - MIN_CROP_SIZE);
-    h = iy2 - iy1;
-  }
-  return { x: ix1, y: iy1, width: w, height: h };
-}
-
-function padClampSquareFigureBbox(
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  imgW: number,
-  imgH: number
-): { x: number; y: number; width: number; height: number } {
-  const rect = padClampFigureBbox(x1, y1, x2, y2, imgW, imgH);
-  const side = Math.max(rect.width, rect.height);
-  let cx = rect.x + rect.width / 2;
-  let cy = rect.y + rect.height / 2;
-  let nx = Math.round(cx - side / 2);
-  let ny = Math.round(cy - side / 2);
-  if (nx < 0) nx = 0;
-  if (ny < 0) ny = 0;
-  if (nx + side > imgW) nx = Math.max(0, imgW - side);
-  if (ny + side > imgH) ny = Math.max(0, imgH - side);
-  const clampedSide = Math.min(side, imgW - nx, imgH - ny);
-  return { x: nx, y: ny, width: clampedSide, height: clampedSide };
-}
 
 type ThreeModule = typeof import("three");
 
@@ -326,24 +262,47 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       const imgH = renderer.domElement.height;
       if (imgW < 1 || imgH < 1) return null;
       const vec = new THREE.Vector3();
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
+
+      // Single pass: accumulate 3D centroid sum and projected 2D AABB simultaneously.
+      let sumX = 0, sumY = 0, sumZ = 0, count = 0;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (let i = 0; i < positions.length; i += 3) {
+        sumX += positions[i]; sumY += positions[i + 1]; sumZ += positions[i + 2];
+        count++;
         vec.set(positions[i], positions[i + 1], positions[i + 2]);
         vec.project(camera);
         if (vec.z < -1 || vec.z > 1) continue;
         const px = (vec.x * 0.5 + 0.5) * imgW;
         const py = (-vec.y * 0.5 + 0.5) * imgH;
-        minX = Math.min(minX, px);
-        minY = Math.min(minY, py);
-        maxX = Math.max(maxX, px);
-        maxY = Math.max(maxY, py);
+        minX = Math.min(minX, px); maxX = Math.max(maxX, px);
+        minY = Math.min(minY, py); maxY = Math.max(maxY, py);
       }
-      if (!Number.isFinite(minX)) return null;
-      const box = padClampSquareFigureBbox(minX, minY, maxX, maxY, imgW, imgH);
-      return { ...box, imageWidth: imgW, imageHeight: imgH };
+      if (!Number.isFinite(minX) || count === 0) return null;
+
+      // Project 3D centroid for a stable crop center.
+      // Computing the average in 3D before projecting avoids the perspective-induced
+      // AABB drift that occurs when the near side of the body protrudes further in
+      // screen space than the far side at oblique camera angles.
+      vec.set(sumX / count, sumY / count, sumZ / count);
+      vec.project(camera);
+      let cx: number, cy: number;
+      if (vec.z >= -1 && vec.z <= 1) {
+        cx = (vec.x * 0.5 + 0.5) * imgW;
+        cy = (-vec.y * 0.5 + 0.5) * imgH;
+      } else {
+        cx = (minX + maxX) / 2;
+        cy = (minY + maxY) / 2;
+      }
+
+      // Square side from padded AABB extent. Center on the projected centroid without
+      // clamping to image bounds — the tile matrix NDC supports values beyond ±1, and
+      // PIL paste/crop handle out-of-bounds coordinates naturally.
+      const bw = maxX - minX;
+      const bh = maxY - minY;
+      const side = Math.round(Math.max(bw, bh, MIN_CROP_SIZE) * (1 + 2 * FIGURE_CROP_PAD_FRAC));
+      const nx = Math.round(cx - side / 2);
+      const ny = Math.round(cy - side / 2);
+      return { x: nx, y: ny, width: side, height: side, imageWidth: imgW, imageHeight: imgH };
     }
 
     function _applyViewportLayout() {
