@@ -4237,6 +4237,10 @@ export type FrameSequenceStripSlot = {
   crop?: SequenceCrop;
   /** When true (image slots), strip keeps order but modal preview/play skips; timeline treats like empty hold. */
   hidden?: boolean;
+  /** Placement metadata stored by batch Qwen generation for no-backdrop preview. */
+  placedFigure?: PlacedFigureMeta;
+  /** Source keypoint file path (relative to storage root) stored at generation time to allow regeneration. */
+  sourceKeypointRelPath?: string;
 };
 
 export type FrameSequenceHiddenItem = {
@@ -4282,6 +4286,8 @@ export type SequenceFrameItem = {
   sequenceGroupId?: string;
   /** Timeline: mask cell and skip its 1-24/second label. */
   hidden?: boolean;
+  /** Placement metadata for no-backdrop transparent canvas preview. */
+  placedFigure?: PlacedFigureMeta;
 };
 
 export type SequencePreviewAspect = "1:1" | "4:3" | "16:9" | "9:16";
@@ -4366,6 +4372,42 @@ export async function apiSequencePut(
     }
   );
   return readJson<{ ok: boolean }>(res);
+}
+
+export async function apiSequenceRegenerateStripFrame(
+  charKey: string,
+  sequenceName: string,
+  galleryItemId: string,
+  stripIndex: number
+): Promise<{ relPath: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/sequence/${encodeURIComponent(sequenceName)}/regenerate_strip_frame`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ galleryItemId, stripIndex }),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ relPath: string }>(res);
+}
+
+export async function apiSequenceRegenerateStripFramesBatch(
+  charKey: string,
+  sequenceName: string,
+  galleryItemId: string,
+  stripIndices: number[]
+): Promise<{ results: { stripIndex: number; relPath: string }[] }> {
+  const res = await fetch(
+    `${API_BASE_URL}/detail/${encodeURIComponent(charKey)}/sequence/${encodeURIComponent(sequenceName)}/regenerate_strip_frames_batch`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ galleryItemId, stripIndices }),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ results: { stripIndex: number; relPath: string }[] }>(res);
 }
 
 /** Slideshow MP4: one frame per visible timeline cell at ``manifest.fps``. */

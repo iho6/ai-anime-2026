@@ -17,6 +17,7 @@ import {
   type KeypointFolder,
   type KeypointsLayout,
   type KeypointVideoReference,
+  type PlacedFigureMeta,
   type PoseReference,
 } from "../lib/api";
 import {
@@ -95,6 +96,7 @@ function ReferencePickerOpen(props: {
     items: [],
     videoItems: [],
   });
+  const [loadingLayout, setLoadingLayout] = useState(true);
   const [videoModalItem, setVideoModalItem] = useState<KeypointVideoReference | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorId, setAnchorId] = useState<string | null>(null);
@@ -111,6 +113,7 @@ function ReferencePickerOpen(props: {
     paths: string[];
     index: number;
     title: string;
+    noBackdropItems?: ({ squareSrc: string; placedFigure: PlacedFigureMeta } | null)[];
   } | null>(null);
   const [videoExportBusy, setVideoExportBusy] = useState(false);
   const [fpsExportPending, setFpsExportPending] = useState<{
@@ -121,10 +124,13 @@ function ReferencePickerOpen(props: {
   const canGenerate = !busy && genPrompt.trim().length > 0;
 
   const loadLayout = useCallback(async () => {
+    setLoadingLayout(true);
     try {
       setLayout(await apiReferenceKeypointsLayout());
     } catch {
       /* ignore */
+    } finally {
+      setLoadingLayout(false);
     }
   }, []);
 
@@ -305,17 +311,26 @@ function ReferencePickerOpen(props: {
   );
 
   const openKeypointLightbox = useCallback(
-    (item: PoseReference) => {
+    (item: PoseReference, noBackdrop?: boolean) => {
       const itemsInView = gridIdsInView
         .filter((id) => !parseFolderToken(id) && !id.startsWith("video:"))
         .map((id) => itemById.get(id))
         .filter((x): x is PoseReference => Boolean(x));
       const idx = itemsInView.findIndex((x) => x.id === item.id);
       if (idx < 0) return;
+      const noBackdropItems = noBackdrop
+        ? itemsInView.map((x) => {
+            const rel = x.placedFigure?.squareKeypointCropRelPath ?? null;
+            return rel && x.placedFigure
+              ? { squareSrc: assetUrlFromRelPath(rel), placedFigure: x.placedFigure }
+              : null;
+          })
+        : undefined;
       setLightbox({
         paths: itemsInView.map((x) => assetUrlFromRelPath(x.keypointRelPath)),
         index: idx,
         title: "Keypoint preview",
+        noBackdropItems,
       });
     },
     [gridIdsInView, itemById]
@@ -799,6 +814,11 @@ function ReferencePickerOpen(props: {
             minHeight: 0,
           }}
         >
+          {loadingLayout ? (
+            <div style={{ textAlign: "center", padding: "32px 0", opacity: 0.55, fontSize: 13 }}>
+              Loading poses…
+            </div>
+          ) : (
           <KeypointRefGrid
             busy={busy}
             layout={layout}
@@ -816,6 +836,7 @@ function ReferencePickerOpen(props: {
             onFolderContextMenu={openFolderMenu}
             onFolderNameClick={renameFolder}
           />
+          )}
         </div>
 
         <div
@@ -906,6 +927,7 @@ function ReferencePickerOpen(props: {
           index={lightbox.index}
           title={lightbox.title}
           onClose={() => setLightbox(null)}
+          noBackdropItems={lightbox.noBackdropItems}
         />
       ) : null}
     </div>

@@ -53,6 +53,7 @@ export type FrameSequenceStripActions = {
   busy?: boolean;
   onRemoveBackground?: (relPaths: string[]) => Promise<string[] | void>;
   onAiEdit?: (relPath: string) => Promise<string | void>;
+  onRegenerateFrames?: (stripIndices: number[]) => Promise<Map<number, string> | void>;
   onGenerateI2v?: (
     relPath: string,
     prompt: string,
@@ -688,6 +689,31 @@ export function FrameSequenceModal(props: {
         },
       });
     }
+    if (activeStripActions?.onRegenerateFrames && selectedIndices.size > 0) {
+      const regenIndices = [...selectedIndices].filter((i) => {
+        const s = menuStrip[i];
+        return s?.kind === "image" && s.sourceKeypointRelPath;
+      });
+      if (regenIndices.length > 0 && regenIndices.length === selectedIndices.size) {
+        const label = regenIndices.length === 1 ? "Regenerate Frame" : `Regenerate ${regenIndices.length} Frames`;
+        items.push({
+          key: "regenerate",
+          label,
+          disabled: busy,
+          onSelect: () => {
+            void (async () => {
+              try {
+                const updates = await activeStripActions.onRegenerateFrames!(regenIndices);
+                if (!updates) return;
+                applyRelPathUpdates(updates);
+              } catch (e) {
+                onErrorRef.current("Regenerate failed.", e);
+              }
+            })();
+          },
+        });
+      }
+    }
     if (i2v.ok && activeStripActions?.onGenerateI2v) {
       items.push({
         key: "i2v",
@@ -1028,13 +1054,19 @@ export function FrameSequenceModal(props: {
       );
       return;
     }
-    setStrip((s) =>
-      s.map((slot, j) =>
-        targets.includes(j) && slot.kind === "image" && slot.relPath
-          ? { ...slot, hidden: true }
-          : slot
-      )
+    const nextStrip = strip.map((slot, j) =>
+      targets.includes(j) && slot.kind === "image" && slot.relPath
+        ? { ...slot, hidden: true }
+        : slot
     );
+    setStrip(nextStrip);
+    // Advance selection to next visible frame so Hide remains available
+    const lastTarget = Math.max(...targets);
+    const nextVis = nextVisibleStripIndexAfter(nextStrip, lastTarget);
+    setSelectedIndices(new Set([nextVis]));
+    rangeAnchorRef.current = nextVis;
+    setFocusIx(nextVis);
+    setPlayIx(nextVis);
   };
 
   const unhideSelectedSlots = () => {
@@ -1090,6 +1122,11 @@ export function FrameSequenceModal(props: {
   const previewSlot = useMemo(() => {
     if (!displayStrip.length) return null;
     const ix = play ? playIx : focusIx;
+    // When manually focused on a hidden image slot, show its image (with a "Hidden" tag)
+    if (!play) {
+      const at = displayStrip[ix];
+      if (at?.kind === "image" && at.relPath?.trim()) return at;
+    }
     return previewDisplaySlot(displayStrip, ix);
   }, [displayStrip, play, playIx, focusIx]);
 
@@ -1189,6 +1226,13 @@ export function FrameSequenceModal(props: {
       onMouseDown={(e) => {
         if (e.target !== e.currentTarget) return;
         if (active != null) return;
+        if (editorMode === "timeline") {
+          if (isGroupMode && onSaveGroup) {
+            onSaveGroup(groupPayloadsFromState());
+          } else {
+            onSave(payloadFromState(initial.sequenceGroupId, strip));
+          }
+        }
         onClose();
       }}
     >
@@ -1516,30 +1560,50 @@ export function FrameSequenceModal(props: {
                     <div style={{ width: "100%", height: "100%", minHeight: 80, background: "#222" }} />
                   )
                 ) : previewSlot?.kind === "image" && previewSlot.relPath ? (
-                  <div
-                    style={{
-                      ...SEQUENCE_CROP_OUTER_CLIP_FLEX,
-                      maxWidth: "100%",
-                      maxHeight: "100%",
-                      width: "100%",
-                      height: "100%",
-                    }}
-                  >
-                    <div style={sequenceCropTransformWrapperStyle(previewSlot.crop)}>
-                      <img
-                        src={assetUrlFromRelPath(previewSlot.relPath)}
-                        alt=""
-                        style={{
-                          maxWidth: "100%",
-                          maxHeight: "100%",
-                          width: "auto",
-                          height: "auto",
-                          objectFit: "contain",
-                          display: "block",
-                          margin: "0 auto",
-                        }}
-                      />
+                  <div style={{ position: "relative", width: "100%", height: "100%" }}>
+                    <div
+                      style={{
+                        ...SEQUENCE_CROP_OUTER_CLIP_FLEX,
+                        maxWidth: "100%",
+                        maxHeight: "100%",
+                        width: "100%",
+                        height: "100%",
+                      }}
+                    >
+                      <div style={sequenceCropTransformWrapperStyle(previewSlot.crop)}>
+                        <img
+                          src={assetUrlFromRelPath(previewSlot.relPath)}
+                          alt=""
+                          style={{
+                            maxWidth: "100%",
+                            maxHeight: "100%",
+                            width: "auto",
+                            height: "auto",
+                            objectFit: "contain",
+                            display: "block",
+                            margin: "0 auto",
+                          }}
+                        />
+                      </div>
                     </div>
+                    {previewSlot.hidden ? (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: 6,
+                          left: 6,
+                          background: "rgba(0,0,0,0.72)",
+                          color: "#bbb",
+                          fontSize: 10,
+                          padding: "2px 6px",
+                          pointerEvents: "none",
+                          zIndex: 2,
+                          letterSpacing: "0.03em",
+                        }}
+                      >
+                        Hidden
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <div style={{ width: "100%", height: "100%", minHeight: 80, background: "#222" }} />
@@ -1613,41 +1677,36 @@ export function FrameSequenceModal(props: {
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexShrink: 0 }}>
-          <button type="button" style={modalBtnSecondary} onClick={onClose}>
-            Cancel
-          </button>
-          {editorMode === "timeline" && (onApplyVideo || onApplyVideoGroup) ? (
-            <button
-              type="button"
-              style={modalBtnPrimary}
-              onClick={() => {
-                if (isGroupMode && onSaveGroup && onApplyVideoGroup) {
-                  const payloads = groupPayloadsFromState();
-                  onSaveGroup(payloads);
-                  onApplyVideoGroup(payloads);
-                  return;
-                }
-                const payload = payloadFromState(initial.sequenceGroupId, strip);
-                onSave(payload);
-                onApplyVideo?.(payload);
-              }}
-            >
-              Apply video…
+          {editorMode !== "timeline" ? (
+            <button type="button" style={modalBtnSecondary} onClick={onClose}>
+              Cancel
             </button>
           ) : null}
           <button
             type="button"
             style={modalBtnPrimary}
             onClick={() => {
-              if (isGroupMode && onSaveGroup) {
-                onSaveGroup(groupPayloadsFromState());
+              if (editorMode === "timeline") {
+                if (isGroupMode && onSaveGroup && onApplyVideoGroup) {
+                  const payloads = groupPayloadsFromState();
+                  onSaveGroup(payloads);
+                  onApplyVideoGroup(payloads);
+                } else {
+                  const payload = payloadFromState(initial.sequenceGroupId, strip);
+                  onSave(payload);
+                  onApplyVideo?.(payload);
+                }
               } else {
-                onSave(payloadFromState(initial.sequenceGroupId, strip));
+                if (isGroupMode && onSaveGroup) {
+                  onSaveGroup(groupPayloadsFromState());
+                } else {
+                  onSave(payloadFromState(initial.sequenceGroupId, strip));
+                }
               }
-              if (editorMode !== "timeline") onClose();
+              onClose();
             }}
           >
-            {editorMode === "timeline" ? "Save strip" : "Save"}
+            {editorMode === "timeline" ? "Done" : "Save"}
           </button>
         </div>
       </div>

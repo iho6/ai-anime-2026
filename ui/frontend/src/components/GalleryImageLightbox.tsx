@@ -4,12 +4,17 @@ import React, { useCallback, useEffect, useState } from "react";
 import { GalleryImagePager } from "./GalleryImagePager";
 import { LightboxModalChrome } from "./LightboxModalChrome";
 import { ZoomableImage } from "./ZoomableImage";
+import { TransparentCanvasOverlay } from "./TransparentCanvasOverlay";
+import { type PlacedFigureMeta } from "../lib/api";
+
+export type GalleryNoBackdropItem = { squareSrc: string; placedFigure: PlacedFigureMeta };
 
 export type GalleryImageLightboxProps = {
   paths: string[];
   index: number;
   title: string;
   onClose: () => void;
+  noBackdropItems?: (GalleryNoBackdropItem | null)[];
 };
 
 function clampIndex(i: number, pathCount: number): number {
@@ -21,7 +26,7 @@ function clampIndex(i: number, pathCount: number): number {
  * Paths-based image preview: same zoom/pager/keyboard behavior as the former per-page lightboxes.
  */
 export function GalleryImageLightbox(props: GalleryImageLightboxProps) {
-  const { paths, title, onClose } = props;
+  const { paths, title, onClose, noBackdropItems } = props;
   const [idx, setIdx] = useState(() => clampIndex(props.index, props.paths.length));
 
   const bump = useCallback(
@@ -53,10 +58,15 @@ export function GalleryImageLightbox(props: GalleryImageLightboxProps) {
 
   if (!paths.length) return null;
   const cur = clampIndex(idx, paths.length);
+  const nbItem = noBackdropItems?.[cur] ?? null;
 
   return (
     <LightboxModalChrome title={title} onBackdropMouseDown={onClose}>
-      <ZoomableImage src={paths[cur]} />
+      {nbItem ? (
+        <TransparentCanvasOverlay squareSrc={nbItem.squareSrc} placedFigure={nbItem.placedFigure} style={{ maxWidth: "100%", maxHeight: "100%" }} />
+      ) : (
+        <ZoomableImage src={paths[cur]} />
+      )}
       <GalleryImagePager
         variant="modalLight"
         index={cur}

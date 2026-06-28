@@ -9,6 +9,7 @@ import {
 } from "../lib/api";
 import { PauseBarsIcon, TimelinePlayIcon } from "./IconPrimitives";
 import { PoseRefFramePreview } from "./PoseRefFramePreview";
+import { TransparentCanvasOverlay, squareSrcFromPlacedFigure } from "./TransparentCanvasOverlay";
 
 const CELL = 72;
 
@@ -43,6 +44,7 @@ export function KeypointVideoSequenceModal(props: {
   const [selected, setSelected] = useState<Set<number>>(() => new Set([0]));
   const [play, setPlay] = useState(false);
   const [playIx, setPlayIx] = useState(0);
+  const [noBackdrop, setNoBackdrop] = useState(false);
   const stripScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,6 +66,11 @@ export function KeypointVideoSequenceModal(props: {
   );
   const displayIx = play ? playIx : focusIx;
   const previewFrameIndex = Math.max(0, vis.indexOf(displayIx));
+  const displaySlot = strip[displayIx];
+  const displayPlacedFigure = displaySlot?.placedFigure ?? null;
+  const noBackdropSrc = noBackdrop && displayPlacedFigure
+    ? squareSrcFromPlacedFigure(displayPlacedFigure)
+    : null;
 
   useEffect(() => {
     if (!play || !open) return;
@@ -184,22 +191,30 @@ export function KeypointVideoSequenceModal(props: {
             marginBottom: 4,
           }}
         >
-          <PoseRefFramePreview
-            frameRelPaths={previewPaths}
-            fps={fps}
-            maxWidth="100%"
-            maxHeight="100%"
-            frameIndex={previewFrameIndex}
-            playing={play}
-            onPlayingChange={setPlay}
-            showPlayOverlay={false}
-          />
+          {noBackdropSrc && displayPlacedFigure ? (
+            <TransparentCanvasOverlay
+              squareSrc={noBackdropSrc}
+              placedFigure={displayPlacedFigure}
+              style={{ maxWidth: "100%", maxHeight: "100%" }}
+            />
+          ) : (
+            <PoseRefFramePreview
+              frameRelPaths={previewPaths}
+              fps={fps}
+              maxWidth="100%"
+              maxHeight="100%"
+              frameIndex={previewFrameIndex}
+              playing={play}
+              onPlayingChange={setPlay}
+              showPlayOverlay={false}
+            />
+          )}
         </div>
         <div style={{ fontSize: 10, color: "#555", marginBottom: 8, userSelect: "none" }}>
           Drag corner to resize preview
         </div>
 
-        <div style={{ marginBottom: 8, display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ marginBottom: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <button
             type="button"
             disabled={busy || !vis.length}
@@ -216,6 +231,17 @@ export function KeypointVideoSequenceModal(props: {
           >
             {play ? <PauseBarsIcon /> : <TimelinePlayIcon />}
           </button>
+          {displayPlacedFigure && squareSrcFromPlacedFigure(displayPlacedFigure) ? (
+            <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", color: noBackdrop ? "#7dd3fc" : "#aaa", fontSize: 12, userSelect: "none" }}>
+              <input
+                type="checkbox"
+                checked={noBackdrop}
+                onChange={(e) => setNoBackdrop(e.target.checked)}
+                style={{ margin: 0 }}
+              />
+              No Backdrop
+            </label>
+          ) : null}
           <button
             type="button"
             disabled={busy}

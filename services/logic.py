@@ -3746,18 +3746,17 @@ def _run_keypoint_image_edit_with_plate(
             f"Qwen full-frame edit → white plate {c_w}×{c_h} at placement {placement}"
         )
 
+    px, py, pw, ph = (
+        int(placement["x"]),
+        int(placement["y"]),
+        int(placement["width"]),
+        int(placement["height"]),
+    )
+    patch_path = tmp_dir / "patch.png"
+    with Image.open(qwen_out) as qwen_im:
+        qwen_im.convert("RGB").resize((pw, ph), Image.Resampling.LANCZOS).save(patch_path)
+
     if keypoint_id:
-        px, py, pw, ph = (
-            int(placement["x"]),
-            int(placement["y"]),
-            int(placement["width"]),
-            int(placement["height"]),
-        )
-        patch_path = tmp_dir / "patch.png"
-        with Image.open(qwen_out) as qwen_im:
-            qwen_im.convert("RGB").resize((pw, ph), Image.Resampling.LANCZOS).save(
-                patch_path
-            )
         reference_storage.update_placed_figure_outputs(
             keypoint_id,
             figure_square_crop_abs=str(patch_path),
@@ -3766,7 +3765,12 @@ def _run_keypoint_image_edit_with_plate(
         if log_cb:
             log_cb("Saved placement patch + full-size plate preview.")
 
-    return str(plate_path.resolve())
+    square_meta: dict[str, Any] = {
+        "canvas": {"width": c_w, "height": c_h},
+        "placement": {"x": px, "y": py, "width": pw, "height": ph},
+        "_squareTmpPath": str(patch_path.resolve()),
+    }
+    return str(plate_path.resolve()), square_meta
 
 
 def _pose_gallery_save_from_local(
@@ -4219,8 +4223,13 @@ def _generate_pose_image_edit_url(
     skip_closeup: bool = False,
     extra_pad_frac: float = 0.0,
     cfg_scale: float | None = None,
-) -> str:
-    """Run image-edit pose generation and return the result URL (no pose gallery save)."""
+) -> tuple[str, dict[str, Any] | None]:
+    """Run image-edit pose generation; return (result_url, square_meta | None).
+
+    square_meta is present when the plate-compositing path is used and contains
+    canvas/placement info plus ``_squareTmpPath`` pointing to the raw Qwen square
+    crop (temporary file valid until the caller copies it).
+    """
     effective = (prompt_text or "").strip()
     kp = (keypoint_image_path or "").strip()
     use_closeup_sheet = bool(kp and not skip_closeup and character_base_closeup_composite_abs_path(character_name))
@@ -4238,7 +4247,7 @@ def _generate_pose_image_edit_url(
     kp_entry = reference_storage.find_keypoint_by_keypoint_abs(kp) if kp else None
     placed = _resolve_placed_figure_for_keypoint(kp, stored_placed) if kp else None
     if placed and placed.get("placement") and placed.get("canvas"):
-        return _run_keypoint_image_edit_with_plate(
+        plate_path, square_meta = _run_keypoint_image_edit_with_plate(
             character_name,
             base_image_path,
             kp,
@@ -4250,6 +4259,7 @@ def _generate_pose_image_edit_url(
             extra_pad_frac=extra_pad_frac,
             cfg_scale=cfg_scale,
         )
+        return plate_path, square_meta
 
     body = _run_service_testmode(
         "services.image_edit_ai_service.serverless",
@@ -4278,7 +4288,7 @@ def _generate_pose_image_edit_url(
     url = results[0].get("url")
     if not isinstance(url, str) or not url.strip():
         raise RuntimeError("Image-edit result missing url.")
-    return url.strip()
+    return url.strip(), None
 
 
 def _keypoint_storage_rel_to_abs(kp_rel: str) -> str:
@@ -4316,6 +4326,7 @@ def generate_pose_sequence_from_keypoints(
     seq_name_prefix: str = "keypoints",
     gallery_subdir_prefix: str = "posevid",
     error_tag: str = "Pose keypoint sequence",
+    extra_pose_config: dict[str, Any] | None = None,
     log_cb: Callable[[str], None] | None = None,
     skip_closeup: bool = False,
     extra_pad_frac: float = 0.0,
@@ -4352,10 +4363,22 @@ def generate_pose_sequence_from_keypoints(
     gid = unique_suffix(12)
     sgid = unique_suffix(12)
     strip: list[dict[str, Any]] = []
+    base_rel = str(Path(base_image_path).resolve().relative_to(root)).replace("\\", "/")
+    pose_config: dict[str, Any] = {
+        "baseImageRelPath": base_rel,
+        "promptText": prompt,
+        "skipCloseup": skip_closeup,
+        "extraPadFrac": extra_pad_frac,
+    }
+    if cfg_scale is not None:
+        pose_config["cfgScale"] = cfg_scale
+    if extra_pose_config:
+        pose_config.update(extra_pose_config)
     gallery_item: dict[str, Any] = {
         "id": gid,
         "relPath": "",
         "frameSequence": {"sequenceGroupId": sgid, "strip": strip, "hidden": []},
+        "poseConfig": pose_config,
     }
     write_sequence_manifest(
         char_key,
@@ -4373,7 +4396,7 @@ def generate_pose_sequence_from_keypoints(
     for i, kp_abs in enumerate(paths):
         if log_cb:
             log_cb(f"Generating pose frame {i + 1}/{len(paths)}…")
-        url = _generate_pose_image_edit_url(
+        url, square_meta = _generate_pose_image_edit_url(
             char_key,
             base_image_path,
             prompt,
@@ -4391,7 +4414,16 @@ def generate_pose_sequence_from_keypoints(
                 f"{error_tag} frame download failed (index {i}, url={url[:200]}): {ex}"
             ) from ex
         rel_str = str(dest.resolve().relative_to(root)).replace("\\", "/")
-        strip.append({"kind": "image", "relPath": rel_str})
+        kp_rel = str(Path(kp_abs).resolve().relative_to(root)).replace("\\", "/")
+        slot: dict[str, Any] = {"kind": "image", "relPath": rel_str, "sourceKeypointRelPath": kp_rel}
+        if square_meta:
+            sq_tmp = square_meta.pop("_squareTmpPath", None)
+            if sq_tmp and Path(sq_tmp).is_file():
+                sq_dest = out_dir / f"frame_{i + 1:06d}_sq.png"
+                shutil.copy2(sq_tmp, sq_dest)
+                square_meta["figureSquareCropRelPath"] = str(sq_dest.resolve().relative_to(root)).replace("\\", "/")
+            slot["placedFigure"] = square_meta
+        strip.append(slot)
         if i == 0:
             gallery_item["relPath"] = rel_str
         manifest = read_sequence_manifest(char_key, seq_name)
@@ -4442,6 +4474,7 @@ def generate_pose_sequence_from_folder_ref(
         seq_name_prefix=prefix,
         gallery_subdir_prefix="posefolder",
         error_tag="Pose folder ref",
+        extra_pose_config={"folderId": folder_id},
         log_cb=log_cb,
         skip_closeup=skip_closeup,
         extra_pad_frac=extra_pad_frac,
@@ -4495,11 +4528,96 @@ def generate_pose_sequence_from_video_ref(
         seq_name_prefix=f"video_{base_name}",
         gallery_subdir_prefix="posevid",
         error_tag="Pose video ref",
+        extra_pose_config={"videoRefId": video_ref_id},
         log_cb=log_cb,
         skip_closeup=skip_closeup,
         extra_pad_frac=extra_pad_frac,
         cfg_scale=cfg_scale,
     )
+
+
+def regenerate_sequence_strip_frames_batch(
+    char_key: str,
+    seq_name: str,
+    gallery_item_id: str,
+    strip_indices: list[int],
+    log_cb: Callable[[str], None] | None = None,
+) -> list[dict[str, Any]]:
+    """Re-run Qwen generation for multiple strip slots, returning per-slot results."""
+    results: list[dict[str, Any]] = []
+    for idx in strip_indices:
+        result = regenerate_sequence_strip_frame(
+            char_key, seq_name, gallery_item_id, idx, log_cb=log_cb
+        )
+        results.append({"stripIndex": idx, **result})
+    return results
+
+
+def regenerate_sequence_strip_frame(
+    char_key: str,
+    seq_name: str,
+    gallery_item_id: str,
+    strip_index: int,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Re-run Qwen generation for a single strip slot using stored source params."""
+    root = DEFAULT_STORAGE_ROOT.resolve()
+    manifest = read_sequence_manifest(char_key, seq_name)
+    gallery_item = next(
+        (g for g in (manifest.get("gallery") or []) if g.get("id") == gallery_item_id),
+        None,
+    )
+    if not gallery_item:
+        raise ValueError(f"Gallery item {gallery_item_id!r} not found.")
+    strip = (gallery_item.get("frameSequence") or {}).get("strip") or []
+    if strip_index < 0 or strip_index >= len(strip):
+        raise ValueError(f"Strip index {strip_index} out of range (strip length {len(strip)}).")
+    slot = dict(strip[strip_index])
+    kp_rel = str(slot.get("sourceKeypointRelPath") or "").strip()
+    if not kp_rel:
+        raise ValueError("Strip slot has no sourceKeypointRelPath; cannot regenerate.")
+    pose_config = gallery_item.get("poseConfig") or {}
+    base_rel = str(pose_config.get("baseImageRelPath") or "").strip()
+    if not base_rel:
+        raise ValueError("Gallery item has no poseConfig.baseImageRelPath.")
+    kp_abs = str((root / kp_rel.lstrip("/")).resolve())
+    base_abs = str((root / base_rel.lstrip("/")).resolve())
+    prompt = str(pose_config.get("promptText") or "").strip()
+    skip_closeup = bool(pose_config.get("skipCloseup", False))
+    extra_pad_frac = float(pose_config.get("extraPadFrac") or 0.0)
+    cfg_scale = pose_config.get("cfgScale")
+
+    url, square_meta = _generate_pose_image_edit_url(
+        char_key,
+        base_abs,
+        prompt,
+        keypoint_image_path=kp_abs,
+        log_cb=log_cb,
+        skip_closeup=skip_closeup,
+        extra_pad_frac=float(extra_pad_frac),
+        cfg_scale=float(cfg_scale) if cfg_scale is not None else None,
+    )
+    dest_rel = str(slot.get("relPath") or "").strip()
+    dest_path = (root / dest_rel.lstrip("/")).resolve()
+    download_url_to_file(url.strip(), dest_path)
+
+    if square_meta:
+        sq_tmp = square_meta.pop("_squareTmpPath", None)
+        sq_dest = dest_path.parent / (dest_path.stem + "_sq" + dest_path.suffix)
+        if sq_tmp and Path(sq_tmp).is_file():
+            shutil.copy2(sq_tmp, sq_dest)
+            square_meta["figureSquareCropRelPath"] = str(sq_dest.resolve().relative_to(root)).replace("\\", "/")
+        slot["placedFigure"] = square_meta
+
+    manifest2 = read_sequence_manifest(char_key, seq_name)
+    for g in manifest2.get("gallery") or []:
+        if g.get("id") == gallery_item_id:
+            strip2 = (g.get("frameSequence") or {}).get("strip") or []
+            if strip_index < len(strip2):
+                strip2[strip_index] = slot
+            break
+    write_sequence_manifest(char_key, seq_name, manifest2)
+    return {"relPath": str(dest_path.resolve().relative_to(root)).replace("\\", "/")}
 
 
 def generate_expression_starting_image(

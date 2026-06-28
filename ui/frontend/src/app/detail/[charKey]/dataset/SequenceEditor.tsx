@@ -101,7 +101,7 @@ const TIMELINE_ZOOM_MAX = 3.2;
 
 type FrameMapValue = Pick<
   SequenceFrameItem,
-  "cellId" | "relPath" | "crop" | "sequenceGroupId" | "hidden"
+  "cellId" | "relPath" | "crop" | "sequenceGroupId" | "hidden" | "placedFigure"
 >;
 
 /** Single gallery image (copy from sequence gallery strip). */
@@ -292,6 +292,7 @@ function framesByIndex(manif: SequenceManifest): Map<number, FrameMapValue> {
       crop: fr.crop,
       sequenceGroupId: fr.sequenceGroupId,
       hidden: fr.hidden,
+      placedFigure: fr.placedFigure,
     });
   }
   return m;
@@ -309,6 +310,7 @@ function toFramesArray(map: Map<number, FrameMapValue>): SequenceManifest["frame
       };
       if (v.sequenceGroupId) row.sequenceGroupId = v.sequenceGroupId;
       if (v.hidden) row.hidden = true;
+      if (v.placedFigure) row.placedFigure = v.placedFigure;
       return row;
     });
 }

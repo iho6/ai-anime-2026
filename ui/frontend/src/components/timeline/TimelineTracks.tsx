@@ -116,6 +116,10 @@ type DragState = {
   clipId: string;
   startX: number;
   orig: TimelineClip;
+  /** Set when dragging multiple selected clips — original start per clip. */
+  multiOrig?: { trackId: string; clipId: string; origStart: number }[];
+  /** True when we deferred collapsing the selection; cancel if drag occurs. */
+  collapseSelectionOnUp?: boolean;
 };
 
 export type TimelineTracksHandle = {
@@ -365,14 +369,40 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
     e.preventDefault();
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    onSelectClip(clip.id, e.shiftKey || e.ctrlKey || e.metaKey);
+
+    const isModified = e.shiftKey || e.ctrlKey || e.metaKey;
+    const isAlreadySelected = selectedClipIds.includes(clip.id);
+    // Drag all selected clips together when clicking an already-selected clip without modifier.
+    const isMultiDrag = kind === "move" && !isModified && isAlreadySelected && selectedClipIds.length > 1;
+
+    if (isMultiDrag) {
+      // Defer selection collapse until pointer-up (in case this turns out to be just a click, not a drag).
+    } else {
+      onSelectClip(clip.id, isModified);
+    }
+
     gestureCommittedRef.current = false;
+
+    let multiOrig: DragState["multiOrig"];
+    if (isMultiDrag) {
+      multiOrig = [];
+      for (const t of manifest.tracks) {
+        for (const c of t.clips) {
+          if (selectedClipIds.includes(c.id)) {
+            multiOrig.push({ trackId: t.id, clipId: c.id, origStart: c.start });
+          }
+        }
+      }
+    }
+
     dragRef.current = {
       kind,
       trackId: track.id,
       clipId: clip.id,
       startX: e.clientX,
       orig: clip,
+      multiOrig,
+      collapseSelectionOnUp: isMultiDrag,
     };
   }
 
@@ -420,8 +450,29 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
         : Infinity;
 
     if (d.kind === "move") {
+      // Cancel the deferred selection collapse since this is a real drag.
+      d.collapseSelectionOnUp = false;
+
       const newStart = snapMove(clamp(o.start + dt, 0, Infinity), o.duration, o.id);
-      // Cross-lane drag: drop onto whichever same-kind track row is under the cursor.
+      const delta = newStart - o.start;
+
+      if (d.multiOrig && d.multiOrig.length > 1) {
+        // Multi-clip drag: apply the same time delta to all selected clips.
+        onChange((prev) => ({
+          ...prev,
+          tracks: prev.tracks.map((t) => ({
+            ...t,
+            clips: t.clips.map((c) => {
+              const m = d.multiOrig!.find((x) => x.clipId === c.id);
+              if (!m) return c;
+              return { ...c, start: Math.max(0, m.origStart + delta) };
+            }),
+          })),
+        }));
+        return;
+      }
+
+      // Single clip drag: support cross-lane drop.
       const targetId = trackIdAtClientY(e.clientY);
       const target = targetId
         ? manifest.tracks.find((t) => t.id === targetId)
@@ -531,8 +582,14 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
     if (dragRef.current) {
       (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
       const hadGesture = gestureCommittedRef.current;
+      const { clipId, collapseSelectionOnUp } = dragRef.current;
       dragRef.current = null;
       gestureCommittedRef.current = false;
+      // If the user clicked (no drag) on an already-selected clip in a multi-selection,
+      // collapse the selection to just that clip now.
+      if (collapseSelectionOnUp && !hadGesture) {
+        onSelectClip(clipId, false);
+      }
       if (hadGesture) onPruneTransitions?.();
     }
   }

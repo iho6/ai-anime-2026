@@ -2,6 +2,7 @@
 
 import React from "react";
 import { TriangleIcon } from "./IconPrimitives";
+import { type PlacedFigureMeta } from "../lib/api";
 
 export function KeypointRefTile(props: {
   tile: number;
@@ -11,8 +12,12 @@ export function KeypointRefTile(props: {
   onToggle: (on: boolean, e: React.ChangeEvent<HTMLInputElement>) => void;
   onPrimary: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  noBackdrop?: boolean;
+  noBackdropSrc?: string;
+  placedFigure?: PlacedFigureMeta;
 }) {
-  const { tile, src, checked, disabled, onToggle, onPrimary, onContextMenu } = props;
+  const { tile, src, checked, disabled, onToggle, onPrimary, onContextMenu, noBackdrop, noBackdropSrc, placedFigure } = props;
+  const showTransparent = noBackdrop && noBackdropSrc && placedFigure;
   return (
     <div
       style={{
@@ -42,7 +47,7 @@ export function KeypointRefTile(props: {
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={src}
+            src={showTransparent ? noBackdropSrc : src}
             alt=""
             className="gallery-cover-img"
             style={{ width: "100%", height: "100%", objectFit: "contain" }}

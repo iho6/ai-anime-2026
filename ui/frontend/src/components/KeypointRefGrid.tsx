@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   apiReferenceKeypointsReorderFolder,
   apiReferenceKeypointsReorderRoot,
@@ -50,7 +50,7 @@ export function KeypointRefGrid(props: {
   viewFolderId: string | null;
   onViewFolderIdChange: (id: string | null) => void;
   onContextMenu: (e: React.MouseEvent, item: PoseReference) => void;
-  onKeypointPreview: (item: PoseReference) => void;
+  onKeypointPreview: (item: PoseReference, noBackdrop?: boolean) => void;
   onOpenVideo: (item: KeypointVideoReference) => void;
   onVideoContextMenu?: (e: React.MouseEvent, item: KeypointVideoReference) => void;
   onFolderContextMenu?: (
@@ -91,6 +91,8 @@ export function KeypointRefGrid(props: {
     () => new Map(layout.folders.map((f) => [f.id, f])),
     [layout.folders]
   );
+
+  const [noBackdrop, setNoBackdrop] = useState(false);
 
   const viewFolder = viewFolderId ? folderById.get(viewFolderId) : null;
   const gridIds = viewFolderId
@@ -268,6 +270,25 @@ export function KeypointRefGrid(props: {
           >
             {viewFolder.name}
           </button>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              cursor: "pointer",
+              color: noBackdrop ? "#7dd3fc" : "#aaa",
+              fontSize: 12,
+              userSelect: "none",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={noBackdrop}
+              onChange={(e) => setNoBackdrop(e.target.checked)}
+              style={{ margin: 0 }}
+            />
+            No Backdrop
+          </label>
         </div>
       ) : null}
 
@@ -345,6 +366,9 @@ export function KeypointRefGrid(props: {
           }
           const it = itemById.get(id);
           if (!it) return null;
+          const pf = it.placedFigure;
+          const kpRelPath = pf?.squareKeypointCropRelPath ?? null;
+          const nbSrc = noBackdrop && pf && kpRelPath ? assetUrlFromRelPath(kpRelPath) : null;
           return (
             <SortableItem id={id} style={{ width: tile }}>
               <KeypointRefTile
@@ -353,8 +377,11 @@ export function KeypointRefGrid(props: {
                 checked={selectedIds.has(id)}
                 disabled={busy}
                 onToggle={(on, e) => onCheckboxChange(id, on, e)}
-                onPrimary={() => onKeypointPreview(it)}
+                onPrimary={() => onKeypointPreview(it, noBackdrop)}
                 onContextMenu={(e) => onContextMenu(e, it)}
+                noBackdrop={nbSrc !== null}
+                noBackdropSrc={nbSrc ?? undefined}
+                placedFigure={pf}
               />
             </SortableItem>
           );

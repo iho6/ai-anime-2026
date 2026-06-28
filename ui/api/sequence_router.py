@@ -482,6 +482,60 @@ def sequence_duplicate_asset(
     return {"relPath": new_rel}
 
 
+class SequenceRegenerateStripFrameBody(BaseModel):
+    galleryItemId: str
+    stripIndex: int
+
+
+@router.post("/detail/{char_key}/sequence/{sequence_name}/regenerate_strip_frame")
+def sequence_regenerate_strip_frame(
+    char_key: str, sequence_name: str, body: SequenceRegenerateStripFrameBody
+) -> dict[str, str]:
+    def svc_log(line: str) -> None:
+        logger.info("regen_strip[%s/%s] %s", char_key, sequence_name, line)
+
+    try:
+        result = logic.regenerate_sequence_strip_frame(
+            char_key,
+            sequence_name,
+            body.galleryItemId.strip(),
+            body.stripIndex,
+            log_cb=svc_log,
+        )
+        return result
+    except ValueError as ex:
+        raise HTTPException(400, str(ex)) from ex
+    except RuntimeError as ex:
+        raise HTTPException(502, detail={"error": str(ex), "stage": "regenerate_strip_frame"}) from ex
+
+
+class SequenceRegenerateStripFramesBatchBody(BaseModel):
+    galleryItemId: str
+    stripIndices: list[int]
+
+
+@router.post("/detail/{char_key}/sequence/{sequence_name}/regenerate_strip_frames_batch")
+def sequence_regenerate_strip_frames_batch(
+    char_key: str, sequence_name: str, body: SequenceRegenerateStripFramesBatchBody
+) -> dict[str, Any]:
+    def svc_log(line: str) -> None:
+        logger.info("regen_batch[%s/%s] %s", char_key, sequence_name, line)
+
+    try:
+        results = logic.regenerate_sequence_strip_frames_batch(
+            char_key,
+            sequence_name,
+            body.galleryItemId.strip(),
+            body.stripIndices,
+            log_cb=svc_log,
+        )
+        return {"results": results}
+    except ValueError as ex:
+        raise HTTPException(400, str(ex)) from ex
+    except RuntimeError as ex:
+        raise HTTPException(502, detail={"error": str(ex), "stage": "regenerate_strip_frames_batch"}) from ex
+
+
 class SequenceRenameFolderBody(BaseModel):
     oldName: str
     newLabel: str

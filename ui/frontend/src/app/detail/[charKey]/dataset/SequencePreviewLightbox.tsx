@@ -12,6 +12,7 @@ import {
   TimelinePlayIcon,
 } from "../../../../components/IconPrimitives";
 import { assetUrlFromRelPath, type SequenceCrop, type SequenceManifest } from "../../../../lib/api";
+import { CHECKERBOARD, squareSrcFromPlacedFigure } from "../../../../components/TransparentCanvasOverlay";
 import {
   aspectDimensionsForId,
   fitAspectBox,
@@ -93,6 +94,7 @@ export function SequencePreviewLightbox(props: Props) {
 
   const [idx, setIdx] = useState(initialIndex);
   const [playing, setPlaying] = useState(false);
+  const [noBackdrop, setNoBackdrop] = useState(false);
   const [mode, setMode] = useState<"view" | "crop">("view");
   const [cropDraft, setCropDraft] = useState<SequenceCrop>(() => defaultSequenceCrop());
   const [boxPx, setBoxPx] = useState({ w: 800, h: 450 });
@@ -293,6 +295,13 @@ export function SequencePreviewLightbox(props: Props) {
   const cur = Math.max(0, Math.min(idx, paths.length - 1));
   const src = paths[cur];
   const imagesReady = loadedCount >= paths.length;
+  const currentFrame = scope === "timeline" ? timelineFramesForPager[cur] : null;
+  const currentPlacedFigure = currentFrame?.placedFigure ?? null;
+  const noBackdropSrc = noBackdrop && currentPlacedFigure
+    ? squareSrcFromPlacedFigure(currentPlacedFigure)
+    : null;
+  const anyFrameSupportsNoBackdrop = scope === "timeline" &&
+    timelineFramesForPager.some((f) => f.placedFigure && squareSrcFromPlacedFigure(f.placedFigure));
 
   const btnStyle: React.CSSProperties = {
     color: "#eee",
@@ -334,13 +343,22 @@ export function SequencePreviewLightbox(props: Props) {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  ...(noBackdropSrc ? CHECKERBOARD : {}),
                 }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   enterCrop();
                 }}
               >
-                {playing ? (
+                {noBackdropSrc ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={noBackdropSrc}
+                    alt=""
+                    draggable={false}
+                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                  />
+                ) : playing ? (
                   // While playing, render a fixed contained image (no per-frame re-fit / zoom) so
                   // frames of differing dimensions don't jump in size.
                   <img
@@ -394,16 +412,29 @@ export function SequencePreviewLightbox(props: Props) {
           onClose={handleClose}
           extraAfterNext={
             scope === "timeline" ? (
-              <SquareIconButton
-                size={36}
-                aria-label={playing ? "Pause" : "Play"}
-                title={!imagesReady ? `Loading ${loadedCount}/${paths.length}…` : (playing ? "Pause" : "Play")}
-                icon={playing ? <PauseBarsIcon /> : <TimelinePlayIcon />}
-                tone="light"
-                style={btnStyle}
-                disabled={paths.length < 2 || !imagesReady}
-                onClick={() => setPlaying((p) => !p)}
-              />
+              <>
+                <SquareIconButton
+                  size={36}
+                  aria-label={playing ? "Pause" : "Play"}
+                  title={!imagesReady ? `Loading ${loadedCount}/${paths.length}…` : (playing ? "Pause" : "Play")}
+                  icon={playing ? <PauseBarsIcon /> : <TimelinePlayIcon />}
+                  tone="light"
+                  style={btnStyle}
+                  disabled={paths.length < 2 || !imagesReady}
+                  onClick={() => setPlaying((p) => !p)}
+                />
+                {anyFrameSupportsNoBackdrop ? (
+                  <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", color: noBackdrop ? "#7dd3fc" : "#ccc", fontSize: 12, userSelect: "none", whiteSpace: "nowrap" }}>
+                    <input
+                      type="checkbox"
+                      checked={noBackdrop}
+                      onChange={(e) => setNoBackdrop(e.target.checked)}
+                      style={{ margin: 0 }}
+                    />
+                    No Backdrop
+                  </label>
+                ) : null}
+              </>
             ) : undefined
           }
         />

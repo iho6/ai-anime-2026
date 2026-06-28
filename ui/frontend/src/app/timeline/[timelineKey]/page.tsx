@@ -90,7 +90,6 @@ import {
   type VolumeAutomationPoint,
 } from "../../../components/timeline/volumeAutomation";
 import {
-  appendClipToTrack,
   buildAudioClip,
   buildGeometryClip,
   buildImageClip,
@@ -240,6 +239,7 @@ export default function TimelineEditorPage() {
   const [videoFrameApplyIsGroup, setVideoFrameApplyIsGroup] = useState(false);
   const videoFrameApplyStripRef = useRef<FrameSequencePayload | null>(null);
   const videoFrameApplyGroupRef = useRef<Record<string, FrameSequencePayload> | null>(null);
+  const videoFrameApplyEditorRef = useRef<{ clipIds: string[]; primaryClipId: string; primaryTrackId: string } | null>(null);
   const [stripAiEditOpen, setStripAiEditOpen] = useState(false);
   const [stripAiEditImageSrc, setStripAiEditImageSrc] = useState("");
   const stripAiEditResolveRef = useRef<((rel: string) => void) | null>(null);
@@ -380,11 +380,16 @@ export default function TimelineEditorPage() {
   function addClip(kind: "video" | "audio", clip: TimelineClip) {
     historyUpdate((m) => {
       const { m: m2, trackId } = resolveTarget(m, kind);
+      const placed = { ...clip, start: playhead };
       return {
         ...m2,
-        tracks: m2.tracks.map((t) =>
-          t.id === trackId ? appendClipToTrack(t, clip) : t
-        ),
+        tracks: m2.tracks.map((t) => {
+          if (t.id !== trackId) return t;
+          const shifted = t.clips.map((c) =>
+            c.start >= playhead ? { ...c, start: c.start + placed.duration } : c
+          );
+          return { ...t, clips: [...shifted, placed] };
+        }),
       };
     });
     targetTrackRef.current = null;
@@ -396,9 +401,13 @@ export default function TimelineEditorPage() {
       const placed = { ...clip, start: playhead };
       return {
         ...m2,
-        tracks: m2.tracks.map((t) =>
-          t.id === trackId ? { ...t, clips: [...t.clips, placed] } : t
-        ),
+        tracks: m2.tracks.map((t) => {
+          if (t.id !== trackId) return t;
+          const shifted = t.clips.map((c) =>
+            c.start >= playhead ? { ...c, start: c.start + placed.duration } : c
+          );
+          return { ...t, clips: [...shifted, placed] };
+        }),
       };
     });
     targetTrackRef.current = null;
@@ -2011,6 +2020,7 @@ export default function TimelineEditorPage() {
   function promptVideoFrameApply(strip: FrameSequencePayload) {
     videoFrameApplyStripRef.current = strip;
     videoFrameApplyGroupRef.current = null;
+    videoFrameApplyEditorRef.current = videoFrameEditor;
     setVideoFrameApplyIsGroup(false);
     setVideoFrameApplyStep("mode");
     setVideoFrameApplyOpen(true);
@@ -2019,6 +2029,7 @@ export default function TimelineEditorPage() {
   function promptVideoFrameApplyGroup(payloads: Record<string, FrameSequencePayload>) {
     videoFrameApplyGroupRef.current = payloads;
     videoFrameApplyStripRef.current = null;
+    videoFrameApplyEditorRef.current = videoFrameEditor;
     setVideoFrameApplyIsGroup(true);
     setVideoFrameApplyPickIds(
       videoFrameEditor ? [videoFrameEditor.primaryClipId] : Object.keys(payloads)
@@ -2029,11 +2040,13 @@ export default function TimelineEditorPage() {
 
   async function applyVideoFrameStrip(mode: "replace" | "new_track") {
     setVideoFrameApplyOpen(false);
-    if (!videoFrameEditor || !manifest) return;
+    const editor = videoFrameEditor ?? videoFrameApplyEditorRef.current;
+    if (!editor || !manifest) return;
     const strip = videoFrameApplyStripRef.current;
     const groupPayloads = videoFrameApplyGroupRef.current;
     videoFrameApplyStripRef.current = null;
     videoFrameApplyGroupRef.current = null;
+    videoFrameApplyEditorRef.current = null;
 
     const encodeJobs: Array<{ clipId: string; strip: FrameSequencePayload }> = [];
     if (groupPayloads) {
@@ -2042,7 +2055,7 @@ export default function TimelineEditorPage() {
         if (s) encodeJobs.push({ clipId, strip: s });
       }
     } else if (strip) {
-      encodeJobs.push({ clipId: videoFrameEditor.primaryClipId, strip });
+      encodeJobs.push({ clipId: editor.primaryClipId, strip });
     }
     if (!encodeJobs.length) return;
 

@@ -9,13 +9,21 @@ import {
   apiExpressionGallerySplit,
   apiSequenceFolderNames,
   apiSequenceFolderDuplicate,
+  apiSequenceFolderDelete,
   apiSequenceGet,
+  apiSequencePut,
+  apiSequenceRegenerateStripFramesBatch,
   assetUrlFromRelPath,
   runDetailWsJob,
   runShotMakeAngleWsJob,
+  type FrameSequencePayload,
   type SequenceFrameItem,
   type SequenceManifest,
 } from "../lib/api";
+import {
+  FrameSequenceModal,
+  type FrameSequenceStripActions,
+} from "../app/detail/[charKey]/dataset/FrameSequenceModal";
 import {
   type KeypointRefEntry,
   keypointRefHasFrames,
@@ -99,6 +107,15 @@ export function TimelineCharacterPicker(props: {
     manifest: SequenceManifest;
   } | null>(null);
 
+  const [seqFrameEditor, setSeqFrameEditor] = useState<{
+    seqName: string;
+    charKey: string;
+    galleryItemId: string;
+    galleryIndex: number;
+    manifest: SequenceManifest;
+    initial: FrameSequencePayload;
+  } | null>(null);
+
   // Image right-click context menu (New Angle / New Pose)
   const [imgCtxMenu, setImgCtxMenu] = useState<{
     relPath: string;
@@ -136,7 +153,7 @@ export function TimelineCharacterPicker(props: {
     pushLog,
     modalProps: poseJobModalProps,
   } = useJobRunSession(logRef);
-  const { askText, showError } = useAppError();
+  const { askText, showError, confirmAction } = useAppError();
 
   const loadIcons = useCallback(async () => {
     setLoading(true);
@@ -400,6 +417,22 @@ export function TimelineCharacterPicker(props: {
     }
   }
 
+  async function deleteSequence(name: string) {
+    if (!selectedKey) return;
+    const confirmed = await confirmAction({
+      title: "Delete sequence",
+      message: `Delete "${name}"? This cannot be undone.`,
+      confirmText: "Delete",
+    });
+    if (!confirmed) return;
+    try {
+      await apiSequenceFolderDelete(selectedKey, name);
+      await loadSections(selectedKey);
+    } catch (e) {
+      showError({ message: "Delete sequence failed.", error: e });
+    }
+  }
+
   async function applyNewAngle(angleId: number) {
     setAngleModalOpen(false);
     const relPath = angleSourceRelPath;
@@ -510,6 +543,7 @@ export function TimelineCharacterPicker(props: {
                     cellId: `preview-${g.id}-${fi}`,
                     relPath: slot.relPath,
                     ...(slot.crop ? { crop: slot.crop } : {}),
+                    ...(slot.placedFigure ? { placedFigure: slot.placedFigure } : {}),
                   });
                   fi++;
                 }
@@ -532,6 +566,66 @@ export function TimelineCharacterPicker(props: {
       }
     },
     [selectedKey, showError]
+  );
+
+  const openFrameEditor = useCallback(
+    async (seqName: string) => {
+      if (!selectedKey) return;
+      try {
+        const manifest = await apiSequenceGet(selectedKey, seqName);
+        const gi = manifest.gallery.findIndex((g) => g.frameSequence);
+        if (gi < 0) {
+          showError({ message: "No frame sequence found in this sequence." });
+          return;
+        }
+        const item = manifest.gallery[gi]!;
+        setSeqFrameEditor({
+          seqName,
+          charKey: selectedKey,
+          galleryItemId: item.id,
+          galleryIndex: gi,
+          manifest,
+          initial: item.frameSequence!,
+        });
+      } catch (e) {
+        showError({ message: "Could not load sequence.", error: e });
+      }
+    },
+    [selectedKey, showError]
+  );
+
+  const saveSeqFrameEditor = useCallback(
+    async (payload: FrameSequencePayload) => {
+      if (!seqFrameEditor) return;
+      const { seqName, charKey: ck, galleryItemId, manifest: prev } = seqFrameEditor;
+      const gallery = [...prev.gallery];
+      const gi = gallery.findIndex((g) => g.id === galleryItemId);
+      if (gi < 0) return;
+      const row = gallery[gi]!;
+      const thumb = payload.strip.find(
+        (s) => s.kind === "image" && !s.hidden && s.relPath
+      )?.relPath;
+      gallery[gi] = { ...row, frameSequence: payload, relPath: thumb ?? row.relPath };
+      const updated = { ...prev, gallery };
+      await apiSequencePut(ck, seqName, updated);
+      setSeqFrameEditor((e) => (e ? { ...e, manifest: updated } : null));
+    },
+    [seqFrameEditor]
+  );
+
+  const regenerateSeqFrames = useCallback(
+    async (stripIndices: number[]): Promise<Map<number, string> | void> => {
+      if (!seqFrameEditor) return;
+      const { seqName, charKey: ck, galleryItemId } = seqFrameEditor;
+      const { results } = await apiSequenceRegenerateStripFramesBatch(ck, seqName, galleryItemId, stripIndices);
+      return new Map(results.map((r) => [r.stripIndex, r.relPath]));
+    },
+    [seqFrameEditor]
+  );
+
+  const seqFrameStripActions: FrameSequenceStripActions = useMemo(
+    () => ({ onRegenerateFrames: regenerateSeqFrames }),
+    [regenerateSeqFrames]
   );
 
   const downloadSequenceVideo = useCallback(
@@ -1115,6 +1209,29 @@ export function TimelineCharacterPicker(props: {
             onClick={() => {
               const { name } = seqCtxMenu;
               setSeqCtxMenu(null);
+              void openFrameEditor(name);
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "8px 14px",
+              background: "transparent",
+              color: "#eee",
+              border: "none",
+              textAlign: "left",
+              cursor: "pointer",
+              font: "inherit",
+              fontSize: 13,
+            }}
+          >
+            Edit Frames
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              const { name } = seqCtxMenu;
+              setSeqCtxMenu(null);
               void duplicateSequence(name);
             }}
             style={{
@@ -1131,6 +1248,30 @@ export function TimelineCharacterPicker(props: {
             }}
           >
             Duplicate Sequence
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              const { name } = seqCtxMenu;
+              setSeqCtxMenu(null);
+              void deleteSequence(name);
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "8px 14px",
+              background: "transparent",
+              color: "#f87171",
+              border: "none",
+              borderTop: "1px solid rgba(255,255,255,0.1)",
+              textAlign: "left",
+              cursor: "pointer",
+              font: "inherit",
+              fontSize: 13,
+            }}
+          >
+            Delete
           </button>
         </div>
       )}
@@ -1228,6 +1369,22 @@ export function TimelineCharacterPicker(props: {
           onCommitManifest={(next) => {
             setSeqPreview((cur) => (cur ? { ...cur, manifest: next } : cur));
           }}
+        />
+      ) : null}
+
+      {seqFrameEditor ? (
+        <FrameSequenceModal
+          open
+          title={`Edit Frames — ${seqFrameEditor.seqName}`}
+          initial={seqFrameEditor.initial}
+          sourceGalleryIndex={seqFrameEditor.galleryIndex}
+          charKey={seqFrameEditor.charKey}
+          sequenceName={seqFrameEditor.seqName}
+          previewFps={Math.max(1, seqFrameEditor.manifest.fps)}
+          stripActions={seqFrameStripActions}
+          onError={(message, error) => showError({ message, error })}
+          onClose={() => setSeqFrameEditor(null)}
+          onSave={saveSeqFrameEditor}
         />
       ) : null}
     </>
