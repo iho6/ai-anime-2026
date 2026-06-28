@@ -4414,7 +4414,10 @@ def generate_pose_sequence_from_keypoints(
                 f"{error_tag} frame download failed (index {i}, url={url[:200]}): {ex}"
             ) from ex
         rel_str = str(dest.resolve().relative_to(root)).replace("\\", "/")
-        kp_rel = str(Path(kp_abs).resolve().relative_to(root)).replace("\\", "/")
+        try:
+            kp_rel = str(Path(kp_abs).resolve().relative_to(root)).replace("\\", "/")
+        except ValueError:
+            kp_rel = str(Path(kp_abs).resolve().relative_to(root.parent)).replace("\\", "/")
         slot: dict[str, Any] = {"kind": "image", "relPath": rel_str, "sourceKeypointRelPath": kp_rel}
         if square_meta:
             sq_tmp = square_meta.pop("_squareTmpPath", None)
@@ -4580,7 +4583,10 @@ def regenerate_sequence_strip_frame(
     base_rel = str(pose_config.get("baseImageRelPath") or "").strip()
     if not base_rel:
         raise ValueError("Gallery item has no poseConfig.baseImageRelPath.")
-    kp_abs = str((root / kp_rel.lstrip("/")).resolve())
+    kp_abs_path = (root / kp_rel.lstrip("/")).resolve()
+    if not kp_abs_path.is_file():
+        kp_abs_path = (root.parent / kp_rel.lstrip("/")).resolve()
+    kp_abs = str(kp_abs_path)
     base_abs = str((root / base_rel.lstrip("/")).resolve())
     prompt = str(pose_config.get("promptText") or "").strip()
     skip_closeup = bool(pose_config.get("skipCloseup", False))
