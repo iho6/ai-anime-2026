@@ -20,13 +20,28 @@ def _decode_png_base64(raw: str) -> bytes:
 
 
 def _placed_figure_from_frame(fr: dict[str, Any]) -> dict[str, Any] | None:
-    from services.figure_crop import placed_figure_from_crop_meta
+    from services.figure_crop import MIN_SQUARE_WORKING_SIZE
 
-    return placed_figure_from_crop_meta(
-        fr.get("cropBox") if isinstance(fr.get("cropBox"), dict) else None,
-        fr.get("imageWidth"),
-        fr.get("imageHeight"),
-    )
+    crop_box = fr.get("cropBox") if isinstance(fr.get("cropBox"), dict) else None
+    image_width = fr.get("imageWidth")
+    image_height = fr.get("imageHeight")
+    if not isinstance(crop_box, dict) or not crop_box.get("width") or not crop_box.get("height"):
+        return None
+    if not image_width or not image_height:
+        return None
+    # cropBox from the frontend is already padded by FIGURE_CROP_PAD_FRAC (15%).
+    # Do NOT call build_placed_figure_meta here — that adds another 15%, making the
+    # paste position 30% larger than the actual mesh zoom square on the canvas.
+    return {
+        "canvas": {"width": int(image_width), "height": int(image_height)},
+        "placement": {
+            "x": int(crop_box["x"]),
+            "y": int(crop_box["y"]),
+            "width": int(crop_box["width"]),
+            "height": int(crop_box["height"]),
+        },
+        "workingSquareSize": MIN_SQUARE_WORKING_SIZE,
+    }
 
 
 def create_v2pose_folder(folder_name: str, *, motion_key: str = "") -> dict[str, Any]:

@@ -126,7 +126,8 @@ const TAN_HALF_FOV = Math.tan((45 * 0.5) * Math.PI / 180); // FOV=45 fixed at ca
 const ZOOM_FACTOR = 0.001;
 const FALLBACK_W = 380;
 const FALLBACK_H = 320;
-const FIGURE_CROP_PAD_FRAC = 0.15;
+const FIGURE_CROP_PAD_FRAC = 0.08;
+const FIGURE_CROP_PAD_MAX_PX = 80;
 const MIN_CROP_SIZE = 64;
 
 
@@ -300,7 +301,8 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       const halfW = Math.max(cx - minX, maxX - cx);
       const halfH = Math.max(cy - minY, maxY - cy);
       const halfSide = Math.max(halfW, halfH, MIN_CROP_SIZE / 2);
-      const side = Math.round(halfSide * 2 * (1 + 2 * FIGURE_CROP_PAD_FRAC));
+      const padPx = Math.min(halfSide * FIGURE_CROP_PAD_FRAC, FIGURE_CROP_PAD_MAX_PX);
+      const side = Math.round((halfSide + padPx) * 2);
       const nx = Math.round(cx - side / 2);
       const ny = Math.round(cy - side / 2);
       return { x: nx, y: ny, width: side, height: side, imageWidth: imgW, imageHeight: imgH };
