@@ -9,6 +9,7 @@ import React, {
 import { keyframeWorldPose, orbitStateFromWorldPose, worldPoseFromOrbitState } from "./cameraTrajectory";
 import type { CameraWorldPose } from "./cameraTrajectory";
 import { computeCaptureViewportLayout } from "./captureViewportLayout";
+import { computeViewOffsetFromBbox, cropCanvasToSquare } from "./captureZoom";
 import type { SequencePreviewAspect } from "../../lib/api";
 import { normalizeSequencePreviewAspect, aspectDimensionsForId } from "../../lib/sequenceAspect";
 
@@ -303,6 +304,9 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       const halfSide = Math.max(halfW, halfH, MIN_CROP_SIZE / 2);
       const padPx = Math.min(halfSide * FIGURE_CROP_PAD_FRAC, FIGURE_CROP_PAD_MAX_PX);
       const side = Math.round((halfSide + padPx) * 2);
+      // nx = cx - side/2 guarantees the centroid projects to exactly 512/1024 in Phase 2.
+      // Negative values are intentional: setViewOffset accepts them and renders those
+      // out-of-canvas areas as the clear color (transparent), which is the verification feature.
       const nx = Math.round(cx - side / 2);
       const ny = Math.round(cy - side / 2);
       return { x: nx, y: ny, width: side, height: side, imageWidth: imgW, imageHeight: imgH };
@@ -851,76 +855,28 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           const screenBbox = _computeFigureScreenBbox();
           if (!screenBbox) return null;
 
-          // ── Phase 2: HD closeup via tile projection matrix ────────────────
-          // Switch to a square viewport so the closeup has 1:1 aspect for Qwen.
-          t.renderer.setSize(targetSize, targetSize);
-          t.camera.aspect = 1.0;
-          t.camera.updateProjectionMatrix();
-
-          // Derive the tile NDC directly from Phase 1's screenBbox converted to
-          // 1:1 camera space. The key insight: a square pixel region in the 16:9
-          // canvas maps to a square NDC region in the 1:1 camera (horizontal NDC
-          // scales by captureAspRatio = captureW/captureH), so scaleX ≈ scaleY
-          // and there is no distortion. Crucially, this approach is correct even
-          // when the figure is near horizontal edges: the old approach computed
-          // closeupBbox in the 1:1 camera (whose horizontal FOV is narrower than
-          // 16:9), placing the zoom region at the wrong offset for off-center
-          // figures. WebGL clips in final NDC space after tile-matrix application,
-          // so ndcL/ndcR can legitimately exceed ±1 for edge-positioned figures.
-          const imgW_p1 = screenBbox.imageWidth;   // captureW * pixelRatio
-          const imgH_p1 = screenBbox.imageHeight;  // captureH * pixelRatio
-          // 16:9 NDC of the screenBbox, then scale horizontal by captureAspRatio:
-          const ndcL = ((screenBbox.x / imgW_p1) * 2 - 1) * captureAspRatio;
-          const ndcR = (((screenBbox.x + screenBbox.width) / imgW_p1) * 2 - 1) * captureAspRatio;
-          const ndcT = 1 - (screenBbox.y / imgH_p1) * 2;
-          const ndcB = 1 - ((screenBbox.y + screenBbox.height) / imgH_p1) * 2;
-
-          // Tile matrix: maps [ndcL,ndcR]×[ndcB,ndcT] → [-1,1]×[-1,1].
-          // Premultiplied onto projectionMatrix so only the frustum changes.
-          const scaleX = 2 / (ndcR - ndcL);
-          const scaleY = 2 / (ndcT - ndcB);
-          const transX = -(ndcR + ndcL) / (ndcR - ndcL);
-          const transY = -(ndcT + ndcB) / (ndcT - ndcB);
-          const tileMatrix = new t.THREE.Matrix4();
-          // Matrix4.set() takes row-major order
-          tileMatrix.set(
-            scaleX, 0,      0, transX,
-            0,      scaleY, 0, transY,
-            0,      0,      1, 0,
-            0,      0,      0, 1,
+          const pr = t.renderer.getPixelRatio();
+          const { logicalBbox } = computeViewOffsetFromBbox(
+            captureW,
+            captureH,
+            screenBbox,
+            pr,
           );
 
-          const savedProjMatrix = t.camera.projectionMatrix.clone();
-          t.camera.projectionMatrix.premultiply(tileMatrix);
+          // ── Phase 2: 2D crop + upscale from phase-1 framebuffer ───────────
+          // Pixel-perfect match to cropBox — same pixels diag pastes at placement.
+          const dataUrl = cropCanvasToSquare(
+            t.renderer.domElement,
+            screenBbox,
+            targetSize,
+          );
 
-          t.gizmoGroup.visible = false;
-          t.grid.visible = false;
-          t.renderer.render(t.scene, t.camera);
-          t.grid.visible = true;
-          t.gizmoGroup.visible = wasGizmoVisible && gizmosVisibleRef.current;
-
-          t.camera.projectionMatrix.copy(savedProjMatrix);
-
-          const dataUrl = t.renderer.domElement.toDataURL('image/png');
-
-          // Normalize screenBbox to logical pixel space (captureW × captureH).
-          // _computeFigureScreenBbox uses renderer.domElement.width/height which
-          // are physical pixels (logical × devicePixelRatio). We divide back so
-          // cropBox and imageWidth/imageHeight are always in the same logical
-          // coordinate space as captureW/captureH, regardless of display DPI.
-          const pr = t.renderer.getPixelRatio();
           return {
             dataUrl,
-            screenBbox: {
-              x: Math.round(screenBbox.x / pr),
-              y: Math.round(screenBbox.y / pr),
-              width: Math.round(screenBbox.width / pr),
-              height: Math.round(screenBbox.height / pr),
-              imageWidth: captureW,
-              imageHeight: captureH,
-            },
+            screenBbox: logicalBbox,
           };
         } finally {
+          t.camera.clearViewOffset();
           t.renderer.setSize(savedRendSize.x, savedRendSize.y);
           t.camera.aspect = savedAspect;
           t.camera.updateProjectionMatrix();

@@ -3,6 +3,7 @@
 import React from "react";
 import { TriangleIcon } from "./IconPrimitives";
 import { type PlacedFigureMeta } from "../lib/api";
+import { TransparentCanvasOverlay } from "./TransparentCanvasOverlay";
 
 export function KeypointRefTile(props: {
   tile: number;
@@ -45,14 +46,22 @@ export function KeypointRefTile(props: {
             overflow: "hidden",
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={showTransparent ? noBackdropSrc : src}
-            alt=""
-            className="gallery-cover-img"
-            style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            draggable={false}
-          />
+          {showTransparent ? (
+            <TransparentCanvasOverlay
+              squareSrc={noBackdropSrc}
+              placedFigure={placedFigure}
+              style={{ width: "100%", height: "100%" }}
+            />
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={src}
+              alt=""
+              className="gallery-cover-img"
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              draggable={false}
+            />
+          )}
         </button>
 
         <label

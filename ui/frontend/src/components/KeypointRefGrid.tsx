@@ -93,6 +93,7 @@ export function KeypointRefGrid(props: {
   );
 
   const [noBackdrop, setNoBackdrop] = useState(false);
+  const [showMeshInput, setShowMeshInput] = useState(false);
 
   const viewFolder = viewFolderId ? folderById.get(viewFolderId) : null;
   const gridIds = viewFolderId
@@ -289,6 +290,25 @@ export function KeypointRefGrid(props: {
             />
             No Backdrop
           </label>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              cursor: "pointer",
+              color: showMeshInput ? "#fde68a" : "#aaa",
+              fontSize: 12,
+              userSelect: "none",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={showMeshInput}
+              onChange={(e) => setShowMeshInput(e.target.checked)}
+              style={{ margin: 0 }}
+            />
+            Mesh input
+          </label>
         </div>
       ) : null}
 
@@ -368,12 +388,23 @@ export function KeypointRefGrid(props: {
           if (!it) return null;
           const pf = it.placedFigure;
           const kpRelPath = pf?.squareKeypointCropRelPath ?? null;
-          const nbSrc = noBackdrop && pf && kpRelPath ? assetUrlFromRelPath(kpRelPath) : null;
+          let nbSrc: string | null = null;
+          if (noBackdrop && pf) {
+            if (showMeshInput) {
+              const meshRel = pf.squareRefCropRelPath ?? it.referenceRelPath;
+              nbSrc = assetUrlFromRelPath(meshRel);
+            } else if (kpRelPath) {
+              nbSrc = assetUrlFromRelPath(kpRelPath);
+            }
+          }
+          const tileSrc = showMeshInput
+            ? assetUrlFromRelPath(it.referenceRelPath)
+            : assetUrlFromRelPath(it.keypointRelPath);
           return (
             <SortableItem id={id} style={{ width: tile }}>
               <KeypointRefTile
                 tile={tile}
-                src={assetUrlFromRelPath(it.keypointRelPath)}
+                src={tileSrc}
                 checked={selectedIds.has(id)}
                 disabled={busy}
                 onToggle={(on, e) => onCheckboxChange(id, on, e)}

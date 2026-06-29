@@ -315,13 +315,22 @@ def composite_qwen_output_on_white_plate(
     return paste_on_white_canvas(qwen_output, c_w, c_h, placement)
 
 
-def placed_figure_from_crop_meta(
+def placed_figure_from_motion_capture_meta(
     crop_box: dict[str, Any] | None,
     image_width: int | None,
     image_height: int | None,
+    *,
+    already_padded: bool = False,
 ) -> dict[str, Any] | None:
-    """Build ``placedFigure`` from motion-ref capture metadata (cropBox + canvas size)."""
+    """Build ``placedFigure`` from motion-ref capture metadata (cropBox + canvas size).
+
+  When ``already_padded=True`` (V2Pose zoom captures), ``cropBox`` is used as-is —
+  the frontend already padded the figure bbox. When ``False``, legacy full-frame
+  staging may apply ``build_placed_figure_meta`` (square expansion + pad).
+    """
     if not isinstance(crop_box, dict) or not crop_box.get("width") or not crop_box.get("height"):
+        return None
+    if not image_width or not image_height:
         return None
     placement = {
         "x": int(crop_box["x"]),
@@ -329,11 +338,83 @@ def placed_figure_from_crop_meta(
         "width": int(crop_box["width"]),
         "height": int(crop_box["height"]),
     }
-    if image_width and image_height:
-        return build_placed_figure_meta(int(image_width), int(image_height), placement)
-    # Canvas dimensions are required for correct compositing; without them we
-    # cannot know which canvas space the cropBox belongs to, so discard.
-    return None
+    if already_padded:
+        return {
+            "canvas": {"width": int(image_width), "height": int(image_height)},
+            "placement": placement,
+            "workingSquareSize": MIN_SQUARE_WORKING_SIZE,
+        }
+    return build_placed_figure_meta(int(image_width), int(image_height), placement)
+
+
+def placed_figure_from_crop_meta(
+    crop_box: dict[str, Any] | None,
+    image_width: int | None,
+    image_height: int | None,
+    *,
+    already_padded: bool = False,
+) -> dict[str, Any] | None:
+    """Build ``placedFigure`` from motion-ref capture metadata (cropBox + canvas size)."""
+    return placed_figure_from_motion_capture_meta(
+        crop_box,
+        image_width,
+        image_height,
+        already_padded=already_padded,
+    )
+
+
+def paste_keypoint_at_placement(
+    kp_path: Path | str | Image.Image,
+    canvas_w: int,
+    canvas_h: int,
+    placement: dict[str, int],
+    *,
+    background: tuple[int, int, int] = (0, 0, 0),
+    dest_path: Path | str | None = None,
+) -> Path:
+    """
+    Paste an SDPose output onto a full canvas at ``placement`` with no re-crop or
+    letterboxing — same contract as diag ``paste_on_black_canvas`` on zoom captures.
+    The patch is only uniformly scaled to ``placement`` width×height.
+    """
+    if isinstance(kp_path, Image.Image):
+        patch = kp_path.convert("RGB")
+    else:
+        src = Path(kp_path)
+        if not src.is_file():
+            raise FileNotFoundError(f"Keypoint image not found: {src}")
+        with Image.open(src) as im:
+            patch = im.convert("RGB")
+    if background == (0, 0, 0):
+        full = paste_on_black_canvas(patch, canvas_w, canvas_h, placement)
+    else:
+        full = paste_patch_on_canvas(
+            patch, canvas_w, canvas_h, placement, background=background, feather_px=0
+        ).convert("RGB")
+    if dest_path is not None:
+        out = Path(dest_path)
+    else:
+        from services.character_storage import unique_suffix
+
+        out = Path(tempfile.gettempdir()) / f"kp_full_{unique_suffix()}.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    full.save(out)
+    return out
+
+
+def prepare_sdpose_input_image(
+    image: Image.Image,
+    min_side: int = MIN_SQUARE_WORKING_SIZE,
+) -> Image.Image:
+    """Return image for SDPose input; upscale only when max side is below ``min_side``."""
+    rgb = image.convert("RGB")
+    w, h = rgb.size
+    if max(w, h) >= min_side:
+        return rgb
+    scale = min_side / max(w, h)
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
+    return rgb.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
 
 def paste_working_keypoint_onto_canvas(

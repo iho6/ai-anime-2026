@@ -4179,10 +4179,10 @@ def _resolve_placed_figure_for_keypoint(
     ``canvas`` dimensions match the keypoint image on disk.
 
     • If ``stored`` is valid and its canvas already matches the file → return it.
-    • If ``stored`` exists but its canvas is wrong (e.g. zoomed-square 1024×1024
-      stored instead of the intended 16:9 1024×576) → override canvas with the
-      real file dimensions while keeping the stored placement coordinates, which
-      are always expressed in the composite-image pixel space.
+    • If ``stored`` has ``squareKeypointCropRelPath`` and canvas differs from the
+      keypoint file (square vs full-canvas composite) → return stored unchanged.
+    • If ``stored`` exists but its canvas is wrong with no square crop path →
+      override canvas with the real file dimensions while keeping placement.
     • If ``stored`` is None and the keypoint is non-square → synthesise a
       centred-square placement within the image canvas so compositing can still
       happen.
@@ -4202,7 +4202,8 @@ def _resolve_placed_figure_for_keypoint(
     if stored and stored.get("placement") and stored.get("canvas"):
         sc = stored["canvas"]
         if int(sc.get("width", 0)) != kw or int(sc.get("height", 0)) != kh:
-            # Canvas stored under wrong dimensions — override with actual image size.
+            if stored.get("squareKeypointCropRelPath"):
+                return stored
             return {**stored, "canvas": {"width": kw, "height": kh}}
         return stored
 
@@ -9142,11 +9143,12 @@ def run_pose_keypoint_for_image(
 ) -> str:
     """
     Run ``pose_keypoint_ai_service`` on a single image.
-    When ``placed_figure`` is set, SDPose runs on a 1024×1024 square crop and the
-    skeleton is pasted onto a full-size black canvas at ``placement``.
-    Set ``skip_placement_crop=True`` when the input image is already the zoomed square
-    (e.g. a V2Pose 1024×1024 capture) — SDPose runs on the full image and the
-    ``placed_figure`` coordinates are only used for the canvas paste step.
+    When ``placed_figure`` is set, SDPose runs on a square crop (or the full image
+    when ``skip_placement_crop=True``) and the skeleton is pasted onto a full-size
+    black canvas at ``placement``.
+    Set ``skip_placement_crop=True`` when the input is already the zoomed 1024²
+    capture — SDPose runs on the full image and the output is pasted directly at
+    ``cropBox`` with no re-crop or letterboxing.
     Returns the local absolute path of the keypoint output image.
     """
     from PIL import Image
@@ -9154,6 +9156,8 @@ def run_pose_keypoint_for_image(
     from services.figure_crop import (
         MIN_SQUARE_WORKING_SIZE,
         extract_square_working_crop,
+        paste_keypoint_at_placement,
+        paste_working_keypoint_onto_canvas,
     )
 
     src = Path(image_abs_path)
@@ -9176,9 +9180,6 @@ def run_pose_keypoint_for_image(
         min_side = int(placed_figure.get("workingSquareSize") or MIN_SQUARE_WORKING_SIZE)
 
         if skip_placement_crop:
-            # Input is already the zoomed square — run SDPose on the full image.
-            # Applying canvas-space placement coords to crop a zoom image would be a
-            # coordinate space mismatch; the image IS the crop, so no further crop needed.
             if save_square_crops_to:
                 out_dir = Path(save_square_crops_to)
                 out_dir.mkdir(parents=True, exist_ok=True)
@@ -9229,23 +9230,29 @@ def run_pose_keypoint_for_image(
     else:
         raise RuntimeError("Pose keypoint result missing url and local_path.")
 
-    if placement is not None and canvas_w > 0 and canvas_h > 0 and not skip_placement_crop:
-        from services.figure_crop import paste_working_keypoint_onto_canvas
-
+    if placement is not None and canvas_w > 0 and canvas_h > 0:
         if save_square_crops_to:
             out_dir = Path(save_square_crops_to)
             out_dir.mkdir(parents=True, exist_ok=True)
-            # SDPose ran on ref_square.png (already 1024²); its output IS the square keypoint.
-            # Do not re-crop with canvas-space placement — just copy directly.
             shutil.copy2(kp_crop_path, out_dir / "kp_square.png")
-        full_dest = paste_working_keypoint_onto_canvas(
-            kp_crop_path,
-            placed_figure,
-            background=(0, 0, 0),
-        )
+
+        if skip_placement_crop:
+            full_dest = paste_keypoint_at_placement(
+                kp_crop_path,
+                canvas_w,
+                canvas_h,
+                placement,
+                background=(0, 0, 0),
+            )
+        else:
+            full_dest = paste_working_keypoint_onto_canvas(
+                kp_crop_path,
+                placed_figure,
+                background=(0, 0, 0),
+            )
         if log_cb:
             log_cb(
-                f"Pasted {min_side}×{min_side} skeleton onto {canvas_w}×{canvas_h} canvas."
+                f"Pasted skeleton onto {canvas_w}×{canvas_h} canvas at placement."
             )
         return str(full_dest)
 
@@ -9281,11 +9288,10 @@ def make_reference_keypoint(
     """Run the SD pose service on a saved reference image and store the
     (original, skeleton) pair in the global keypoint collection.
 
-    Set ``image_is_zoomed_crop=True`` when the image is already a 1024×1024
-    zoomed capture (character fills the whole image). This skips the
-    canvas-space placement crop that would otherwise create a coordinate space
-    mismatch, and also skips the 15% re-padding of ``placed_figure`` so the
-    canvas paste uses the exact original cropBox coordinates.
+    Set ``image_is_zoomed_crop=True`` when the image is already a zoomed 1024²
+    capture. This skips ``build_placed_figure_meta`` re-padding and passes
+    ``skip_placement_crop`` so SDPose runs on the full zoom PNG and the raw
+    output is pasted at ``cropBox`` without letterboxing.
     """
     from services import reference_storage
     from services.figure_crop import build_placed_figure_meta
@@ -9456,10 +9462,12 @@ def make_reference_keypoint_video_from_staged_frames(
     """
     from services import reference_storage
     from services.figure_crop import (
-        extract_square_working_crop_path,
-        paste_working_keypoint_onto_canvas,
+        MIN_SQUARE_WORKING_SIZE,
+        paste_keypoint_at_placement,
         placed_figure_from_crop_meta,
+        prepare_sdpose_input_image,
     )
+    from PIL import Image
 
     rels = [str(r or "").strip().replace("\\", "/").lstrip("/") for r in frame_rel_paths]
     rels = [r for r in rels if r]
@@ -9478,6 +9486,7 @@ def make_reference_keypoint_video_from_staged_frames(
             meta.get("cropBox") if isinstance(meta, dict) else None,
             meta.get("imageWidth") if isinstance(meta, dict) else None,
             meta.get("imageHeight") if isinstance(meta, dict) else None,
+            already_padded=True,
         )
         if not pf or not pf.get("placement") or not pf.get("canvas"):
             raise ValueError(f"Invalid crop metadata for frame: {rel}")
@@ -9493,11 +9502,12 @@ def make_reference_keypoint_video_from_staged_frames(
 
     try:
         crop_paths: list[Path] = []
-        for i, (full_abs, pf) in enumerate(zip(full_abs_paths, placed_figures)):
+        min_side = MIN_SQUARE_WORKING_SIZE
+        for i, full_abs in enumerate(full_abs_paths):
             crop_out = crop_dir / f"crop_{i + 1:06d}.png"
-            extract_square_working_crop_path(
-                full_abs, pf["placement"], crop_out, min_side=int(pf.get("workingSquareSize") or 1024)
-            )
+            with Image.open(full_abs) as im:
+                sq = prepare_sdpose_input_image(im.convert("RGB"), min_side=min_side)
+            sq.save(crop_out)
             crop_paths.append(crop_out)
 
         if log_cb:
@@ -9524,9 +9534,12 @@ def make_reference_keypoint_video_from_staged_frames(
 
         kp_full_paths: list[str] = []
         for i in range(n):
-            kp_full = paste_working_keypoint_onto_canvas(
+            pf = placed_figures[i]
+            kp_full = paste_keypoint_at_placement(
                 kp_square_frames[i],
-                placed_figures[i],
+                int(pf["canvas"]["width"]),
+                int(pf["canvas"]["height"]),
+                pf["placement"],
                 background=(0, 0, 0),
                 dest_path=kp_full_dir / f"kp_{i + 1:06d}.png",
             )

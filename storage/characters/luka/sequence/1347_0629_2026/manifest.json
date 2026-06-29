@@ -1,0 +1,2169 @@
+{
+  "version": 1,
+  "fps": 24,
+  "gallery": [
+    {
+      "id": "7ef15527ac58",
+      "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000001.png",
+      "frameSequence": {
+        "sequenceGroupId": "d8d044439376",
+        "strip": [
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000001.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_d8a55c7ca3c1.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 642,
+                "y": 28,
+                "width": 255,
+                "height": 255
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000001_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000002.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_ae0d6aa54d46.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 640,
+                "y": 30,
+                "width": 251,
+                "height": 251
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000002_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000003.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_dbf19abce825.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 639,
+                "y": 31,
+                "width": 248,
+                "height": 248
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000003_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000004.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_4b11b96bb04e.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 636,
+                "y": 34,
+                "width": 244,
+                "height": 244
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000004_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000005.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_720be9e2fdba.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 634,
+                "y": 36,
+                "width": 240,
+                "height": 240
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000005_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000006.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_dbaf8c366e84.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 630,
+                "y": 39,
+                "width": 236,
+                "height": 236
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000006_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000007.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_556bcfb0385f.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 626,
+                "y": 43,
+                "width": 231,
+                "height": 231
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000007_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000008.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_29f898e9c54b.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 625,
+                "y": 48,
+                "width": 223,
+                "height": 223
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000008_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000009.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_aaa485724cdd.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 620,
+                "y": 50,
+                "width": 223,
+                "height": 223
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000009_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000010.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_e84b876f789f.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 617,
+                "y": 53,
+                "width": 222,
+                "height": 222
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000010_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000011.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_fafd7b8f5fc9.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 617,
+                "y": 59,
+                "width": 219,
+                "height": 219
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000011_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000012.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_5e30f3012690.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 617,
+                "y": 66,
+                "width": 212,
+                "height": 212
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000012_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000013.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_14ed7540ed65.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 615,
+                "y": 70,
+                "width": 207,
+                "height": 207
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000013_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000014.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_dacbff9a5699.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 606,
+                "y": 63,
+                "width": 212,
+                "height": 212
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000014_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000015.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_417010505cc7.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 589,
+                "y": 51,
+                "width": 231,
+                "height": 231
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000015_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000016.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_2a5b060025e3.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 582,
+                "y": 55,
+                "width": 234,
+                "height": 234
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000016_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000017.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_76e67e301353.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 583,
+                "y": 64,
+                "width": 221,
+                "height": 221
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000017_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000018.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_8e2fb5ce21a9.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 567,
+                "y": 48,
+                "width": 247,
+                "height": 247
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000018_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000019.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_dd31c378d82d.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 557,
+                "y": 41,
+                "width": 260,
+                "height": 260
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000019_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000020.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_f803d364ce56.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 554,
+                "y": 49,
+                "width": 257,
+                "height": 257
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000020_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000021.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_1649b0c02328.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 550,
+                "y": 53,
+                "width": 250,
+                "height": 250
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000021_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000022.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_165c48e16e42.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 533,
+                "y": 39,
+                "width": 271,
+                "height": 271
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000022_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000023.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_394e875828d0.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 520,
+                "y": 36,
+                "width": 284,
+                "height": 284
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000023_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000024.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_30193346b8c9.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 523,
+                "y": 54,
+                "width": 266,
+                "height": 266
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000024_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000025.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_b97c0997cf53.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 510,
+                "y": 41,
+                "width": 287,
+                "height": 287
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000025_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000026.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_614c029d12b6.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 493,
+                "y": 26,
+                "width": 314,
+                "height": 314
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000026_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000027.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_5067cb5d8982.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 487,
+                "y": 31,
+                "width": 317,
+                "height": 317
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000027_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000028.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_608f280a1507.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 486,
+                "y": 41,
+                "width": 304,
+                "height": 304
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000028_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000029.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_95aed624152e.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 461,
+                "y": 21,
+                "width": 335,
+                "height": 335
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000029_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000030.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_ce24ce38cd74.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 444,
+                "y": 18,
+                "width": 352,
+                "height": 352
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000030_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000031.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_65580c77cc3a.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 444,
+                "y": 37,
+                "width": 335,
+                "height": 335
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000031_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000032.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_a69c8697937a.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 423,
+                "y": 21,
+                "width": 364,
+                "height": 364
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000032_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000033.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_8a73d7bffafa.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 394,
+                "y": 0,
+                "width": 404,
+                "height": 404
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000033_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000034.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_c32f83d89e65.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 379,
+                "y": 7,
+                "width": 412,
+                "height": 412
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000034_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000035.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_4b919b768a04.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 375,
+                "y": 24,
+                "width": 392,
+                "height": 392
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000035_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000036.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_4e2e51d480fa.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 331,
+                "y": -10,
+                "width": 446,
+                "height": 446
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000036_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000037.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_e8229643e9e8.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 298,
+                "y": -17,
+                "width": 474,
+                "height": 474
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000037_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000038.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_b77c5a5c002b.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 279,
+                "y": -3,
+                "width": 476,
+                "height": 476
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000038_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000039.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_6db8deebeaf4.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 254,
+                "y": -15,
+                "width": 498,
+                "height": 498
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000039_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000040.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_ee3faa239f20.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 212,
+                "y": -51,
+                "width": 560,
+                "height": 560
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000040_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000041.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_dc0a6d71414c.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 181,
+                "y": -64,
+                "width": 594,
+                "height": 594
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000041_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000042.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_904eacf49c77.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 180,
+                "y": -50,
+                "width": 573,
+                "height": 573
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000042_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000043.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_8ece0f27ddec.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 167,
+                "y": -62,
+                "width": 573,
+                "height": 573
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000043_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000044.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_7adec1c41484.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 148,
+                "y": -79,
+                "width": 582,
+                "height": 582
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000044_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000045.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_fbf91f1cd911.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 83,
+                "y": -124,
+                "width": 676,
+                "height": 676
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000045_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000046.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_5f0aa396787e.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 37,
+                "y": -137,
+                "width": 726,
+                "height": 726
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000046_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000047.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_8842cf1b106c.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": -2,
+                "y": -145,
+                "width": 752,
+                "height": 752
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000047_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000048.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_57e4147a7607.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": -23,
+                "y": -147,
+                "width": 743,
+                "height": 743
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000048_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000049.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_587a9b82b4e5.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": -41,
+                "y": -147,
+                "width": 727,
+                "height": 727
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000049_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000050.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_7aa96a6c47f6.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": -51,
+                "y": -137,
+                "width": 701,
+                "height": 701
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000050_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000051.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_c11667e8face.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": -45,
+                "y": -125,
+                "width": 667,
+                "height": 667
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000051_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000052.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_e76b14fff443.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": -31,
+                "y": -131,
+                "width": 669,
+                "height": 669
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000052_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000053.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_594b3e6ef3a1.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": -3,
+                "y": -126,
+                "width": 659,
+                "height": 659
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000053_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000054.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_4f9c00fe227d.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 44,
+                "y": -100,
+                "width": 611,
+                "height": 611
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000054_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000055.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_ca73c8d7cc5d.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 87,
+                "y": -74,
+                "width": 562,
+                "height": 562
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000055_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000056.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_4dd497f4413d.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 107,
+                "y": -67,
+                "width": 539,
+                "height": 539
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000056_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000057.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_af8d975efe18.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 75,
+                "y": -98,
+                "width": 600,
+                "height": 600
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000057_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000058.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_540d602dc81f.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 64,
+                "y": -86,
+                "width": 595,
+                "height": 595
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000058_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000059.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_8208aaccd5df.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 66,
+                "y": -69,
+                "width": 578,
+                "height": 578
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000059_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000060.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_3dedcf096f37.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 64,
+                "y": -73,
+                "width": 583,
+                "height": 583
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000060_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000061.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_60bd5f013619.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 60,
+                "y": -85,
+                "width": 598,
+                "height": 598
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000061_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000062.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_77cfa5eb8aec.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 79,
+                "y": -75,
+                "width": 573,
+                "height": 573
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000062_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000063.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_6dded3575817.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 106,
+                "y": -57,
+                "width": 536,
+                "height": 536
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000063_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000064.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_5527fdbf2551.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 108,
+                "y": -67,
+                "width": 549,
+                "height": 549
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000064_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000065.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_93d2b7cb83c1.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 119,
+                "y": -72,
+                "width": 559,
+                "height": 559
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000065_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000066.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_0eec183e9285.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 136,
+                "y": -71,
+                "width": 555,
+                "height": 555
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000066_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000067.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_94372ab58f76.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 139,
+                "y": -79,
+                "width": 564,
+                "height": 564
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000067_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000068.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_24d4fdffcba0.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 135,
+                "y": -94,
+                "width": 579,
+                "height": 579
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000068_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000069.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_2affe70555db.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 130,
+                "y": -115,
+                "width": 600,
+                "height": 600
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000069_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000070.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_bb4f1b14b103.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 136,
+                "y": -114,
+                "width": 604,
+                "height": 604
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000070_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000071.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_50949f6506c0.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 149,
+                "y": -106,
+                "width": 600,
+                "height": 600
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000071_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000072.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_734d42f5f94e.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 164,
+                "y": -102,
+                "width": 588,
+                "height": 588
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000072_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000073.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_196a53587252.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 175,
+                "y": -97,
+                "width": 586,
+                "height": 586
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000073_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000074.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_22546aee6b17.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 186,
+                "y": -95,
+                "width": 588,
+                "height": 588
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000074_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000075.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_536456568a17.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 191,
+                "y": -103,
+                "width": 598,
+                "height": 598
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000075_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000076.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_b28932b6c2e8.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 209,
+                "y": -109,
+                "width": 605,
+                "height": 605
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000076_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000077.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_456c508f5e8a.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 223,
+                "y": -105,
+                "width": 601,
+                "height": 601
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000077_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000078.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_6b1fc8b38c5a.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 249,
+                "y": -87,
+                "width": 577,
+                "height": 577
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000078_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000079.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_56a2e8c45f2b.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 290,
+                "y": -56,
+                "width": 521,
+                "height": 521
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000079_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000080.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_3479cea070bc.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 312,
+                "y": -51,
+                "width": 498,
+                "height": 498
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000080_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000081.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_52160ae5b7e0.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 311,
+                "y": -72,
+                "width": 520,
+                "height": 520
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000081_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000082.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_5b1b806d228b.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 320,
+                "y": -72,
+                "width": 521,
+                "height": 521
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000082_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000083.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_73ca93761423.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 336,
+                "y": -50,
+                "width": 499,
+                "height": 499
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000083_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000084.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_70f7cd0b7b43.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 342,
+                "y": -40,
+                "width": 486,
+                "height": 486
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000084_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000085.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_d06b1232cab4.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 346,
+                "y": -29,
+                "width": 474,
+                "height": 474
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000085_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000086.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_9deef0b6435c.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 347,
+                "y": -29,
+                "width": 472,
+                "height": 472
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000086_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000087.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_13658085cf89.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 317,
+                "y": -66,
+                "width": 527,
+                "height": 527
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000087_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000088.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_547d16bd832c.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 299,
+                "y": -81,
+                "width": 557,
+                "height": 557
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000088_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000089.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_9d070141406f.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 302,
+                "y": -65,
+                "width": 539,
+                "height": 539
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000089_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000090.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_58733825dc0e.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 304,
+                "y": -63,
+                "width": 534,
+                "height": 534
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000090_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000091.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_7c7e8ce2c280.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 310,
+                "y": -55,
+                "width": 523,
+                "height": 523
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000091_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000092.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_e1a8fa0e29cb.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 312,
+                "y": -46,
+                "width": 512,
+                "height": 512
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000092_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000093.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_5487e74f88bd.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 307,
+                "y": -51,
+                "width": 516,
+                "height": 516
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000093_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000094.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_edc030954494.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 302,
+                "y": -55,
+                "width": 518,
+                "height": 518
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000094_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000095.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_1bfeb1deab8f.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 298,
+                "y": -55,
+                "width": 517,
+                "height": 517
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000095_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000096.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_5ac9200f5b9b.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 293,
+                "y": -55,
+                "width": 516,
+                "height": 516
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000096_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000097.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_739a795ba4ac.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 290,
+                "y": -54,
+                "width": 514,
+                "height": 514
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000097_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000098.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_cf02421eecdf.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 289,
+                "y": -53,
+                "width": 512,
+                "height": 512
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000098_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000099.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_8b1bb6fecb25.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 288,
+                "y": -51,
+                "width": 509,
+                "height": 509
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000099_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000100.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_591b668a1464.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 288,
+                "y": -50,
+                "width": 507,
+                "height": 507
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000100_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000101.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_8066d8c88a2e.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 286,
+                "y": -48,
+                "width": 505,
+                "height": 505
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000101_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000102.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_74d98077101d.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 285,
+                "y": -46,
+                "width": 503,
+                "height": 503
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000102_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000103.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_239e9ddbb633.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 283,
+                "y": -45,
+                "width": 502,
+                "height": 502
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000103_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000104.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_a3f5fe30ce6a.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 281,
+                "y": -45,
+                "width": 502,
+                "height": 502
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000104_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000105.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_ccd595cb1505.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 278,
+                "y": -44,
+                "width": 502,
+                "height": 502
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000105_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000106.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_47462f13a51a.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 258,
+                "y": -34,
+                "width": 496,
+                "height": 496
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000106_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000107.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_10fad9691f6f.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 250,
+                "y": -12,
+                "width": 472,
+                "height": 472
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000107_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000108.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_f441fddd9ade.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 260,
+                "y": 16,
+                "width": 436,
+                "height": 436
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000108_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000109.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_8b3ea2cf1096.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 265,
+                "y": 18,
+                "width": 423,
+                "height": 423
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000109_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000110.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_a18983b7146e.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 268,
+                "y": 7,
+                "width": 414,
+                "height": 414
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000110_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000111.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_0131b5b2e4c7.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 276,
+                "y": -7,
+                "width": 402,
+                "height": 402
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000111_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000112.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_013156b80a23.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 313,
+                "y": -20,
+                "width": 385,
+                "height": 385
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000112_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000113.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_1e98ccd60985.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 401,
+                "y": -24,
+                "width": 369,
+                "height": 369
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000113_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000114.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_4650c577c6e7.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 512,
+                "y": -4,
+                "width": 347,
+                "height": 347
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000114_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000115.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_37979b326425.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 597,
+                "y": 26,
+                "width": 317,
+                "height": 317
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000115_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000116.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_74e47507abe9.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 634,
+                "y": 45,
+                "width": 297,
+                "height": 297
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000116_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000117.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_5c31917bfa0c.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 634,
+                "y": 40,
+                "width": 302,
+                "height": 302
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000117_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000118.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_232db211f0ff.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 635,
+                "y": 38,
+                "width": 304,
+                "height": 304
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000118_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000119.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_98be7af260d7.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 636,
+                "y": 40,
+                "width": 302,
+                "height": 302
+              },
+              "figureSquareCropRelPath": "luka/sequence/1347_0629_2026/gallery/posefolder_f143b2b97040/frame_000119_sq.png"
+            }
+          }
+        ],
+        "hidden": []
+      },
+      "poseConfig": {
+        "baseImageRelPath": "luka/poses/pose_000.png",
+        "promptText": "",
+        "skipCloseup": false,
+        "extraPadFrac": 0.0,
+        "cfgScale": 1.0,
+        "folderId": "fcc00ef013a6"
+      }
+    }
+  ],
+  "frames": [],
+  "previewAspect": "16:9",
+  "timelineViewStep": 1
+}

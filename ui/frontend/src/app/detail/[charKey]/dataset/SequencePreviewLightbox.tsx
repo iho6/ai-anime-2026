@@ -12,7 +12,7 @@ import {
   TimelinePlayIcon,
 } from "../../../../components/IconPrimitives";
 import { assetUrlFromRelPath, type SequenceCrop, type SequenceManifest } from "../../../../lib/api";
-import { CHECKERBOARD, squareSrcFromPlacedFigure } from "../../../../components/TransparentCanvasOverlay";
+import { TransparentCanvasOverlay, squareSrcFromPlacedFigure } from "../../../../components/TransparentCanvasOverlay";
 import {
   aspectDimensionsForId,
   fitAspectBox,
@@ -343,20 +343,17 @@ export function SequencePreviewLightbox(props: Props) {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  ...(noBackdropSrc ? CHECKERBOARD : {}),
                 }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   enterCrop();
                 }}
               >
-                {noBackdropSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={noBackdropSrc}
-                    alt=""
-                    draggable={false}
-                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                {noBackdropSrc && currentPlacedFigure ? (
+                  <TransparentCanvasOverlay
+                    squareSrc={noBackdropSrc}
+                    placedFigure={currentPlacedFigure}
+                    style={{ width: "100%", height: "100%", maxWidth: "100%", maxHeight: "100%" }}
                   />
                 ) : playing ? (
                   // While playing, render a fixed contained image (no per-frame re-fit / zoom) so

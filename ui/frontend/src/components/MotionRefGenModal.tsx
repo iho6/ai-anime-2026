@@ -1269,6 +1269,9 @@ export function MotionRefGenModal(props: {
       const f = frames[i];
       opts.setRunningStatus(`Capturing frame ${i + 1}/${frames.length}…`);
       setFrameIndex(f);
+      // Direct sync: guarantee positionsRef and geometry are at frame f before
+      // captureFrameAutoFit runs, independent of React 18 effect scheduling.
+      if (displayMode === "mesh" && meshData) pushMeshFrame(meshData, f);
       await waitViewerFrame();
       applyTrajectoryAtFrame(f, captureKeyframes, { forCapture: true });
       await waitViewerFrame();
