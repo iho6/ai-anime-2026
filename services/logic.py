@@ -9229,7 +9229,7 @@ def run_pose_keypoint_for_image(
     else:
         raise RuntimeError("Pose keypoint result missing url and local_path.")
 
-    if placement is not None and canvas_w > 0 and canvas_h > 0:
+    if placement is not None and canvas_w > 0 and canvas_h > 0 and not skip_placement_crop:
         from services.figure_crop import paste_working_keypoint_onto_canvas
 
         if save_square_crops_to:
