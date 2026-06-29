@@ -294,12 +294,13 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         cy = (minY + maxY) / 2;
       }
 
-      // Square side from padded AABB extent. Center on the projected centroid without
-      // clamping to image bounds — the tile matrix NDC supports values beyond ±1, and
-      // PIL paste/crop handle out-of-bounds coordinates naturally.
-      const bw = maxX - minX;
-      const bh = maxY - minY;
-      const side = Math.round(Math.max(bw, bh, MIN_CROP_SIZE) * (1 + 2 * FIGURE_CROP_PAD_FRAC));
+      // Square side from the farthest AABB vertex to the centroid, so the square
+      // always contains every vertex even when the centroid is offset from the AABB center.
+      // Using max(bw,bh)/2 would fail if the centroid is not at the AABB midpoint.
+      const halfW = Math.max(cx - minX, maxX - cx);
+      const halfH = Math.max(cy - minY, maxY - cy);
+      const halfSide = Math.max(halfW, halfH, MIN_CROP_SIZE / 2);
+      const side = Math.round(halfSide * 2 * (1 + 2 * FIGURE_CROP_PAD_FRAC));
       const nx = Math.round(cx - side / 2);
       const ny = Math.round(cy - side / 2);
       return { x: nx, y: ny, width: side, height: side, imageWidth: imgW, imageHeight: imgH };

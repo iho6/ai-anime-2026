@@ -9138,11 +9138,15 @@ def run_pose_keypoint_for_image(
     *,
     placed_figure: dict[str, Any] | None = None,
     save_square_crops_to: Path | str | None = None,
+    skip_placement_crop: bool = False,
 ) -> str:
     """
     Run ``pose_keypoint_ai_service`` on a single image.
     When ``placed_figure`` is set, SDPose runs on a 1024×1024 square crop and the
     skeleton is pasted onto a full-size black canvas at ``placement``.
+    Set ``skip_placement_crop=True`` when the input image is already the zoomed square
+    (e.g. a V2Pose 1024×1024 capture) — SDPose runs on the full image and the
+    ``placed_figure`` coordinates are only used for the canvas paste step.
     Returns the local absolute path of the keypoint output image.
     """
     from PIL import Image
@@ -9160,7 +9164,6 @@ def run_pose_keypoint_for_image(
     placement: dict[str, int] | None = None
     canvas_w = canvas_h = 0
     min_side = MIN_SQUARE_WORKING_SIZE
-    work_dir: Path | None = None
 
     if (
         placed_figure
@@ -9171,19 +9174,31 @@ def run_pose_keypoint_for_image(
         canvas_w = int(placed_figure["canvas"]["width"])
         canvas_h = int(placed_figure["canvas"]["height"])
         min_side = int(placed_figure.get("workingSquareSize") or MIN_SQUARE_WORKING_SIZE)
-        work_dir = Path(tempfile.gettempdir()) / f"kp_crop_{unique_suffix()}"
-        work_dir.mkdir(parents=True, exist_ok=True)
-        ref_square_path = work_dir / "ref_square.png"
-        with Image.open(src) as im:
-            ref_square = extract_square_working_crop(im, placement, min_side=min_side)
-        ref_square.save(ref_square_path)
-        run_path = str(ref_square_path)
-        if save_square_crops_to:
-            out_dir = Path(save_square_crops_to)
-            out_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(ref_square_path, out_dir / "ref_square.png")
-        if log_cb:
-            log_cb(f"SDPose on {min_side}×{min_side} square crop…")
+
+        if skip_placement_crop:
+            # Input is already the zoomed square — run SDPose on the full image.
+            # Applying canvas-space placement coords to crop a zoom image would be a
+            # coordinate space mismatch; the image IS the crop, so no further crop needed.
+            if save_square_crops_to:
+                out_dir = Path(save_square_crops_to)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, out_dir / "ref_square.png")
+            if log_cb:
+                log_cb("SDPose on full zoomed capture (skip_placement_crop)…")
+        else:
+            work_dir = Path(tempfile.gettempdir()) / f"kp_crop_{unique_suffix()}"
+            work_dir.mkdir(parents=True, exist_ok=True)
+            ref_square_path = work_dir / "ref_square.png"
+            with Image.open(src) as im:
+                ref_square = extract_square_working_crop(im, placement, min_side=min_side)
+            ref_square.save(ref_square_path)
+            run_path = str(ref_square_path)
+            if save_square_crops_to:
+                out_dir = Path(save_square_crops_to)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ref_square_path, out_dir / "ref_square.png")
+            if log_cb:
+                log_cb(f"SDPose on {min_side}×{min_side} square crop…")
 
     body = _run_service_testmode(
         "services.pose_keypoint_ai_service.serverless",
@@ -9261,9 +9276,17 @@ def make_reference_keypoint(
     log_cb: Callable[[str], None] | None = None,
     *,
     placed_figure: dict[str, Any] | None = None,
+    image_is_zoomed_crop: bool = False,
 ) -> dict[str, Any]:
     """Run the SD pose service on a saved reference image and store the
-    (original, skeleton) pair in the global keypoint collection."""
+    (original, skeleton) pair in the global keypoint collection.
+
+    Set ``image_is_zoomed_crop=True`` when the image is already a 1024×1024
+    zoomed capture (character fills the whole image). This skips the
+    canvas-space placement crop that would otherwise create a coordinate space
+    mismatch, and also skips the 15% re-padding of ``placed_figure`` so the
+    canvas paste uses the exact original cropBox coordinates.
+    """
     from services import reference_storage
     from services.figure_crop import build_placed_figure_meta
     from PIL import Image
@@ -9273,7 +9296,7 @@ def make_reference_keypoint(
         raise ValueError(f"Reference image not found: {image_rel_path}")
 
     pf = placed_figure
-    if pf and pf.get("placement"):
+    if pf and pf.get("placement") and not image_is_zoomed_crop:
         with Image.open(abs_path) as im:
             if pf.get("canvas"):
                 pf = build_placed_figure_meta(
@@ -9291,6 +9314,7 @@ def make_reference_keypoint(
         log_cb=log_cb,
         placed_figure=pf,
         save_square_crops_to=square_dir,
+        skip_placement_crop=image_is_zoomed_crop,
     )
     entry = reference_storage.add_keypoint_pair(abs_path, kp_abs, placed_figure=pf)
     ref_square = square_dir / "ref_square.png"

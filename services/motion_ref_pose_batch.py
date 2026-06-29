@@ -68,6 +68,7 @@ def process_v2pose_frame(
         str(png_path),
         log_cb=log_cb,
         placed_figure=placed_figure,
+        image_is_zoomed_crop=True,  # png is the 1024×1024 zoom capture, not a full frame
     )
     reference_storage.assign_keypoints_to_folder(fid, [entry["id"]])
     item: dict[str, Any] = {
