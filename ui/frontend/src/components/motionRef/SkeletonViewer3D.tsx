@@ -9,7 +9,6 @@ import React, {
 import { keyframeWorldPose, orbitStateFromWorldPose, worldPoseFromOrbitState } from "./cameraTrajectory";
 import type { CameraWorldPose } from "./cameraTrajectory";
 import { computeCaptureViewportLayout } from "./captureViewportLayout";
-import { computeViewOffsetFromBbox, cropCanvasToSquare } from "./captureZoom";
 import type { SequencePreviewAspect } from "../../lib/api";
 import { normalizeSequencePreviewAspect, aspectDimensionsForId } from "../../lib/sequenceAspect";
 
@@ -124,11 +123,12 @@ const DEFAULT_ORBIT: CameraState = {
   slideY: 0,
 };
 const TAN_HALF_FOV = Math.tan((45 * 0.5) * Math.PI / 180); // FOV=45 fixed at camera creation
-const ZOOM_FACTOR = 0.001;
+const ZOOM_STEP = 0.12; // fixed 12% distance change per scroll notch regardless of deltaY magnitude
 const FALLBACK_W = 380;
 const FALLBACK_H = 320;
 const FIGURE_CROP_PAD_FRAC = 0.08;
 const FIGURE_CROP_PAD_MAX_PX = 80;
+const MIN_PAN_DIST = 0.5; // pan speed floor — never slower than this effective distance
 const MIN_CROP_SIZE = 64;
 
 
@@ -546,9 +546,11 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
 
       const onWheelNative = (e: WheelEvent) => {
         e.preventDefault();
+        const direction = Math.sign(e.deltaY);
+        if (direction === 0) return;
         orbitRef.current.distance = Math.max(
           0.05,
-          orbitRef.current.distance * (1 + e.deltaY * ZOOM_FACTOR)
+          orbitRef.current.distance * (1 + direction * ZOOM_STEP)
         );
         _applyCameraToThree();
         onCameraChangeRef.current?.({ ...orbitRef.current });
@@ -855,28 +857,62 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           const screenBbox = _computeFigureScreenBbox();
           if (!screenBbox) return null;
 
+          // ── Phase 2: 3D re-render via tile projection matrix ─────────────
+          // Narrows the GPU frustum to the figure's bbox so the full 1024²
+          // output is a real re-render at native 3D quality — not a 2D upscale.
+          t.renderer.setSize(targetSize, targetSize);
+          t.camera.aspect = 1.0;
+          t.camera.updateProjectionMatrix();
+
+          // Derive NDC tile bounds from Phase-1 physical-pixel bbox.
+          // Horizontal NDC in the 16:9 camera spans [-captureAspRatio, +captureAspRatio];
+          // mapping to the 1:1 camera's [-1, +1] requires the captureAspRatio scale.
+          const imgW_p1 = screenBbox.imageWidth;   // captureW × pixelRatio
+          const imgH_p1 = screenBbox.imageHeight;  // captureH × pixelRatio
+          const ndcL = ((screenBbox.x / imgW_p1) * 2 - 1) * captureAspRatio;
+          const ndcR = (((screenBbox.x + screenBbox.width)  / imgW_p1) * 2 - 1) * captureAspRatio;
+          const ndcT =  1 - (screenBbox.y / imgH_p1) * 2;
+          const ndcB =  1 - ((screenBbox.y + screenBbox.height) / imgH_p1) * 2;
+
+          const scaleX =  2 / (ndcR - ndcL);
+          const scaleY =  2 / (ndcT - ndcB);
+          const transX = -(ndcR + ndcL) / (ndcR - ndcL);
+          const transY = -(ndcT + ndcB) / (ndcT - ndcB);
+          const tileMatrix = new t.THREE.Matrix4();
+          tileMatrix.set(
+            scaleX, 0,      0, transX,
+            0,      scaleY, 0, transY,
+            0,      0,      1, 0,
+            0,      0,      0, 1,
+          );
+
+          const savedProjMatrix = t.camera.projectionMatrix.clone();
+          t.camera.projectionMatrix.premultiply(tileMatrix);
+
+          t.gizmoGroup.visible = false;
+          t.grid.visible = false;
+          t.renderer.render(t.scene, t.camera);
+          t.grid.visible = true;
+          t.gizmoGroup.visible = wasGizmoVisible && gizmosVisibleRef.current;
+
+          t.camera.projectionMatrix.copy(savedProjMatrix);
+
+          const dataUrl = t.renderer.domElement.toDataURL("image/png");
+
+          // Normalize screenBbox to logical pixel space for cropBox metadata.
           const pr = t.renderer.getPixelRatio();
-          const { logicalBbox } = computeViewOffsetFromBbox(
-            captureW,
-            captureH,
-            screenBbox,
-            pr,
-          );
-
-          // ── Phase 2: 2D crop + upscale from phase-1 framebuffer ───────────
-          // Pixel-perfect match to cropBox — same pixels diag pastes at placement.
-          const dataUrl = cropCanvasToSquare(
-            t.renderer.domElement,
-            screenBbox,
-            targetSize,
-          );
-
           return {
             dataUrl,
-            screenBbox: logicalBbox,
+            screenBbox: {
+              x: Math.round(screenBbox.x / pr),
+              y: Math.round(screenBbox.y / pr),
+              width:  Math.round(screenBbox.width  / pr),
+              height: Math.round(screenBbox.height / pr),
+              imageWidth:  captureW,
+              imageHeight: captureH,
+            },
           };
         } finally {
-          t.camera.clearViewOffset();
           t.renderer.setSize(savedRendSize.x, savedRendSize.y);
           t.camera.aspect = savedAspect;
           t.camera.updateProjectionMatrix();
@@ -976,7 +1012,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         );
       } else {
         const vh = sizeRef.current.h || FALLBACK_H;
-        const scale = (Math.max(0.05, orbitRef.current.distance) * TAN_HALF_FOV) / (vh * 0.5);
+        const scale = (Math.max(MIN_PAN_DIST, orbitRef.current.distance) * TAN_HALF_FOV) / (vh * 0.5);
         orbitRef.current.slideX -= dx * scale;
         orbitRef.current.slideY += dy * scale;
       }
