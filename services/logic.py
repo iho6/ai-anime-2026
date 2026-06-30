@@ -11406,7 +11406,7 @@ def write_frame_sequence_strip_mp4(
             im_rgba = im.convert("RGBA")
             if im_rgba.size != (w, h):
                 im_rgba = im_rgba.resize((w, h), Image.Resampling.LANCZOS)
-            rgb = _flatten_rgba_for_video(np.asarray(im_rgba), export_bg)
+            rgb = _flatten_rgba_for_video(im_rgba, export_bg)
             return np.asarray(rgb, dtype=np.uint8)
 
     def blank_rgb_array() -> Any:
