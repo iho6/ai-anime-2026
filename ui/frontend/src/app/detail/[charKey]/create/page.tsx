@@ -33,7 +33,6 @@ import {
   runShotRemoveBgWsJob,
   type RemoveBgImageRunOptions,
   runShotMakeAngleWsJob,
-  apiSequenceFolderNames,
   apiSequenceFolderOrder,
   apiSequenceCreate,
   apiSequenceGet,
@@ -77,6 +76,7 @@ import type { SharedLogStreamHandle } from "../../../../components/SharedLogStre
 import { ConnectedJobRunModal } from "../../../../components/ConnectedJobRunModal";
 import { RemoveBgImageModal } from "../../../../components/removeBg/RemoveBgImageModal";
 import { useJobRunSession } from "../../../../hooks/useJobRunSession";
+import { useCharacterSections } from "../../../../hooks/useCharacterSections";
 import {
   ReferencePicker,
   type ReferencePickerSelection,
@@ -202,14 +202,19 @@ export default function CreatePage() {
       : apiExpressionImportStartingFromRel({ charKey, sourceRelPath, expressionFolderName: folderName });
   }
 
-  const [poseSplit, setPoseSplit] = useState<GallerySplit | null>(null);
-  const [exprSplit, setExprSplit] = useState<GallerySplit | null>(null);
+  const { data: charSections, refresh: refreshCharSections } = useCharacterSections(charKey);
+  const poseSplit = charSections?.poseSplit ?? null;
+  const exprSplit = charSections?.exprSplit ?? null;
+  const [sequences, setSequences] = useState<{ name: string; thumb: string | null }[]>([]);
+  useEffect(() => {
+    setSequences(charSections?.sequences.map((s) => ({ name: s.name, thumb: s.coverRelPath || null })) ?? []);
+  }, [charSections]);
+
   // Per-item type for context actions invoked from any section (incl. shared Hidden).
   const [aiEditType, setAiEditType] = useState<GenType>("pose");
   const [angleItem, setAngleItem] = useState<{ item: GallerySplitItem; type: GenType } | null>(null);
   const [selectedExpr, setSelectedExpr] = useState<Set<string>>(new Set());
   // Sequence section state.
-  const [sequences, setSequences] = useState<{ name: string; thumb: string | null }[]>([]);
   const [activeSequence, setActiveSequence] = useState<string | null>(null);
   const [seqPreview, setSeqPreview] = useState<{ name: string; manifest: SequenceManifest } | null>(null);
   const sequenceFlushRef = useRef<(() => Promise<void>) | null>(null);
@@ -293,38 +298,6 @@ export default function CreatePage() {
   const [exprOpen, setExprOpen] = useState(true);
   const [seqOpen, setSeqOpen] = useState(true);
   const [hiddenOpen, setHiddenOpen] = useState(true);
-
-  const refreshGallery = useCallback(async () => {
-    if (!charKey) return;
-    const [p, e] = await Promise.all([
-      apiPoseGallerySplit(charKey),
-      apiExpressionGallerySplit(charKey),
-    ]);
-    setPoseSplit(p);
-    setExprSplit(e);
-  }, [charKey]);
-
-  const loadSequences = useCallback(async () => {
-    if (!charKey) return;
-    try {
-      const names = await apiSequenceFolderNames(charKey);
-      const withThumbs = await Promise.all(
-        names.map(async (name) => {
-          try {
-            const m = await apiSequenceGet(charKey, name);
-            // Cover = first visible TIMELINE frame; fall back to a gallery image.
-            const firstFrame = m.frames?.find((f) => !f.hidden && f.relPath)?.relPath;
-            return { name, thumb: firstFrame ?? m.gallery?.[0]?.relPath ?? null };
-          } catch {
-            return { name, thumb: null };
-          }
-        })
-      );
-      setSequences(withThumbs);
-    } catch {
-      /* none */
-    }
-  }, [charKey]);
 
   // Combined item pool across both galleries — lets renderItem/renderDragOverlay resolve a tile by
   // id even right after an optimistic cross-section move (before refreshGallery swaps the id).
@@ -429,7 +402,7 @@ export default function CreatePage() {
             i === gi ? { ...g, relPath: done.result!.fileRelPath } : g
           );
           await apiSequencePut(charKey, seqName, { ...manifest, gallery: nextGallery });
-          await loadSequences();
+          await refreshCharSections();
           endSession();
         } catch (err) {
           failSession(err, "AI Edit sequence frame failed.");
@@ -469,7 +442,7 @@ export default function CreatePage() {
         if (!done.ok) {
           throw new Error(done.error ?? "AI Edit failed");
         }
-        await refreshGallery();
+        await refreshCharSections();
       } catch (err) {
         failSession(err, "AI Edit failed.");
         return;
@@ -486,8 +459,7 @@ export default function CreatePage() {
       endSession,
       failSession,
       pushLog,
-      refreshGallery,
-      loadSequences,
+      refreshCharSections,
       setRunningStatus,
       showError,
     ]
@@ -535,7 +507,7 @@ export default function CreatePage() {
         i === gi ? { ...g, relPath: newRel } : g
       );
       await apiSequencePut(charKey, ctx.seqName, { ...manifest, gallery: nextGallery });
-      await loadSequences();
+      await refreshCharSections();
       endSession();
     } catch (err) {
       failSession(err, "New Angle failed.");
@@ -776,13 +748,12 @@ export default function CreatePage() {
     clearPosePromptUiForKeypointReference();
     (async () => {
       const ensured = await apiPoseEnsureBase(charKey);
-      await refreshGallery();
-      await loadSequences();
+      await refreshCharSections();
       if (ensured.relPath) {
         setStarting({ stack: [ensured.relPath], index: 0 });
       }
     })().catch(() => {});
-  }, [charKey, refreshGallery, loadSequences, clearPosePromptUiForKeypointReference]);
+  }, [charKey, refreshCharSections, clearPosePromptUiForKeypointReference]);
 
   // Single-prompt generate: wrap by type unless a keypoint ref supplies pose authority.
   const promptTextsForGeneration = useMemo(() => {
@@ -856,7 +827,7 @@ export default function CreatePage() {
       const labelStem = fileName.replace(/\.[^.]+$/, "") || "import";
 
       await importFromRelForType(relPath, labelStem, type);
-      await refreshGallery();
+      await refreshCharSections();
     } catch (err) {
       showError({ message: "Adding image to gallery failed.", error: err });
     } finally {
@@ -890,7 +861,7 @@ export default function CreatePage() {
       const stem =
         ((item.relPath.split("/").pop() ?? "image").replace(/\.[^.]+$/, "") || "image") + "_nobg";
       await importFromRelForType(newRel, stem, type);
-      await refreshGallery();
+      await refreshCharSections();
       endSession();
     } catch (e) {
       failSession(e, "Remove background failed.");
@@ -960,7 +931,7 @@ export default function CreatePage() {
           label: "Unhide",
           onSelect: () => {
             void hiddenFn(charKey, [item.itemId], false).then(() => {
-              void refreshGallery();
+              void refreshCharSections();
               dropFromSel(item.itemId);
             });
           },
@@ -992,7 +963,7 @@ export default function CreatePage() {
           label: "Hide",
           onSelect: () => {
             void hiddenFn(charKey, [item.itemId], true).then(() => {
-              void refreshGallery();
+              void refreshCharSections();
               dropFromSel(item.itemId);
             });
           },
@@ -1023,7 +994,7 @@ export default function CreatePage() {
             if (!ok) return;
             try {
               await deleteFn(charKey, POSE_FLAT_FOLDER_KEY, [item.relPath]);
-              await refreshGallery();
+              await refreshCharSections();
             } catch (err) {
               showError({ message: "Delete image failed.", error: err });
             }
@@ -1122,7 +1093,7 @@ export default function CreatePage() {
         return false;
       }
       const r = done.result!;
-      await loadSequences();
+      await refreshCharSections();
       if (r.sequenceName) setActiveSequence(r.sequenceName);
       return true;
     }
@@ -1146,7 +1117,7 @@ export default function CreatePage() {
         return false;
       }
       const r = done.result!;
-      await loadSequences();
+      await refreshCharSections();
       if (r.sequenceName) setActiveSequence(r.sequenceName);
       return true;
     }
@@ -1172,7 +1143,7 @@ export default function CreatePage() {
     if (r.lastInputRelPath) {
       setStarting((prev) => mergeStackAfterGeneration(prev, r.lastInputRelPath));
     }
-    await refreshGallery();
+    await refreshCharSections();
     return true;
   }
 
@@ -1274,7 +1245,7 @@ export default function CreatePage() {
           "Angle generation failed"
         );
       } else {
-        await refreshGallery();
+        await refreshCharSections();
         poseAnglesSessionOk = true;
       }
     } catch (e) {
@@ -1319,7 +1290,7 @@ export default function CreatePage() {
       pushLog(r.message);
       setSelectedPose(new Set());
       setSelectedExpr(new Set());
-      await loadSequences();
+      await refreshCharSections();
       endSession();
       setActiveSequence(r.folderName);
     } catch (e) {
@@ -1333,7 +1304,7 @@ export default function CreatePage() {
     while (existing.has(`Sequence ${n}`)) n++;
     try {
       await apiSequenceCreate({ charKey, name: `Sequence ${n}`, entries: [] });
-      await loadSequences();
+      await refreshCharSections();
     } catch (e) {
       showError({ message: "Create sequence failed.", error: e });
     }
@@ -1364,7 +1335,7 @@ export default function CreatePage() {
     if (!ok) return;
     try {
       await apiSequenceFolderDelete(charKey, name);
-      await loadSequences();
+      await refreshCharSections();
     } catch (e) {
       showError({ message: "Delete sequence failed.", error: e });
     }
@@ -1380,7 +1351,7 @@ export default function CreatePage() {
     if (!next?.trim() || next.trim() === name) return;
     try {
       await apiSequenceFolderRename(charKey, name, next.trim());
-      await loadSequences();
+      await refreshCharSections();
     } catch (e) {
       showError({ message: "Rename failed.", error: e });
     }
@@ -1396,7 +1367,7 @@ export default function CreatePage() {
     if (!label?.trim()) return;
     try {
       await apiSequenceFolderDuplicate(charKey, name, label.trim());
-      await loadSequences();
+      await refreshCharSections();
     } catch (e) {
       showError({ message: "Duplicate sequence failed.", error: e });
     }
@@ -1438,7 +1409,7 @@ export default function CreatePage() {
       /* ignore */
     }
     setActiveSequence(null);
-    await loadSequences();
+    await refreshCharSections();
   }
 
   // ── Per-type gallery section helpers (symmetric Pose / Expression) ──────────
@@ -1525,7 +1496,7 @@ export default function CreatePage() {
     const fn = type === "pose" ? apiPoseGalleryHidden : apiExpressionGalleryHidden;
     try {
       await fn(charKey, keys, hide);
-      await refreshGallery();
+      await refreshCharSections();
       setSelFor(type)((prev) => {
         const n = new Set(prev);
         for (const k of keys) n.delete(k);
@@ -1586,7 +1557,7 @@ export default function CreatePage() {
     const deleteFn = type === "pose" ? apiPoseAnglesDelete : apiExpressionAnglesDelete;
     try {
       await deleteFn(charKey, POSE_FLAT_FOLDER_KEY, items.map((it) => it.relPath));
-      await refreshGallery();
+      await refreshCharSections();
       setSelFor(type)(new Set());
     } catch (e) {
       showError({ message: "Delete failed.", error: e });
@@ -1613,7 +1584,7 @@ export default function CreatePage() {
           await importStartingFileForType(f, stem, type);
         }
       }
-      await refreshGallery();
+      await refreshCharSections();
     } catch (err) {
       showError({ message: "Import image(s) failed.", error: err });
     }
@@ -1654,7 +1625,7 @@ export default function CreatePage() {
       setBusy(true);
       try {
         await addImageToSequenceGallery(charKey, seqName, dropItem.relPath);
-        await loadSequences();
+        await refreshCharSections();
       } catch (err) {
         showError({ message: "Could not add image to sequence.", error: err });
       } finally {
@@ -1701,10 +1672,10 @@ export default function CreatePage() {
           order: [...nextVisible, ...hidden],
           hiddenKeys: hidden,
         });
-        await refreshGallery();
+        await refreshCharSections();
       } catch (e) {
         showError({ message: "Failed to save order.", error: e });
-        await refreshGallery();
+        await refreshCharSections();
       } finally {
         setBusy(false);
       }
@@ -1768,10 +1739,10 @@ export default function CreatePage() {
         });
         // Preload the new copy's image so the id/URL swap on reconcile doesn't flash blank.
         await preloadImage(assetUrlFromRelPath(imp.relPath));
-        await refreshGallery();
+        await refreshCharSections();
       } catch (err) {
         showError({ message: "Move between galleries failed.", error: err });
-        await refreshGallery();
+        await refreshCharSections();
       } finally {
         setBusy(false);
       }

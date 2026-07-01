@@ -5,25 +5,17 @@ import {
   apiHubCharacters,
   apiHubDelete,
   apiNewCharacterDiscard,
-  apiPoseGallerySplit,
-  apiExpressionGallerySplit,
-  apiSequenceFolderNames,
   apiSequenceFolderDuplicate,
   apiSequenceFolderDelete,
   apiSequenceGet,
   apiSequencePut,
-  apiSequenceRegenerateStripFramesBatch,
   assetUrlFromRelPath,
   runDetailWsJob,
   runShotMakeAngleWsJob,
-  type FrameSequencePayload,
   type SequenceFrameItem,
   type SequenceManifest,
 } from "../lib/api";
-import {
-  FrameSequenceModal,
-  type FrameSequenceStripActions,
-} from "../app/detail/[charKey]/dataset/FrameSequenceModal";
+import { SequenceEditor } from "../app/detail/[charKey]/dataset/SequenceEditor";
 import {
   type KeypointRefEntry,
   keypointRefHasFrames,
@@ -47,7 +39,7 @@ import type { SharedLogStreamHandle } from "./SharedLogStream";
 import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 import { useJobRunSession } from "../hooks/useJobRunSession";
 import { useAppError } from "./ErrorProvider";
-import { resolveSequenceImportGalleryItemId } from "../lib/sequenceImport";
+import { useCharacterSections } from "../hooks/useCharacterSections";
 import { BaseCloseupWizardModal } from "./BaseCloseupWizardModal";
 import { SequencePreviewLightbox } from "../app/detail/[charKey]/dataset/SequencePreviewLightbox";
 import {
@@ -91,10 +83,23 @@ export function TimelineCharacterPicker(props: {
   const createPanelRef = useRef<NewCharacterCreatePanelHandle | null>(null);
   const [closeupWizardOpen, setCloseupWizardOpen] = useState(false);
   const [closeupWizardCharKey, setCloseupWizardCharKey] = useState("");
-  const [sectionData, setSectionData] = useState<SectionData | null>(null);
-  const [sectionsError, setSectionsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [seqOpen, setSeqOpen] = useState(true);
+
+  const {
+    data: charSectionsRaw,
+    loading: sectionsLoading,
+    error: sectionsError,
+    refresh: refreshSections,
+  } = useCharacterSections(stage === "gallery" && open ? selectedKey : null);
+  const sectionData = useMemo<SectionData | null>(() => {
+    if (!charSectionsRaw) return null;
+    return {
+      poseImages: charSectionsRaw.poseSplit.visible.map((x) => ({ relPath: x.relPath })),
+      exprImages: charSectionsRaw.exprSplit.visible.map((x) => ({ relPath: x.relPath })),
+      sequences: charSectionsRaw.sequences,
+    };
+  }, [charSectionsRaw]);
   const [selectedRelPaths, setSelectedRelPaths] = useState<Set<string>>(new Set());
   const [selectedSequences, setSelectedSequences] = useState<Set<string>>(new Set());
   const [lightbox, setLightbox] = useState<{
@@ -107,13 +112,9 @@ export function TimelineCharacterPicker(props: {
     manifest: SequenceManifest;
   } | null>(null);
 
-  const [seqFrameEditor, setSeqFrameEditor] = useState<{
-    seqName: string;
+  const [pickerSeqEditor, setPickerSeqEditor] = useState<{
     charKey: string;
-    galleryItemId: string;
-    galleryIndex: number;
-    manifest: SequenceManifest;
-    initial: FrameSequencePayload;
+    sequenceName: string;
   } | null>(null);
 
   // Image right-click context menu (New Angle / New Pose)
@@ -178,8 +179,6 @@ export function TimelineCharacterPicker(props: {
   useEffect(() => {
     if (!open) return;
     setStage(initialKey ? "gallery" : "pick");
-    setSectionData(null);
-    setSectionsError(null);
     setNewPoseBaseRelPath(null);
     setNewPosePrompt("");
     setNewPoseRef(null);
@@ -206,55 +205,6 @@ export function TimelineCharacterPicker(props: {
     }
   }, [open, initialKey, loadIcons]);
 
-  const loadSections = useCallback(async (charKey: string) => {
-    setLoading(true);
-    setSectionData(null);
-    setSectionsError(null);
-    try {
-      const [poses, exprs, seqNames] = await Promise.all([
-        apiPoseGallerySplit(charKey),
-        apiExpressionGallerySplit(charKey),
-        apiSequenceFolderNames(charKey),
-      ]);
-
-      let sequences: { name: string; coverRelPath: string; galleryItemId?: string }[] = [];
-      if (seqNames.length > 0) {
-        const manifests = await Promise.all(
-          seqNames.map((name) =>
-            apiSequenceGet(charKey, name).catch((): SequenceManifest => ({ version: 1, fps: 24, gallery: [], frames: [] }))
-          )
-        );
-        sequences = seqNames
-          .map((name, i) => {
-            const manifest = manifests[i]!;
-            return {
-              name,
-              coverRelPath:
-                manifest.frames?.[0]?.relPath ??
-                manifest.gallery?.[0]?.relPath ?? "",
-              galleryItemId: resolveSequenceImportGalleryItemId(manifest),
-            };
-          })
-          .filter((s) => s.coverRelPath);
-      }
-
-      setSectionData({
-        poseImages: (poses.visible ?? []).map((x) => ({ relPath: x.relPath })),
-        exprImages: (exprs.visible ?? []).map((x) => ({ relPath: x.relPath })),
-        sequences,
-      });
-    } catch (e) {
-      setSectionsError(String((e as Error)?.message ?? e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!open || !selectedKey || stage !== "gallery") return;
-    void loadSections(selectedKey);
-  }, [open, selectedKey, stage, loadSections]);
-
   useEffect(() => {
     if (!sectionData) return;
     setNewPoseBaseRelPath((prev) => prev ?? sectionData.poseImages[0]?.relPath ?? null);
@@ -278,7 +228,6 @@ export function TimelineCharacterPicker(props: {
     if (stage === "gallery" && !initialKey) {
       setSelectedKey(null);
       setStage("pick");
-      setSectionData(null);
       setSelectedRelPaths(new Set());
       setSelectedSequences(new Set());
       setLightbox(null);
@@ -324,7 +273,7 @@ export function TimelineCharacterPicker(props: {
           pushLog(`[${i + 1}/${total}] Starting…`);
           await _runPoseJobForRef(ref, baseRelPath, charKey);
           pushLog(`[${i + 1}/${total}] Done.`);
-          void loadSections(charKey);
+          void refreshSections();
         }
         setPoseBatchQueue([]);
         setNewPoseRef(null);
@@ -347,7 +296,7 @@ export function TimelineCharacterPicker(props: {
       setNewPosePrompt("");
       setNewPoseRef(null);
       setPoseBatchQueue([]);
-      void loadSections(charKey);
+      void refreshSections();
     } catch (e) {
       failSession(e, "Pose generation failed.");
     }
@@ -411,7 +360,7 @@ export function TimelineCharacterPicker(props: {
     if (!label?.trim()) return;
     try {
       await apiSequenceFolderDuplicate(selectedKey, name, label.trim());
-      await loadSections(selectedKey);
+      await refreshSections();
     } catch (e) {
       showError({ message: "Duplicate sequence failed.", error: e });
     }
@@ -427,7 +376,7 @@ export function TimelineCharacterPicker(props: {
     if (!confirmed) return;
     try {
       await apiSequenceFolderDelete(selectedKey, name);
-      await loadSections(selectedKey);
+      await refreshSections();
     } catch (e) {
       showError({ message: "Delete sequence failed.", error: e });
     }
@@ -451,7 +400,7 @@ export function TimelineCharacterPicker(props: {
       if (!done.ok || !newRel) throw new Error(done.error || "Angle generation returned no image.");
       pushLog("Done.");
       endSession();
-      await loadSections(selectedKey);
+      await refreshSections();
       setSelectedRelPaths((prev) => new Set([...prev, newRel]));
     } catch (e) {
       failSession(e, "Angle generation failed.");
@@ -569,63 +518,11 @@ export function TimelineCharacterPicker(props: {
   );
 
   const openFrameEditor = useCallback(
-    async (seqName: string) => {
+    (seqName: string) => {
       if (!selectedKey) return;
-      try {
-        const manifest = await apiSequenceGet(selectedKey, seqName);
-        const gi = manifest.gallery.findIndex((g) => g.frameSequence);
-        if (gi < 0) {
-          showError({ message: "No frame sequence found in this sequence." });
-          return;
-        }
-        const item = manifest.gallery[gi]!;
-        setSeqFrameEditor({
-          seqName,
-          charKey: selectedKey,
-          galleryItemId: item.id,
-          galleryIndex: gi,
-          manifest,
-          initial: item.frameSequence!,
-        });
-      } catch (e) {
-        showError({ message: "Could not load sequence.", error: e });
-      }
+      setPickerSeqEditor({ charKey: selectedKey, sequenceName: seqName });
     },
-    [selectedKey, showError]
-  );
-
-  const saveSeqFrameEditor = useCallback(
-    async (payload: FrameSequencePayload) => {
-      if (!seqFrameEditor) return;
-      const { seqName, charKey: ck, galleryItemId, manifest: prev } = seqFrameEditor;
-      const gallery = [...prev.gallery];
-      const gi = gallery.findIndex((g) => g.id === galleryItemId);
-      if (gi < 0) return;
-      const row = gallery[gi]!;
-      const thumb = payload.strip.find(
-        (s) => s.kind === "image" && !s.hidden && s.relPath
-      )?.relPath;
-      gallery[gi] = { ...row, frameSequence: payload, relPath: thumb ?? row.relPath };
-      const updated = { ...prev, gallery };
-      await apiSequencePut(ck, seqName, updated);
-      setSeqFrameEditor((e) => (e ? { ...e, manifest: updated } : null));
-    },
-    [seqFrameEditor]
-  );
-
-  const regenerateSeqFrames = useCallback(
-    async (stripIndices: number[]): Promise<Map<number, string> | void> => {
-      if (!seqFrameEditor) return;
-      const { seqName, charKey: ck, galleryItemId } = seqFrameEditor;
-      const { results } = await apiSequenceRegenerateStripFramesBatch(ck, seqName, galleryItemId, stripIndices);
-      return new Map(results.map((r) => [r.stripIndex, r.relPath]));
-    },
-    [seqFrameEditor]
-  );
-
-  const seqFrameStripActions: FrameSequenceStripActions = useMemo(
-    () => ({ onRegenerateFrames: regenerateSeqFrames }),
-    [regenerateSeqFrames]
+    [selectedKey]
   );
 
   const downloadSequenceVideo = useCallback(
@@ -821,7 +718,7 @@ export function TimelineCharacterPicker(props: {
             {stage === "gallery" && selectedKey && (
               <>
                 {sectionsError && <div style={{ color: "#ff8080", fontSize: 13, padding: 12 }}>{sectionsError}</div>}
-                {loading && !sectionData && <div style={{ opacity: 0.6, fontSize: 13, padding: 12 }}>Loading…</div>}
+                {sectionsLoading && !sectionData && <div style={{ opacity: 0.6, fontSize: 13, padding: 12 }}>Loading…</div>}
                 {sectionData && (
                   <>
                     {/* New Pose top section — fixed, does not scroll */}
@@ -1372,20 +1269,48 @@ export function TimelineCharacterPicker(props: {
         />
       ) : null}
 
-      {seqFrameEditor ? (
-        <FrameSequenceModal
-          open
-          title={`Edit Frames — ${seqFrameEditor.seqName}`}
-          initial={seqFrameEditor.initial}
-          sourceGalleryIndex={seqFrameEditor.galleryIndex}
-          charKey={seqFrameEditor.charKey}
-          sequenceName={seqFrameEditor.seqName}
-          previewFps={Math.max(1, seqFrameEditor.manifest.fps)}
-          stripActions={seqFrameStripActions}
-          onError={(message, error) => showError({ message, error })}
-          onClose={() => setSeqFrameEditor(null)}
-          onSave={saveSeqFrameEditor}
-        />
+      {pickerSeqEditor ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            zIndex: 10040,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onMouseDown={() => setPickerSeqEditor(null)}
+        >
+          <div
+            style={{
+              background: "#fff",
+              border: "1px solid rgba(0,0,0,0.4)",
+              padding: 14,
+              maxWidth: "min(1100px, 96vw)",
+              maxHeight: "92vh",
+              overflow: "auto",
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div>Sequence: {pickerSeqEditor.sequenceName}</div>
+              <button
+                type="button"
+                onClick={() => setPickerSeqEditor(null)}
+                style={{ borderRadius: 0, border: "1px solid rgba(0,0,0,0.5)", background: "transparent", padding: "4px 12px", cursor: "pointer" }}
+              >
+                Close
+              </button>
+            </div>
+            <SequenceEditor
+              charKey={pickerSeqEditor.charKey}
+              sequenceName={pickerSeqEditor.sequenceName}
+              onError={(msg, err) => showError({ message: msg, error: err })}
+            />
+          </div>
+        </div>
       ) : null}
     </>
   );

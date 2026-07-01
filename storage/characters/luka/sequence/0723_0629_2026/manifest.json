@@ -105,8 +105,8 @@
         "baseImageRelPath": "luka/poses/pose_000.png",
         "promptText": "",
         "skipCloseup": false,
-        "extraPadFrac": 0.0,
-        "cfgScale": 1.0,
+        "extraPadFrac": 0,
+        "cfgScale": 1,
         "folderId": "5f30fc8355e8"
       }
     }

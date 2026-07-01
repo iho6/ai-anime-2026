@@ -123,6 +123,8 @@ import {
   FrameSequenceModal,
   type FrameSequenceStripActions,
 } from "../../detail/[charKey]/dataset/FrameSequenceModal";
+import { SequenceEditor } from "../../detail/[charKey]/dataset/SequenceEditor";
+import { sanitizeDownloadBaseName } from "../../../lib/downloadVideo";
 
 export default function TimelineEditorPage() {
   const router = useRouter();
@@ -233,8 +235,10 @@ export default function TimelineEditorPage() {
     primaryClipId: string;
     primaryTrackId: string;
   } | null>(null);
-  const [videoFrameApplyOpen, setVideoFrameApplyOpen] = useState(false);
-  const [videoFrameApplyStep, setVideoFrameApplyStep] = useState<"pick" | "mode">("mode");
+  const [seqEditorSource, setSeqEditorSource] = useState<{
+    charKey: string;
+    sequenceName: string;
+  } | null>(null);
   const [videoFrameApplyPickIds, setVideoFrameApplyPickIds] = useState<string[]>([]);
   const [videoFrameApplyIsGroup, setVideoFrameApplyIsGroup] = useState(false);
   const videoFrameApplyStripRef = useRef<FrameSequencePayload | null>(null);
@@ -1964,6 +1968,29 @@ export default function TimelineEditorPage() {
   async function openVideoFrameEditor(clipId: string, trackId: string) {
     const found = findClip(clipId);
     if (!found || found.clip.type !== "video") return;
+
+    // If the clip originated from a character sequence, open the full SequenceEditor.
+    // Also check frameSequence strip paths as a fallback for clips created by the old
+    // "New track" apply path that didn't copy source metadata.
+    const src = found.clip.source;
+    const charInfoFromStrip = (): { charKey: string; sequenceName: string } | null => {
+      const relPath = found.clip.frameSequence?.strip.find(
+        (s) => s.kind === "image" && s.relPath
+      )?.relPath;
+      if (!relPath) return null;
+      const m = relPath.match(/^characters\/([^/]+)\/sequence\/([^/]+)\//);
+      if (!m) return null;
+      return { charKey: m[1], sequenceName: m[2] };
+    };
+    const charInfo =
+      src?.charKey && src?.sequenceName
+        ? { charKey: src.charKey, sequenceName: src.sequenceName }
+        : charInfoFromStrip();
+    if (charInfo) {
+      setSeqEditorSource(charInfo);
+      return;
+    }
+
     const selected = selectedVideoClips();
     const clipIds =
       selected.length >= 2 && selected.some((c) => c.id === clipId)
@@ -1976,6 +2003,42 @@ export default function TimelineEditorPage() {
       primaryClipId: clipId,
       primaryTrackId: trackId,
     });
+  }
+
+  async function downloadVideoClip(clipId: string) {
+    const found = findClip(clipId);
+    if (!found || found.clip.type !== "video" || !found.clip.srcRelPath) return;
+    const clip = found.clip;
+    const baseName = sanitizeDownloadBaseName(clipVideoLabel(clip)) || "clip";
+
+    if (clip.frameSequence) {
+      beginSession({ title: "Downloading clip", clearLog: true });
+      await Promise.resolve();
+      try {
+        pushLog("Encoding edited frames…");
+        const done = await runTimelineVideoFramesEncodeWsJob({
+          timelineKey,
+          frameSequence: clip.frameSequence,
+          fps: manifest?.fps,
+          outputBasename: baseName,
+          onLogLine: (line) => pushLog(line),
+        });
+        if (!done.ok || !done.result?.srcRelPath) throw new Error(done.error || "Encoding failed.");
+        pushLog("Download starting…");
+        endSession();
+        const a = document.createElement("a");
+        a.href = assetDownloadUrlFromRelPath(done.result.srcRelPath);
+        a.download = `${baseName}.mp4`;
+        a.click();
+      } catch (e) {
+        failSession(e, "Clip download failed.");
+      }
+    } else {
+      const a = document.createElement("a");
+      a.href = assetDownloadUrlFromRelPath(clip.srcRelPath);
+      a.download = baseName;
+      a.click();
+    }
   }
 
   async function reExtractVideoFrames() {
@@ -2022,8 +2085,8 @@ export default function TimelineEditorPage() {
     videoFrameApplyGroupRef.current = null;
     videoFrameApplyEditorRef.current = videoFrameEditor;
     setVideoFrameApplyIsGroup(false);
-    setVideoFrameApplyStep("mode");
-    setVideoFrameApplyOpen(true);
+    setVideoFrameApplyPickIds(videoFrameEditor ? [videoFrameEditor.primaryClipId] : []);
+    void applyVideoFrameStrip("replace");
   }
 
   function promptVideoFrameApplyGroup(payloads: Record<string, FrameSequencePayload>) {
@@ -2031,15 +2094,11 @@ export default function TimelineEditorPage() {
     videoFrameApplyStripRef.current = null;
     videoFrameApplyEditorRef.current = videoFrameEditor;
     setVideoFrameApplyIsGroup(true);
-    setVideoFrameApplyPickIds(
-      videoFrameEditor ? [videoFrameEditor.primaryClipId] : Object.keys(payloads)
-    );
-    setVideoFrameApplyStep("pick");
-    setVideoFrameApplyOpen(true);
+    setVideoFrameApplyPickIds(Object.keys(payloads));
+    void applyVideoFrameStrip("replace");
   }
 
   async function applyVideoFrameStrip(mode: "replace" | "new_track") {
-    setVideoFrameApplyOpen(false);
     const editor = videoFrameEditor ?? videoFrameApplyEditorRef.current;
     if (!editor || !manifest) return;
     const strip = videoFrameApplyStripRef.current;
@@ -2367,6 +2426,12 @@ export default function TimelineEditorPage() {
         label: selectedVideoClips().length >= 2 ? "Edit Video Group" : "Edit Video Frames",
         disabled: busy,
         onSelect: () => void openVideoFrameEditor(clipMenu.clipId, clipMenu.trackId),
+      });
+      items.push({
+        key: "downloadClip",
+        label: "Download",
+        disabled: busy,
+        onSelect: () => void downloadVideoClip(clipMenu.clipId),
       });
     }
 
@@ -3157,110 +3222,47 @@ export default function TimelineEditorPage() {
         );
       })() : null}
 
-      {videoFrameApplyOpen ? (
+      {seqEditorSource ? (
         <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Apply edited video"
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.65)",
-            zIndex: 10050,
+            background: "rgba(0,0,0,0.55)",
+            zIndex: 10030,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             padding: 16,
           }}
-          onMouseDown={() => setVideoFrameApplyOpen(false)}
+          onMouseDown={() => setSeqEditorSource(null)}
         >
           <div
             style={{
-              background: "#0b0b0b",
-              color: "#eee",
+              background: "#fff",
+              border: "1px solid rgba(0,0,0,0.4)",
               padding: 14,
-              maxWidth: 400,
-              width: "100%",
-              border: "1px solid rgba(255,255,255,0.22)",
+              maxWidth: "min(1100px, 96vw)",
+              maxHeight: "92vh",
+              overflow: "auto",
             }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            {videoFrameApplyStep === "pick" && videoFrameEditor ? (
-              <>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>Choose clips to apply</div>
-                <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 12 }}>
-                  Select which videos to encode from their edited frame strips.
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-                  {videoFrameEditor.clipIds.map((clipId) => {
-                    const found = findClip(clipId);
-                    if (!found) return null;
-                    const checked = videoFrameApplyPickIds.includes(clipId);
-                    return (
-                      <label
-                        key={clipId}
-                        style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => {
-                            setVideoFrameApplyPickIds((prev) =>
-                              checked ? prev.filter((id) => id !== clipId) : [...prev, clipId]
-                            );
-                          }}
-                        />
-                        <span>{clipVideoLabel(found.clip)}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <button
-                    type="button"
-                    disabled={videoFrameApplyPickIds.length === 0}
-                    onClick={() => setVideoFrameApplyStep("mode")}
-                  >
-                    Next
-                  </button>
-                  <button type="button" onClick={() => setVideoFrameApplyOpen(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>Apply edited video</div>
-                <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 16 }}>
-                  Replace the original clip or insert the encoded video on a new track. Frame edits
-                  are kept for re-opening the editor.
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void applyVideoFrameStrip("replace")}
-                  >
-                    Replace clip
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void applyVideoFrameStrip("new_track")}
-                  >
-                    New track
-                  </button>
-                  {videoFrameApplyIsGroup ? (
-                    <button type="button" onClick={() => setVideoFrameApplyStep("pick")}>
-                      Back
-                    </button>
-                  ) : null}
-                  <button type="button" onClick={() => setVideoFrameApplyOpen(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </>
-            )}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div>Sequence: {seqEditorSource.sequenceName}</div>
+              <button
+                type="button"
+                onClick={() => setSeqEditorSource(null)}
+                style={{ borderRadius: 0, border: "1px solid rgba(0,0,0,0.5)", background: "transparent", padding: "4px 12px", cursor: "pointer" }}
+              >
+                Close
+              </button>
+            </div>
+            <SequenceEditor
+              charKey={seqEditorSource.charKey}
+              sequenceName={seqEditorSource.sequenceName}
+              onError={(msg, err) => showError({ message: msg, error: err })}
+              jobModal={{ begin: beginSession, end: endSession, fail: failSession, log: pushLog }}
+            />
           </div>
         </div>
       ) : null}

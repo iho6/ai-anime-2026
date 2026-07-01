@@ -1609,6 +1609,11 @@ export function SequenceEditor(props: {
     const gi = galleryMenu.galleryIndex;
     const g = manifest.gallery[gi];
     const items: ContextMenuItem[] = [];
+    items.push({
+      key: "preview",
+      label: "Preview",
+      onSelect: () => setPreview({ scope: "gallery", index: gi }),
+    });
     if (g?.frameSequence) {
       items.push({
         key: "editFs",
@@ -1616,12 +1621,7 @@ export function SequenceEditor(props: {
         onSelect: () => setFrameSeqModal({ galleryIndex: gi }),
       });
     }
-    items.push({
-      key: "preview",
-      label: "Preview",
-      onSelect: () => setPreview({ scope: "gallery", index: gi }),
-    });
-    if (g?.relPath?.trim() && g.id && onAiEditSequenceGallery) {
+    if (g?.relPath?.trim() && g.id && onAiEditSequenceGallery && !g.frameSequence) {
       items.push({
         key: "aiEdit",
         label: "AI Edit",
@@ -1629,7 +1629,7 @@ export function SequenceEditor(props: {
           onAiEditSequenceGallery({ relPath: g.relPath.trim(), galleryItemId: g.id }),
       });
     }
-    if (g?.relPath?.trim() && g.id && onNewAngleSequenceGallery) {
+    if (g?.relPath?.trim() && g.id && onNewAngleSequenceGallery && !g.frameSequence) {
       items.push({
         key: "newAngle",
         label: "New Angle",

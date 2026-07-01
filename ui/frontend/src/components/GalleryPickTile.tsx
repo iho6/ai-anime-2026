@@ -53,18 +53,22 @@ export function GalleryPickTile(props: GalleryPickTileProps) {
             boxSizing: "border-box",
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={src}
-            alt=""
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "contain",
-              display: "block",
-            }}
-            draggable={false}
-          />
+          {src ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={src}
+              alt=""
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                display: "block",
+              }}
+              draggable={false}
+            />
+          ) : (
+            <div style={{ width: "100%", height: "100%", background: "rgba(255,255,255,0.1)" }} />
+          )}
         </button>
 
         {onPlayClick ? (
