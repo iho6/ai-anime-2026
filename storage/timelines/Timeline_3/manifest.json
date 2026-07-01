@@ -4,6 +4,12 @@
   "previewAspect": "16:9",
   "tracks": [
     {
+      "id": "trk_mr1s47pv_5",
+      "name": "Video 3",
+      "kind": "video",
+      "clips": []
+    },
+    {
       "id": "trk_mr1jb0nc_3",
       "name": "Remove Background (RMBG)",
       "kind": "video",
@@ -36,7 +42,7 @@
           "id": "clip_mr1fngam_1",
           "type": "video",
           "srcRelPath": "timelines/Timeline_3/clips/clip_7c8206c5784a45c29e584ed7990c9ed5.mp4",
-          "start": 11.9166,
+          "start": 20.916600000000003,
           "inPoint": 0,
           "outPoint": 5.9583,
           "speed": 0.5,
@@ -47,6 +53,68 @@
           "source": {
             "charKey": "luka",
             "sequenceName": "0817_0630_2026"
+          }
+        },
+        {
+          "id": "clip_mr1s3hvd_1",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_3/clips/clip_761bef960245435f85f66e0713b7d136.png",
+          "start": 7.666600000000001,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 4.25,
+          "naturalW": 1408,
+          "naturalH": 768,
+          "source": {
+            "locationKey": "bushu_city"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        },
+        {
+          "id": "clip_mr1s3v0k_3",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_3/clips/clip_ecb73396644846e4b51fd4c01ea2e06b.png",
+          "start": 1.088087426757813,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1408,
+          "naturalH": 768,
+          "source": {
+            "locationKey": "pla_beach"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        },
+        {
+          "id": "clip_mr1s3prx_2",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_3/clips/clip_3a7f0ac6941e4ac2a2d27e9a93b49a02.png",
+          "start": 4.088087426757813,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3.5785125732421874,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "flala_courtyard"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1.7924248889134802,
+            "rotation": 0,
+            "opacity": 1
           }
         }
       ]

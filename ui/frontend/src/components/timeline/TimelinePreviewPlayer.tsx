@@ -673,6 +673,7 @@ export function TimelinePreviewPlayer(props: {
           const selected = clip.id === selectedClipId;
           const inShapeEdit = geometryEditClipId === clip.id;
           const isText = clip.type === "text";
+          const isGeometry = clip.type === "geometry";
           const isTextEditing = isText && textEditClipId === clip.id;
           const textHandlers = isText
             ? {
@@ -681,11 +682,19 @@ export function TimelinePreviewPlayer(props: {
                 onPointerMove: onPointerMoveCombined,
                 onPointerUp: onPointerUpCombined,
               }
-            : {
-                onPointerDown: (e: React.PointerEvent) => beginDrag(e, clip, "move"),
-                onPointerMove: onDragMove,
-                onPointerUp: endDrag,
-              };
+            : isGeometry
+              ? {
+                  onClick: (e: React.MouseEvent) => {
+                    if (!editable) return;
+                    e.stopPropagation();
+                    onRequestGeometryEdit?.(clip.id);
+                  },
+                }
+              : {
+                  onPointerDown: (e: React.PointerEvent) => beginDrag(e, clip, "move"),
+                  onPointerMove: onDragMove,
+                  onPointerUp: endDrag,
+                };
           return (
             <div
               key={`hit-${clip.id}`}

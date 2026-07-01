@@ -29,6 +29,17 @@ router = APIRouter(tags=["timeline"])
 _IMG_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 
+def _timeline_video_clip_result(out_abs: str, **fields: Any) -> dict[str, Any]:
+    """Build WS result for a bg-removed WebM, including alpha companion path when present."""
+    out = Path(out_abs).resolve()
+    result: dict[str, Any] = dict(fields)
+    result["srcRelPath"] = storage_rel_from_abs(str(out))
+    alpha = out.parent / (out.stem + ".alpha.mkv")
+    if alpha.is_file():
+        result["alphaRelPath"] = storage_rel_from_abs(str(alpha.resolve()))
+    return result
+
+
 def _timeline_dir(timeline_key: str) -> Path:
     return (TIMELINES_STORAGE_ROOT / sanitize_for_folder(timeline_key)).resolve()
 
@@ -86,6 +97,30 @@ def timeline_hub_delete(timeline_key: str) -> dict[str, bool]:
     if d.is_dir():
         shutil.rmtree(d)
     return {"ok": True}
+
+
+def _rewrite_duplicate_manifest(old_key: str, new_key: str) -> None:
+    """After copytree, rewrite srcRelPath values so the copy references its own clips/."""
+    manifest_path = _timeline_dir(new_key) / "manifest.json"
+    if not manifest_path.is_file():
+        return
+    old_folder = sanitize_for_folder(old_key)
+    new_folder = sanitize_for_folder(new_key)
+    text = manifest_path.read_text(encoding="utf-8")
+    text = text.replace(f"timelines/{old_folder}/", f"timelines/{new_folder}/")
+    manifest_path.write_text(text, encoding="utf-8")
+
+
+@router.post("/timeline/hub/{timeline_key}/duplicate")
+def timeline_hub_duplicate(timeline_key: str) -> dict[str, str]:
+    src = _timeline_dir(timeline_key)
+    if not src.is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    new_key = timeline_storage.unique_timeline_key(timeline_key + "_copy")
+    dst = _timeline_dir(new_key)
+    shutil.copytree(str(src), str(dst))
+    _rewrite_duplicate_manifest(timeline_key, new_key)
+    return {"newTimelineKey": new_key}
 
 
 @router.get("/timeline/{timeline_key}/manifest")
@@ -311,13 +346,13 @@ async def timeline_remove_video_bg_ws(ws: WebSocket, timeline_key: str) -> None:
             duration = float(meta.get("durationSec") or 0)
             if duration <= 0 and result.get("frames") and fps > 0:
                 duration = float(result["frames"]) / fps
-            return {
-                "srcRelPath": storage_rel_from_abs(out_abs),
-                "width": result.get("width") or meta.get("width") or 0,
-                "height": result.get("height") or meta.get("height") or 0,
-                "durationSec": duration,
-                "fps": fps,
-            }
+            return _timeline_video_clip_result(
+                str(out_abs),
+                width=result.get("width") or meta.get("width") or 0,
+                height=result.get("height") or meta.get("height") or 0,
+                durationSec=duration,
+                fps=fps,
+            )
 
         result, err = await run_with_log_stream(ws, work)
         if err:
@@ -367,15 +402,15 @@ async def timeline_remove_video_bg_rmbg_ws(ws: WebSocket, timeline_key: str) -> 
             )
             out_abs = result.get("absPath") or result.get("url") or out_path
             meta = logic.probe_video_meta(out_abs)
-            return {
-                "srcRelPath": storage_rel_from_abs(out_abs),
-                "width": result.get("width") or meta.get("width") or 0,
-                "height": result.get("height") or meta.get("height") or 0,
-                "durationSec": float(
+            return _timeline_video_clip_result(
+                str(out_abs),
+                width=result.get("width") or meta.get("width") or 0,
+                height=result.get("height") or meta.get("height") or 0,
+                durationSec=float(
                     result.get("durationSec") or meta.get("durationSec") or 0
                 ),
-                "fps": float(result.get("fps") or meta.get("fps") or 0),
-            }
+                fps=float(result.get("fps") or meta.get("fps") or 0),
+            )
 
         result, err = await run_with_log_stream(ws, work)
         if err:
@@ -426,15 +461,15 @@ async def timeline_remove_video_bg_anime_seg_ws(ws: WebSocket, timeline_key: str
             )
             out_abs = result.get("absPath") or result.get("url") or out_path
             meta = logic.probe_video_meta(out_abs)
-            return {
-                "srcRelPath": storage_rel_from_abs(out_abs),
-                "width": result.get("width") or meta.get("width") or 0,
-                "height": result.get("height") or meta.get("height") or 0,
-                "durationSec": float(
+            return _timeline_video_clip_result(
+                str(out_abs),
+                width=result.get("width") or meta.get("width") or 0,
+                height=result.get("height") or meta.get("height") or 0,
+                durationSec=float(
                     result.get("durationSec") or meta.get("durationSec") or 0
                 ),
-                "fps": float(result.get("fps") or meta.get("fps") or 0),
-            }
+                fps=float(result.get("fps") or meta.get("fps") or 0),
+            )
 
         result, err = await run_with_log_stream(ws, work)
         if err:

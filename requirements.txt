@@ -33,6 +33,7 @@ runpod>=1.6.0
 simpleeval>=1.0.0
 blake3
 # PyQt6>=6.5.0
+imageio-ffmpeg
 opencv-python-headless
 scikit-image
 transparent-background

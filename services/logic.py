@@ -8684,8 +8684,17 @@ def encode_rgba_frames_to_webm(
         "auto-alt-ref": "0",
     }
 
+    # Companion alpha — VP9 silently drops yuva420p on this platform; write alpha as FFv1.
+    alpha_path = out.parent / (out.stem + ".alpha.mkv")
+    alpha_container = av.open(str(alpha_path), mode="w", format="matroska")
+    alpha_stream = alpha_container.add_stream("ffv1", rate=out_rate)
+    alpha_stream.time_base = tb
+    alpha_stream.width = width
+    alpha_stream.height = height
+    alpha_stream.pix_fmt = "gray"
+
     frame_idx = 0
-    with out_container:
+    with out_container, alpha_container:
         for rgba in rgba_frames:
             arr = np.asarray(rgba, dtype=np.uint8)
             if arr.shape[0] != height or arr.shape[1] != width:
@@ -8700,11 +8709,19 @@ def encode_rgba_frames_to_webm(
             out_frame.time_base = tb
             for pkt in out_stream.encode(out_frame):
                 out_container.mux(pkt)
+            alpha_arr = arr[:, :, 3]  # (H, W) uint8
+            alpha_frame = av.VideoFrame.from_ndarray(alpha_arr, format="gray")
+            alpha_frame.pts = frame_idx
+            alpha_frame.time_base = tb
+            for pkt in alpha_stream.encode(alpha_frame):
+                alpha_container.mux(pkt)
             frame_idx += 1
             if frame_idx % 12 == 0:
                 _log(f"  Encoded frame {frame_idx}/{len(rgba_frames)}")
         for pkt in out_stream.encode():
             out_container.mux(pkt)
+        for pkt in alpha_stream.encode():
+            alpha_container.mux(pkt)
 
     duration = frame_idx / out_fps if out_fps > 0 else 0.0
     _log(f"WebM written: {out.name} ({frame_idx} frames @ {out_fps:.2f} fps)")
@@ -12085,8 +12102,17 @@ def composite_video_with_masks(
         "auto-alt-ref": "0",
     }
 
+    # Companion alpha — VP9 silently drops yuva420p on this platform; write alpha as FFv1.
+    alpha_path = out.parent / (out.stem + ".alpha.mkv")
+    alpha_container = av.open(str(alpha_path), mode="w", format="matroska")
+    alpha_stream = alpha_container.add_stream("ffv1", rate=out_rate)
+    alpha_stream.time_base = tb
+    alpha_stream.width = src_w
+    alpha_stream.height = src_h
+    alpha_stream.pix_fmt = "gray"
+
     frame_idx = 0
-    with in_container, out_container:
+    with in_container, out_container, alpha_container:
         for packet in in_container.demux(in_stream):
             for av_frame in packet.decode():
                 mask_path = mask_paths[min(frame_idx, len(mask_paths) - 1)]
@@ -12104,9 +12130,16 @@ def composite_video_with_masks(
                 out_frame.time_base = tb
                 for pkt in out_stream.encode(out_frame):
                     out_container.mux(pkt)
+                alpha_frame_av = av.VideoFrame.from_ndarray(alpha, format="gray")
+                alpha_frame_av.pts = frame_idx
+                alpha_frame_av.time_base = tb
+                for pkt in alpha_stream.encode(alpha_frame_av):
+                    alpha_container.mux(pkt)
                 frame_idx += 1
         for pkt in out_stream.encode():
             out_container.mux(pkt)
+        for pkt in alpha_stream.encode():
+            alpha_container.mux(pkt)
 
     duration = frame_idx / fps if fps > 0 else 0.0
     return {

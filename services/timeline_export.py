@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 from services.character_storage import DEFAULT_STORAGE_ROOT
 from services.logic import probe_video_meta
+from utils.video_utils import require_ffmpeg as _require_ffmpeg
 
 LOCATION_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "locations").resolve()
 SHOTS_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "shots").resolve()
@@ -61,14 +62,6 @@ def _resolve_storage_rel_file(rel_path: str) -> Path:
         raise ValueError(f"File not found: {rel_path}")
     return target
 
-
-def _require_ffmpeg() -> str:
-    exe = shutil.which("ffmpeg")
-    if not exe:
-        raise RuntimeError(
-            "ffmpeg is required for timeline audio export but was not found on PATH."
-        )
-    return exe
 
 
 # ── Layout helpers (keep in sync with timelineUtil.ts) ────────────────────────
@@ -630,6 +623,174 @@ def clip_transform_at_playhead(clip: dict[str, Any], playhead: float) -> dict[st
 # ── Media loading ─────────────────────────────────────────────────────────────
 
 
+def _alpha_companion_path(
+    video_path: Path,
+    alpha_rel: str | None = None,
+) -> Path | None:
+    """Resolve FFv1 alpha companion for WebM bg-removed clips."""
+    if alpha_rel:
+        try:
+            resolved = _resolve_storage_rel_file(str(alpha_rel).strip())
+            if resolved.is_file():
+                return resolved
+        except ValueError:
+            pass
+    companion = video_path.parent / (video_path.stem + ".alpha.mkv")
+    return companion if companion.is_file() else None
+
+
+def _clip_expects_alpha_companion(clip: dict[str, Any], video_path: Path) -> bool:
+    if clip.get("alphaRelPath"):
+        return True
+    stem = video_path.stem.lower()
+    return "_rmbg_" in stem or "_nobg_" in stem or "_anime_seg_" in stem
+
+
+def _av_frame_to_rgba_image(av_frame: Any) -> Any:
+    """Decode a PyAV video frame to PIL RGBA, preferring real alpha when present."""
+    import numpy as np
+    from PIL import Image
+
+    for fmt in ("rgba", "yuva420p"):
+        try:
+            arr = av_frame.to_ndarray(format=fmt)
+        except Exception:
+            continue
+        if fmt == "yuva420p" and arr.ndim == 3 and arr.shape[2] >= 4:
+            rgba = arr[:, :, :4].copy()
+            if rgba.dtype != np.uint8:
+                rgba = rgba.astype(np.uint8)
+            return Image.fromarray(rgba, mode="RGBA")
+        if arr.ndim == 3 and arr.shape[2] == 4:
+            if arr.dtype != np.uint8:
+                arr = arr.astype(np.uint8)
+            return Image.fromarray(arr, mode="RGBA")
+    rgb = av_frame.to_ndarray(format="rgb24")
+    if rgb.dtype != np.uint8:
+        rgb = rgb.astype(np.uint8)
+    h, w = rgb.shape[:2]
+    alpha = np.full((h, w), 255, dtype=np.uint8)
+    return Image.fromarray(np.dstack([rgb, alpha]), mode="RGBA")
+
+
+def _image_has_transparent_alpha(im_rgba: Any) -> bool:
+    from PIL import Image
+
+    if im_rgba.mode != "RGBA":
+        im_rgba = im_rgba.convert("RGBA")
+    lo, _hi = im_rgba.getchannel("A").getextrema()
+    return int(lo) < 255
+
+
+def _clip_has_exportable_frame_sequence(clip: dict[str, Any]) -> bool:
+    from services.logic import _frame_sequence_strip_slot_visible_for_export
+
+    fs = clip.get("frameSequence")
+    if not isinstance(fs, dict):
+        return False
+    strip = fs.get("strip")
+    if not isinstance(strip, list) or not strip:
+        return False
+    return any(
+        isinstance(s, dict) and _frame_sequence_strip_slot_visible_for_export(s) for s in strip
+    )
+
+
+def _strip_frame_index_at_source_time(
+    clip: dict[str, Any],
+    strip: list[dict[str, Any]],
+    manifest_fps: float,
+    source_time: float,
+) -> int:
+    """Map trimmed source time to a strip slot index (one slot per extracted frame)."""
+    in_point = float(clip.get("inPoint", 0))
+    out_point = float(clip.get("outPoint", 0))
+    st = source_time
+    if out_point > 0:
+        st = min(st, out_point)
+    st = max(st, in_point)
+    local_frames = (st - in_point) * float(manifest_fps)
+    idx = int(round(local_frames))
+    return max(0, min(idx, len(strip) - 1))
+
+
+def _resolve_strip_slot_path(rel: str) -> Path:
+    from services.logic import _timeline_strip_rel_to_abs
+
+    rel_norm = str(rel or "").strip().replace("\\", "/").lstrip("/")
+    if not rel_norm:
+        raise ValueError("Strip slot relPath is empty.")
+    return _timeline_strip_rel_to_abs(rel_norm)
+
+
+def _strip_rgba_at_index(
+    strip: list[dict[str, Any]],
+    idx: int,
+    image_cache: dict[str, Any],
+) -> Any:
+    """Hold-last-visible: empty/hidden slots repeat the previous visible PNG."""
+    from PIL import Image
+
+    from services.logic import _frame_sequence_strip_slot_visible_for_export
+
+    target = max(0, min(int(idx), len(strip) - 1))
+    last_im: Any = None
+    for i in range(target + 1):
+        slot = strip[i]
+        if not isinstance(slot, dict):
+            continue
+        if str(slot.get("kind") or "") == "image" and slot.get("hidden") is True:
+            continue
+        if not _frame_sequence_strip_slot_visible_for_export(slot):
+            continue
+        rel = str(slot.get("relPath") or "").strip()
+        if not rel:
+            continue
+        path = _resolve_strip_slot_path(rel)
+        cache_key = str(path.resolve())
+        if cache_key not in image_cache:
+            with Image.open(path) as im:
+                image_cache[cache_key] = im.convert("RGBA")
+        last_im = image_cache[cache_key]
+    if last_im is None:
+        return Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    return last_im.copy()
+
+
+def _log_overlapping_video_tracks(
+    tracks: list[dict[str, Any]],
+    log_cb: Callable[[str], None] | None,
+) -> None:
+    """Inform when multiple visible video clips overlap in time."""
+    if not log_cb:
+        return
+    intervals: list[tuple[float, float, str]] = []
+    for track in tracks:
+        for clip in track.get("clips") or []:
+            if str(clip.get("type") or "") not in ("video", "image"):
+                continue
+            rel = str(clip.get("srcRelPath") or "").strip()
+            if not rel and not _clip_has_exportable_frame_sequence(clip):
+                continue
+            start = float(clip.get("start", 0))
+            dur = float(clip.get("duration", 0))
+            if dur <= 0:
+                continue
+            label = str(clip.get("id") or rel.split("/")[-1])
+            intervals.append((start, start + dur, label))
+    overlaps = False
+    for i, (a0, a1, la) in enumerate(intervals):
+        for b0, b1, lb in intervals[i + 1 :]:
+            if a0 < b1 and b0 < a1:
+                if not overlaps:
+                    log_cb(
+                        "Note: multiple visible video clips overlap in time "
+                        "(e.g. original + bg-removed). Hide tracks you do not want exported."
+                    )
+                    overlaps = True
+                    return
+
+
 def _clip_natural_size(clip: dict[str, Any], abs_path: Path) -> tuple[int, int]:
     n_w = int(clip.get("naturalW") or 0)
     n_h = int(clip.get("naturalH") or 0)
@@ -647,10 +808,20 @@ def _clip_natural_size(clip: dict[str, Any], abs_path: Path) -> tuple[int, int]:
 class _VideoFrameDecoder:
     """Sequential PyAV decoder with hold-last-frame at EOF."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(
+        self,
+        path: Path,
+        clip: dict[str, Any],
+        *,
+        log_cb: Callable[[str], None] | None = None,
+        warned: set[str] | None = None,
+    ) -> None:
         import av
 
         self._path = path
+        self._clip = clip
+        self._log_cb = log_cb
+        self._warned = warned if warned is not None else set()
         self._container = av.open(str(path))
         self._stream = self._container.streams.video[0]
         rate = self._stream.average_rate or self._stream.base_rate
@@ -659,6 +830,28 @@ class _VideoFrameDecoder:
         self._idx = -1
         self._last: Any = None
         self._natural: tuple[int, int] | None = None
+
+        alpha_rel = str(clip.get("alphaRelPath") or "").strip() or None
+        alpha_path = _alpha_companion_path(path, alpha_rel)
+        if alpha_path is not None:
+            self._alpha_container: Any = av.open(str(alpha_path))
+            self._alpha_iter: Any = self._alpha_container.decode(
+                self._alpha_container.streams.video[0]
+            )
+        else:
+            self._alpha_container = None
+            self._alpha_iter = None
+            if _clip_expects_alpha_companion(clip, path):
+                warn_key = str(path.resolve())
+                if warn_key not in self._warned:
+                    self._warned.add(warn_key)
+                    msg = (
+                        f"Alpha companion missing for {path.name}; "
+                        "export may show the original background. "
+                        f"Expected {path.stem}.alpha.mkv beside the WebM."
+                    )
+                    if self._log_cb:
+                        self._log_cb(msg)
 
     @property
     def natural_size(self) -> tuple[int, int]:
@@ -676,8 +869,19 @@ class _VideoFrameDecoder:
             try:
                 av_frame = next(self._iter)
                 self._idx += 1
-                rgb = av_frame.to_ndarray(format="rgb24")
-                self._last = Image.fromarray(rgb).convert("RGBA")
+                if self._alpha_iter is not None:
+                    try:
+                        alpha_frame = next(self._alpha_iter)
+                        import numpy as np
+
+                        color_np = av_frame.to_ndarray(format="rgb24")
+                        alpha_np = alpha_frame.to_ndarray(format="gray")
+                        combined = np.dstack([color_np, alpha_np])
+                        self._last = Image.fromarray(combined, mode="RGBA")
+                    except StopIteration:
+                        self._last = _av_frame_to_rgba_image(av_frame)
+                else:
+                    self._last = _av_frame_to_rgba_image(av_frame)
             except StopIteration:
                 break
         if self._last is None:
@@ -692,24 +896,46 @@ class _VideoFrameDecoder:
         self._stream = self._container.streams.video[0]
         self._iter = self._container.decode(self._stream)
         self._idx = -1
+        alpha_rel = str(self._clip.get("alphaRelPath") or "").strip() or None
+        alpha_path = _alpha_companion_path(self._path, alpha_rel)
+        if alpha_path is not None:
+            self._alpha_container = av.open(str(alpha_path))
+            self._alpha_iter = self._alpha_container.decode(
+                self._alpha_container.streams.video[0]
+            )
+        else:
+            self._alpha_container = None
+            self._alpha_iter = None
 
     def close(self) -> None:
         if self._container is not None:
             self._container.close()
             self._container = None
+        if self._alpha_container is not None:
+            self._alpha_container.close()
+            self._alpha_container = None
 
 
 class _CompositorState:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        manifest_fps: float,
+        log_cb: Callable[[str], None] | None = None,
+    ) -> None:
+        self._manifest_fps = float(manifest_fps)
+        self._log_cb = log_cb
         self._image_cache: dict[str, Any] = {}
+        self._strip_image_cache: dict[str, Any] = {}
         self._video_decoders: dict[str, _VideoFrameDecoder] = {}
         self._clip_dims: dict[str, tuple[int, int]] = {}
+        self._alpha_warnings: set[str] = set()
 
     def close(self) -> None:
         for dec in self._video_decoders.values():
             dec.close()
         self._video_decoders.clear()
         self._image_cache.clear()
+        self._strip_image_cache.clear()
 
     def _ensure_dims(self, clip: dict[str, Any], abs_path: Path) -> tuple[int, int]:
         cid = str(clip.get("id", ""))
@@ -717,8 +943,30 @@ class _CompositorState:
             self._clip_dims[cid] = _clip_natural_size(clip, abs_path)
         return self._clip_dims[cid]
 
+    def _strip_rgba_at_source_time(
+        self, clip: dict[str, Any], source_time: float
+    ) -> Any:
+        fs = clip.get("frameSequence") or {}
+        strip = fs.get("strip") or []
+        if not isinstance(strip, list):
+            strip = []
+        idx = _strip_frame_index_at_source_time(
+            clip, strip, self._manifest_fps, source_time
+        )
+        return _strip_rgba_at_index(strip, idx, self._strip_image_cache)
+
     def get_rgba_frame(self, clip: dict[str, Any], abs_path: Path, source_time: float) -> Any:
         from PIL import Image
+
+        in_point = float(clip.get("inPoint", 0))
+        out_point = float(clip.get("outPoint", 0))
+        st = source_time
+        if out_point > 0:
+            st = min(st, out_point)
+        st = max(st, in_point)
+
+        if _clip_has_exportable_frame_sequence(clip):
+            return self._strip_rgba_at_source_time(clip, st)
 
         key = str(abs_path)
         clip_type = str(clip.get("type", "image"))
@@ -730,13 +978,12 @@ class _CompositorState:
 
         cid = str(clip.get("id", key))
         if cid not in self._video_decoders:
-            self._video_decoders[cid] = _VideoFrameDecoder(abs_path)
-        in_point = float(clip.get("inPoint", 0))
-        out_point = float(clip.get("outPoint", 0))
-        st = source_time
-        if out_point > 0:
-            st = min(st, out_point)
-        st = max(st, in_point)
+            self._video_decoders[cid] = _VideoFrameDecoder(
+                abs_path,
+                clip,
+                log_cb=self._log_cb,
+                warned=self._alpha_warnings,
+            )
         return self._video_decoders[cid].frame_at_source_time(st)
 
     def clip_with_dims(self, clip: dict[str, Any], abs_path: Path) -> dict[str, Any]:
@@ -1176,7 +1423,13 @@ def _render_video_track(
     if not video_tracks:
         raise ValueError("No visible video tracks to export.")
 
-    state = _CompositorState()
+    if log_cb:
+        log_cb(
+            "Hide original clips on other tracks when exporting bg-removed versions only."
+        )
+        _log_overlapping_video_tracks(video_tracks, log_cb)
+
+    state = _CompositorState(fps, log_cb=log_cb)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     from services.utils import av_output_framerate
 

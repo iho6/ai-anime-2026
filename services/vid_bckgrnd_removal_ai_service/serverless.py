@@ -156,7 +156,7 @@ def remove_video_background(
         + (f"  {total} frames" if total else "")
     )
 
-    # ── Output (WebM / VP9 + alpha) ────────────────────────────────────────
+    # ── Output (WebM / VP9 color + FFv1 MKV alpha companion) ──────────────
     out_container = av.open(str(out), mode="w", format="webm")
     out_stream = out_container.add_stream("libvpx-vp9", rate=out_rate)
     out_stream.time_base = tb
@@ -171,6 +171,16 @@ def remove_video_background(
         "row-mt": "1",
         "auto-alt-ref": "0", # must be off for alpha streams
     }
+
+    # Companion alpha channel — VP9 on this platform silently drops yuva420p,
+    # so we write the alpha separately as grayscale FFv1 in Matroska.
+    alpha_path = out.parent / (out.stem + ".alpha.mkv")
+    alpha_container = av.open(str(alpha_path), mode="w", format="matroska")
+    alpha_stream = alpha_container.add_stream("ffv1", rate=out_rate)
+    alpha_stream.time_base = tb
+    alpha_stream.width = src_w
+    alpha_stream.height = src_h
+    alpha_stream.pix_fmt = "gray"
 
     # ── Inference ──────────────────────────────────────────────────────────
     rec = [None] * 4  # RVM recurrent state
@@ -219,6 +229,12 @@ def remove_video_background(
                 for pkt in out_stream.encode(out_frame):
                     out_container.mux(pkt)
 
+                alpha_frame = av.VideoFrame.from_ndarray(pha_np, format="gray")
+                alpha_frame.pts = frame_idx
+                alpha_frame.time_base = tb
+                for pkt in alpha_stream.encode(alpha_frame):
+                    alpha_container.mux(pkt)
+
                 frame_idx += 1
                 if frame_idx % 30 == 0:
                     elapsed = time.monotonic() - t0
@@ -228,8 +244,11 @@ def remove_video_background(
 
     for pkt in out_stream.encode(None):
         out_container.mux(pkt)
+    for pkt in alpha_stream.encode(None):
+        alpha_container.mux(pkt)
 
     out_container.close()
+    alpha_container.close()
     in_container.close()
 
     elapsed = time.monotonic() - t0

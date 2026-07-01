@@ -35,13 +35,18 @@ def needs_normalization(ref: str) -> bool:
 
 
 def require_ffmpeg() -> str:
+    try:
+        import imageio_ffmpeg  # bundled static binary — no system install needed
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        pass
     exe = shutil.which("ffmpeg")
-    if not exe:
-        raise RuntimeError(
-            "ffmpeg is required for video normalization but was not found on PATH. "
-            "Install ffmpeg (e.g. apt install ffmpeg) and retry."
-        )
-    return exe
+    if exe:
+        return exe
+    raise RuntimeError(
+        "ffmpeg not found. Install the Python package imageio-ffmpeg "
+        "(pip install imageio-ffmpeg) or add ffmpeg to PATH."
+    )
 
 
 def transcode_to_mp4(src: Path, dst: Path) -> None:

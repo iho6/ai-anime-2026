@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   apiTimelineCreate,
   apiTimelineHubDelete,
+  apiTimelineHubDuplicate,
   apiTimelineHubItems,
   apiTimelineHubRename,
   assetUrlFromRelPath,
@@ -25,6 +26,7 @@ export default function TimelineHubPage() {
   const { showError, askText, confirmAction } = useAppError();
   const [items, setItems] = useState<HubTimeline[]>([]);
   const [loading, setLoading] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [coversVersion, setCoversVersion] = useState<number>(0);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -115,6 +117,22 @@ export default function TimelineHubPage() {
           apiTimelineHubRename(menuKey, nn.trim())
             .then(() => refresh())
             .catch((e) => showError({ message: "Rename failed.", error: e }));
+        },
+      },
+      {
+        key: "duplicate",
+        label: "Duplicate Timeline",
+        onSelect: async () => {
+          setMenuOpen(false);
+          setDuplicating(true);
+          try {
+            await apiTimelineHubDuplicate(menuKey);
+            await refresh();
+          } catch (e) {
+            showError({ message: "Duplicate failed.", error: e });
+          } finally {
+            setDuplicating(false);
+          }
         },
       },
       {
@@ -267,7 +285,16 @@ export default function TimelineHubPage() {
         onClose={() => setMenuOpen(false)}
       />
 
-      {loading ? null : null}
+      {duplicating ? (
+        <div style={{
+          position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.45)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "#fff", zIndex: 1000, font: "inherit",
+        }}>
+          Duplicating timeline…
+        </div>
+      ) : null}
     </div>
   );
 }

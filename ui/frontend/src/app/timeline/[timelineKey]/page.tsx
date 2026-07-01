@@ -1282,7 +1282,7 @@ export default function TimelineEditorPage() {
   }
 
   function insertVideoBgClip(
-    r: { srcRelPath: string; width: number; height: number; durationSec?: number },
+    r: { srcRelPath: string; alphaRelPath?: string; width: number; height: number; durationSec?: number },
     start: number,
     fallback: { naturalW?: number; naturalH?: number; duration?: number; source?: TimelineClip["source"] },
     label: string
@@ -1293,6 +1293,7 @@ export default function TimelineEditorPage() {
         id: genId("clip"),
         type: "video",
         srcRelPath: r.srcRelPath,
+        ...(r.alphaRelPath ? { alphaRelPath: r.alphaRelPath } : {}),
         start: 0,
         inPoint: 0,
         outPoint: dur,

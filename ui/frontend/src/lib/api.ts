@@ -546,6 +546,8 @@ export type TimelineClip = {
   /** Per-frame strip for video frame editing (persisted across re-opens). */
   frameSequence?: FrameSequencePayload;
   frameEdit?: { framesDirRel: string };
+  /** FFv1 alpha companion for WebM bg-removed clips (``{stem}.alpha.mkv``). */
+  alphaRelPath?: string;
 };
 
 export type TimelineTrack = {
@@ -604,6 +606,16 @@ export async function apiTimelineHubDelete(timelineKey: string): Promise<void> {
     { method: "POST", credentials: "omit" }
   );
   await readJson<{ ok: boolean }>(res);
+}
+
+export async function apiTimelineHubDuplicate(
+  timelineKey: string
+): Promise<{ newTimelineKey: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/hub/${encodeURIComponent(timelineKey)}/duplicate`,
+    { method: "POST", credentials: "omit" }
+  );
+  return readJson<{ newTimelineKey: string }>(res);
 }
 
 export async function apiTimelineGet(timelineKey: string): Promise<TimelineManifest> {
@@ -840,6 +852,8 @@ export function runTimelineImportSequenceWsJob(params: {
 type TimelineVideoClipResult = {
   type?: "video";
   srcRelPath: string;
+  /** FFv1 alpha companion for WebM bg-removed clips (``{stem}.alpha.mkv``). */
+  alphaRelPath?: string;
   durationSec: number;
   width: number;
   height: number;

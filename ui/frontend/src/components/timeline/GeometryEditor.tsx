@@ -187,7 +187,12 @@ export function GeometryEditor(props: Props) {
   if (!geom || !bounds || frameW < 1 || frameH < 1) return null;
 
   function clientToLocal(clientX: number, clientY: number) {
-    return localFromScreen(clientX, clientY, rect.left, rect.top, rect.width, rect.height, false);
+    const r = svgRef.current?.getBoundingClientRect();
+    const rl = r?.left ?? rect.left;
+    const rt = r?.top ?? rect.top;
+    const rw = r?.width ?? rect.width;
+    const rh = r?.height ?? rect.height;
+    return localFromScreen(clientX, clientY, rl, rt, rw, rh, false);
   }
 
   function hitBboxHandle(loc: { x: number; y: number }): BboxHandleId | null {
@@ -233,11 +238,16 @@ export function GeometryEditor(props: Props) {
         setSelectedIndex(i);
         return;
       }
-      if (Math.hypot(loc.x - pt.x, loc.y - pt.y) <= hit.point) {
-        dragRef.current = { kind: "point", index: i };
-        setSelectedIndex(i);
-        return;
-      }
+      // single-point drag omitted — use bbox handles to resize
+    }
+
+    if (pointInBounds(loc.x, loc.y, bounds!)) {
+      dragRef.current = {
+        kind: "moveAll",
+        startLocal: loc,
+        origGeometry: cloneGeometry(geom!),
+      };
+      return;
     }
 
     const segHit = distToSegment(loc.x, loc.y, geom!, hit.seg);
@@ -256,21 +266,16 @@ export function GeometryEditor(props: Props) {
       return;
     }
 
-    if (pointInBounds(loc.x, loc.y, bounds!)) {
-      dragRef.current = {
-        kind: "moveAll",
-        startLocal: loc,
-        origGeometry: cloneGeometry(geom!),
-      };
-      return;
-    }
-
     setSelectedIndex(null);
   }
 
   function onSvgPointerMove(e: React.PointerEvent<SVGSVGElement>) {
     const d = dragRef.current;
     if (!d) return;
+    if (e.buttons === 0) {
+      dragRef.current = null;
+      return;
+    }
     e.preventDefault();
     const loc = clientToLocal(e.clientX, e.clientY);
 
@@ -391,29 +396,16 @@ export function GeometryEditor(props: Props) {
           height: rect.height,
           zIndex: 10001,
           overflow: "visible",
-          pointerEvents: "auto",
+          pointerEvents: "all",
         }}
         viewBox={`0 0 ${ARTBOARD} ${ARTBOARD}`}
         preserveAspectRatio="none"
         onPointerDown={onSvgPointerDown}
         onPointerMove={onSvgPointerMove}
         onPointerUp={onSvgPointerUp}
+        onPointerCancel={() => { dragRef.current = null; }}
         onContextMenu={onSvgContextMenu}
       >
-        {/* 1. Bbox fill — no pointer capture */}
-        <rect
-          x={bx}
-          y={by}
-          width={bw}
-          height={bh}
-          fill="rgba(255,255,255,0.03)"
-          stroke={CHROME_STROKE}
-          strokeWidth={1.5}
-          strokeDasharray="4 4"
-          vectorEffect="non-scaling-stroke"
-          style={{ cursor: "move", pointerEvents: "none" }}
-        />
-
         {/* 2. Path hit area */}
         <path
           d={pathD}
@@ -421,17 +413,6 @@ export function GeometryEditor(props: Props) {
           stroke="transparent"
           strokeWidth={20}
           style={{ cursor: "pointer", pointerEvents: "stroke" }}
-        />
-
-        {/* 3. Path dash outline */}
-        <path
-          d={pathD}
-          fill="none"
-          stroke={CHROME_STROKE}
-          strokeWidth={1.5}
-          strokeDasharray="4 4"
-          vectorEffect="non-scaling-stroke"
-          style={{ pointerEvents: "none" }}
         />
 
         {/* 4. Active segment guides */}

@@ -119,10 +119,10 @@ export function DesktopContextMenu(props: {
       if (e.key === "Escape") onClose();
     }
 
-    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("pointerdown", onDocMouseDown, true);
     document.addEventListener("keydown", onKeyDown);
     return () => {
-      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("pointerdown", onDocMouseDown, true);
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [open, onClose]);
@@ -141,7 +141,7 @@ export function DesktopContextMenu(props: {
         position: "fixed",
         left,
         top,
-        zIndex: 9999,
+        zIndex: 20000,
         background: "rgba(0,0,0,0.85)",
         border: "1px solid rgba(255,255,255,0.35)",
         borderRadius: 0,
