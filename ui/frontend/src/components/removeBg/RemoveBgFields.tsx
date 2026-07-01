@@ -27,9 +27,10 @@ export function RemoveBgNumberField(props: {
   max?: number;
   step?: number;
   disabled?: boolean;
+  title?: string;
   onChange: (v: number) => void;
 }) {
-  const { label, value, min, max, step = 1, disabled, onChange } = props;
+  const { label, value, min, max, step = 1, disabled, title, onChange } = props;
   return (
     <label style={{ display: "block" }}>
       <div style={removeBgLabelStyle}>{label}</div>
@@ -40,6 +41,7 @@ export function RemoveBgNumberField(props: {
         max={max}
         step={step}
         disabled={disabled}
+        title={title}
         style={removeBgInputStyle}
         onChange={(e) => onChange(Number(e.target.value))}
       />
@@ -76,25 +78,27 @@ export function RmbgFields(props: {
       <RemoveBgNumberField
         label="Sensitivity"
         value={value.sensitivity ?? 1}
-        min={0.5}
-        max={1.5}
+        min={0}
+        max={1}
         step={0.05}
         disabled={disabled}
         onChange={(sensitivity) => set({ sensitivity })}
       />
       <RemoveBgNumberField
-        label="Mask expand (px)"
+        label="Mask offset (px)"
         value={value.mask_offset ?? 0}
-        min={0}
-        max={64}
+        min={-20}
+        max={20}
+        step={1}
         disabled={disabled}
+        title="Negative shrinks the mask (reduces halos); positive expands it."
         onChange={(mask_offset) => set({ mask_offset })}
       />
       <RemoveBgNumberField
         label="Mask blur"
         value={value.mask_blur ?? 0}
         min={0}
-        max={20}
+        max={64}
         disabled={disabled}
         onChange={(mask_blur) => set({ mask_blur })}
       />

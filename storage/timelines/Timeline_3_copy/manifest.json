@@ -1,0 +1,322 @@
+{
+  "version": 2,
+  "fps": 24,
+  "previewAspect": "16:9",
+  "tracks": [
+    {
+      "id": "trk_mr29xtzt_27",
+      "name": "Remove Background (RMBG)",
+      "kind": "video",
+      "clips": []
+    },
+    {
+      "id": "trk_mr295rcy_24",
+      "name": "Remove Background (RMBG)",
+      "kind": "video",
+      "clips": []
+    },
+    {
+      "id": "trk_mr27nxmb_9",
+      "name": "AniSeg",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mr27nxmb_7",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_anime_seg_1782918490.webm",
+          "alphaRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_anime_seg_1782918490.alpha.mkv",
+          "start": 42.691948208618165,
+          "inPoint": 0,
+          "outPoint": 5.9583,
+          "speed": 1,
+          "duration": 5.9583,
+          "srcDuration": 5.9583,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "0817_0630_2026"
+          }
+        },
+        {
+          "id": "clip_mr27uman_10",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_anime_seg_1782918804.webm",
+          "alphaRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_anime_seg_1782918804.alpha.mkv",
+          "start": 48.797320065307616,
+          "inPoint": 0,
+          "outPoint": 5.9583,
+          "speed": 1,
+          "duration": 5.9583,
+          "srcDuration": 5.9583,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "0817_0630_2026"
+          }
+        },
+        {
+          "id": "clip_mr27xlb8_13",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_anime_seg_1782918936.webm",
+          "alphaRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_anime_seg_1782918936.alpha.mkv",
+          "start": 55.15062511901856,
+          "inPoint": 0,
+          "outPoint": 5.9583,
+          "speed": 1,
+          "duration": 5.9583,
+          "srcDuration": 5.9583,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "0817_0630_2026"
+          }
+        },
+        {
+          "id": "clip_mr281kux_16",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_anime_seg_1782919127.webm",
+          "alphaRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_anime_seg_1782919127.alpha.mkv",
+          "start": 61.36719004211426,
+          "inPoint": 0,
+          "outPoint": 5.9583,
+          "speed": 1,
+          "duration": 5.9583,
+          "srcDuration": 5.9583,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "0817_0630_2026"
+          }
+        },
+        {
+          "id": "clip_mr2892s4_19",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_anime_seg_1782919476.webm",
+          "alphaRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_anime_seg_1782919476.alpha.mkv",
+          "start": 67.5369883392334,
+          "inPoint": 0,
+          "outPoint": 5.9583,
+          "speed": 1,
+          "duration": 5.9583,
+          "srcDuration": 5.9583,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "0817_0630_2026"
+          }
+        }
+      ]
+    },
+    {
+      "id": "trk_mr26id70_3",
+      "name": "RMBG",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mr27gnvx_4",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_rmbg_1782916812.webm",
+          "alphaRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_rmbg_1782916812.alpha.mkv",
+          "start": 36.73364820861816,
+          "inPoint": 0,
+          "outPoint": 5.9583,
+          "speed": 1,
+          "duration": 5.9583,
+          "srcDuration": 5.9583,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "0817_0630_2026"
+          }
+        },
+        {
+          "id": "clip_mr1jb0nb_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_rmbg_1782876473.webm",
+          "start": 11.9166,
+          "inPoint": 0,
+          "outPoint": 5.9583,
+          "speed": 0.5,
+          "duration": 11.9166,
+          "srcDuration": 5.9583,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "0817_0630_2026"
+          }
+        },
+        {
+          "id": "clip_mr26id70_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_rmbg_1782915444.webm",
+          "alphaRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_rmbg_1782915444.alpha.mkv",
+          "start": 24.267084429931646,
+          "inPoint": 0,
+          "outPoint": 5.9583,
+          "speed": 0.5,
+          "duration": 11.9166,
+          "srcDuration": 5.9583,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "0817_0630_2026"
+          }
+        },
+        {
+          "id": "clip_mr295rcx_22",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_rmbg_1782919832.webm",
+          "alphaRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_rmbg_1782919832.alpha.mkv",
+          "start": 73.75355249938964,
+          "inPoint": 0,
+          "outPoint": 5.9583,
+          "speed": 1,
+          "duration": 5.9583,
+          "srcDuration": 5.9583,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "0817_0630_2026"
+          }
+        },
+        {
+          "id": "clip_mr29xtzs_25",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_rmbg_1782921170.webm",
+          "alphaRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_rmbg_1782921170.alpha.mkv",
+          "start": 79.71185249938964,
+          "inPoint": 0,
+          "outPoint": 5.9583,
+          "speed": 1,
+          "duration": 5.9583,
+          "srcDuration": 5.9583,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "0817_0630_2026"
+          }
+        }
+      ]
+    },
+    {
+      "id": "trk_mr1jb0nc_3",
+      "name": "Remove Background (RMBG)",
+      "kind": "video",
+      "clips": []
+    },
+    {
+      "id": "trk_mr1fngao_3",
+      "name": "Video 1",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mr1s3hvd_1",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_761bef960245435f85f66e0713b7d136.png",
+          "start": 7.666600000000001,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 4.25,
+          "naturalW": 1408,
+          "naturalH": 768,
+          "source": {
+            "locationKey": "bushu_city"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        },
+        {
+          "id": "clip_mr1s3v0k_3",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_ecb73396644846e4b51fd4c01ea2e06b.png",
+          "start": 1.088087426757813,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1408,
+          "naturalH": 768,
+          "source": {
+            "locationKey": "pla_beach"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        },
+        {
+          "id": "clip_mr1s3prx_2",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_3a7f0ac6941e4ac2a2d27e9a93b49a02.png",
+          "start": 4.088087426757813,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3.5785125732421874,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "flala_courtyard"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1.7924248889134802,
+            "rotation": 0,
+            "opacity": 1
+          }
+        },
+        {
+          "id": "clip_mr1fngam_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_7c8206c5784a45c29e584ed7990c9ed5.mp4",
+          "start": 86.66677385864259,
+          "inPoint": 0,
+          "outPoint": 5.9583,
+          "speed": 0.5,
+          "duration": 11.9166,
+          "srcDuration": 5.9583,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "0817_0630_2026"
+          }
+        }
+      ]
+    },
+    {
+      "id": "trk_mr1jezii_10",
+      "name": "Music 1",
+      "kind": "audio",
+      "clips": [
+        {
+          "id": "clip_mr1jezih_8",
+          "type": "audio",
+          "srcRelPath": "timelines/Timeline_3_copy/clips/clip_34128badd52b461db0343b3eafaa2c07.mp3",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 30.0002,
+          "speed": 1,
+          "duration": 30.0002,
+          "srcDuration": 30.0002
+        }
+      ]
+    }
+  ]
+}
