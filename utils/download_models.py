@@ -386,6 +386,7 @@ def download_file(
                 desc=desc,
                 dynamic_ncols=False,
                 disable=False,
+                mininterval=1.0,
                 file=_TqdmPipeLineStdout(sys.stdout),
             ) as bar:
                 with open(part_path, "wb") as f:

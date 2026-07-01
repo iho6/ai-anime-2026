@@ -4,14 +4,14 @@
   "previewAspect": "16:9",
   "tracks": [
     {
-      "id": "trk_mr1fngao_3",
-      "name": "Video 1",
+      "id": "trk_mr1jb0nc_3",
+      "name": "Remove Background (RMBG)",
       "kind": "video",
       "clips": [
         {
-          "id": "clip_mr1fngam_1",
+          "id": "clip_mr1jb0nb_1",
           "type": "video",
-          "srcRelPath": "timelines/Timeline_3/clips/clip_7c8206c5784a45c29e584ed7990c9ed5.mp4",
+          "srcRelPath": "timelines/Timeline_3/clips/clip_7c8206c5784a45c29e584ed7990c9ed5_rmbg_1782876473.webm",
           "start": 0,
           "inPoint": 0,
           "outPoint": 5.9583,
@@ -24,6 +24,48 @@
             "charKey": "luka",
             "sequenceName": "0817_0630_2026"
           }
+        }
+      ]
+    },
+    {
+      "id": "trk_mr1fngao_3",
+      "name": "Video 1",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mr1fngam_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_3/clips/clip_7c8206c5784a45c29e584ed7990c9ed5.mp4",
+          "start": 11.9166,
+          "inPoint": 0,
+          "outPoint": 5.9583,
+          "speed": 0.5,
+          "duration": 11.9166,
+          "srcDuration": 5.9583,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "luka",
+            "sequenceName": "0817_0630_2026"
+          }
+        }
+      ]
+    },
+    {
+      "id": "trk_mr1jezii_10",
+      "name": "Music 1",
+      "kind": "audio",
+      "clips": [
+        {
+          "id": "clip_mr1jezih_8",
+          "type": "audio",
+          "srcRelPath": "timelines/Timeline_3/clips/clip_34128badd52b461db0343b3eafaa2c07.mp3",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 30.0002,
+          "speed": 1,
+          "duration": 30.0002,
+          "srcDuration": 30.0002
         }
       ]
     }

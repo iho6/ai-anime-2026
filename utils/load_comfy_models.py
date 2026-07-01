@@ -250,6 +250,7 @@ class ModelDownloader:
                     desc=desc,
                     dynamic_ncols=False,
                     disable=False,
+                    mininterval=1.0,
                     file=self.progress.stream(),
                 ) as bar:
                     with open(part_path, "wb") as f:
