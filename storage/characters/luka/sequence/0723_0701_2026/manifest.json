@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "fps": 24,
+  "gallery": [
+    {
+      "id": "ad663f685b90",
+      "relPath": "sequence/0723_0701_2026/gallery/posefolder_1402f63a9d45/frame_000001.png",
+      "frameSequence": {
+        "sequenceGroupId": "da40677fdcb1",
+        "strip": [
+          {
+            "kind": "image",
+            "relPath": "sequence/0723_0701_2026/gallery/posefolder_1402f63a9d45/frame_000001.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_7031a15059ee.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 0,
+                "y": 0,
+                "width": 576,
+                "height": 576
+              },
+              "figureSquareCropRelPath": "luka/sequence/0723_0629_2026/gallery/posefolder_1402f63a9d45/frame_000001_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0723_0701_2026/gallery/posefolder_1402f63a9d45/frame_000002.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_040a9e89844b.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 0,
+                "y": 0,
+                "width": 576,
+                "height": 576
+              },
+              "figureSquareCropRelPath": "luka/sequence/0723_0629_2026/gallery/posefolder_1402f63a9d45/frame_000002_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0723_0701_2026/gallery/posefolder_1402f63a9d45/frame_000003.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_187ace33ea8a.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 192,
+                "y": 0,
+                "width": 576,
+                "height": 576
+              },
+              "figureSquareCropRelPath": "luka/sequence/0723_0629_2026/gallery/posefolder_1402f63a9d45/frame_000003_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0723_0701_2026/gallery/posefolder_1402f63a9d45/frame_000004.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_991119def63f.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 436,
+                "y": 0,
+                "width": 497,
+                "height": 497
+              },
+              "figureSquareCropRelPath": "luka/sequence/0723_0629_2026/gallery/posefolder_1402f63a9d45/frame_000004_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0723_0701_2026/gallery/posefolder_1402f63a9d45/frame_000005.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_991e5b744d3f.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 574,
+                "y": 0,
+                "width": 426,
+                "height": 426
+              },
+              "figureSquareCropRelPath": "luka/sequence/0723_0629_2026/gallery/posefolder_1402f63a9d45/frame_000005_sq.png"
+            }
+          }
+        ],
+        "hidden": []
+      },
+      "poseConfig": {
+        "baseImageRelPath": "luka/poses/pose_000.png",
+        "promptText": "",
+        "skipCloseup": false,
+        "extraPadFrac": 0,
+        "cfgScale": 1,
+        "folderId": "5f30fc8355e8"
+      }
+    }
+  ],
+  "frames": [],
+  "previewAspect": "16:9",
+  "timelineViewStep": 1
+}

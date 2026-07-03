@@ -7,6 +7,7 @@ import {
   apiNewCharacterDiscard,
   apiSequenceFolderDuplicate,
   apiSequenceFolderDelete,
+  apiSequenceFolderRename,
   apiSequenceGet,
   apiSequencePut,
   assetUrlFromRelPath,
@@ -85,6 +86,8 @@ export function TimelineCharacterPicker(props: {
   const [closeupWizardCharKey, setCloseupWizardCharKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [seqOpen, setSeqOpen] = useState(true);
+  const [editingSeqName, setEditingSeqName] = useState<string | null>(null);
+  const [editingSeqDraft, setEditingSeqDraft] = useState("");
 
   const {
     data: charSectionsRaw,
@@ -188,6 +191,7 @@ export function TimelineCharacterPicker(props: {
     setQwenCfg(1.0);
     setImgCtxMenu(null);
     setSeqCtxMenu(null);
+    setEditingSeqName(null);
     setAngleModalOpen(false);
     setAngleSourceRelPath("");
     setCloseupWizardOpen(false);
@@ -347,6 +351,25 @@ export function TimelineCharacterPicker(props: {
       onLogLine: (line) => pushLog(line),
     });
     if (!done.ok) throw new Error(done.error ?? "Pose generation failed.");
+  }
+
+  async function renameSequence(oldName: string, newName: string) {
+    const trimmed = newName.trim();
+    setEditingSeqName(null);
+    if (!selectedKey || !trimmed || trimmed === oldName) return;
+    try {
+      const { newName } = await apiSequenceFolderRename(selectedKey, oldName, trimmed);
+      setSelectedSequences((prev) => {
+        if (!prev.has(oldName)) return prev;
+        const next = new Set(prev);
+        next.delete(oldName);
+        next.add(newName);
+        return next;
+      });
+      await refreshSections();
+    } catch (e) {
+      showError({ message: "Rename failed.", error: e });
+    }
   }
 
   async function duplicateSequence(name: string) {
@@ -906,18 +929,50 @@ export function TimelineCharacterPicker(props: {
                                   setSeqCtxMenu({ name: seq.name, x: e.clientX, y: e.clientY });
                                 }}
                                 footer={
-                                  <div
-                                    style={{
-                                      fontSize: 10,
-                                      color: "#aaa",
-                                      overflow: "hidden",
-                                      textOverflow: "ellipsis",
-                                      whiteSpace: "nowrap",
-                                      textAlign: "center",
-                                    }}
-                                  >
-                                    {seq.name}
-                                  </div>
+                                  editingSeqName === seq.name ? (
+                                    <input
+                                      autoFocus
+                                      value={editingSeqDraft}
+                                      onChange={(e) => setEditingSeqDraft(e.target.value)}
+                                      onBlur={() => void renameSequence(seq.name, editingSeqDraft)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") { e.currentTarget.blur(); }
+                                        if (e.key === "Escape") { e.preventDefault(); setEditingSeqName(null); }
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onDoubleClick={(e) => e.stopPropagation()}
+                                      style={{
+                                        width: "100%",
+                                        fontSize: 10,
+                                        textAlign: "center",
+                                        background: "rgba(255,255,255,0.1)",
+                                        border: "1px solid rgba(255,255,255,0.35)",
+                                        color: "#eee",
+                                        padding: "1px 4px",
+                                        boxSizing: "border-box",
+                                        outline: "none",
+                                      }}
+                                    />
+                                  ) : (
+                                    <div
+                                      style={{
+                                        fontSize: 10,
+                                        color: "#aaa",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                        textAlign: "center",
+                                        cursor: "text",
+                                      }}
+                                      onDoubleClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingSeqName(seq.name);
+                                        setEditingSeqDraft(seq.name);
+                                      }}
+                                    >
+                                      {seq.name}
+                                    </div>
+                                  )
                                 }
                               />
                             ))}
@@ -1054,6 +1109,30 @@ export function TimelineCharacterPicker(props: {
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              const { name } = seqCtxMenu;
+              setSeqCtxMenu(null);
+              setEditingSeqName(name);
+              setEditingSeqDraft(name);
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "8px 14px",
+              background: "transparent",
+              color: "#eee",
+              border: "none",
+              textAlign: "left",
+              cursor: "pointer",
+              font: "inherit",
+              fontSize: 13,
+            }}
+          >
+            Rename
+          </button>
           <button
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
