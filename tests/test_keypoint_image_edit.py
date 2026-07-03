@@ -37,7 +37,7 @@ def test_run_keypoint_image_edit_with_plate_uses_full_primary_and_cropped_aux(
         return {"results": [{"url": str(qwen_out)}]}
 
     with patch.object(logic, "_run_service_testmode", side_effect=fake_run):
-        out = logic._run_keypoint_image_edit_with_plate(
+        plate_path, _square_meta = logic._run_keypoint_image_edit_with_plate(
             "test_char",
             str(identity),
             str(keypoint),
@@ -45,7 +45,7 @@ def test_run_keypoint_image_edit_with_plate_uses_full_primary_and_cropped_aux(
             "test prompt",
         )
 
-    assert Path(out).is_file()
+    assert Path(plate_path).is_file()
     assert "--image-url" in captured_argv
     primary_idx = captured_argv.index("--image-url") + 1
     assert captured_argv[primary_idx] == str(identity)

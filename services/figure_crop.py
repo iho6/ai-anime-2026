@@ -292,6 +292,28 @@ def paste_square_working_onto_canvas(
     ).convert("RGB")
 
 
+def qwen_sidecar_path(plate_path: Path | str) -> Path:
+    """Sibling path for native Qwen output: ``foo.png`` → ``foo_qwen.png``."""
+    p = Path(plate_path)
+    return p.parent / f"{p.stem}_qwen{p.suffix or '.png'}"
+
+
+def composite_rgba_on_transparent_canvas(
+    rgba_crop: Image.Image,
+    canvas_w: int,
+    canvas_h: int,
+    box: dict[str, int],
+) -> Image.Image:
+    """Paste RGBA matte onto a full-size transparent canvas at ``box``."""
+    x, y, w, h = placement_box(box)
+    canvas = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+    patch_rgba = rgba_crop.convert("RGBA")
+    if patch_rgba.size != (w, h):
+        patch_rgba = patch_rgba.resize((w, h), Image.Resampling.LANCZOS)
+    canvas.paste(patch_rgba, (x, y), patch_rgba)
+    return canvas
+
+
 def composite_rgba_on_white_plate(
     rgba_crop: Image.Image,
     canvas_w: int,

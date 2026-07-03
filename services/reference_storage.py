@@ -1040,6 +1040,7 @@ def update_placed_figure_outputs(
     figure_crop_rgba_abs: str | None = None,
     figure_plate_abs: str | None = None,
     figure_square_crop_abs: str | None = None,
+    qwen_output_abs: str | None = None,
     square_ref_crop_abs: str | None = None,
     square_keypoint_crop_abs: str | None = None,
 ) -> dict[str, Any]:
@@ -1062,6 +1063,10 @@ def update_placed_figure_outputs(
             dest = placed_dir() / f"pf_{keypoint_id}_plate.png"
             shutil.copy2(figure_plate_abs, dest)
             pf["figurePlateRelPath"] = _abs_to_storage_rel(dest)
+        if qwen_output_abs:
+            dest = placed_dir() / f"pf_{keypoint_id}_qwen.png"
+            shutil.copy2(qwen_output_abs, dest)
+            pf["qwenOutputRelPath"] = _abs_to_storage_rel(dest)
         if square_ref_crop_abs:
             # SDPose input crop only (motion-ref mesh square); not Qwen character primary.
             dest = placed_dir() / f"pf_{keypoint_id}_ref_square.png"
@@ -1110,6 +1115,7 @@ def delete_keypoint(keypoint_id: str) -> bool:
                 "figureCropRgbaRelPath",
                 "figureSquareCropRelPath",
                 "figurePlateRelPath",
+                "qwenOutputRelPath",
                 "squareRefCropRelPath",
                 "squareKeypointCropRelPath",
             ):

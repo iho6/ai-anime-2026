@@ -1962,6 +1962,7 @@ export function runShotRemoveBgWsJob(params: {
   engine?: RemoveBgEngine;
   rmbg?: RmbgBgOptions;
   animeSeg?: AnimeSegBgOptions;
+  placedFigure?: PlacedFigureMeta;
   onLogLine: (line: string) => void;
 }): Promise<WsDoneMessage<{ relPath: string }>> {
   const url = wsUrlForPath("/shot/remove_bg/ws");
@@ -3214,6 +3215,7 @@ export type PlacedFigureMeta = {
   figureCropRgbaRelPath?: string;
   figureSquareCropRelPath?: string;
   figurePlateRelPath?: string;
+  qwenOutputRelPath?: string;
   squareRefCropRelPath?: string;
   squareKeypointCropRelPath?: string;
 };

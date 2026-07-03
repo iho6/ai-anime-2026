@@ -4,157 +4,157 @@
   "gallery": [
     {
       "id": "5b667f1f68a1",
-      "relPath": "Iya/sequence/closeup/gallery/gal_5b667f1f68a1.png"
+      "relPath": "sequence/closeup/gallery/gal_5b667f1f68a1.png"
     },
     {
       "id": "98b491a2c7dd",
-      "relPath": "Iya/sequence/closeup/gallery/gal_98b491a2c7dd.png"
+      "relPath": "sequence/closeup/gallery/gal_98b491a2c7dd.png"
     },
     {
       "id": "9e67eefc2117",
-      "relPath": "Iya/sequence/closeup/gallery/gal_9e67eefc2117.png"
+      "relPath": "sequence/closeup/gallery/gal_9e67eefc2117.png"
     },
     {
       "id": "334e49ead64b",
-      "relPath": "Iya/sequence/closeup/gallery/gal_334e49ead64b.png"
+      "relPath": "sequence/closeup/gallery/gal_334e49ead64b.png"
     },
     {
       "id": "0ba1e1393130",
-      "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000001.png",
+      "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000001.png",
       "frameSequence": {
         "sequenceGroupId": "5d4856f0512a",
         "strip": [
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000001.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000001.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000002.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000002.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000003.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000003.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000004.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000004.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000005.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000005.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000006.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000006.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000007.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000007.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000008.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000008.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000009.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000009.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000010.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000010.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000011.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000011.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000012.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000012.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000013.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000013.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000014.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000014.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000015.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000015.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000016.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000016.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000017.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000017.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000018.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000018.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000019.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000019.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000020.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000020.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000021.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000021.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000022.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000022.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000023.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000023.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000024.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000024.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000025.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000025.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000026.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000026.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000027.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000027.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000028.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000028.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000029.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000029.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000030.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000030.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000031.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000031.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000032.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000032.png"
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_02e1cf72b64e/frame_000033.png"
+            "relPath": "sequence/closeup/gallery/flf_02e1cf72b64e/frame_000033.png"
           }
         ],
         "hidden": []
@@ -162,322 +162,322 @@
     },
     {
       "id": "4a5174951441",
-      "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000007.png",
+      "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000007.png",
       "frameSequence": {
         "sequenceGroupId": "13184ff54e82",
         "strip": [
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000001.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000001.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000002.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000002.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000003.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000003.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000004.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000004.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000005.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000005.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000006.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000006.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000007.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000007.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000008.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000008.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000009.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000009.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000010.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000010.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000011.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000011.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000012.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000012.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000013.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000013.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000014.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000014.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000015.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000015.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000016.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000016.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000017.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000017.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000018.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000018.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000019.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000019.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000020.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000020.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000021.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000021.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000022.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000022.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000023.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000023.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000024.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000024.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000025.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000025.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000026.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000026.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000027.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000027.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000028.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000028.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000029.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000029.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000030.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000030.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000031.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000031.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000032.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000032.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "Iya/sequence/closeup/gallery/flf_d5219c73b22a/frame_000033.png",
+            "relPath": "sequence/closeup/gallery/flf_d5219c73b22a/frame_000033.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           }
         ],
@@ -486,29 +486,29 @@
     },
     {
       "id": "g_1775969593670_dda4610b4645e",
-      "relPath": "Iya/sequence/closeup/gallery/gal_d38d1f5fc8cf.png",
+      "relPath": "sequence/closeup/gallery/gal_d38d1f5fc8cf.png",
       "crop": {
-        "translateX": 0,
-        "translateY": 0,
-        "scale": 1
+        "scale": 1,
+        "translateXFrac": 0.0,
+        "translateYFrac": 0.0
       }
     },
     {
       "id": "g_1775969630206_ec2d8a3376549",
-      "relPath": "Iya/sequence/closeup/gallery/gal_c7467b2f1497.png",
+      "relPath": "sequence/closeup/gallery/gal_c7467b2f1497.png",
       "crop": {
-        "translateX": 0,
-        "translateY": 0,
-        "scale": 1
+        "scale": 1,
+        "translateXFrac": 0.0,
+        "translateYFrac": 0.0
       }
     },
     {
       "id": "g_1775969642733_da0a8596f5972",
-      "relPath": "Iya/sequence/closeup/gallery/gal_c1fe100bc6c9.png",
+      "relPath": "sequence/closeup/gallery/gal_c1fe100bc6c9.png",
       "crop": {
-        "translateX": 0,
-        "translateY": 0,
-        "scale": 1
+        "scale": 1,
+        "translateXFrac": 0.0,
+        "translateYFrac": 0.0
       }
     }
   ],
@@ -516,31 +516,31 @@
     {
       "index": 0,
       "cellId": "cell_1775827249449_63f677ed0c985",
-      "relPath": "Iya/sequence/closeup/cells/cell_052c3792cb61.png",
+      "relPath": "sequence/closeup/cells/cell_052c3792cb61.png",
       "crop": {
-        "translateX": 0,
-        "translateY": 0,
-        "scale": 1
+        "scale": 1,
+        "translateXFrac": 0.0,
+        "translateYFrac": 0.0
       }
     },
     {
       "index": 41,
       "cellId": "cell_1775827510810_d7e1a45340c118",
-      "relPath": "Iya/sequence/closeup/cells/cell_1efe76d59e9c.png",
+      "relPath": "sequence/closeup/cells/cell_1efe76d59e9c.png",
       "crop": {
-        "translateX": 0,
-        "translateY": 0,
-        "scale": 1
+        "scale": 1,
+        "translateXFrac": 0.0,
+        "translateYFrac": 0.0
       }
     },
     {
       "index": 50,
       "cellId": "cell_1775827258693_0dabb8dad26c08",
-      "relPath": "Iya/sequence/closeup/cells/cell_e3f22fba391a.png",
+      "relPath": "sequence/closeup/cells/cell_e3f22fba391a.png",
       "crop": {
-        "translateX": 0,
-        "translateY": 0,
-        "scale": 1
+        "scale": 1,
+        "translateXFrac": 0.0,
+        "translateYFrac": 0.0
       }
     }
   ],

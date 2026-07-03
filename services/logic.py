@@ -3761,14 +3761,16 @@ def _run_keypoint_image_edit_with_plate(
             keypoint_id,
             figure_square_crop_abs=str(patch_path),
             figure_plate_abs=str(plate_path),
+            qwen_output_abs=str(qwen_out),
         )
         if log_cb:
-            log_cb("Saved placement patch + full-size plate preview.")
+            log_cb("Saved placement patch, full-size plate, and native Qwen output.")
 
     square_meta: dict[str, Any] = {
         "canvas": {"width": c_w, "height": c_h},
         "placement": {"x": px, "y": py, "width": pw, "height": ph},
         "_squareTmpPath": str(patch_path.resolve()),
+        "_qwenTmpPath": str(qwen_out.resolve()),
     }
     return str(plate_path.resolve()), square_meta
 
@@ -3791,6 +3793,53 @@ def _pose_gallery_save_from_local(
     return str(dest), rel
 
 
+def _persist_qwen_sidecar_for_plate(
+    plate_abs: Path,
+    square_meta: dict[str, Any] | None,
+    *,
+    storage_root: Path | None = None,
+) -> dict[str, Any] | None:
+    """Copy native Qwen from ``square_meta`` to ``{stem}_qwen.png`` beside plate."""
+    if not square_meta:
+        return square_meta
+    meta = dict(square_meta)
+    qwen_tmp = str(meta.pop("_qwenTmpPath", "") or "").strip()
+    if not qwen_tmp or not Path(qwen_tmp).is_file():
+        return meta
+    from services.figure_crop import qwen_sidecar_path
+
+    qwen_dest = qwen_sidecar_path(plate_abs)
+    qwen_dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(qwen_tmp, qwen_dest)
+    root = (storage_root or DEFAULT_STORAGE_ROOT).resolve()
+    try:
+        meta["qwenOutputRelPath"] = str(qwen_dest.resolve().relative_to(root)).replace("\\", "/")
+    except ValueError:
+        meta["qwenOutputRelPath"] = str(qwen_dest.resolve().relative_to(root.parent)).replace(
+            "\\", "/"
+        )
+    return meta
+
+
+def _pose_gallery_save_plate_with_qwen_sidecar(
+    character_name: str,
+    plate_abs: str,
+    qwen_abs: str,
+) -> tuple[str, str]:
+    """Save white plate to pose gallery and native Qwen as ``pose_NNN_qwen.png``."""
+    character = get_character_paths(character_name)
+    ensure_dirs(character.poses_dir)
+    plate_src = Path(plate_abs)
+    ext = plate_src.suffix.lower() if plate_src.suffix else ".png"
+    pid = _next_pose_tile_index_for_new_tile(character.poses_dir)
+    plate_dest = character.poses_dir / f"pose_{pid:03d}{ext}"
+    shutil.copy2(plate_src, plate_dest)
+    qwen_dest = character.poses_dir / f"pose_{pid:03d}_qwen.png"
+    shutil.copy2(qwen_abs, qwen_dest)
+    rel = _append_pose_gallery_file_to_order(character_name, plate_dest)
+    return str(plate_dest), rel
+
+
 def _finalize_qwen_pose_result(
     character_name: str,
     result_ref: str,
@@ -3808,7 +3857,6 @@ def _finalize_qwen_pose_result(
     work_dir.mkdir(parents=True, exist_ok=True)
     qwen_out = work_dir / f"qwen_{index}.png"
     download_url_to_file(result_ref.strip(), qwen_out)
-    out_abs = qwen_out
     if (
         placed_figure
         and isinstance(placed_figure.get("placement"), dict)
@@ -3818,8 +3866,10 @@ def _finalize_qwen_pose_result(
             plate = composite_qwen_output_on_white_plate(qwen_im, placed_figure)
         plate_path = work_dir / f"plate_{index}.png"
         plate.save(plate_path)
-        out_abs = plate_path
-    return _pose_gallery_save_from_local(character_name, str(out_abs), stem_tag)
+        return _pose_gallery_save_plate_with_qwen_sidecar(
+            character_name, str(plate_path), str(qwen_out)
+        )
+    return _pose_gallery_save_from_local(character_name, str(qwen_out), stem_tag)
 
 
 def generate_pose_starting_image(
@@ -4228,8 +4278,8 @@ def _generate_pose_image_edit_url(
     """Run image-edit pose generation; return (result_url, square_meta | None).
 
     square_meta is present when the plate-compositing path is used and contains
-    canvas/placement info plus ``_squareTmpPath`` pointing to the raw Qwen square
-    crop (temporary file valid until the caller copies it).
+    canvas/placement info plus ``_squareTmpPath`` (placement-sized patch) and
+    ``_qwenTmpPath`` (native Qwen output; valid until the caller copies it).
     """
     effective = (prompt_text or "").strip()
     kp = (keypoint_image_path or "").strip()
@@ -4422,10 +4472,13 @@ def generate_pose_sequence_from_keypoints(
         slot: dict[str, Any] = {"kind": "image", "relPath": rel_str, "sourceKeypointRelPath": kp_rel}
         if square_meta:
             sq_tmp = square_meta.pop("_squareTmpPath", None)
+            square_meta = _persist_qwen_sidecar_for_plate(dest_path, square_meta, storage_root=root)
             if sq_tmp and Path(sq_tmp).is_file():
                 sq_dest = out_dir / f"frame_{i + 1:06d}_sq.png"
                 shutil.copy2(sq_tmp, sq_dest)
-                square_meta["figureSquareCropRelPath"] = str(sq_dest.resolve().relative_to(root)).replace("\\", "/")
+                square_meta["figureSquareCropRelPath"] = str(
+                    sq_dest.resolve().relative_to(root)
+                ).replace("\\", "/")
             slot["placedFigure"] = square_meta
         strip.append(slot)
         if i == 0:
@@ -4610,10 +4663,13 @@ def regenerate_sequence_strip_frame(
 
     if square_meta:
         sq_tmp = square_meta.pop("_squareTmpPath", None)
+        square_meta = _persist_qwen_sidecar_for_plate(dest_path, square_meta, storage_root=root)
         sq_dest = dest_path.parent / (dest_path.stem + "_sq" + dest_path.suffix)
         if sq_tmp and Path(sq_tmp).is_file():
             shutil.copy2(sq_tmp, sq_dest)
-            square_meta["figureSquareCropRelPath"] = str(sq_dest.resolve().relative_to(root)).replace("\\", "/")
+            square_meta["figureSquareCropRelPath"] = str(
+                sq_dest.resolve().relative_to(root)
+            ).replace("\\", "/")
         slot["placedFigure"] = square_meta
 
     manifest2 = read_sequence_manifest(char_key, seq_name)
@@ -11540,6 +11596,154 @@ def _copy_frame_urls_to_dir(
     return rels
 
 
+def _abs_path_for_image_rel(image_rel: str) -> Path:
+    """Resolve a storage or timeline-relative image path to an absolute file."""
+    rel_norm = str(image_rel or "").replace("\\", "/").lstrip("/")
+    if rel_norm.lower().startswith("timelines/"):
+        from services import timeline_storage
+
+        return timeline_storage.timeline_rel_to_abs(rel_norm)
+    return resolve_storage_rel_path_to_abs(rel_norm)
+
+
+def find_placed_figure_for_image_rel(image_rel: str) -> dict[str, Any] | None:
+    """Locate ``placedFigure`` metadata for a plate or sequence frame ``relPath``."""
+    from services import reference_storage
+    from services.character_storage import list_characters
+
+    rel_norm = str(image_rel or "").replace("\\", "/").lstrip("/")
+    if not rel_norm:
+        return None
+
+    for char_key in list_characters():
+        for seq_name in list_sequence_folder_names(char_key):
+            try:
+                manifest = read_sequence_manifest(char_key, seq_name)
+            except Exception:
+                continue
+            for item in manifest.get("gallery") or []:
+                if str(item.get("relPath") or "").replace("\\", "/") == rel_norm:
+                    pf = item.get("placedFigure")
+                    if isinstance(pf, dict) and pf.get("placement") and pf.get("canvas"):
+                        return pf
+                strip = (item.get("frameSequence") or {}).get("strip") or []
+                for slot in strip:
+                    if not isinstance(slot, dict):
+                        continue
+                    if str(slot.get("relPath") or "").replace("\\", "/") == rel_norm:
+                        pf = slot.get("placedFigure")
+                        if isinstance(pf, dict) and pf.get("placement") and pf.get("canvas"):
+                            return pf
+
+    for entry in reference_storage.list_keypoints():
+        pf = entry.get("placedFigure")
+        if not isinstance(pf, dict):
+            continue
+        for key in ("figurePlateRelPath",):
+            plate_rel = str(pf.get(key) or "").replace("\\", "/")
+            if plate_rel and plate_rel == rel_norm:
+                return pf
+    return None
+
+
+def resolve_rmbg_input(
+    image_rel: str,
+    placed_figure: dict[str, Any] | None = None,
+) -> tuple[Path, dict[str, Any] | None, str]:
+    """Pick HD Qwen sidecar when available; otherwise fall back to the plate image."""
+    from PIL import Image
+
+    from services.figure_crop import qwen_sidecar_path
+
+    rel_norm = str(image_rel or "").replace("\\", "/").lstrip("/")
+    plate_abs = _abs_path_for_image_rel(rel_norm)
+    if not plate_abs.is_file():
+        raise ValueError(f"Source image not found: {image_rel}")
+
+    pf = placed_figure if isinstance(placed_figure, dict) else None
+    if pf is None:
+        pf = find_placed_figure_for_image_rel(rel_norm)
+
+    qwen_rel = str((pf or {}).get("qwenOutputRelPath") or "").strip()
+    if qwen_rel:
+        try:
+            qwen_abs = _abs_path_for_image_rel(qwen_rel)
+            if qwen_abs.is_file():
+                with Image.open(qwen_abs) as im:
+                    w, h = im.size
+                return (
+                    qwen_abs,
+                    pf,
+                    f"RMBG source: native Qwen ({w}×{h}) from metadata",
+                )
+        except (ValueError, OSError):
+            pass
+
+    sidecar = qwen_sidecar_path(plate_abs)
+    if sidecar.is_file():
+        with Image.open(sidecar) as im:
+            w, h = im.size
+        return sidecar, pf, f"RMBG source: native Qwen ({w}×{h}) sidecar"
+
+    with Image.open(plate_abs) as im:
+        w, h = im.size
+    return (
+        plate_abs,
+        pf,
+        f"RMBG source: plate fallback ({w}×{h}, no Qwen sidecar)",
+    )
+
+
+def remove_bg_to_temp_with_hd_source(
+    image_rel: str,
+    log_cb: Callable[[str], None] | None = None,
+    *,
+    engine: str = "rmbg",
+    rmbg_overrides: dict[str, Any] | None = None,
+    anime_seg_options: dict[str, Any] | None = None,
+    placed_figure: dict[str, Any] | None = None,
+) -> str:
+    """Run RMBG on native Qwen when available; re-composite matte onto transparent canvas."""
+    from PIL import Image
+
+    from services.figure_crop import composite_rgba_on_transparent_canvas
+
+    rmbg_abs, pf, label = resolve_rmbg_input(image_rel, placed_figure)
+    if log_cb:
+        log_cb(label)
+
+    rgba_tmp = remove_bg_to_temp_file(
+        str(rmbg_abs),
+        log_cb=log_cb,
+        engine=engine,
+        rmbg_overrides=rmbg_overrides,
+        anime_seg_options=anime_seg_options,
+    )
+    try:
+        canvas = (pf or {}).get("canvas") if isinstance(pf, dict) else None
+        placement = (pf or {}).get("placement") if isinstance(pf, dict) else None
+        if isinstance(canvas, dict) and isinstance(placement, dict):
+            c_w = int(canvas.get("width") or 0)
+            c_h = int(canvas.get("height") or 0)
+            if c_w > 0 and c_h > 0:
+                with Image.open(rgba_tmp) as im:
+                    out_im = composite_rgba_on_transparent_canvas(
+                        im, c_w, c_h, placement
+                    )
+                dest_tmp = Path(tempfile.gettempdir()) / f"rembg_{unique_suffix()}.png"
+                out_im.save(dest_tmp)
+                if log_cb:
+                    log_cb(
+                        f"Re-composited HD matte onto {c_w}×{c_h} transparent canvas."
+                    )
+                Path(rgba_tmp).unlink(missing_ok=True)
+                return str(dest_tmp)
+        return rgba_tmp
+    except Exception:
+        Path(rgba_tmp).unlink(missing_ok=True)
+        raise
+
+
 def remove_background_next_to_source(
     source_rel: str,
     log_cb: Callable[[str], None] | None = None,
@@ -11547,23 +11751,20 @@ def remove_background_next_to_source(
     engine: str = "rmbg",
     rmbg_overrides: dict[str, Any] | None = None,
     anime_seg_options: dict[str, Any] | None = None,
+    placed_figure: dict[str, Any] | None = None,
 ) -> str:
     """Remove background and write a new PNG beside the source file (for strip frames)."""
     rel_norm = str(source_rel).replace("\\", "/").lstrip("/")
-    if rel_norm.lower().startswith("timelines/"):
-        from services import timeline_storage
-
-        src_abs = timeline_storage.timeline_rel_to_abs(rel_norm)
-    else:
-        src_abs = resolve_storage_rel_path_to_abs(rel_norm)
+    src_abs = _abs_path_for_image_rel(rel_norm)
     if not src_abs.is_file():
         raise ValueError(f"Source image not found: {source_rel}")
-    temp_path = remove_bg_to_temp_file(
-        str(src_abs),
+    temp_path = remove_bg_to_temp_with_hd_source(
+        source_rel,
         log_cb=log_cb,
         engine=engine,
         rmbg_overrides=rmbg_overrides,
         anime_seg_options=anime_seg_options,
+        placed_figure=placed_figure,
     )
     try:
         dest = src_abs.parent / f"rembg_{unique_suffix(12)}.png"

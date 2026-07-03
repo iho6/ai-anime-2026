@@ -246,12 +246,13 @@ async def shot_remove_bg_ws(ws: WebSocket) -> None:
         image_rel = (msg.get("imageRelPath") or "").strip()
         if not image_rel:
             raise ValueError("imageRelPath is required.")
-        src_abs = str(resolve_storage_rel_file(image_rel))
 
         engine = str(msg.get("engine") or "rmbg").strip().lower()
         rmbg_overrides = msg.get("rmbg") if isinstance(msg.get("rmbg"), dict) else None
         raw_anime = msg.get("animeSeg") or msg.get("anime_seg")
         anime_seg_options = raw_anime if isinstance(raw_anime, dict) else None
+        raw_pf = msg.get("placedFigure")
+        placed_figure = raw_pf if isinstance(raw_pf, dict) else None
 
         def work(log_cb: Any) -> dict[str, str]:
             if bool(msg.get("inPlace")):
@@ -261,14 +262,16 @@ async def shot_remove_bg_ws(ws: WebSocket) -> None:
                     engine=engine,
                     rmbg_overrides=rmbg_overrides,
                     anime_seg_options=anime_seg_options,
+                    placed_figure=placed_figure,
                 )
                 return {"relPath": rel}
-            temp_path = logic.remove_bg_to_temp_file(
-                src_abs,
+            temp_path = logic.remove_bg_to_temp_with_hd_source(
+                image_rel,
                 log_cb=log_cb,
                 engine=engine,
                 rmbg_overrides=rmbg_overrides,
                 anime_seg_options=anime_seg_options,
+                placed_figure=placed_figure,
             )
             dest_dir = SHOTS_STORAGE_ROOT / "_rembg"
             dest_dir.mkdir(parents=True, exist_ok=True)

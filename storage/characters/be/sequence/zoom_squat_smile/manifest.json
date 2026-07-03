@@ -4,348 +4,348 @@
   "gallery": [
     {
       "id": "b660a8c17cea",
-      "relPath": "be/sequence/zoom_squat_smile/gallery/gal_b660a8c17cea.png"
+      "relPath": "sequence/zoom_squat_smile/gallery/gal_b660a8c17cea.png"
     },
     {
       "id": "28424528ffe0",
-      "relPath": "be/sequence/zoom_squat_smile/gallery/gal_28424528ffe0.png"
+      "relPath": "sequence/zoom_squat_smile/gallery/gal_28424528ffe0.png"
     },
     {
       "id": "9be294afd412",
-      "relPath": "be/sequence/zoom_squat_smile/gallery/gal_9be294afd412.png"
+      "relPath": "sequence/zoom_squat_smile/gallery/gal_9be294afd412.png"
     },
     {
       "id": "a8b820f57384",
-      "relPath": "be/sequence/zoom_squat_smile/gallery/gal_a8b820f57384.png"
+      "relPath": "sequence/zoom_squat_smile/gallery/gal_a8b820f57384.png"
     },
     {
       "id": "3983ede3e5c7",
-      "relPath": "be/sequence/zoom_squat_smile/gallery/gal_3983ede3e5c7.png"
+      "relPath": "sequence/zoom_squat_smile/gallery/gal_3983ede3e5c7.png"
     },
     {
       "id": "623fe3c3b8ef",
-      "relPath": "be/sequence/zoom_squat_smile/gallery/gal_623fe3c3b8ef.png"
+      "relPath": "sequence/zoom_squat_smile/gallery/gal_623fe3c3b8ef.png"
     },
     {
       "id": "d4c5e0d22658",
-      "relPath": "be/sequence/zoom_squat_smile/gallery/gal_d4c5e0d22658.png"
+      "relPath": "sequence/zoom_squat_smile/gallery/gal_d4c5e0d22658.png"
     },
     {
       "id": "956914bf4297",
-      "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000001.png",
+      "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000001.png",
       "frameSequence": {
         "sequenceGroupId": "d1b55f047b16",
         "strip": [
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000001.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000001.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000002.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000002.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000003.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000003.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000004.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000004.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000005.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000005.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000006.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000006.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000007.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000007.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000008.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000008.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000009.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000009.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000010.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000010.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000011.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000011.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000012.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000012.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000013.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000013.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000014.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000014.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000015.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000015.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000016.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000016.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000017.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000017.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000018.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000018.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000019.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000019.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000020.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000020.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000021.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000021.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000022.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000022.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000023.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000023.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000024.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000024.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000025.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000025.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000026.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000026.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000027.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000027.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000028.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000028.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000029.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000029.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000030.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000030.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000031.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000031.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000032.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000032.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000033.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_de9266ba4983/frame_000033.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           }
@@ -355,308 +355,308 @@
     },
     {
       "id": "e558bc71fb03",
-      "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000001.png",
+      "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000001.png",
       "frameSequence": {
         "sequenceGroupId": "1f000ae46fbb",
         "strip": [
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000001.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000001.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000002.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000002.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000003.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000003.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000004.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000004.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000005.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000005.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000006.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000006.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             },
             "hidden": true
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000007.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000007.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000008.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000008.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000009.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000009.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000010.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000010.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000011.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000011.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000012.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000012.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000013.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000013.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000014.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000014.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000015.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000015.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000016.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000016.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000017.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000017.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000018.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000018.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000019.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000019.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000020.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000020.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000021.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000021.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000022.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000022.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000023.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000023.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000024.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000024.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000025.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000025.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000026.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000026.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000027.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000027.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000028.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000028.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000029.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000029.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000030.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000030.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000031.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000031.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000032.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000032.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           },
           {
             "kind": "image",
-            "relPath": "be/sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000033.png",
+            "relPath": "sequence/zoom_squat_smile/gallery/flf_e2289c56e08b/frame_000033.png",
             "crop": {
-              "translateX": 0,
-              "translateY": 0,
-              "scale": 1
+              "scale": 1,
+              "translateXFrac": 0.0,
+              "translateYFrac": 0.0
             }
           }
         ],
@@ -668,21 +668,21 @@
     {
       "index": 0,
       "cellId": "cell_1776683016015_7fdf62e80bf3d8",
-      "relPath": "be/sequence/zoom_squat_smile/cells/cell_9cc87a4a8df4.png",
+      "relPath": "sequence/zoom_squat_smile/cells/cell_9cc87a4a8df4.png",
       "crop": {
-        "translateX": 0,
-        "translateY": 0,
-        "scale": 1
+        "scale": 1,
+        "translateXFrac": 0.0,
+        "translateYFrac": 0.0
       }
     },
     {
       "index": 6,
       "cellId": "cell_1776683021381_14028d9795d5",
-      "relPath": "be/sequence/zoom_squat_smile/cells/cell_13062c616773.png",
+      "relPath": "sequence/zoom_squat_smile/cells/cell_13062c616773.png",
       "crop": {
-        "translateX": 0,
-        "translateY": 0,
-        "scale": 1
+        "scale": 1,
+        "translateXFrac": 0.0,
+        "translateYFrac": 0.0
       }
     }
   ],

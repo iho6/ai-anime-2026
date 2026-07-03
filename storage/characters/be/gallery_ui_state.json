@@ -6,23 +6,23 @@
     "flat"
   ],
   "pose_image_order": [
-    "pimg:flat:be/poses/pose_001.png",
-    "pimg:flat:be/poses/pose_001_edit_000.png",
-    "pimg:flat:be/poses/pose_001_edit_000_angle_046.png",
-    "pimg:flat:be/poses/pose_001_edit_000_angle_072.png",
-    "pimg:flat:be/poses/pose_001_edit_000_angle_080.png",
-    "pimg:flat:be/poses/pose_001_edit_000_angle_072_edit_000.png",
-    "pimg:flat:be/poses/pose_001_edit_000_angle_072_edit_000_edit_000.png",
-    "pimg:flat:be/poses/pose_001_angle_008.png"
+    "pimg:flat:poses/pose_001.png",
+    "pimg:flat:poses/pose_001_edit_000.png",
+    "pimg:flat:poses/pose_001_edit_000_angle_046.png",
+    "pimg:flat:poses/pose_001_edit_000_angle_072.png",
+    "pimg:flat:poses/pose_001_edit_000_angle_080.png",
+    "pimg:flat:poses/pose_001_edit_000_angle_072_edit_000.png",
+    "pimg:flat:poses/pose_001_edit_000_angle_072_edit_000_edit_000.png",
+    "pimg:flat:poses/pose_001_angle_008.png"
   ],
   "hidden_pose_images": [],
   "expression_image_order": [
-    "eimg:flat:be/expressions/expr_000.png",
-    "eimg:flat:be/expressions/expr_001.png",
-    "eimg:flat:be/expressions/expr_002.png",
-    "eimg:flat:be/expressions/expr_003.png",
-    "eimg:flat:be/expressions/expr_004.png",
-    "eimg:flat:be/expressions/expr_005.png"
+    "eimg:flat:expressions/expr_000.png",
+    "eimg:flat:expressions/expr_001.png",
+    "eimg:flat:expressions/expr_002.png",
+    "eimg:flat:expressions/expr_003.png",
+    "eimg:flat:expressions/expr_004.png",
+    "eimg:flat:expressions/expr_005.png"
   ],
   "hidden_expression_images": [],
   "gallery_flat_migrated_v1": true,
