@@ -29,7 +29,7 @@ export function GeometryStyleBar(props: {
         top: barTop,
         transform: "translateX(-50%)",
         width: "max-content",
-        zIndex: 10002,
+        zIndex: 55,
         display: "flex",
         gap: 4,
         justifyContent: "center",

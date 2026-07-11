@@ -16,13 +16,15 @@ import {
   clamp,
   clipImageRect,
   clipTransformAtPlayhead,
-  clipTransformFromRectCenter,
   playbackEndPlayhead,
-  snapClipRectToFrame,
+  previewMoveTransformFromPointerDelta,
   snapClipScaleToFrame,
+  type ClipRect,
   sourceTimeAt,
   sourceTimeAtWithTransition,
   timelineDuration,
+  previewClipHitZIndex,
+  PREVIEW_SELECTION_CHROME_Z,
   type AlignGuide,
   type ClipTransform,
 } from "./timelineUtil";
@@ -52,7 +54,12 @@ export function TimelinePreviewPlayer(props: {
   onPlayheadChange: (t: number) => void;
   onEnded: () => void;
   onSelectClip: (clipId: string | null, additive?: boolean) => void;
-  onClipTransformChange: (clipId: string, transform: ClipTransform) => void;
+  onClipTransformChange: (
+    clipId: string,
+    from: ClipTransform,
+    to: ClipTransform,
+    mode: "move" | "scale"
+  ) => void;
   onTransformStart?: () => void;
   onClipContextMenu?: (clipId: string, x: number, y: number) => void;
   trajectoryClipId?: string | null;
@@ -75,6 +82,8 @@ export function TimelinePreviewPlayer(props: {
   onRequestGeometryEdit?: (clipId: string) => void;
   onGeometryContextMenu?: (clipId: string, clientX: number, clientY: number) => void;
   onExitClipEditModes?: () => void;
+  /** Hide selection outline/handles (e.g. while a modal covers the page). */
+  suppressSelectionChrome?: boolean;
   height?: number;
 }) {
   const {
@@ -106,6 +115,7 @@ export function TimelinePreviewPlayer(props: {
     onRequestGeometryEdit,
     onGeometryContextMenu,
     onExitClipEditModes,
+    suppressSelectionChrome = false,
     height = 260,
   } = props;
 
@@ -251,6 +261,8 @@ export function TimelinePreviewPlayer(props: {
         orig: ClipTransform;
         w: number;
         h: number;
+        pointerId: number;
+        startRect?: ClipRect;
       }
     | null
   >(null);
@@ -267,25 +279,36 @@ export function TimelinePreviewPlayer(props: {
 
   const DRAG_THRESHOLD_PX = 4;
 
+  function liveFrameSize(): { w: number; h: number } {
+    const el = frameRef.current;
+    return { w: el?.clientWidth ?? 0, h: el?.clientHeight ?? 0 };
+  }
+
   function startDragFromPending(
-    e: React.PointerEvent,
-    p: NonNullable<typeof pendingDragRef.current>
+    p: NonNullable<typeof pendingDragRef.current>,
+    clientX: number,
+    clientY: number,
+    pointerId: number
   ) {
     if (!editable) return;
-    e.preventDefault();
+    const { w: frameW, h: frameH } = liveFrameSize();
+    if (frameW < 1 || frameH < 1) return;
     onTransformStart?.();
-    p.target.setPointerCapture?.(p.pointerId);
+    const orig = clipTransform(p.clip, playhead);
     dragRef.current = {
       mode: p.mode,
       clipId: p.clip.id,
       startX: p.startX,
       startY: p.startY,
-      orig: clipTransform(p.clip, playhead),
-      w: frameSize.w || 1,
-      h: frameSize.h || 1,
+      orig,
+      w: frameW,
+      h: frameH,
+      pointerId,
+      startRect:
+        p.mode === "move" ? clipImageRect(p.clip, orig, frameW, frameH) : undefined,
     };
     pendingDragRef.current = null;
-    onDragMove(e);
+    applyDragMove(clientX, clientY);
   }
 
   function beginDrag(
@@ -293,6 +316,7 @@ export function TimelinePreviewPlayer(props: {
     clip: TimelineClip,
     mode: "move" | "scale"
   ) {
+    if (e.button !== 0) return;
     if (geometryEditClipId === clip.id) return;
     if (textEditClipId === clip.id) return;
     e.preventDefault();
@@ -300,17 +324,23 @@ export function TimelinePreviewPlayer(props: {
     const additive = e.shiftKey || e.ctrlKey || e.metaKey;
     onSelectClip(clip.id, additive);
     if (!editable) return;
+    const { w: frameW, h: frameH } = liveFrameSize();
+    if (frameW < 1 || frameH < 1) return;
     onTransformStart?.();
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    const orig = clipTransform(clip, playhead);
     dragRef.current = {
       mode,
       clipId: clip.id,
       startX: e.clientX,
       startY: e.clientY,
-      orig: clipTransform(clip, playhead),
-      w: frameSize.w || 1,
-      h: frameSize.h || 1,
+      orig,
+      w: frameW,
+      h: frameH,
+      pointerId: e.pointerId,
+      startRect:
+        mode === "move" ? clipImageRect(clip, orig, frameW, frameH) : undefined,
     };
+    attachDragListeners();
   }
 
   function beginTextPointerDown(
@@ -318,6 +348,7 @@ export function TimelinePreviewPlayer(props: {
     clip: TimelineClip,
     mode: "move" | "scale"
   ) {
+    if (e.button !== 0) return;
     if (geometryEditClipId === clip.id) return;
     if (textEditClipId === clip.id) return;
     e.stopPropagation();
@@ -337,60 +368,31 @@ export function TimelinePreviewPlayer(props: {
       target: e.currentTarget as HTMLElement,
       wasSelected: clip.id === selectedClipId,
     };
+    attachDragListeners();
   }
 
-  function onPointerMoveCombined(e: React.PointerEvent) {
-    const p = pendingDragRef.current;
-    if (p) {
-      const dx = e.clientX - p.startX;
-      const dy = e.clientY - p.startY;
-      if (Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX) {
-        startDragFromPending(e, p);
-      }
-    }
-    onDragMove(e);
-  }
-
-  function onPointerUpCombined(e: React.PointerEvent) {
-    const p = pendingDragRef.current;
-    if (p && !dragRef.current && p.mode === "move" && p.clip.type === "text" && p.wasSelected) {
-      onRequestTextEdit?.(p.clip.id);
-    }
-    pendingDragRef.current = null;
-    endDrag(e);
-  }
-
-  function onDragMove(e: React.PointerEvent) {
+  function applyDragMove(clientX: number, clientY: number) {
     const d = dragRef.current;
     if (!d) return;
     if (d.mode === "move") {
-      const x = d.orig.x + (e.clientX - d.startX) / d.w;
-      const y = d.orig.y + (e.clientY - d.startY) / d.h;
-      const clip = videoTracks.flatMap((t) => t.clips).find((c) => c.id === d.clipId);
-      const frameW = d.w;
-      const frameH = d.h;
-      if (clip && frameW > 0 && frameH > 0) {
-        const rawRect = clipImageRect(clip, { ...d.orig, x, y }, frameW, frameH);
-        const { rect: snappedRect, guides } = snapClipRectToFrame(rawRect, frameW, frameH);
-        const snapped = clipTransformFromRectCenter(snappedRect, frameW, frameH);
-        setAlignGuides(guides);
-        onClipTransformChange(d.clipId, {
-          ...d.orig,
-          x: clamp(snapped.x, -1.5, 1.5),
-          y: clamp(snapped.y, -1.5, 1.5),
-        });
-      } else {
-        setAlignGuides([]);
-        onClipTransformChange(d.clipId, {
-          ...d.orig,
-          x: clamp(x, -1.5, 1.5),
-          y: clamp(y, -1.5, 1.5),
-        });
-      }
+      if (!d.startRect || d.w < 1 || d.h < 1) return;
+      const { to, guides } = previewMoveTransformFromPointerDelta({
+        orig: d.orig,
+        startRect: d.startRect,
+        startClientX: d.startX,
+        startClientY: d.startY,
+        clientX,
+        clientY,
+        frameW: d.w,
+        frameH: d.h,
+      });
+      setAlignGuides(guides);
+      onClipTransformChange(d.clipId, d.orig, to, "move");
     } else {
+      if (d.w < 1 || d.h < 1) return;
       const clip = videoTracks.flatMap((t) => t.clips).find((c) => c.id === d.clipId);
-      const tentative = clamp(d.orig.scale + ((e.clientX - d.startX) / d.w) * 2, 0.1, 6);
-      if (clip && d.w > 0 && d.h > 0) {
+      const tentative = clamp(d.orig.scale + ((clientX - d.startX) / d.w) * 2, 0.1, 6);
+      if (clip) {
         const { scale, guides } = snapClipScaleToFrame(
           clip,
           { ...d.orig, scale: tentative },
@@ -398,21 +400,88 @@ export function TimelinePreviewPlayer(props: {
           d.h
         );
         setAlignGuides(guides);
-        onClipTransformChange(d.clipId, { ...d.orig, scale });
+        onClipTransformChange(d.clipId, d.orig, { ...d.orig, scale }, "scale");
       } else {
         setAlignGuides([]);
-        onClipTransformChange(d.clipId, { ...d.orig, scale: tentative });
+        onClipTransformChange(d.clipId, d.orig, { ...d.orig, scale: tentative }, "scale");
       }
     }
   }
 
-  function endDrag(e: React.PointerEvent) {
+  function endActiveDrag() {
     if (dragRef.current) {
-      (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
       dragRef.current = null;
       setAlignGuides([]);
     }
   }
+
+  // Latest-closure refs so the (stable) window listeners always see current
+  // props/state without re-attaching mid-drag.
+  const dragMoveHandlerRef = useRef<(e: PointerEvent) => void>(() => {});
+  const dragEndHandlerRef = useRef<(e: PointerEvent) => void>(() => {});
+
+  dragMoveHandlerRef.current = (e: PointerEvent) => {
+    const p = pendingDragRef.current;
+    if (p && !dragRef.current) {
+      const dx = e.clientX - p.startX;
+      const dy = e.clientY - p.startY;
+      if (Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX) {
+        startDragFromPending(p, e.clientX, e.clientY, e.pointerId);
+      }
+    }
+    if (dragRef.current) {
+      if (e.cancelable) e.preventDefault();
+      applyDragMove(e.clientX, e.clientY);
+    }
+  };
+
+  dragEndHandlerRef.current = (e: PointerEvent) => {
+    void e;
+    const p = pendingDragRef.current;
+    if (
+      p &&
+      !dragRef.current &&
+      p.mode === "move" &&
+      p.clip.type === "text" &&
+      p.wasSelected
+    ) {
+      onRequestTextEdit?.(p.clip.id);
+    }
+    pendingDragRef.current = null;
+    endActiveDrag();
+    detachDragListeners();
+  };
+
+  // Stable window listeners, attached synchronously at drag start (not via a
+  // deferred effect) so no pointer moves are dropped between pointerdown and the
+  // listener being live. They delegate to the latest-closure refs above.
+  const windowMoveRef = useRef<((e: PointerEvent) => void) | null>(null);
+  const windowEndRef = useRef<((e: PointerEvent) => void) | null>(null);
+
+  function attachDragListeners() {
+    detachDragListeners();
+    const onMove = (e: PointerEvent) => dragMoveHandlerRef.current(e);
+    const onEnd = (e: PointerEvent) => dragEndHandlerRef.current(e);
+    windowMoveRef.current = onMove;
+    windowEndRef.current = onEnd;
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onEnd);
+    window.addEventListener("pointercancel", onEnd);
+  }
+
+  function detachDragListeners() {
+    if (windowMoveRef.current) {
+      window.removeEventListener("pointermove", windowMoveRef.current);
+      windowMoveRef.current = null;
+    }
+    if (windowEndRef.current) {
+      window.removeEventListener("pointerup", windowEndRef.current);
+      window.removeEventListener("pointercancel", windowEndRef.current);
+      windowEndRef.current = null;
+    }
+  }
+
+  useEffect(() => detachDragListeners, []);
 
   function layerVisible(layer: ActiveLayer): boolean {
     if (layer.opacity > 0.001) return true;
@@ -633,6 +702,7 @@ export function TimelinePreviewPlayer(props: {
     if (target.closest("[data-trajectory-editor]")) return;
     if (target.closest("[data-trajectory-toolbar]")) return;
     if (target.closest("[data-preview-clip-hit]")) return;
+    if (target.closest("[data-preview-selection-chrome]")) return;
     if (geometryStyleModalOpen) return;
 
     const { clientX: x, clientY: y } = e;
@@ -740,8 +810,6 @@ export function TimelinePreviewPlayer(props: {
             ? {
                 onPointerDown: (e: React.PointerEvent) =>
                   beginTextPointerDown(e, clip, "move"),
-                onPointerMove: onPointerMoveCombined,
-                onPointerUp: onPointerUpCombined,
               }
             : isGeometry
               ? {
@@ -753,8 +821,6 @@ export function TimelinePreviewPlayer(props: {
                 }
               : {
                   onPointerDown: (e: React.PointerEvent) => beginDrag(e, clip, "move"),
-                  onPointerMove: onDragMove,
-                  onPointerUp: endDrag,
                 };
           return (
             <div
@@ -786,63 +852,93 @@ export function TimelinePreviewPlayer(props: {
                 top: rect.top,
                 width: rect.width,
                 height: rect.height,
-                zIndex: selected ? 10000 : trackZ + 100,
+                zIndex: previewClipHitZIndex({
+                  trackZ,
+                  selected,
+                  inEditMode: inShapeEdit || inTrajectoryEdit,
+                }),
                 cursor:
-                  editable && !inShapeEdit && !isTextEditing
+                  editable && !inShapeEdit && !isTextEditing && !inTrajectoryEdit
                     ? isText
                       ? "default"
                       : "move"
                     : "pointer",
-                outline:
-                  selected && !inShapeEdit && !isText && !inTrajectoryEdit
-                    ? editable
-                      ? "2px dashed rgba(255,255,255,0.85)"
-                      : "2px solid rgba(255,255,255,0.55)"
-                    : "none",
-                outlineOffset: 2,
                 pointerEvents:
-                  inShapeEdit || isTextEditing ? "none" : "auto",
+                  inShapeEdit || isTextEditing || inTrajectoryEdit ? "none" : "auto",
               }}
             >
-              {isText && selected && editable && !inShapeEdit && !isTextEditing ? (
-                <div
-                  onPointerDown={(e) => beginTextPointerDown(e, clip, "scale")}
-                  onPointerMove={onPointerMoveCombined}
-                  onPointerUp={onPointerUpCombined}
-                  style={{
-                    position: "absolute",
-                    right: 0,
-                    bottom: 0,
-                    width: 14,
-                    height: 14,
-                    transform: "translate(50%, 50%)",
-                    background: "#0b0b0b",
-                    border: "1px solid rgba(255,255,255,0.9)",
-                    cursor: "nwse-resize",
-                    zIndex: 2,
-                  }}
-                />
-              ) : null}
-              {!isText && selected && editable && !inShapeEdit ? (
-                <div
-                  onPointerDown={(e) => beginDrag(e, clip, "scale")}
-                  onPointerMove={onDragMove}
-                  onPointerUp={endDrag}
-                  style={{
-                    position: "absolute",
-                    right: -7,
-                    bottom: -7,
-                    width: 14,
-                    height: 14,
-                    background: "#0b0b0b",
-                    border: "1px solid rgba(255,255,255,0.9)",
-                    cursor: "nwse-resize",
-                  }}
-                />
-              ) : null}
             </div>
           );
         })}
+
+        {selectedClipId &&
+          editable &&
+          !suppressSelectionChrome &&
+          geometryEditClipId !== selectedClipId &&
+          trajectoryClipId !== selectedClipId &&
+          textEditClipId !== selectedClipId &&
+          (() => {
+            const layer = interactionLayers.find((l) => l.clip.id === selectedClipId);
+            if (!layer) return null;
+            const { clip } = layer;
+            const isText = clip.type === "text";
+            const tf = clipTransform(clip, playhead);
+            const rect = clipImageRect(clip, tf, frameSize.w, frameSize.h);
+            return (
+              <div
+                key={`selection-chrome-${clip.id}`}
+                data-preview-selection-chrome
+                style={{
+                  position: "absolute",
+                  left: rect.left,
+                  top: rect.top,
+                  width: rect.width,
+                  height: rect.height,
+                  zIndex: PREVIEW_SELECTION_CHROME_Z,
+                  pointerEvents: "none",
+                  outline: isText
+                    ? "none"
+                    : editable
+                      ? "2px dashed rgba(255,255,255,0.85)"
+                      : "2px solid rgba(255,255,255,0.55)",
+                  outlineOffset: 2,
+                }}
+              >
+                {isText ? (
+                  <div
+                    onPointerDown={(e) => beginTextPointerDown(e, clip, "scale")}
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      bottom: 0,
+                      width: 14,
+                      height: 14,
+                      transform: "translate(50%, 50%)",
+                      background: "#0b0b0b",
+                      border: "1px solid rgba(255,255,255,0.9)",
+                      cursor: "nwse-resize",
+                      pointerEvents: "auto",
+                    }}
+                  />
+                ) : (
+                  <div
+                    onPointerDown={(e) => beginDrag(e, clip, "scale")}
+                    style={{
+                      position: "absolute",
+                      right: -7,
+                      bottom: -7,
+                      width: 14,
+                      height: 14,
+                      background: "#0b0b0b",
+                      border: "1px solid rgba(255,255,255,0.9)",
+                      cursor: "nwse-resize",
+                      pointerEvents: "auto",
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })()}
 
         {textEditClipId &&
           editable &&
@@ -883,7 +979,7 @@ export function TimelinePreviewPlayer(props: {
           })()}
 
         {alignGuides.length > 0 ? (
-          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 9998 }}>
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 40 }}>
             {alignGuides.map((guide, i) => (
               <div
                 key={`${guide.axis}-${guide.pos}-${guide.kind}-${i}`}

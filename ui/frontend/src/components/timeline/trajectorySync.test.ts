@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { TimelineClip, TimelineManifest, TimelineTrack } from "../../lib/api";
 import { clipTransformAtPlayhead } from "./timelineUtil";
+import { motionOffsetAt, motionTailEnvelope, trajectoryTransformAt } from "./trajectoryMotion";
 import {
   findTrajectorySyncPair,
   syncMotionIncomingToOutgoing,
+  syncMotionPair,
 } from "./trajectorySync";
 
 function imageClip(
@@ -179,5 +181,95 @@ describe("syncMotionIncomingToOutgoing", () => {
     expect(startWp.x).toBe(0.15);
     expect(startWp.y).toBe(-0.05);
     expect(startWp.scale).toBe(0.9);
+  });
+});
+
+describe("motionTailEnvelope", () => {
+  it("returns 1 outside the tail zone and 0 at clip end", () => {
+    const clip = imageClip("clip_a", 0, {
+      duration: 4,
+      trajectory: {
+        motion: "pulse",
+        motionAmount: 100,
+        motionTailSec: 1,
+        waypoints: [
+          { t: 0, x: 0, y: 0, scale: 1 },
+          { t: 1, x: 0, y: 0, scale: 1 },
+        ],
+      },
+    });
+    expect(motionTailEnvelope(clip, 2)).toBe(1);
+    expect(motionTailEnvelope(clip, 4)).toBe(0);
+    expect(motionTailEnvelope(clip, 3.5)).toBeGreaterThan(0);
+    expect(motionTailEnvelope(clip, 3.5)).toBeLessThan(1);
+  });
+
+  it("scales motion offset down near clip end", () => {
+    const clip = imageClip("clip_a", 0, {
+      duration: 2,
+      trajectory: {
+        motion: "pulse",
+        motionAmount: 100,
+        motionTailSec: 1,
+        waypoints: [
+          { t: 0, x: 0, y: 0, scale: 1 },
+          { t: 1, x: 0, y: 0, scale: 1 },
+        ],
+      },
+    });
+    const mid = motionOffsetAt(clip, 0.5);
+    const nearEnd = motionOffsetAt(clip, 1.95);
+    expect(Math.abs(mid.dScale)).toBeGreaterThan(Math.abs(nearEnd.dScale));
+    expect(Math.abs(nearEnd.dScale)).toBeLessThan(0.001);
+  });
+});
+
+describe("syncMotionPair", () => {
+  it("stores motionTailSec on outgoing and aligns incoming to path end when tail > 0", () => {
+    const outgoing = imageClip("clip_a", 0, {
+      duration: 2,
+      trajectory: {
+        motion: "pulse",
+        motionAmount: 100,
+        waypoints: [
+          { t: 0, x: 0, y: 0, scale: 1 },
+          { t: 1, x: 0.2, y: 0.1, scale: 1 },
+        ],
+      },
+    });
+    const incoming = imageClip("clip_b", 2, {
+      transform: { x: 0.5, y: -0.2, scale: 0.8 },
+    });
+    const motionEnd = clipTransformAtPlayhead(outgoing, 2 - 1 / 24);
+    expect(motionEnd.scale).not.toBe(1);
+    const pathEnd = trajectoryTransformAt(outgoing, 2 - 1 / 24)!;
+
+    const synced = syncMotionPair(outgoing, incoming, 24, 0.5);
+    expect(synced.outgoing.trajectory?.motionTailSec).toBe(0.5);
+    expect(synced.incoming.transform).toEqual(pathEnd);
+    expect(synced.incoming.transform!.scale).not.toBeCloseTo(motionEnd.scale, 3);
+  });
+
+  it("with tail 0 matches effective end including motion", () => {
+    const outgoing = imageClip("clip_a", 0, {
+      duration: 2,
+      trajectory: {
+        motion: "pulse",
+        motionAmount: 100,
+        waypoints: [
+          { t: 0, x: 0, y: 0, scale: 1 },
+          { t: 1, x: 0, y: 0, scale: 1 },
+        ],
+      },
+    });
+    const incoming = imageClip("clip_b", 2);
+    const endPose = clipTransformAtPlayhead(outgoing, 2 - 1 / 24);
+    const synced = syncMotionPair(outgoing, incoming, 24, 0);
+    expect(synced.outgoing.trajectory?.motionTailSec).toBe(0);
+    expect(synced.incoming.transform).toEqual({
+      x: endPose.x,
+      y: endPose.y,
+      scale: endPose.scale,
+    });
   });
 });

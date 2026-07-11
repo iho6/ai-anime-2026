@@ -100,6 +100,7 @@ import {
   type VolumeAutomationPoint,
 } from "../../../components/timeline/volumeAutomation";
 import {
+  applyPreviewDragToTrajectory,
   buildAudioClip,
   buildGeometryClip,
   buildImageClip,
@@ -108,7 +109,9 @@ import {
   buildTimelineCompositePngBase64,
   clipActsAsImage,
   clipEnd,
+  clipHasEditableTrajectory,
   clamp,
+  defaultImageClipTransform,
   formatTime,
   genId,
   newAudioTrack,
@@ -123,12 +126,14 @@ import {
   resolveClipImageRelPath,
   resolveImportDimensions,
   timelineDuration,
+  type ClipTransform,
   type TimelineClipClipboard,
 } from "../../../components/timeline/timelineUtil";
 import {
   findTrajectorySyncPair,
-  syncMotionIncomingToOutgoing,
+  syncMotionPair,
 } from "../../../components/timeline/trajectorySync";
+import { SyncMotionFlyout } from "../../../components/timeline/SyncMotionFlyout";
 import {
   flfEndpointLabel,
   resolveFlfEndpoint,
@@ -234,6 +239,12 @@ export default function TimelineEditorPage() {
   } | null>(null);
   const previewResizeRef = useRef<{ startY: number; orig: number } | null>(null);
 
+  // Drag-start waypoint snapshot so trajectory preview-drag stays absolute (no accumulation).
+  const trajDragOriginRef = useRef<{
+    clipId: string;
+    waypoints: NonNullable<TimelineClip["trajectory"]>["waypoints"];
+  } | null>(null);
+
   // Pickers + which track a newly-imported clip should land on.
   const targetTrackRef = useRef<string | null>(null);
   const [seqPickerOpen, setSeqPickerOpen] = useState(false);
@@ -307,6 +318,7 @@ export default function TimelineEditorPage() {
     y: number;
     trackId: string | null;
   }>({ open: false, x: 0, y: 0, trackId: null });
+  const [syncMotionTailSec, setSyncMotionTailSec] = useState(0.5);
 
   // ---- Load + debounced autosave ------------------------------------------
   const loadedRef = useRef(false);
@@ -1067,6 +1079,44 @@ export default function TimelineEditorPage() {
     }));
   }
 
+  /**
+   * Bring a clip's position back to the frame center so an off-border clip is
+   * reachable again. Trajectory clips are shifted by their waypoint centroid so
+   * the motion shape is preserved; other clips reset x/y to 0 (scale kept).
+   */
+  function resetClipPosition(clipId: string) {
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => {
+          if (c.id !== clipId) return c;
+          if (clipHasEditableTrajectory(c) && c.trajectory) {
+            const wps = c.trajectory.waypoints;
+            const n = wps.length || 1;
+            const cx = wps.reduce((s, w) => s + w.x, 0) / n;
+            const cy = wps.reduce((s, w) => s + w.y, 0) / n;
+            return {
+              ...c,
+              trajectory: {
+                ...c.trajectory,
+                waypoints: wps.map((w) => ({ ...w, x: w.x - cx, y: w.y - cy })),
+              },
+            };
+          }
+          return {
+            ...c,
+            transform: {
+              ...(c.transform ?? defaultImageClipTransform()),
+              x: 0,
+              y: 0,
+            },
+          };
+        }),
+      })),
+    }));
+  }
+
   function updateClipVolumeAutomation(
     clipId: string,
     volumeAutomation: TimelineClip["volumeAutomation"]
@@ -1703,15 +1753,11 @@ export default function TimelineEditorPage() {
     return findTrajectorySyncPair(manifest, selectedClipIds);
   }
 
-  function syncSelectedClipMotion() {
+  function syncSelectedClipMotion(tailSec: number = syncMotionTailSec) {
     const pair = getTrajectorySyncPair();
     if (!pair || !manifest) return;
     const fps = Math.max(1, manifest.fps || 24);
-    const syncedIncoming = syncMotionIncomingToOutgoing(
-      pair.outgoing,
-      pair.incoming,
-      fps
-    );
+    const synced = syncMotionPair(pair.outgoing, pair.incoming, fps, tailSec);
     historyUpdate((m) => ({
       ...m,
       tracks: m.tracks.map((t) =>
@@ -1719,9 +1765,11 @@ export default function TimelineEditorPage() {
           ? t
           : {
               ...t,
-              clips: t.clips.map((c) =>
-                c.id === pair.incoming.id ? syncedIncoming : c
-              ),
+              clips: t.clips.map((c) => {
+                if (c.id === pair.outgoing.id) return synced.outgoing;
+                if (c.id === pair.incoming.id) return synced.incoming;
+                return c;
+              }),
             }
       ),
     }));
@@ -1753,12 +1801,51 @@ export default function TimelineEditorPage() {
     return base || clip.id.slice(0, 8);
   }
 
-  function setClipTransform(clipId: string, transform: { x: number; y: number; scale: number }) {
+  function setClipTransformFromPreview(
+    clipId: string,
+    from: ClipTransform,
+    to: ClipTransform,
+    mode: "move" | "scale"
+  ) {
+    // Snapshot the drag-start waypoints once per gesture so the shift stays
+    // absolute (relative to the origin), not accumulated onto already-moved ones.
+    if (
+      !trajDragOriginRef.current ||
+      trajDragOriginRef.current.clipId !== clipId
+    ) {
+      const found = findClip(clipId);
+      if (found?.clip.trajectory && clipHasEditableTrajectory(found.clip)) {
+        trajDragOriginRef.current = {
+          clipId,
+          waypoints: found.clip.trajectory.waypoints,
+        };
+      }
+    }
     updateManifest((m) => ({
       ...m,
       tracks: m.tracks.map((t) => ({
         ...t,
-        clips: t.clips.map((c) => (c.id === clipId ? { ...c, transform } : c)),
+        clips: t.clips.map((c) => {
+          if (c.id !== clipId) return c;
+          if (clipHasEditableTrajectory(c)) {
+            const origin = trajDragOriginRef.current;
+            const baseClip =
+              origin && origin.clipId === clipId && c.trajectory
+                ? { ...c, trajectory: { ...c.trajectory, waypoints: origin.waypoints } }
+                : c;
+            const trajectory = applyPreviewDragToTrajectory(baseClip, from, to, mode);
+            if (trajectory) return { ...c, trajectory };
+          }
+          return {
+            ...c,
+            transform: {
+              ...(c.transform ?? defaultImageClipTransform()),
+              x: to.x,
+              y: to.y,
+              scale: to.scale,
+            },
+          };
+        }),
       })),
     }));
   }
@@ -2783,7 +2870,20 @@ export default function TimelineEditorPage() {
           ? "Sync Motion"
           : "Sync Motion (2 connected clips, one with trajectory)",
         disabled: busy || !trajectorySyncPair,
-        onSelect: () => syncSelectedClipMotion(),
+        keepOpenOnSelect: true,
+        submenu: (
+          <SyncMotionFlyout
+            motionTailSec={syncMotionTailSec}
+            disabled={busy || !trajectorySyncPair}
+            onMotionTailSecChange={setSyncMotionTailSec}
+            onApply={() => syncSelectedClipMotion(syncMotionTailSec)}
+          />
+        ),
+      });
+      items.push({
+        key: "resetPosition",
+        label: "Reset position",
+        onSelect: () => resetClipPosition(clipMenu.clipId),
       });
       items.push({
         key: "trajectory",
@@ -2831,7 +2931,7 @@ export default function TimelineEditorPage() {
 
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clipMenu, playhead, manifest, busy, selectedClipIds, hasClipClipboard]);
+  }, [clipMenu, playhead, manifest, busy, selectedClipIds, hasClipClipboard, syncMotionTailSec]);
 
   const trackMenuItems: ContextMenuItem[] = useMemo(() => {
     if (!trackMenu.open) return [];
@@ -2965,6 +3065,12 @@ export default function TimelineEditorPage() {
     }
   }, [trajectoryClipId, nonTrajectoryUiActive]);
 
+  useEffect(() => {
+    if (nonTrajectoryUiActive) {
+      setClipMenu((s) => (s.open ? { ...s, open: false } : s));
+    }
+  }, [nonTrajectoryUiActive]);
+
   if (!manifest) {
     return (
       <div style={{ minHeight: "100vh", padding: 20, color: "#888" }}>Loading timeline…</div>
@@ -3030,7 +3136,7 @@ export default function TimelineEditorPage() {
 
       {/* Preview */}
       <div
-        style={{ padding: "12px 20px" }}
+        style={{ position: "relative", zIndex: 10, overflow: "visible", padding: "12px 20px" }}
         onPointerDown={(e) => {
           const t = e.target as HTMLElement;
           if (t.closest("[data-timeline-preview-frame]")) return;
@@ -3071,13 +3177,18 @@ export default function TimelineEditorPage() {
           playing={playing}
           playhead={playhead}
           selectedClipId={selectedClipIds[selectedClipIds.length - 1] ?? null}
+          suppressSelectionChrome={nonTrajectoryUiActive || clipMenu.open}
           editable={!playing}
           onPlayheadChange={setPlayhead}
           onEnded={() => setPlaying(false)}
           onSelectClip={(id, additive) => selectClip(id, additive ?? false)}
-          onClipTransformChange={setClipTransform}
-          onTransformStart={commit}
+          onClipTransformChange={setClipTransformFromPreview}
+          onTransformStart={() => {
+            trajDragOriginRef.current = null;
+            commit();
+          }}
           onClipContextMenu={(clipId, x, y) => {
+            if (!selectedClipIds.includes(clipId)) selectClip(clipId, false);
             const rc = findClip(clipId);
             setClipMenu({ open: true, x, y, trackId: rc?.trackId ?? "", clipId, fromTrack: false });
           }}
@@ -3533,6 +3644,7 @@ export default function TimelineEditorPage() {
               </button>
               <button
                 type="button"
+                className="ui-btn-black"
                 disabled={!i2vDialog.prompt.trim() || busy}
                 onClick={() => {
                   const dlg = i2vDialog;

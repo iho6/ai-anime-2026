@@ -6,7 +6,9 @@ import {
   apiHubDelete,
   apiNewCharacterDiscard,
   apiPoseGallerySplit,
+  apiPoseAnglesDelete,
   apiExpressionGallerySplit,
+  apiExpressionAnglesDelete,
   apiSequenceFolderDuplicate,
   apiSequenceFolderDelete,
   apiSequenceFolderRename,
@@ -42,9 +44,11 @@ import { SquareIconButton, TriangleIcon } from "./IconPrimitives";
 import { ReferencePicker } from "./ReferencePicker";
 import { MotionRefGenModal } from "./MotionRefGenModal";
 import { CameraAngleModal } from "./CameraAngleModal";
+import { AiEditModal } from "./AiEditModal";
 import type { SharedLogStreamHandle } from "./SharedLogStream";
 import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 import { useJobRunSession } from "../hooks/useJobRunSession";
+import { useCharacterGalleryAiEdit } from "../hooks/useCharacterGalleryAiEdit";
 import { useAppError } from "./ErrorProvider";
 import { useCharacterSections } from "../hooks/useCharacterSections";
 import { BaseCloseupWizardModal } from "./BaseCloseupWizardModal";
@@ -185,9 +189,25 @@ export function TimelineCharacterPicker(props: {
     endSession,
     failSession,
     pushLog,
+    onJobLogLine,
     modalProps: poseJobModalProps,
   } = useJobRunSession(logRef);
   const { askText, showError, confirmAction } = useAppError();
+
+  const {
+    openAiEditForGallery,
+    openAiEditSequenceGallery,
+    aiEditModalProps,
+  } = useCharacterGalleryAiEdit({
+    charKey: selectedKey,
+    refreshSections,
+    beginSession,
+    endSession,
+    failSession,
+    onJobLogLine,
+    showError,
+    busy: poseBusy,
+  });
 
   const loadIcons = useCallback(async () => {
     setLoading(true);
@@ -408,6 +428,83 @@ export function TimelineCharacterPicker(props: {
     } catch (e) {
       showError({ message: "Delete sequence failed.", error: e });
     }
+  }
+
+  async function deleteGalleryImages(targetRelPaths: string[]) {
+    if (!selectedKey || !targetRelPaths.length) return;
+
+    const posePaths: string[] = [];
+    const exprPaths: string[] = [];
+    for (const relPath of targetRelPaths) {
+      const inPose =
+        charSectionsRaw?.poseSplit.visible.some((x) => x.relPath === relPath) ||
+        charSectionsRaw?.poseSplit.hidden.some((x) => x.relPath === relPath);
+      const inExpr =
+        charSectionsRaw?.exprSplit.visible.some((x) => x.relPath === relPath) ||
+        charSectionsRaw?.exprSplit.hidden.some((x) => x.relPath === relPath);
+      if (inPose) posePaths.push(relPath);
+      else if (inExpr) exprPaths.push(relPath);
+    }
+
+    if (!posePaths.length && !exprPaths.length) {
+      showError({ message: "Image is not in this character gallery." });
+      return;
+    }
+
+    const count = posePaths.length + exprPaths.length;
+    const confirmed = await confirmAction({
+      title: count > 1 ? "Delete images" : "Delete image",
+      message:
+        count > 1
+          ? `Delete ${count} selected images?`
+          : "Delete this gallery image?",
+      confirmText: count > 1 ? "Delete all" : "Delete",
+    });
+    if (!confirmed) return;
+
+    try {
+      if (posePaths.length) {
+        await apiPoseAnglesDelete(selectedKey, POSE_FLAT_FOLDER_KEY, posePaths);
+      }
+      if (exprPaths.length) {
+        await apiExpressionAnglesDelete(selectedKey, POSE_FLAT_FOLDER_KEY, exprPaths);
+      }
+      setSelectedRelPaths((prev) => {
+        const next = new Set(prev);
+        for (const relPath of targetRelPaths) next.delete(relPath);
+        return next.size === prev.size ? prev : next;
+      });
+      if (newPoseBaseRelPath && targetRelPaths.includes(newPoseBaseRelPath)) {
+        setNewPoseBaseRelPath(null);
+      }
+      await refreshSections();
+    } catch (e) {
+      showError({ message: "Delete image failed.", error: e });
+    }
+  }
+
+  async function deleteGalleryImageFromMenu(relPath: string) {
+    const targetRelPaths =
+      selectedRelPaths.size > 1 ? Array.from(selectedRelPaths) : [relPath];
+    await deleteGalleryImages(targetRelPaths);
+  }
+
+  function openAiEditFromMenu(relPath: string) {
+    const inPose =
+      charSectionsRaw?.poseSplit.visible.some((x) => x.relPath === relPath) ||
+      charSectionsRaw?.poseSplit.hidden.some((x) => x.relPath === relPath);
+    const inExpr =
+      charSectionsRaw?.exprSplit.visible.some((x) => x.relPath === relPath) ||
+      charSectionsRaw?.exprSplit.hidden.some((x) => x.relPath === relPath);
+    if (!inPose && !inExpr) {
+      showError({ message: "Image is not in this character gallery." });
+      return;
+    }
+    openAiEditForGallery({
+      sourceRelPath: relPath,
+      type: inPose ? "pose" : "expression",
+      poseFolderKey: POSE_FLAT_FOLDER_KEY,
+    });
   }
 
   async function applyNewAngle(angleId: number) {
@@ -1124,6 +1221,29 @@ export function TimelineCharacterPicker(props: {
             onClick={() => {
               const { relPath } = imgCtxMenu;
               setImgCtxMenu(null);
+              openAiEditFromMenu(relPath);
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "8px 14px",
+              background: "transparent",
+              color: "#eee",
+              border: "none",
+              textAlign: "left",
+              cursor: "pointer",
+              font: "inherit",
+              fontSize: 13,
+            }}
+          >
+            AI Edit
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              const { relPath } = imgCtxMenu;
+              setImgCtxMenu(null);
               setAngleSourceRelPath(relPath);
               setAngleModalOpen(true);
             }}
@@ -1141,6 +1261,30 @@ export function TimelineCharacterPicker(props: {
             }}
           >
             New Angle
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              const { relPath } = imgCtxMenu;
+              setImgCtxMenu(null);
+              void deleteGalleryImageFromMenu(relPath);
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "8px 14px",
+              background: "transparent",
+              color: "#f87171",
+              border: "none",
+              borderTop: "1px solid rgba(255,255,255,0.1)",
+              textAlign: "left",
+              cursor: "pointer",
+              font: "inherit",
+              fontSize: 13,
+            }}
+          >
+            {selectedRelPaths.size > 1 ? "Delete all" : "Delete"}
           </button>
         </div>
       )}
@@ -1314,6 +1458,8 @@ export function TimelineCharacterPicker(props: {
         onConfirm={(angleId) => void applyNewAngle(angleId)}
       />
 
+      <AiEditModal {...aiEditModalProps} />
+
       {/* Reference picker — includes Motion Ref Gen (KiMoD) option */}
       <ReferencePicker
         open={refPickerOpen}
@@ -1438,6 +1584,14 @@ export function TimelineCharacterPicker(props: {
               charKey={pickerSeqEditor.charKey}
               sequenceName={pickerSeqEditor.sequenceName}
               onError={(msg, err) => showError({ message: msg, error: err })}
+              onAiEditSequenceGallery={(ctx) =>
+                openAiEditSequenceGallery({
+                  sourceRelPath: ctx.relPath,
+                  galleryItemId: ctx.galleryItemId,
+                  sequenceName: pickerSeqEditor.sequenceName,
+                })
+              }
+              jobModal={{ begin: beginSession, end: endSession, fail: failSession, log: pushLog }}
             />
           </div>
         </div>

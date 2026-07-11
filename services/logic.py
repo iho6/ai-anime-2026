@@ -4485,7 +4485,7 @@ def generate_pose_sequence_from_keypoints(
         slot: dict[str, Any] = {"kind": "image", "relPath": rel_str, "sourceKeypointRelPath": kp_rel}
         if square_meta:
             sq_tmp = square_meta.pop("_squareTmpPath", None)
-            square_meta = _persist_qwen_sidecar_for_plate(dest_path, square_meta, storage_root=root)
+            square_meta = _persist_qwen_sidecar_for_plate(dest, square_meta, storage_root=root)
             if sq_tmp and Path(sq_tmp).is_file():
                 sq_dest = out_dir / f"frame_{i + 1:06d}_sq.png"
                 shutil.copy2(sq_tmp, sq_dest)

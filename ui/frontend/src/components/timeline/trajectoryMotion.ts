@@ -81,6 +81,19 @@ function motionAmount(clip: TimelineClip): number {
   return clamp((clip.trajectory?.motionAmount ?? 50) / 100, 0, 1);
 }
 
+/** Fade procedural motion to zero over the last motionTailSec seconds of the clip. */
+export function motionTailEnvelope(clip: TimelineClip, localTimeSec: number): number {
+  const tailSec = Math.max(0, clip.trajectory?.motionTailSec ?? 0);
+  if (tailSec <= 0) return 1;
+  const duration = clip.duration;
+  if (duration <= 0) return 1;
+  const timeToEnd = duration - Math.max(0, localTimeSec);
+  if (timeToEnd >= tailSec) return 1;
+  if (timeToEnd <= 0) return 0;
+  const u = clamp(timeToEnd / tailSec, 0, 1);
+  return u * u * (3 - 2 * u);
+}
+
 function sinWave(t: number, hz: number): number {
   return Math.sin(TAU * hz * t);
 }
@@ -90,7 +103,7 @@ export function motionOffsetAt(clip: TimelineClip, localTimeSec: number): Motion
   const motion = clip.trajectory?.motion ?? "none";
   if (motion === "none") return ZERO_OFFSET;
 
-  const amount = motionAmount(clip);
+  const amount = motionAmount(clip) * motionTailEnvelope(clip, localTimeSec);
   if (amount <= 0) return ZERO_OFFSET;
 
   const t = Math.max(0, localTimeSec);

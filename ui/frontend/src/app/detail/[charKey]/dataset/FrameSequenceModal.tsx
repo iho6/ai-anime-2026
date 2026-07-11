@@ -1828,6 +1828,7 @@ export function FrameSequenceModal(props: {
               </button>
               <button
                 type="button"
+                className="ui-btn-black"
                 disabled={!stripI2vDialog.prompt.trim() || !activeStripActions?.onGenerateI2v}
                 onClick={() => {
                   const dlg = stripI2vDialog;

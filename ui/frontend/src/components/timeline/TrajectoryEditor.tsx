@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { assetUrlFromRelPath, TimelineClip, TrajectoryMotionId } from "../../lib/api";
 import { TRAJECTORY_MOTION_OPTIONS } from "./trajectoryMotion";
+import { clipImageRect } from "./timelineUtil";
 
 export type TrajectoryWaypoint = NonNullable<TimelineClip["trajectory"]>["waypoints"][number];
 
@@ -139,8 +140,26 @@ function buildPathD(wps: TrajectoryWaypoint[], fw: number, fh: number): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const DIAMOND_SIZE = 9;
-const HIT_RADIUS = 14;    // pointer hit area around diamonds
+const HIT_RADIUS = 20;    // fallback pointer hit around diamonds when bbox is tiny
 const SEG_HIT_DIST = 8;   // max px from path line to trigger segment drag
+
+function pointInWaypointBBox(
+  sx: number,
+  sy: number,
+  wp: TrajectoryWaypoint,
+  clip: TimelineClip,
+  frameW: number,
+  frameH: number,
+  scaleOverride?: number
+): boolean {
+  const r = clipImageRect(
+    clip,
+    { x: wp.x, y: wp.y, scale: scaleOverride ?? wp.scale },
+    frameW,
+    frameH
+  );
+  return sx >= r.left && sx <= r.left + r.width && sy >= r.top && sy <= r.top + r.height;
+}
 
 export function TrajectoryEditor(props: Props) {
   const {
@@ -197,29 +216,57 @@ export function TrajectoryEditor(props: Props) {
   // ── Context menu (right-click waypoint to delete / delete trajectory) ───────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; idx: number | null } | null>(null);
 
-  // ── Pointer down on path / waypoints (SVG background is pass-through) ─────
-  function onTrajPointerDown(e: React.PointerEvent<SVGElement>) {
+  function beginWaypointDrag(
+    i: number,
+    sx: number,
+    sy: number,
+    e: React.PointerEvent<Element>
+  ) {
     if (playing) return;
     e.preventDefault();
     e.stopPropagation();
-    (e.target as SVGElement).setPointerCapture?.(e.pointerId);
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    setCtxMenu(null);
+    setSelectedIdx(i);
+    setGhostScale(wps[i].scale);
+    dragRef.current = {
+      kind: "waypoint",
+      idx: i,
+      startSx: sx,
+      startSy: sy,
+      origWps: wps.map((w) => ({ ...w })),
+    };
+    onPlayheadSync(clip.start + wps[i].t * clip.duration);
+  }
+
+  // ── Pointer down on path / waypoints (SVG background is pass-through) ─────
+  function onTrajPointerDown(e: React.PointerEvent<Element>) {
+    if (playing) return;
+    e.preventDefault();
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     setCtxMenu(null);
 
     const { sx, sy } = getSvgPos(e);
 
-    // 1. Check if clicking a waypoint diamond
-    for (let i = 0; i < wps.length; i++) {
-      const p = fracToSvg(wps[i].x, wps[i].y, frameW, frameH);
-      if (Math.hypot(sx - p.sx, sy - p.sy) <= HIT_RADIUS) {
-        setSelectedIdx(i);
-        setGhostScale(wps[i].scale);
-        dragRef.current = { kind: "waypoint", idx: i, startSx: sx, startSy: sy, origWps: wps.map((w) => ({ ...w })) };
-        onPlayheadSync(clip.start + wps[i].t * clip.duration);
+    // 1. Bbox hit (end → start so top-most wins)
+    for (let i = wps.length - 1; i >= 0; i--) {
+      if (pointInWaypointBBox(sx, sy, wps[i], clip, frameW, frameH)) {
+        beginWaypointDrag(i, sx, sy, e);
         return;
       }
     }
 
-    // 2. Check if clicking a path segment (uses actual bezier curve for hit detection)
+    // 2. Fallback: small circle around diamond center
+    for (let i = wps.length - 1; i >= 0; i--) {
+      const p = fracToSvg(wps[i].x, wps[i].y, frameW, frameH);
+      if (Math.hypot(sx - p.sx, sy - p.sy) <= HIT_RADIUS) {
+        beginWaypointDrag(i, sx, sy, e);
+        return;
+      }
+    }
+
+    // 3. Path segment hit
     for (let i = 0; i < wps.length - 1; i++) {
       const d = distToPathSeg(sx, sy, wps[i], wps[i + 1], frameW, frameH);
       if (d <= SEG_HIT_DIST) {
@@ -241,7 +288,7 @@ export function TrajectoryEditor(props: Props) {
     }
   }
 
-  function onTrajPointerMove(e: React.PointerEvent<SVGElement>) {
+  function onTrajPointerMove(e: React.PointerEvent<Element>) {
     const d = dragRef.current;
     if (!d) return;
     e.preventDefault();
@@ -273,10 +320,10 @@ export function TrajectoryEditor(props: Props) {
     }
   }
 
-  function onTrajPointerUp(e: React.PointerEvent<SVGElement>) {
+  function onTrajPointerUp(e: React.PointerEvent<Element>) {
     const d = dragRef.current;
     if (!d) return;
-    (e.target as SVGElement).releasePointerCapture?.(e.pointerId);
+    (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
 
     const { sx, sy } = getSvgPos(e);
     const dx = Math.abs(sx - d.startSx), dy = Math.abs(sy - d.startSy);
@@ -324,9 +371,14 @@ export function TrajectoryEditor(props: Props) {
     e.preventDefault();
     e.stopPropagation();
     const { sx, sy } = getSvgPos(e);
-    for (let i = 0; i < wps.length; i++) {
-      const p = fracToSvg(wps[i].x, wps[i].y, frameW, frameH);
-      if (Math.hypot(sx - p.sx, sy - p.sy) <= HIT_RADIUS) {
+    for (let i = wps.length - 1; i >= 0; i--) {
+      if (
+        pointInWaypointBBox(sx, sy, wps[i], clip, frameW, frameH) ||
+        Math.hypot(
+          sx - fracToSvg(wps[i].x, wps[i].y, frameW, frameH).sx,
+          sy - fracToSvg(wps[i].x, wps[i].y, frameW, frameH).sy
+        ) <= HIT_RADIUS
+      ) {
         if (i === 0 || i === wps.length - 1) {
           // Start/end point → offer to delete the whole trajectory
           setCtxMenu({ x: e.clientX, y: e.clientY, idx: null });
@@ -346,7 +398,13 @@ export function TrajectoryEditor(props: Props) {
     if (selectedIdx === idx) { setSelectedIdx(null); setGhostScale(null); }
   }
 
-  // ── Ghost scale drag ───────────────────────────────────────────────────────
+  // ── Ghost move + scale drag ────────────────────────────────────────────────
+  function onGhostMovePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (selectedIdx === null || playing) return;
+    const { sx, sy } = getSvgPos(e);
+    beginWaypointDrag(selectedIdx, sx, sy, e);
+  }
+
   function onGhostScalePointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (selectedIdx === null) return;
     e.preventDefault();
@@ -418,15 +476,48 @@ export function TrajectoryEditor(props: Props) {
       style={{
         position: "absolute",
         inset: 0,
-        zIndex: 10001,
+        zIndex: 60,
         pointerEvents: "none",
       }}
     >
-      {/* Ghost image when waypoint selected */}
+      {/* Bbox hit targets for unselected waypoints */}
+      {!playing &&
+        wps.map((wp, i) => {
+          if (i === selectedIdx) return null;
+          const rect = clipImageRect(
+            clip,
+            { x: wp.x, y: wp.y, scale: wp.scale },
+            frameW,
+            frameH
+          );
+          return (
+            <div
+              key={`wp-hit-${i}`}
+              style={{
+                position: "absolute",
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                height: rect.height,
+                pointerEvents: "auto",
+                cursor: "move",
+                zIndex: 0,
+              }}
+              onPointerDown={onTrajPointerDown}
+              onPointerMove={onTrajPointerMove}
+              onPointerUp={onTrajPointerUp}
+            />
+          );
+        })}
+
+      {/* Ghost image when waypoint selected — full bbox is move handle */}
       {ghostWp && ghostSrc && (() => {
         const r = ghostRect(ghostWp);
         return (
           <div
+            onPointerDown={onGhostMovePointerDown}
+            onPointerMove={onTrajPointerMove}
+            onPointerUp={onTrajPointerUp}
             style={{
               position: "absolute",
               left: r.left,
@@ -435,7 +526,8 @@ export function TrajectoryEditor(props: Props) {
               height: r.height,
               pointerEvents: "auto",
               userSelect: "none",
-              zIndex: 0,
+              cursor: "move",
+              zIndex: 1,
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -443,7 +535,14 @@ export function TrajectoryEditor(props: Props) {
               src={ghostSrc}
               alt=""
               draggable={false}
-              style={{ width: "100%", height: "100%", objectFit: "fill", opacity: 0.35, display: "block" }}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "fill",
+                opacity: 0.35,
+                display: "block",
+                pointerEvents: "none",
+              }}
             />
             {/* Scale drag handle */}
             <div
@@ -537,18 +636,31 @@ export function TrajectoryEditor(props: Props) {
 
           return (
             <g key={i} pointerEvents="visiblePainted">
-              {/* Hit target */}
-              <circle
-                cx={sx}
-                cy={sy}
-                r={HIT_RADIUS}
-                fill="transparent"
-                pointerEvents="all"
-                style={{ cursor: playing ? "default" : "move" }}
-                onPointerDown={onTrajPointerDown}
-                onPointerMove={onTrajPointerMove}
-                onPointerUp={onTrajPointerUp}
-              />
+              {/* Hit target — bbox-sized when possible */}
+              {(() => {
+                const hitRect = clipImageRect(
+                  clip,
+                  { x: wp.x, y: wp.y, scale: wp.scale },
+                  frameW,
+                  frameH
+                );
+                const hitW = Math.max(hitRect.width, HIT_RADIUS * 2);
+                const hitH = Math.max(hitRect.height, HIT_RADIUS * 2);
+                return (
+                  <rect
+                    x={hitRect.left + hitRect.width / 2 - hitW / 2}
+                    y={hitRect.top + hitRect.height / 2 - hitH / 2}
+                    width={hitW}
+                    height={hitH}
+                    fill="transparent"
+                    pointerEvents="all"
+                    style={{ cursor: playing ? "default" : "move" }}
+                    onPointerDown={onTrajPointerDown}
+                    onPointerMove={onTrajPointerMove}
+                    onPointerUp={onTrajPointerUp}
+                  />
+                );
+              })()}
               {/* Scale ring */}
               <circle
                 cx={sx} cy={sy}
@@ -675,7 +787,7 @@ export function TrajectoryEditor(props: Props) {
             left: ctxMenu.x,
             background: "#1e1e1e",
             border: "1px solid rgba(255,255,255,0.2)",
-            zIndex: 10003,
+            zIndex: 70,
             minWidth: 140,
             pointerEvents: "all",
           }}

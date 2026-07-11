@@ -478,6 +478,23 @@ def _motion_amount(clip: dict[str, Any]) -> float:
     return _clamp(float(traj.get("motionAmount", 50)) / 100.0, 0, 1)
 
 
+def _motion_tail_envelope(clip: dict[str, Any], local_time_sec: float) -> float:
+    traj = clip.get("trajectory") or {}
+    tail_sec = max(0.0, float(traj.get("motionTailSec") or 0))
+    if tail_sec <= 0:
+        return 1.0
+    duration = float(clip.get("duration") or 0)
+    if duration <= 0:
+        return 1.0
+    time_to_end = duration - max(0.0, local_time_sec)
+    if time_to_end >= tail_sec:
+        return 1.0
+    if time_to_end <= 0:
+        return 0.0
+    u = _clamp(time_to_end / tail_sec, 0.0, 1.0)
+    return u * u * (3.0 - 2.0 * u)
+
+
 def _motion_offset_at(clip: dict[str, Any], local_time_sec: float) -> dict[str, float]:
     traj = clip.get("trajectory") or {}
     motion = str(traj.get("motion") or "none")
@@ -485,7 +502,7 @@ def _motion_offset_at(clip: dict[str, Any], local_time_sec: float) -> dict[str, 
     if motion == "none":
         return zero
 
-    amount = _motion_amount(clip)
+    amount = _motion_amount(clip) * _motion_tail_envelope(clip, local_time_sec)
     if amount <= 0:
         return zero
 

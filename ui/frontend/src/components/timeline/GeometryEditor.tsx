@@ -394,7 +394,7 @@ export function GeometryEditor(props: Props) {
           top: rect.top,
           width: rect.width,
           height: rect.height,
-          zIndex: 10001,
+          zIndex: 60,
           overflow: "visible",
           pointerEvents: "all",
         }}

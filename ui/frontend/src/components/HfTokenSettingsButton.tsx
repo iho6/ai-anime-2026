@@ -38,7 +38,6 @@ export function HfTokenSettingsButton() {
         throw new Error(done.error || "Restart failed.");
       }
       endSession();
-      showError({ title: "Settings", message: "ComfyUI restarted on 8188." });
     } catch (e) {
       failSession(e, "Could not restart ComfyUI.");
     }

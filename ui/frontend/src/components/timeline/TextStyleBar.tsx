@@ -25,7 +25,7 @@ export function TextStyleBar(props: {
         left: rect.left,
         top: barTop,
         width: rect.width,
-        zIndex: 10002,
+        zIndex: 55,
         display: "flex",
         gap: 4,
         justifyContent: "center",

@@ -36,6 +36,19 @@ export function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
+/** Stacking for selection outline/handles above clip hit targets and timeline tracks. */
+export const PREVIEW_SELECTION_CHROME_Z = 300;
+
+/** Preview hit-target stacking: selected clips stay above unselected overlaps. */
+export function previewClipHitZIndex(opts: {
+  trackZ: number;
+  selected: boolean;
+  inEditMode: boolean;
+}): number {
+  if (opts.inEditMode) return 50;
+  return opts.selected ? opts.trackZ + 150 : opts.trackZ + 100;
+}
+
 /** Logical output frame for fit math (preview + export reference). */
 export function referenceFrameSize(
   previewAspect: TimelineManifest["previewAspect"]
@@ -132,6 +145,105 @@ function snapAxis(
   return { delta: bestDelta, guide: bestGuide };
 }
 
+/** Shift a clip rect by pointer delta (preview move drag). */
+export function translateClipRect(rect: ClipRect, dxPx: number, dyPx: number): ClipRect {
+  return {
+    ...rect,
+    left: rect.left + dxPx,
+    top: rect.top + dyPx,
+  };
+}
+
+/** Minimum on-screen strip (px) kept inside the frame so a dragged clip stays reachable. */
+export const PREVIEW_MIN_VISIBLE_PX = 24;
+
+/**
+ * Keep a dragged clip reachable: at least `minVisible` px of the rect must remain
+ * inside the frame on each axis (or 10% of the smaller frame dimension, whichever
+ * is larger). Large scaled clips still move freely, they just can't leave a
+ * grabbable strip inside the frame.
+ */
+export function clampClipRectToFrame(
+  rect: ClipRect,
+  frameW: number,
+  frameH: number,
+  minVisiblePx = PREVIEW_MIN_VISIBLE_PX
+): ClipRect {
+  const { left, top, width, height } = rect;
+  const minVisible = Math.max(minVisiblePx, 0.1 * Math.min(frameW, frameH));
+
+  const clampAxis = (
+    pos: number,
+    size: number,
+    frameExtent: number
+  ): number => {
+    const lo = minVisible - size;
+    const hi = frameExtent - minVisible;
+    if (lo > hi) return pos;
+    return clamp(pos, lo, hi);
+  };
+
+  return {
+    left: clampAxis(left, width, frameW),
+    top: clampAxis(top, height, frameH),
+    width,
+    height,
+  };
+}
+
+/**
+ * Snap clip rect to frame center and near borders only.
+ * Border targets are included only when that edge is within threshold of the frame
+ * (avoids oversized scaled clips fighting snap far off-screen).
+ */
+export function snapClipRectToFrameScaleAware(
+  rect: ClipRect,
+  frameW: number,
+  frameH: number,
+  thresholdPx = PREVIEW_ALIGN_SNAP_PX
+): { rect: ClipRect; guides: AlignGuide[] } {
+  const guides: AlignGuide[] = [];
+  let { left, top, width, height } = rect;
+
+  const cx = left + width / 2;
+  const right = left + width;
+  const xCandidates: SnapCandidate[] = [
+    { delta: frameW / 2 - cx, guide: { axis: "x", pos: frameW / 2, kind: "center" } },
+  ];
+  if (Math.abs(left) < thresholdPx) {
+    xCandidates.push({ delta: -left, guide: { axis: "x", pos: 0, kind: "border" } });
+  }
+  if (Math.abs(frameW - right) < thresholdPx) {
+    xCandidates.push({
+      delta: frameW - right,
+      guide: { axis: "x", pos: frameW, kind: "border" },
+    });
+  }
+  const xSnap = snapAxis(xCandidates, thresholdPx);
+  left += xSnap.delta;
+  if (xSnap.guide) guides.push(xSnap.guide);
+
+  const cy = top + height / 2;
+  const bottom = top + height;
+  const yCandidates: SnapCandidate[] = [
+    { delta: frameH / 2 - cy, guide: { axis: "y", pos: frameH / 2, kind: "center" } },
+  ];
+  if (Math.abs(top) < thresholdPx) {
+    yCandidates.push({ delta: -top, guide: { axis: "y", pos: 0, kind: "border" } });
+  }
+  if (Math.abs(frameH - bottom) < thresholdPx) {
+    yCandidates.push({
+      delta: frameH - bottom,
+      guide: { axis: "y", pos: frameH, kind: "border" },
+    });
+  }
+  const ySnap = snapAxis(yCandidates, thresholdPx);
+  top += ySnap.delta;
+  if (ySnap.guide) guides.push(ySnap.guide);
+
+  return { rect: { left, top, width, height }, guides };
+}
+
 /** Snap clip rect to frame center and borders; nearest target per axis within threshold. */
 export function snapClipRectToFrame(
   rect: ClipRect,
@@ -169,6 +281,35 @@ export function snapClipRectToFrame(
   if (ySnap.guide) guides.push(ySnap.guide);
 
   return { rect: { left, top, width, height }, guides };
+}
+
+/** Pixel-anchored preview move: translate start rect by pointer delta, snap, convert to transform. */
+export function previewMoveTransformFromPointerDelta(params: {
+  orig: ClipTransform;
+  startRect: ClipRect;
+  startClientX: number;
+  startClientY: number;
+  clientX: number;
+  clientY: number;
+  frameW: number;
+  frameH: number;
+}): { to: ClipTransform; guides: AlignGuide[] } {
+  const { orig, startRect, startClientX, startClientY, clientX, clientY, frameW, frameH } =
+    params;
+  const dx = clientX - startClientX;
+  const dy = clientY - startClientY;
+  const rawRect = translateClipRect(startRect, dx, dy);
+  const { rect: snappedRect, guides } = snapClipRectToFrameScaleAware(
+    rawRect,
+    frameW,
+    frameH
+  );
+  const clampedRect = clampClipRectToFrame(snappedRect, frameW, frameH);
+  const { x, y } = clipTransformFromRectCenter(clampedRect, frameW, frameH);
+  return {
+    to: { ...orig, x, y },
+    guides,
+  };
 }
 
 const MIN_CLIP_SCALE = 0.1;
@@ -219,6 +360,43 @@ export function clipTransformAtPlayhead(clip: TimelineClip, playhead: number): C
   const traj = resolveTrajectoryTransformAt(clip, playhead, { applyMotion: true });
   if (traj) return traj;
   return clip.transform ?? defaultImageClipTransform();
+}
+
+export function clipHasEditableTrajectory(clip: TimelineClip): boolean {
+  return (clip.trajectory?.waypoints?.length ?? 0) >= 2;
+}
+
+/** Apply preview drag delta to all trajectory waypoints (move whole path or uniform scale). */
+export function applyPreviewDragToTrajectory(
+  clip: TimelineClip,
+  from: Pick<ClipTransform, "x" | "y" | "scale">,
+  to: Pick<ClipTransform, "x" | "y" | "scale">,
+  mode: "move" | "scale"
+): NonNullable<TimelineClip["trajectory"]> | null {
+  const traj = clip.trajectory;
+  if (!traj || traj.waypoints.length < 2) return null;
+
+  if (mode === "move") {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    return {
+      ...traj,
+      waypoints: traj.waypoints.map((w) => ({
+        ...w,
+        x: w.x + dx,
+        y: w.y + dy,
+      })),
+    };
+  }
+
+  const ratio = from.scale > 1e-6 ? to.scale / from.scale : 1;
+  return {
+    ...traj,
+    waypoints: traj.waypoints.map((w) => ({
+      ...w,
+      scale: clamp((w.scale ?? 1) * ratio, 0.1, 6),
+    })),
+  };
 }
 
 /** Initial transform for a newly imported image: centered, scale 1 (contain handled in layout). */
@@ -893,6 +1071,7 @@ export function cloneTimelineClipForPaste(clip: TimelineClip): TimelineClip {
       ? {
           motion: clip.trajectory.motion,
           motionAmount: clip.trajectory.motionAmount,
+          motionTailSec: clip.trajectory.motionTailSec,
           waypoints: clip.trajectory.waypoints.map((w) => ({ ...w })),
         }
       : undefined,

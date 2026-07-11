@@ -2093,6 +2093,7 @@ export function SequenceEditor(props: {
               </button>
               <button
                 type="button"
+                className="ui-btn-black"
                 onClick={() => {
                   void (async () => {
                     const dlg = i2vDialog;
@@ -2154,15 +2155,6 @@ export function SequenceEditor(props: {
                   })();
                 }}
                 disabled={!i2vDialog.prompt.trim()}
-                style={{
-                  borderRadius: 0,
-                  border: "1px solid rgba(255,255,255,0.35)",
-                  background: "rgba(255,255,255,0.12)",
-                  color: "inherit",
-                  padding: "6px 12px",
-                  cursor: i2vDialog.prompt.trim() ? "pointer" : "not-allowed",
-                  opacity: i2vDialog.prompt.trim() ? 1 : 0.45,
-                }}
               >
                 Generate
               </button>

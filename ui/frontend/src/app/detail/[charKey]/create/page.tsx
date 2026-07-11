@@ -80,6 +80,7 @@ import type { SharedLogStreamHandle } from "../../../../components/SharedLogStre
 import { ConnectedJobRunModal } from "../../../../components/ConnectedJobRunModal";
 import { RemoveBgImageModal } from "../../../../components/removeBg/RemoveBgImageModal";
 import { useJobRunSession } from "../../../../hooks/useJobRunSession";
+import { useCharacterGalleryAiEdit } from "../../../../hooks/useCharacterGalleryAiEdit";
 import { useCharacterSections } from "../../../../hooks/useCharacterSections";
 import {
   ReferencePicker,
@@ -203,7 +204,6 @@ export default function CreatePage() {
   }, [charSections]);
 
   // Per-item type for context actions invoked from any section (incl. shared Hidden).
-  const [aiEditType, setAiEditType] = useState<GenType>("pose");
   const [angleItem, setAngleItem] = useState<{ item: GallerySplitItem; type: GenType } | null>(null);
   const [selectedExpr, setSelectedExpr] = useState<Set<string>>(new Set());
   // Sequence section state.
@@ -241,11 +241,21 @@ export default function CreatePage() {
   } = useJobRunSession(logRef);
   const uiBusy = busy || jobRunning;
 
-  const [aiEditOpen, setAiEditOpen] = useState(false);
-  const [aiEditPoseKey, setAiEditPoseKey] = useState<string>("");
-  const [aiEditSourceRelPath, setAiEditSourceRelPath] = useState<string>("");
-  // When set, the AI Edit modal targets a Sequence gallery frame instead of a pose/expr image.
-  const [aiEditSeqCtx, setAiEditSeqCtx] = useState<{ seqName: string; galleryItemId: string } | null>(null);
+  const {
+    openAiEditForGallery,
+    openAiEditSequenceGallery: openAiEditSequenceGalleryBase,
+    aiEditModalProps,
+  } = useCharacterGalleryAiEdit({
+    charKey,
+    refreshSections: refreshCharSections,
+    beginSession,
+    endSession,
+    failSession,
+    onJobLogLine,
+    showError,
+    busy: uiBusy,
+  });
+
   // Sequence gallery-frame "New Angle" (right-click a frame in the editor).
   const [seqAngleOpen, setSeqAngleOpen] = useState(false);
   const [seqAngleImageUrl, setSeqAngleImageUrl] = useState<string | null>(null);
@@ -315,146 +325,24 @@ export default function CreatePage() {
 
   const openAiEditForPose = useCallback(
     (poseFolderKey: string, sourceRelPath: string, type: GenType = genType) => {
-      if (!sourceRelPath) {
-        showError({ message: "AI Edit: source image not found." });
-        return;
-      }
-      setAiEditSeqCtx(null);
-      setAiEditType(type);
-      setAiEditPoseKey(poseFolderKey);
-      setAiEditSourceRelPath(sourceRelPath);
-      setAiEditOpen(true);
+      openAiEditForGallery({ sourceRelPath, type, poseFolderKey });
     },
-    [showError, genType]
+    [openAiEditForGallery, genType]
   );
 
-  // AI Edit a Sequence gallery frame (right-click a frame in the editor).
   const openAiEditSequenceGallery = useCallback(
     (ctx: { relPath: string; galleryItemId: string }) => {
       if (!activeSequence) {
         showError({ message: "AI Edit: sequence name missing." });
         return;
       }
-      const rel = (ctx.relPath || "").trim();
-      if (!rel) {
-        showError({ message: "AI Edit: source image not found." });
-        return;
-      }
-      setAiEditSeqCtx({ seqName: activeSequence, galleryItemId: ctx.galleryItemId });
-      setAiEditPoseKey("");
-      setAiEditSourceRelPath(rel);
-      setAiEditOpen(true);
-    },
-    [activeSequence, showError]
-  );
-
-  const onAiEditGeneratePose = useCallback(
-    async (promptText: string, maskPngBase64?: string) => {
-      if (!charKey || !aiEditSourceRelPath) {
-        showError({ message: "AI Edit: source image not found." });
-        return;
-      }
-
-      const onWsLogLine = (line: string) => {
-        pushLog(line);
-        setRunningStatus(truncateJobModalStatusLine(line));
-      };
-
-      // ── Sequence gallery-frame branch ───────────────────────────────────────
-      if (aiEditSeqCtx) {
-        const { seqName, galleryItemId } = aiEditSeqCtx;
-        setAiEditOpen(false);
-        beginSession({
-          title: "AI Editing sequence frame",
-          clearLog: true,
-          runningStatus: "AI editing…",
-        });
-        await Promise.resolve();
-        pushLog("AI editing…");
-        try {
-          const done = await runDetailWsJob<{ fileRelPath: string }>({
-            charKey,
-            pathSuffix: "/dataset/ws",
-            payload: {
-              job: "ai_edit_sequence_gallery_image",
-              sequenceName: seqName,
-              sourceRelPath: aiEditSourceRelPath,
-              promptText,
-              ...(maskPngBase64 ? { maskPngBase64 } : {}),
-            },
-            onLogLine: onWsLogLine,
-          });
-          if (!done.ok || !done.result?.fileRelPath) {
-            throw new Error(done.error ?? "AI Edit sequence frame failed");
-          }
-          const manifest = await apiSequenceGet(charKey, seqName);
-          const gi = manifest.gallery.findIndex((g) => g.id === galleryItemId);
-          if (gi < 0) throw new Error("AI Edit: sequence gallery item no longer exists");
-          const nextGallery = manifest.gallery.map((g, i) =>
-            i === gi ? { ...g, relPath: done.result!.fileRelPath } : g
-          );
-          await apiSequencePut(charKey, seqName, { ...manifest, gallery: nextGallery });
-          await refreshCharSections();
-          endSession();
-        } catch (err) {
-          failSession(err, "AI Edit sequence frame failed.");
-        } finally {
-          setAiEditSeqCtx(null);
-        }
-        return;
-      }
-
-      if (!aiEditPoseKey) {
-        showError({ message: "AI Edit: gallery item not found." });
-        return;
-      }
-
-      const aiPose = aiEditType === "pose";
-      setAiEditOpen(false);
-      beginSession({
-        title: aiPose ? "AI Editing pose" : "AI Editing expression",
-        clearLog: true,
-        runningStatus: "AI editing…",
+      openAiEditSequenceGalleryBase({
+        sourceRelPath: ctx.relPath,
+        galleryItemId: ctx.galleryItemId,
+        sequenceName: activeSequence,
       });
-      await Promise.resolve();
-      pushLog("AI editing…");
-      try {
-        const done = await runDetailWsJob<{ newRelPath: string }>({
-          charKey,
-          pathSuffix: aiPose ? "/pose/ws" : "/expression/ws",
-          payload: {
-            job: aiPose ? "ai_edit_pose" : "ai_edit_expression",
-            [aiPose ? "poseKey" : "exprKey"]: aiEditPoseKey,
-            sourceRelPath: aiEditSourceRelPath,
-            promptText,
-            ...(maskPngBase64 ? { maskPngBase64 } : {}),
-          },
-          onLogLine: onWsLogLine,
-        });
-        if (!done.ok) {
-          throw new Error(done.error ?? "AI Edit failed");
-        }
-        await refreshCharSections();
-      } catch (err) {
-        failSession(err, "AI Edit failed.");
-        return;
-      }
-      endSession();
     },
-    [
-      aiEditPoseKey,
-      aiEditSourceRelPath,
-      aiEditType,
-      aiEditSeqCtx,
-      beginSession,
-      charKey,
-      endSession,
-      failSession,
-      pushLog,
-      refreshCharSections,
-      setRunningStatus,
-      showError,
-    ]
+    [activeSequence, openAiEditSequenceGalleryBase, showError]
   );
 
   // New Angle on a Sequence gallery frame.
@@ -2280,19 +2168,7 @@ export default function CreatePage() {
         onConfirm={(angleId) => void applyNewAngleSequenceGallery(angleId)}
       />
 
-      <AiEditModal
-        open={aiEditOpen}
-        title="AI Edit"
-        imageSrc={aiEditSourceRelPath ? assetUrlFromRelPath(aiEditSourceRelPath) : ""}
-        busy={uiBusy}
-        onCancel={() => {
-          setAiEditOpen(false);
-          setAiEditSeqCtx(null);
-        }}
-        onGenerate={(promptText, maskPngBase64) =>
-          void onAiEditGeneratePose(promptText, maskPngBase64)
-        }
-      />
+      <AiEditModal {...aiEditModalProps} />
 
       {isPose && (
         <ReferencePicker

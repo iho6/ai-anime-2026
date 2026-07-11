@@ -521,6 +521,8 @@ export type TimelineClip = {
     motion?: TrajectoryMotionId;
     /** Intensity 0–100 for motion amplitude. */
     motionAmount?: number;
+    /** Seconds to fade procedural motion to zero before clip end (0 = abrupt). */
+    motionTailSec?: number;
     waypoints: Array<{
       t: number;       // 0–1 fraction of clip duration
       x: number;       // same space as transform.x (fractional from center)
