@@ -18,9 +18,9 @@ from fastapi.responses import Response
 
 from services import logic, timeline_asset_storage, timeline_saved_shapes, timeline_storage
 from services.constant import WAN_VIDEO_DEFAULT_LENGTH
-from services.clip_coloring import apply_clip_coloring_rgba
 from services.character_storage import sanitize_for_folder
 from services.timeline_preview_cache import preview_decoder_cache
+from services.timeline_preview_frames import timeline_preview_rgba
 from .storage_paths import (
     TIMELINES_STORAGE_ROOT,
     resolve_storage_rel_file,
@@ -184,14 +184,7 @@ def timeline_clip_rgba_frame(
 
     from io import BytesIO
 
-    from PIL import Image
-
-    if clip_type == "image":
-        with Image.open(abs_p) as im:
-            rgba = im.convert("RGBA")
-        rgba = apply_clip_coloring_rgba(rgba, clip.get("coloring"))
-    else:
-        rgba = preview_decoder_cache.get_rgba_frame(timeline_key, clip, abs_p, st)
+    rgba = timeline_preview_rgba(timeline_key, manifest, clip, abs_p, st)
 
     buf = BytesIO()
     rgba.save(buf, format="PNG")

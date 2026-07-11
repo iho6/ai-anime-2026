@@ -4,8 +4,8 @@
   "previewAspect": "16:9",
   "tracks": [
     {
-      "id": "trk_mrfvdf07_3",
-      "name": "Remove Background (RMBG)",
+      "id": "trk_mrfz00or_3",
+      "name": "Remove Background",
       "kind": "video",
       "clips": [
         {
@@ -13,7 +13,7 @@
           "type": "video",
           "srcRelPath": "timelines/Timeline_4/clips/clip_b8f8832387f2.mp4",
           "alphaRelPath": "timelines/Timeline_4/clips/clip_55eef712648d_rmbg_1783743416.alpha.mkv",
-          "start": 0,
+          "start": 14.994835662841798,
           "inPoint": 0,
           "outPoint": 5.375,
           "speed": 1,
@@ -22,8 +22,8 @@
           "naturalW": 1080,
           "naturalH": 1080,
           "transform": {
-            "x": 0,
-            "y": 0,
+            "x": 0.05628960729173771,
+            "y": 0.6948421288526091,
             "scale": 1,
             "rotation": 0,
             "opacity": 1
@@ -1200,6 +1200,301 @@
             "extractInPointSec": 0,
             "extractFps": 24,
             "mp4Aligned": true
+          },
+          "trajectory": {
+            "motion": "bob",
+            "motionAmount": 50,
+            "waypoints": [
+              {
+                "t": 0,
+                "x": -0.002147365232643388,
+                "y": 1.5,
+                "scale": 2.8353487519607175
+              },
+              {
+                "t": 1,
+                "x": -0.002147365232643388,
+                "y": 0.5631399956133659,
+                "scale": 1
+              }
+            ]
+          }
+        },
+        {
+          "id": "clip_mrfz00oq_1",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_4e02aa49a22c42c3b7ed303a001ca2a2.png",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 12.044422149658203,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "Buan"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0.5655644453768691,
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "trajectory": {
+            "motion": "bob",
+            "motionAmount": 44,
+            "waypoints": [
+              {
+                "t": 0,
+                "x": -0.002147365232643388,
+                "y": 1.5,
+                "scale": 2.28993896201323
+              },
+              {
+                "t": 1,
+                "x": -0.010804458927231808,
+                "y": 0.5980027702548062,
+                "scale": 1
+              }
+            ]
+          },
+          "coloring": {
+            "r": 107,
+            "g": 114,
+            "b": 104,
+            "opacity": 100,
+            "lightness": -8
+          }
+        },
+        {
+          "id": "clip_mrg00a2x_2",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_4e02aa49a22c42c3b7ed303a001ca2a2.png",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 12.044422149658203,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "Buan"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0.5655644453768691,
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "trajectory": {
+            "motion": "bob",
+            "motionAmount": 44,
+            "waypoints": [
+              {
+                "t": 0,
+                "x": -0.002147365232643388,
+                "y": 1.5,
+                "scale": 2.28993896201323
+              },
+              {
+                "t": 1,
+                "x": -0.010804458927231808,
+                "y": 0.5980027702548062,
+                "scale": 1
+              }
+            ]
+          },
+          "coloring": {
+            "r": 107,
+            "g": 114,
+            "b": 104,
+            "opacity": 100,
+            "lightness": -8
+          }
+        },
+        {
+          "id": "clip_mrg00cap_4",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_4e02aa49a22c42c3b7ed303a001ca2a2.png",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 12.044422149658203,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "Buan"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0.5655644453768691,
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "trajectory": {
+            "motion": "bob",
+            "motionAmount": 44,
+            "waypoints": [
+              {
+                "t": 0,
+                "x": -0.002147365232643388,
+                "y": 1.5,
+                "scale": 2.28993896201323
+              },
+              {
+                "t": 0.8583235240646249,
+                "x": -0.009577952400740164,
+                "y": 0.7257945590685762,
+                "scale": 1.1827540063097701
+              },
+              {
+                "t": 1,
+                "x": -0.010804458927231808,
+                "y": 0.5980027702548062,
+                "scale": 1
+              }
+            ]
+          },
+          "coloring": {
+            "r": 107,
+            "g": 114,
+            "b": 104,
+            "opacity": 100,
+            "lightness": -8
+          }
+        },
+        {
+          "id": "clip_mrg00je1_6",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_4e02aa49a22c42c3b7ed303a001ca2a2.png",
+          "start": 12.044422149658203,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 2.1270683288574226,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "Buan"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0.568736342576785,
+            "scale": 1.004462435481147,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "coloring": {
+            "r": 107,
+            "g": 114,
+            "b": 104,
+            "opacity": 100,
+            "lightness": -8
+          }
+        }
+      ],
+      "hidden": false
+    },
+    {
+      "id": "trk_mrfvdf07_3",
+      "name": "Remove Background (RMBG)",
+      "kind": "video",
+      "clips": []
+    },
+    {
+      "id": "trk_mrftp69z_6",
+      "name": "Video 2",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mrft880z_1",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_d97ab7d749e24cba90193adfa7bcb256.png",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 18.540288543701173,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "hey"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "trajectory": {
+            "motion": "none",
+            "motionAmount": 50,
+            "waypoints": [
+              {
+                "t": 0,
+                "x": 0,
+                "y": 0,
+                "scale": 1
+              },
+              {
+                "t": 1,
+                "x": 0,
+                "y": 0,
+                "scale": 1
+              }
+            ]
+          },
+          "coloring": {
+            "r": 90,
+            "g": 90,
+            "b": 95,
+            "opacity": 100,
+            "lightness": 15
+          }
+        },
+        {
+          "id": "clip_mrftp4j9_4",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_cee3033dbec748648b49cd745cf80667.png",
+          "start": 21.572314453125003,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "Buan"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0.54199663700175,
+            "scale": 1.246947951027658,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "trajectory": {
+            "motion": "none",
+            "motionAmount": 50,
+            "waypoints": [
+              {
+                "t": 0,
+                "x": -0.004831584887507401,
+                "y": 1.0502184322289612,
+                "scale": 1.246947951027658
+              },
+              {
+                "t": 1,
+                "x": 0,
+                "y": 0.5477420929701879,
+                "scale": 1.246947951027658
+              }
+            ]
           }
         }
       ]
@@ -1213,7 +1508,7 @@
           "id": "clip_mrfuah7v_13",
           "type": "video",
           "srcRelPath": "timelines/Timeline_4/clips/clip_55eef712648d.mp4",
-          "start": 9.74173469543457,
+          "start": 20.18181610107422,
           "inPoint": 0,
           "outPoint": 5.375,
           "speed": 0.5,
@@ -2428,7 +2723,7 @@
           "id": "clip_mrfu1def_10",
           "type": "video",
           "srcRelPath": "timelines/Timeline_4/clips/clip_427b27a874e344a4b57cb0292048534c.mp4",
-          "start": 18.458676528930667,
+          "start": 21.061981582641604,
           "inPoint": 0,
           "outPoint": 5.375,
           "speed": 1,
@@ -2442,46 +2737,6 @@
             "b": 100,
             "opacity": 100,
             "lightness": 0
-          }
-        },
-        {
-          "id": "clip_mrftp4j9_4",
-          "type": "image",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_cee3033dbec748648b49cd745cf80667.png",
-          "start": 5.530992889404297,
-          "inPoint": 0,
-          "outPoint": 3,
-          "speed": 1,
-          "duration": 3,
-          "naturalW": 1024,
-          "naturalH": 1024,
-          "source": {
-            "charKey": "Buan"
-          },
-          "transform": {
-            "x": 0,
-            "y": 0.54199663700175,
-            "scale": 1.246947951027658,
-            "rotation": 0,
-            "opacity": 1
-          },
-          "trajectory": {
-            "motion": "none",
-            "motionAmount": 50,
-            "waypoints": [
-              {
-                "t": 0,
-                "x": -0.004831584887507401,
-                "y": 1.0502184322289612,
-                "scale": 1.246947951027658
-              },
-              {
-                "t": 1,
-                "x": 0,
-                "y": 0.5477420929701879,
-                "scale": 1.246947951027658
-              }
-            ]
           }
         }
       ]
@@ -2498,10 +2753,10 @@
       "kind": "video",
       "clips": [
         {
-          "id": "clip_mrft880z_1",
+          "id": "clip_mrg0cgrp_7",
           "type": "image",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_d97ab7d749e24cba90193adfa7bcb256.png",
-          "start": 5.530992889404297,
+          "srcRelPath": "timelines/Timeline_4/clips/clip_afe56859e05f4897a8b66007663bcb1c.png",
+          "start": 12.88059267788008,
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
@@ -2509,41 +2764,15 @@
           "naturalW": 1024,
           "naturalH": 1024,
           "source": {
-            "locationKey": "hey"
+            "locationKey": "forest"
           },
           "transform": {
             "x": 0,
             "y": 0,
-            "scale": 1,
-            "rotation": 0,
-            "opacity": 1
-          },
-          "trajectory": {
-            "motion": "none",
-            "motionAmount": 50,
-            "waypoints": [
-              {
-                "t": 0,
-                "x": 0,
-                "y": 0,
-                "scale": 1
-              },
-              {
-                "t": 1,
-                "x": 0,
-                "y": 0,
-                "scale": 1
-              }
-            ]
+            "scale": 1
           }
         }
       ]
-    },
-    {
-      "id": "trk_mrftp69z_6",
-      "name": "Video 2",
-      "kind": "video",
-      "clips": []
     }
   ]
 }

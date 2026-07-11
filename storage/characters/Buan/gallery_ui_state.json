@@ -145,7 +145,9 @@
     "pimg:flat:poses/pose_152.png",
     "pimg:flat:poses/pose_153.png",
     "pimg:flat:poses/pose_154.png",
-    "pimg:flat:poses/pose_155.png"
+    "pimg:flat:poses/pose_155.png",
+    "pimg:flat:poses/pose_156_qwen.png",
+    "pimg:flat:poses/pose_156.png"
   ],
   "hidden_pose_images": [
     "pimg:flat:poses/pose_046.png",

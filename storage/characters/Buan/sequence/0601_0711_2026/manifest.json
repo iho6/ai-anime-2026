@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "fps": 24,
+  "gallery": [
+    {
+      "id": "9da3a04ee0f7",
+      "relPath": "",
+      "frameSequence": {
+        "sequenceGroupId": "19f34b384443",
+        "strip": [],
+        "hidden": []
+      },
+      "poseConfig": {
+        "baseImageRelPath": "Buan/poses/pose_000.png",
+        "promptText": "",
+        "skipCloseup": false,
+        "extraPadFrac": 0.0,
+        "cfgScale": 1.0,
+        "folderId": "c5303a193111"
+      }
+    }
+  ],
+  "frames": [],
+  "previewAspect": "16:9",
+  "timelineViewStep": 1
+}

@@ -104,6 +104,7 @@ import {
   buildGeometryClip,
   buildImageClip,
   buildTextClip,
+  buildTimelineClipClipboard,
   buildTimelineCompositePngBase64,
   clipActsAsImage,
   clipEnd,
@@ -113,6 +114,7 @@ import {
   newAudioTrack,
   newNeutralTrack,
   newVideoTrack,
+  pasteTimelineClipClipboard,
   promoteTrackKind,
   dedupeTimelineManifestClips,
   defaultTrackNameForKind,
@@ -121,7 +123,12 @@ import {
   resolveClipImageRelPath,
   resolveImportDimensions,
   timelineDuration,
+  type TimelineClipClipboard,
 } from "../../../components/timeline/timelineUtil";
+import {
+  findTrajectorySyncPair,
+  syncMotionIncomingToOutgoing,
+} from "../../../components/timeline/trajectorySync";
 import {
   flfEndpointLabel,
   resolveFlfEndpoint,
@@ -170,6 +177,8 @@ export default function TimelineEditorPage() {
   const [playhead, setPlayhead] = useState(0);
   const [pxPerSec, setPxPerSec] = useState(80);
   const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
+  const clipClipboardRef = useRef<TimelineClipClipboard | null>(null);
+  const [hasClipClipboard, setHasClipClipboard] = useState(false);
   const [previewHeight, setPreviewHeight] = useState(260);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -586,11 +595,13 @@ export default function TimelineEditorPage() {
   }
 
   function openAudioPicker(targetTrackId?: string) {
+    exitClipEditModes();
     targetTrackRef.current = targetTrackId ?? null;
     setAudioPickerOpen(true);
   }
 
   function openOtherAssetPicker(targetTrackId?: string) {
+    exitClipEditModes();
     targetTrackRef.current = targetTrackId ?? null;
     setOtherAssetPickerOpen(true);
   }
@@ -1046,96 +1057,6 @@ export default function TimelineEditorPage() {
     setSelectedClipIds((prev) => prev.filter((x) => !idSet.has(x)));
   }
 
-  useEffect(() => {
-    function isEditableTarget(target: EventTarget | null): boolean {
-      const t = target as HTMLElement | null;
-      return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
-    }
-
-    function modalBlocksDelete(): boolean {
-      return (
-        aiEditOpen ||
-        segmentOpen ||
-        cameraAngleOpen ||
-        charPickerOpen ||
-        locPickerOpen ||
-        audioPickerOpen ||
-        seqPickerOpen ||
-        jobModalProps.open
-      );
-    }
-
-    function onKey(e: KeyboardEvent) {
-      if (isEditableTarget(e.target)) return;
-
-      if (e.key === "Delete" || e.key === "Backspace") {
-        if (!e.ctrlKey && !e.metaKey && !modalBlocksDelete() && selectedClipIds.length > 0) {
-          e.preventDefault();
-          const ids = [...selectedClipIds];
-          deleteClips(ids);
-          if (trajectoryClipId && ids.includes(trajectoryClipId)) {
-            setTrajectoryClipId(null);
-          }
-          if (geometryEditClipId && ids.includes(geometryEditClipId)) {
-            setGeometryEditClipId(null);
-          }
-          if (textEditClipId && ids.includes(textEditClipId)) {
-            setTextEditClipId(null);
-          }
-          if (volumeEditClipId && ids.includes(volumeEditClipId)) {
-            setVolumeEditClipId(null);
-          }
-        }
-        return;
-      }
-
-      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-        if (modalBlocksDelete() || !manifest) return;
-        e.preventDefault();
-        const dir = e.key === "ArrowRight" ? 1 : -1;
-        const fps = Math.max(1, manifest.fps || 24);
-        const step = e.shiftKey ? 1 : e.altKey ? 0.1 : 1 / fps;
-        setPlaying(false);
-        setPlayhead((p) => {
-          const next = clamp(p + dir * step, 0, total);
-          tracksRef.current?.ensurePlayheadVisible(next);
-          return next;
-        });
-        return;
-      }
-
-      if (!(e.ctrlKey || e.metaKey)) return;
-      const k = e.key.toLowerCase();
-      if (k === "z" && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      } else if ((k === "z" && e.shiftKey) || k === "y") {
-        e.preventDefault();
-        redo();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [
-    undo,
-    redo,
-    selectedClipIds,
-    trajectoryClipId,
-    geometryEditClipId,
-    textEditClipId,
-    volumeEditClipId,
-    aiEditOpen,
-    segmentOpen,
-    cameraAngleOpen,
-    charPickerOpen,
-    locPickerOpen,
-    audioPickerOpen,
-    seqPickerOpen,
-    jobModalProps.open,
-    manifest,
-    total,
-  ]);
-
   function updateClipTrajectory(clipId: string, trajectory: TimelineClip["trajectory"]) {
     historyUpdate((m) => ({
       ...m,
@@ -1466,6 +1387,7 @@ export default function TimelineEditorPage() {
     if (!next || next === timelineKey) return;
     try {
       const { newTimelineKey } = await apiTimelineHubRename(timelineKey, next);
+      exitClipEditModes();
       router.replace(`/timeline/${encodeURIComponent(newTimelineKey)}`);
     } catch (e) {
       showError({ message: "Could not rename timeline.", error: e });
@@ -1598,6 +1520,7 @@ export default function TimelineEditorPage() {
   function exitClipEditModes() {
     const active = document.activeElement;
     if (active instanceof HTMLElement) active.blur();
+    setTrajectoryClipId(null);
     setGeometryEditClipId(null);
     setTextEditClipId(null);
   }
@@ -1610,7 +1533,11 @@ export default function TimelineEditorPage() {
       }
       return;
     }
-    if (clipId !== textEditClipId && clipId !== geometryEditClipId) {
+    if (
+      clipId !== textEditClipId &&
+      clipId !== geometryEditClipId &&
+      clipId !== trajectoryClipId
+    ) {
       exitClipEditModes();
     }
     setSelectedClipIds((prev) => {
@@ -1632,11 +1559,173 @@ export default function TimelineEditorPage() {
     return null;
   }
 
+  const copySelectedClips = useCallback(() => {
+    if (!manifest || selectedClipIds.length === 0) return;
+    const cb = buildTimelineClipClipboard(manifest, selectedClipIds);
+    if (cb) {
+      clipClipboardRef.current = cb;
+      setHasClipClipboard(true);
+    }
+  }, [manifest, selectedClipIds]);
+
+  const pasteClips = useCallback(() => {
+    const cb = clipClipboardRef.current;
+    if (!cb) return;
+    let newClipIds: string[] = [];
+    historyUpdate((m) => {
+      const result = pasteTimelineClipClipboard(m, cb, playhead);
+      newClipIds = result.newClipIds;
+      return result.manifest;
+    });
+    if (newClipIds.length === 0) return;
+    setSelectedClipIds(newClipIds);
+    setPlaying(false);
+    exitClipEditModes();
+  }, [playhead, historyUpdate]);
+
+  useEffect(() => {
+    function isEditableTarget(target: EventTarget | null): boolean {
+      const t = target as HTMLElement | null;
+      return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+    }
+
+    function modalBlocksShortcuts(): boolean {
+      return (
+        aiEditOpen ||
+        segmentOpen ||
+        cameraAngleOpen ||
+        charPickerOpen ||
+        locPickerOpen ||
+        audioPickerOpen ||
+        seqPickerOpen ||
+        jobModalProps.open
+      );
+    }
+
+    function onKey(e: KeyboardEvent) {
+      if (isEditableTarget(e.target)) return;
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (!e.ctrlKey && !e.metaKey && !modalBlocksShortcuts() && selectedClipIds.length > 0) {
+          e.preventDefault();
+          const ids = [...selectedClipIds];
+          deleteClips(ids);
+          if (trajectoryClipId && ids.includes(trajectoryClipId)) {
+            setTrajectoryClipId(null);
+          }
+          if (geometryEditClipId && ids.includes(geometryEditClipId)) {
+            setGeometryEditClipId(null);
+          }
+          if (textEditClipId && ids.includes(textEditClipId)) {
+            setTextEditClipId(null);
+          }
+          if (volumeEditClipId && ids.includes(volumeEditClipId)) {
+            setVolumeEditClipId(null);
+          }
+        }
+        return;
+      }
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        if (modalBlocksShortcuts() || !manifest) return;
+        e.preventDefault();
+        const dir = e.key === "ArrowRight" ? 1 : -1;
+        const fps = Math.max(1, manifest.fps || 24);
+        const step = e.shiftKey ? 1 : e.altKey ? 0.1 : 1 / fps;
+        setPlaying(false);
+        setPlayhead((p) => {
+          const next = clamp(p + dir * step, 0, total);
+          tracksRef.current?.ensurePlayheadVisible(next);
+          return next;
+        });
+        return;
+      }
+
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "c") {
+        if (modalBlocksShortcuts() || seqEditorSource || videoFrameEditor) return;
+        if (selectedClipIds.length === 0) return;
+        e.preventDefault();
+        copySelectedClips();
+        return;
+      }
+      if (k === "v") {
+        if (modalBlocksShortcuts() || seqEditorSource || videoFrameEditor) return;
+        if (!clipClipboardRef.current) return;
+        e.preventDefault();
+        pasteClips();
+        return;
+      }
+      if (k === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((k === "z" && e.shiftKey) || k === "y") {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    undo,
+    redo,
+    copySelectedClips,
+    pasteClips,
+    selectedClipIds,
+    trajectoryClipId,
+    geometryEditClipId,
+    textEditClipId,
+    volumeEditClipId,
+    aiEditOpen,
+    segmentOpen,
+    cameraAngleOpen,
+    charPickerOpen,
+    locPickerOpen,
+    audioPickerOpen,
+    seqPickerOpen,
+    seqEditorSource,
+    videoFrameEditor,
+    jobModalProps.open,
+    manifest,
+    total,
+  ]);
+
   /** Selected FLF endpoint clips (image, video, geometry), ordered by timeline start. */
   function getSelectedFlfClips(): TimelineClip[] {
     if (!manifest) return [];
     const all = manifest.tracks.flatMap((t) => t.clips);
     return selectedFlfClips(all, selectedClipIds);
+  }
+
+  function getTrajectorySyncPair() {
+    if (!manifest) return null;
+    return findTrajectorySyncPair(manifest, selectedClipIds);
+  }
+
+  function syncSelectedClipMotion() {
+    const pair = getTrajectorySyncPair();
+    if (!pair || !manifest) return;
+    const fps = Math.max(1, manifest.fps || 24);
+    const syncedIncoming = syncMotionIncomingToOutgoing(
+      pair.outgoing,
+      pair.incoming,
+      fps
+    );
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) =>
+        t.id !== pair.trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id === pair.incoming.id ? syncedIncoming : c
+              ),
+            }
+      ),
+    }));
+    setClipMenu((s) => ({ ...s, open: false }));
   }
 
   /** Selected image-like clips (images + geometries), ordered by timeline start. */
@@ -2489,12 +2578,34 @@ export default function TimelineEditorPage() {
     const isCharImage = isImage && Boolean(rc?.clip.source?.charKey);
     const twoFlfSelected = getSelectedFlfClips().length === 2;
     const pair = getOverlappingCharBgPair();
+    const trajectorySyncPair = getTrajectorySyncPair();
     const isVideo = rc?.clip.type === "video";
     const isGeometry = rc?.clip.type === "geometry";
     const isText = rc?.clip.type === "text";
     const isAudio = rc?.clip.type === "audio";
 
     const items: ContextMenuItem[] = [];
+
+    items.push(
+      {
+        key: "copy",
+        label: "Copy",
+        disabled: selectedClipIds.length === 0,
+        onSelect: () => {
+          copySelectedClips();
+          setClipMenu((s) => ({ ...s, open: false }));
+        },
+      },
+      {
+        key: "paste",
+        label: "Paste",
+        disabled: !hasClipClipboard,
+        onSelect: () => {
+          pasteClips();
+          setClipMenu((s) => ({ ...s, open: false }));
+        },
+      }
+    );
 
     if (clipMenu.fromTrack) {
       items.push(
@@ -2667,6 +2778,14 @@ export default function TimelineEditorPage() {
 
     if (isImage || isVideo || isGeometry || isText) {
       items.push({
+        key: "syncMotion",
+        label: trajectorySyncPair
+          ? "Sync Motion"
+          : "Sync Motion (2 connected clips, one with trajectory)",
+        disabled: busy || !trajectorySyncPair,
+        onSelect: () => syncSelectedClipMotion(),
+      });
+      items.push({
         key: "trajectory",
         label: rc?.clip.trajectory ? "Edit Trajectory" : "Add Trajectory",
         onSelect: () => {
@@ -2712,7 +2831,7 @@ export default function TimelineEditorPage() {
 
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clipMenu, playhead, manifest, busy]);
+  }, [clipMenu, playhead, manifest, busy, selectedClipIds, hasClipClipboard]);
 
   const trackMenuItems: ContextMenuItem[] = useMemo(() => {
     if (!trackMenu.open) return [];
@@ -2815,6 +2934,37 @@ export default function TimelineEditorPage() {
     });
   }
 
+  function leaveTimeline(path: string) {
+    exitClipEditModes();
+    router.push(path);
+  }
+
+  const nonTrajectoryUiActive =
+    charPickerOpen ||
+    locPickerOpen ||
+    audioPickerOpen ||
+    seqPickerOpen ||
+    otherAssetPickerOpen ||
+    geomPickerOpen ||
+    removeBgVideoOpen ||
+    removeBgImageOpen ||
+    aiEditOpen ||
+    segmentOpen ||
+    cameraAngleOpen ||
+    stripAiEditOpen ||
+    Boolean(videoFrameEditor) ||
+    Boolean(seqEditorSource) ||
+    Boolean(i2vDialog?.open) ||
+    Boolean(flfDialog?.open) ||
+    jobModalProps.open ||
+    volumeEditClipId != null;
+
+  useEffect(() => {
+    if (trajectoryClipId && nonTrajectoryUiActive) {
+      setTrajectoryClipId(null);
+    }
+  }, [trajectoryClipId, nonTrajectoryUiActive]);
+
   if (!manifest) {
     return (
       <div style={{ minHeight: "100vh", padding: 20, color: "#888" }}>Loading timeline…</div>
@@ -2849,9 +2999,9 @@ export default function TimelineEditorPage() {
         }}
       >
         <HfTokenSettingsButton />
-        <SquareIconButton onClick={() => router.push("/home")} aria-label="Home" icon={<HomeIcon />} />
+        <SquareIconButton onClick={() => leaveTimeline("/home")} aria-label="Home" icon={<HomeIcon />} />
         <SquareIconButton
-          onClick={() => router.push("/timeline_hub")}
+          onClick={() => leaveTimeline("/timeline_hub")}
           aria-label="Back"
           icon={<TriangleIcon direction="left" />}
         />
@@ -2895,9 +3045,10 @@ export default function TimelineEditorPage() {
           {(["16:9", "9:16", "1:1", "4:3"] as const).map((a) => (
             <button
               key={a}
-              onClick={() =>
-                historyUpdate((m) => ({ ...m, previewAspect: a }))
-              }
+              onClick={() => {
+                exitClipEditModes();
+                historyUpdate((m) => ({ ...m, previewAspect: a }));
+              }}
               style={{
                 ...toolBtn,
                 padding: "3px 8px",
@@ -3041,6 +3192,7 @@ export default function TimelineEditorPage() {
         </button>
         <button
           onClick={() => {
+            exitClipEditModes();
             targetTrackRef.current = null;
             setCharPickerInitialKey(null);
             setChangePoseClipId(null);
@@ -3053,6 +3205,7 @@ export default function TimelineEditorPage() {
         </button>
         <button
           onClick={() => {
+            exitClipEditModes();
             targetTrackRef.current = null;
             setLocPickerOpen(true);
           }}
@@ -3069,27 +3222,36 @@ export default function TimelineEditorPage() {
         </button>
         <button
           ref={geomBtnRef}
-          onClick={() => setGeomPickerOpen((o) => !o)}
+          onClick={() => {
+            exitClipEditModes();
+            setGeomPickerOpen((o) => !o);
+          }}
           style={toolBtn}
           disabled={busy}
         >
           Geometry
         </button>
-        <button onClick={() => addTextClip()} style={toolBtn} disabled={busy}>
+        <button
+          onClick={() => {
+            exitClipEditModes();
+            addTextClip();
+          }}
+          style={toolBtn}
+          disabled={busy}
+        >
           Text
         </button>
-        <button onClick={() => void runExportMp4()} style={toolBtn} disabled={busy} title="Compile all clips into a single MP4">
+        <button
+          onClick={() => {
+            exitClipEditModes();
+            void runExportMp4();
+          }}
+          style={toolBtn}
+          disabled={busy}
+          title="Compile all clips into a single MP4"
+        >
           Export MP4
         </button>
-        {trajectoryClipId && (
-          <button
-            onClick={() => setTrajectoryClipId(null)}
-            style={{ ...toolBtn, borderColor: "#ffd166", color: "#ffd166" }}
-            title="Exit path edit mode"
-          >
-            Exit Path Mode
-          </button>
-        )}
         {volumeEditClipId && (
           <button
             onClick={() => setVolumeEditClipId(null)}

@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { TimelineClip, TimelineManifest, TimelineTrack } from "../../lib/api";
 import {
+  buildTimelineClipClipboard,
+  cloneTimelineClipForPaste,
+  clipTransformAtPlayhead,
   dedupeTimelineManifestClips,
   moveClipBetweenTracks,
+  pasteTimelineClipClipboard,
+  playbackEndPlayhead,
 } from "./timelineUtil";
+import { createGeometryData } from "./geometryTemplates";
 
 function videoClip(id: string, start = 0): TimelineClip {
   return {
@@ -26,6 +32,17 @@ function manifest(tracks: TimelineTrack[]): TimelineManifest {
 function track(id: string, clips: TimelineClip[]): TimelineTrack {
   return { id, name: id, kind: "video", clips };
 }
+
+describe("playbackEndPlayhead", () => {
+  it("holds the final frame inside the exclusive clip end", () => {
+    expect(playbackEndPlayhead(2, 24)).toBeCloseTo(2 - 1 / 24);
+  });
+
+  it("clamps short and empty timelines to zero", () => {
+    expect(playbackEndPlayhead(0, 24)).toBe(0);
+    expect(playbackEndPlayhead(0.01, 24)).toBe(0);
+  });
+});
 
 describe("dedupeTimelineManifestClips", () => {
   it("drops duplicate clip ids on the same track", () => {
@@ -93,5 +110,111 @@ describe("moveClipBetweenTracks", () => {
     expect(out.tracks[0].clips).toHaveLength(0);
     expect(out.tracks[1].clips).toHaveLength(1);
     expect(out.tracks[1].clips[0].start).toBe(2);
+  });
+});
+
+describe("timeline clip clipboard", () => {
+  it("buildTimelineClipClipboard uses earliest start as anchor across tracks", () => {
+    const m = manifest([
+      track("trk_a", [videoClip("clip_a", 5)]),
+      { id: "trk_b", name: "trk_b", kind: "audio", clips: [videoClip("clip_b", 2)] },
+    ]);
+    const cb = buildTimelineClipClipboard(m, ["clip_a", "clip_b"]);
+    expect(cb).not.toBeNull();
+    expect(cb!.anchorStart).toBe(2);
+    expect(cb!.items).toHaveLength(2);
+    expect(cb!.items.map((i) => i.trackId).sort()).toEqual(["trk_a", "trk_b"]);
+  });
+
+  it("cloneTimelineClipForPaste assigns a new id and deep-copies nested data", () => {
+    const clip: TimelineClip = {
+      ...videoClip("clip_src", 1),
+      type: "geometry",
+      geometry: createGeometryData("rect"),
+      trajectory: {
+        motion: "bounce",
+        motionAmount: 40,
+        waypoints: [{ t: 0, x: 0, y: 0, scale: 1 }],
+      },
+    };
+    const cloned = cloneTimelineClipForPaste(clip);
+    expect(cloned.id).not.toBe("clip_src");
+    expect(cloned.srcRelPath).toBe(clip.srcRelPath);
+    expect(cloned.geometry).not.toBe(clip.geometry);
+    expect(cloned.trajectory).not.toBe(clip.trajectory);
+    expect(cloned.trajectory?.waypoints).not.toBe(clip.trajectory?.waypoints);
+  });
+
+  it("pasteTimelineClipClipboard shifts starts to playhead and preserves tracks", () => {
+    const m = manifest([
+      track("trk_a", [videoClip("clip_a", 5)]),
+      track("trk_b", [videoClip("clip_b", 8)]),
+    ]);
+    const cb = buildTimelineClipClipboard(m, ["clip_a", "clip_b"]);
+    expect(cb).not.toBeNull();
+    expect(cb!.anchorStart).toBe(5);
+    const { manifest: out, newClipIds } = pasteTimelineClipClipboard(m, cb!, 10);
+    expect(newClipIds).toHaveLength(2);
+    const pastedA = out.tracks[0].clips.find((c) => newClipIds.includes(c.id));
+    const pastedB = out.tracks[1].clips.find((c) => newClipIds.includes(c.id));
+    expect(pastedA?.start).toBe(10);
+    expect(pastedB?.start).toBe(13);
+    expect(out.tracks[0].clips.some((c) => c.id === "clip_a")).toBe(true);
+    expect(out.tracks[1].clips.some((c) => c.id === "clip_b")).toBe(true);
+  });
+});
+
+describe("clipTransformAtPlayhead", () => {
+  it("interpolates trajectory waypoints at different scrub times", () => {
+    const clip: TimelineClip = {
+      ...videoClip("clip_a", 0),
+      duration: 4,
+      trajectory: {
+        motion: "none",
+        motionAmount: 50,
+        waypoints: [
+          { t: 0, x: -0.2, y: 0, scale: 1 },
+          { t: 1, x: 0.2, y: 0.1, scale: 1.1 },
+        ],
+      },
+    };
+    const atStart = clipTransformAtPlayhead(clip, 0);
+    const atMid = clipTransformAtPlayhead(clip, 2);
+    const atEnd = clipTransformAtPlayhead(clip, 4);
+    expect(atStart.x).toBeCloseTo(-0.2, 5);
+    expect(atMid.x).toBeCloseTo(0, 5);
+    expect(atEnd.x).toBeCloseTo(0.2, 5);
+    expect(atStart.x).not.toBeCloseTo(atEnd.x, 3);
+  });
+
+  it("applies procedural motion while scrubbing within a clip", () => {
+    const clip: TimelineClip = {
+      ...videoClip("clip_a", 0),
+      duration: 4,
+      transform: { x: 0, y: 0, scale: 1 },
+      trajectory: {
+        motion: "pulse",
+        motionAmount: 100,
+        waypoints: [
+          { t: 0, x: 0, y: 0, scale: 1 },
+          { t: 1, x: 0, y: 0, scale: 1 },
+        ],
+      },
+    };
+    const t0 = clipTransformAtPlayhead(clip, 0.5);
+    const t1 = clipTransformAtPlayhead(clip, 1.5);
+    expect(t0.scale).not.toBeCloseTo(t1.scale, 3);
+  });
+
+  it("falls back to clip transform when no trajectory", () => {
+    const clip: TimelineClip = {
+      ...videoClip("clip_a", 0),
+      transform: { x: 0.25, y: -0.1, scale: 0.8 },
+    };
+    expect(clipTransformAtPlayhead(clip, 1)).toMatchObject({
+      x: 0.25,
+      y: -0.1,
+      scale: 0.8,
+    });
   });
 });

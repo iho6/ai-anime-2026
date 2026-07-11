@@ -4,9 +4,20 @@ import React, { useEffect, useRef } from "react";
 import type { TimelineClip } from "../../lib/api";
 import { apiTimelineClipRgbaFrameUrl, assetUrlFromRelPath } from "../../lib/api";
 import { applyColoringToImageData } from "../../lib/clipColoring";
+import {
+  frameIdxFromSourceTime,
+  planAlphaFrameFetch,
+  planAlphaFrameFetchAfterComplete,
+  planAlphaFrameFetchAfterError,
+  resetAlphaFrameFetchState,
+  type AlphaFrameFetchState,
+} from "./alphaFrameFetch";
+import { timelineStripPreviewRelPath } from "./timelineStripPreview";
 
 const DEFAULT_PREVIEW_FPS = 24;
 const SCRUB_DEBOUNCE_MS = 80;
+const FETCH_TIMEOUT_MS = 5000;
+const RETRY_DELAY_MS = 250;
 
 export function ClipColoringCanvas(props: {
   clip: TimelineClip;
@@ -29,15 +40,20 @@ export function ClipColoringCanvas(props: {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const rafRef = useRef<number | null>(null);
-  const lastFetchedFrameRef = useRef<number | null>(null);
-  const fetchGenRef = useRef(0);
   const scrubTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const alphaFetchRef = useRef<AlphaFrameFetchState>(resetAlphaFrameFetchState());
+  const hasPaintedRef = useRef(false);
+  const requestEpochRef = useRef(0);
+  const latestSourceTimeRef = useRef(sourceTimeSec);
   const sourceTimeRef = useRef(sourceTimeSec);
   sourceTimeRef.current = sourceTimeSec;
+  latestSourceTimeRef.current = sourceTimeSec;
 
   const src = assetUrlFromRelPath(clip.srcRelPath);
   const hasAlphaVideo = Boolean(clip.alphaRelPath?.trim());
   const fps = Math.max(1, previewFps || DEFAULT_PREVIEW_FPS);
+  const stripRelPath = timelineStripPreviewRelPath(clip, sourceTimeSec, fps);
 
   function paintFromSource(source: CanvasImageSource, w: number, h: number) {
     const canvas = canvasRef.current;
@@ -55,31 +71,65 @@ export function ClipColoringCanvas(props: {
     ctx.putImageData(imageData, 0, 0);
   }
 
-  function paintRgbaImage(img: HTMLImageElement) {
+  function paintRgbaImage(img: HTMLImageElement): boolean {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || img.naturalWidth < 1 || img.naturalHeight < 1) return false;
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
     const ctx = canvas.getContext("2d");
-    ctx?.clearRect(0, 0, canvas.width, canvas.height);
-    ctx?.drawImage(img, 0, 0);
+    if (!ctx) return false;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+    hasPaintedRef.current = true;
+    return true;
   }
 
-  function fetchRgbaFrame(sourceTime: number, frameIdx: number) {
-    if (lastFetchedFrameRef.current === frameIdx) return;
-    lastFetchedFrameRef.current = frameIdx;
-    const gen = ++fetchGenRef.current;
+  function startAlphaFrameFetch(frameIdx: number, sourceTime: number) {
+    const epoch = requestEpochRef.current;
     const rounded = Math.round(sourceTime * 1000) / 1000;
     const img = new Image();
+    let settled = false;
+    const finishError = () => {
+      if (settled || epoch !== requestEpochRef.current) return;
+      settled = true;
+      clearTimeout(timeout);
+      alphaFetchRef.current = planAlphaFrameFetchAfterError(alphaFetchRef.current);
+      if (retryTimerRef.current != null) clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = setTimeout(() => {
+        retryTimerRef.current = null;
+        scheduleAlphaFrameFetch(latestSourceTimeRef.current, !hasPaintedRef.current);
+      }, RETRY_DELAY_MS);
+    };
+    const timeout = setTimeout(finishError, FETCH_TIMEOUT_MS);
     img.crossOrigin = "anonymous";
     img.onload = () => {
-      if (gen !== fetchGenRef.current) return;
-      paintRgbaImage(img);
+      if (settled || epoch !== requestEpochRef.current) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (!paintRgbaImage(img)) {
+        alphaFetchRef.current = planAlphaFrameFetchAfterError(alphaFetchRef.current);
+        return;
+      }
+      const after = planAlphaFrameFetchAfterComplete(alphaFetchRef.current, frameIdx);
+      alphaFetchRef.current = after.state;
+      if (after.plan.action === "fetch") {
+        startAlphaFrameFetch(after.plan.frameIdx, latestSourceTimeRef.current);
+      }
     };
-    img.onerror = () => {
-      /* keep previous frame */
-    };
+    img.onerror = finishError;
     img.src = `${apiTimelineClipRgbaFrameUrl(timelineKey, clip.id, rounded)}&_=${rounded}`;
+  }
+
+  function scheduleAlphaFrameFetch(sourceTime: number, force = false) {
+    latestSourceTimeRef.current = sourceTime;
+    const frameIdx = frameIdxFromSourceTime(sourceTime, fps);
+    const planned = planAlphaFrameFetch(alphaFetchRef.current, frameIdx, {
+      force,
+    });
+    alphaFetchRef.current = planned.state;
+    if (planned.plan.action === "fetch") {
+      startAlphaFrameFetch(planned.plan.frameIdx, sourceTime);
+    }
   }
 
   useEffect(() => {
@@ -97,9 +147,26 @@ export function ClipColoringCanvas(props: {
     };
   }, [clip.type, src, clip.coloring, clip.id]);
 
+  // Edited clips preview the same frameSequence PNGs used by frame edit and export.
+  useEffect(() => {
+    if (clip.type !== "video" || !stripRelPath) return;
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      if (cancelled) return;
+      paintFromSource(img, img.naturalWidth, img.naturalHeight);
+      hasPaintedRef.current = true;
+    };
+    img.src = assetUrlFromRelPath(stripRelPath);
+    return () => {
+      cancelled = true;
+    };
+  }, [clip.type, stripRelPath, clip.coloring, clip.id]);
+
   // Non-alpha video: draw from hidden <video> each RAF (coloring applied client-side).
   useEffect(() => {
-    if (clip.type !== "video" || hasAlphaVideo) return;
+    if (clip.type !== "video" || hasAlphaVideo || stripRelPath) return;
     const video = videoRef.current;
     if (!video) return;
 
@@ -114,11 +181,22 @@ export function ClipColoringCanvas(props: {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [clip.type, hasAlphaVideo, clip.coloring, clip.id, src]);
+  }, [clip.type, hasAlphaVideo, stripRelPath, clip.coloring, clip.id, src]);
+
+  // Reset request state before the scheduler effect runs for a new clip/coloring.
+  useEffect(() => {
+    requestEpochRef.current += 1;
+    alphaFetchRef.current = resetAlphaFrameFetchState();
+    hasPaintedRef.current = false;
+    if (retryTimerRef.current != null) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  }, [clip.coloring, clip.id, timelineKey]);
 
   // Alpha video: hidden color <video> for sync/play; fetch composited RGBA at video frame rate.
   useEffect(() => {
-    if (clip.type !== "video" || !hasAlphaVideo) return;
+    if (clip.type !== "video" || !hasAlphaVideo || stripRelPath) return;
 
     if (playing) {
       if (scrubTimerRef.current != null) {
@@ -126,13 +204,7 @@ export function ClipColoringCanvas(props: {
         scrubTimerRef.current = null;
       }
       const tick = () => {
-        const video = videoRef.current;
-        const t =
-          video && video.readyState >= 2
-            ? video.currentTime
-            : sourceTimeRef.current;
-        const frameIdx = Math.max(0, Math.round(t * fps));
-        fetchRgbaFrame(t, frameIdx);
+        scheduleAlphaFrameFetch(sourceTimeRef.current, !hasPaintedRef.current);
         rafRef.current = requestAnimationFrame(tick);
       };
       rafRef.current = requestAnimationFrame(tick);
@@ -143,14 +215,12 @@ export function ClipColoringCanvas(props: {
     }
 
     // Paused / scrubbing: debounce fetches to avoid request storms.
-    // First paint (no frame yet) is immediate.
-    const delayMs = lastFetchedFrameRef.current == null ? 0 : SCRUB_DEBOUNCE_MS;
+    const delayMs =
+      alphaFetchRef.current.lastPaintedFrame == null ? 0 : SCRUB_DEBOUNCE_MS;
     if (scrubTimerRef.current != null) clearTimeout(scrubTimerRef.current);
     scrubTimerRef.current = setTimeout(() => {
       scrubTimerRef.current = null;
-      const t = sourceTimeRef.current;
-      const frameIdx = Math.max(0, Math.round(t * fps));
-      fetchRgbaFrame(t, frameIdx);
+      scheduleAlphaFrameFetch(sourceTimeRef.current, !hasPaintedRef.current);
     }, delayMs);
 
     return () => {
@@ -162,19 +232,22 @@ export function ClipColoringCanvas(props: {
   }, [
     clip.type,
     hasAlphaVideo,
+    stripRelPath,
     playing,
     timelineKey,
     clip.id,
     fps,
     clip.coloring,
-    // When paused, re-run debounce when scrub time changes.
     playing ? 0 : sourceTimeSec,
   ]);
 
-  // Invalidate frame cache when coloring / clip identity changes so we refetch.
-  useEffect(() => {
-    lastFetchedFrameRef.current = null;
-  }, [clip.coloring, clip.id, timelineKey]);
+  useEffect(
+    () => () => {
+      requestEpochRef.current += 1;
+      if (retryTimerRef.current != null) clearTimeout(retryTimerRef.current);
+    },
+    []
+  );
 
   return (
     <>

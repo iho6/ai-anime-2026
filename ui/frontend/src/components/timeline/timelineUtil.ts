@@ -6,7 +6,7 @@ import type {
   TimelineManifest,
   TimelineTrack,
 } from "../../lib/api";
-import { createGeometryData, VECTOR_ARTBOARD_SIZE } from "./geometryTemplates";
+import { cloneTimelineGeometry, createGeometryData, VECTOR_ARTBOARD_SIZE } from "./geometryTemplates";
 import { rasterizeGeometryToPngBase64 } from "./geometryRasterize";
 import { estimateTextClipNaturalSize } from "./textMeasure";
 import { resolveTrajectoryTransformAt } from "./trajectoryMotion";
@@ -401,6 +401,12 @@ export function timelineDuration(manifest: TimelineManifest): number {
     }
   }
   return max;
+}
+
+/** Keep the final frame active because clip intervals use an exclusive end. */
+export function playbackEndPlayhead(total: number, fps: number): number {
+  if (total <= 0) return 0;
+  return Math.max(0, total - 1 / Math.max(1, fps));
 }
 
 export const CONNECT_EPS = 0.05;
@@ -864,4 +870,103 @@ export async function buildTimelineCompositePngBase64(params: {
     overlayNaturalW,
     overlayNaturalH,
   };
+}
+
+export type TimelineClipClipboardItem = {
+  trackId: string;
+  start: number;
+  clip: TimelineClip;
+};
+
+export type TimelineClipClipboard = {
+  anchorStart: number;
+  items: TimelineClipClipboardItem[];
+};
+
+/** Deep-clone a clip for paste (new id; same asset paths). */
+export function cloneTimelineClipForPaste(clip: TimelineClip): TimelineClip {
+  return {
+    ...clip,
+    id: genId("clip"),
+    transform: clip.transform ? { ...clip.transform } : undefined,
+    trajectory: clip.trajectory
+      ? {
+          motion: clip.trajectory.motion,
+          motionAmount: clip.trajectory.motionAmount,
+          waypoints: clip.trajectory.waypoints.map((w) => ({ ...w })),
+        }
+      : undefined,
+    geometry: clip.geometry ? cloneTimelineGeometry(clip.geometry) : undefined,
+    text: clip.text ? { ...clip.text } : undefined,
+    volumeAutomation: clip.volumeAutomation
+      ? { points: clip.volumeAutomation.points.map((p) => ({ ...p })) }
+      : undefined,
+    source: clip.source ? { ...clip.source } : undefined,
+    coloring: clip.coloring ? { ...clip.coloring } : undefined,
+    transitionOut: clip.transitionOut ? { ...clip.transitionOut } : undefined,
+    frameSequence: clip.frameSequence ? structuredClone(clip.frameSequence) : undefined,
+    frameEdit: clip.frameEdit ? structuredClone(clip.frameEdit) : undefined,
+  };
+}
+
+/** Build an in-memory clipboard from the current multi-select. */
+export function buildTimelineClipClipboard(
+  manifest: TimelineManifest,
+  selectedClipIds: string[]
+): TimelineClipClipboard | null {
+  if (selectedClipIds.length === 0) return null;
+  const idSet = new Set(selectedClipIds);
+  const items: TimelineClipClipboardItem[] = [];
+  for (const t of manifest.tracks) {
+    for (const c of t.clips) {
+      if (idSet.has(c.id)) {
+        items.push({ trackId: t.id, start: c.start, clip: c });
+      }
+    }
+  }
+  if (items.length === 0) return null;
+  const anchorStart = Math.min(...items.map((i) => i.start));
+  return { anchorStart, items };
+}
+
+function resolvePasteTrackId(
+  manifest: TimelineManifest,
+  preferredTrackId: string,
+  clip: TimelineClip
+): string | null {
+  if (manifest.tracks.some((t) => t.id === preferredTrackId)) {
+    return preferredTrackId;
+  }
+  const kind = trackKindForClip(clip);
+  const fallback = manifest.tracks.find(
+    (t) => t.kind === kind || (t.kind === "neutral" && kind === "video")
+  );
+  return fallback?.id ?? null;
+}
+
+/** Paste clipboard clips anchored at ``playhead``; returns updated manifest and new ids. */
+export function pasteTimelineClipClipboard(
+  manifest: TimelineManifest,
+  clipboard: TimelineClipClipboard,
+  playhead: number
+): { manifest: TimelineManifest; newClipIds: string[] } {
+  const delta = playhead - clipboard.anchorStart;
+  const newClipIds: string[] = [];
+  let nextManifest = manifest;
+
+  for (const item of clipboard.items) {
+    const trackId = resolvePasteTrackId(nextManifest, item.trackId, item.clip);
+    if (!trackId) continue;
+    const cloned = cloneTimelineClipForPaste(item.clip);
+    cloned.start = item.start + delta;
+    newClipIds.push(cloned.id);
+    nextManifest = {
+      ...nextManifest,
+      tracks: nextManifest.tracks.map((t) =>
+        t.id === trackId ? { ...t, clips: [...t.clips, cloned] } : t
+      ),
+    };
+  }
+
+  return { manifest: nextManifest, newClipIds };
 }

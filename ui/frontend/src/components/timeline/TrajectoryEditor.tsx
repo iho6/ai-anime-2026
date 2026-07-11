@@ -197,8 +197,8 @@ export function TrajectoryEditor(props: Props) {
   // ── Context menu (right-click waypoint to delete / delete trajectory) ───────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; idx: number | null } | null>(null);
 
-  // ── Pointer down on SVG ───────────────────────────────────────────────────
-  function onSvgPointerDown(e: React.PointerEvent<SVGSVGElement>) {
+  // ── Pointer down on path / waypoints (SVG background is pass-through) ─────
+  function onTrajPointerDown(e: React.PointerEvent<SVGElement>) {
     if (playing) return;
     e.preventDefault();
     e.stopPropagation();
@@ -223,8 +223,6 @@ export function TrajectoryEditor(props: Props) {
     for (let i = 0; i < wps.length - 1; i++) {
       const d = distToPathSeg(sx, sy, wps[i], wps[i + 1], frameW, frameH);
       if (d <= SEG_HIT_DIST) {
-        // Segment drag starts from the current control point position (relative movement)
-        // so re-adjusting an existing curve feels natural.
         const pa = fracToSvg(wps[i].x, wps[i].y, frameW, frameH);
         const pb = fracToSvg(wps[i + 1].x, wps[i + 1].y, frameW, frameH);
         const cpOrigSx = wps[i].cpx != null
@@ -241,13 +239,9 @@ export function TrajectoryEditor(props: Props) {
         return;
       }
     }
-
-    // 3. Deselect
-    setSelectedIdx(null);
-    setGhostScale(null);
   }
 
-  function onSvgPointerMove(e: React.PointerEvent<SVGSVGElement>) {
+  function onTrajPointerMove(e: React.PointerEvent<SVGElement>) {
     const d = dragRef.current;
     if (!d) return;
     e.preventDefault();
@@ -279,7 +273,7 @@ export function TrajectoryEditor(props: Props) {
     }
   }
 
-  function onSvgPointerUp(e: React.PointerEvent<SVGSVGElement>) {
+  function onTrajPointerUp(e: React.PointerEvent<SVGElement>) {
     const d = dragRef.current;
     if (!d) return;
     (e.target as SVGElement).releasePointerCapture?.(e.pointerId);
@@ -439,7 +433,7 @@ export function TrajectoryEditor(props: Props) {
               top: r.top,
               width: r.width,
               height: r.height,
-              pointerEvents: "none",
+              pointerEvents: "auto",
               userSelect: "none",
               zIndex: 0,
             }}
@@ -473,7 +467,7 @@ export function TrajectoryEditor(props: Props) {
         );
       })()}
 
-      {/* SVG overlay — below toolbar so motion controls stay clickable */}
+      {/* SVG overlay — pass-through except path and waypoints */}
       <svg
         ref={svgRef}
         viewBox={`0 0 ${frameW || 1} ${frameH || 1}`}
@@ -484,26 +478,34 @@ export function TrajectoryEditor(props: Props) {
           width: "100%",
           height: "100%",
           overflow: "visible",
-          cursor: playing ? "default" : "crosshair",
-          pointerEvents: "auto",
+          pointerEvents: "none",
           zIndex: 1,
         }}
-        onPointerDown={onSvgPointerDown}
-        onPointerMove={onSvgPointerMove}
-        onPointerUp={onSvgPointerUp}
         onContextMenu={onSvgContextMenu}
       >
-        {/* Transparent rect so the full SVG area captures pointer events */}
-        <rect x={0} y={0} width={frameW || 1} height={frameH || 1} fill="transparent" />
-        {/* Path line */}
+        {/* Path line — wide invisible stroke for hit testing */}
         {pathD && (
-          <path
-            d={pathD}
-            fill="none"
-            stroke="rgba(255,209,102,0.7)"
-            strokeWidth={1.5}
-            strokeDasharray="5 4"
-          />
+          <>
+            <path
+              d={pathD}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={SEG_HIT_DIST * 2}
+              pointerEvents="stroke"
+              style={{ cursor: playing ? "default" : "crosshair" }}
+              onPointerDown={onTrajPointerDown}
+              onPointerMove={onTrajPointerMove}
+              onPointerUp={onTrajPointerUp}
+            />
+            <path
+              d={pathD}
+              fill="none"
+              stroke="rgba(255,209,102,0.7)"
+              strokeWidth={1.5}
+              strokeDasharray="5 4"
+              pointerEvents="none"
+            />
+          </>
         )}
 
         {/* Bezier handles (active segment drag only) */}
@@ -534,7 +536,19 @@ export function TrajectoryEditor(props: Props) {
           ) < 10) ? (i % 2 === 0 ? -12 : 12) : 0;
 
           return (
-            <g key={i}>
+            <g key={i} pointerEvents="visiblePainted">
+              {/* Hit target */}
+              <circle
+                cx={sx}
+                cy={sy}
+                r={HIT_RADIUS}
+                fill="transparent"
+                pointerEvents="all"
+                style={{ cursor: playing ? "default" : "move" }}
+                onPointerDown={onTrajPointerDown}
+                onPointerMove={onTrajPointerMove}
+                onPointerUp={onTrajPointerUp}
+              />
               {/* Scale ring */}
               <circle
                 cx={sx} cy={sy}
@@ -542,6 +556,7 @@ export function TrajectoryEditor(props: Props) {
                 fill="none"
                 stroke="rgba(255,209,102,0.25)"
                 strokeWidth={1}
+                pointerEvents="none"
               />
               {/* Diamond */}
               <rect
@@ -553,6 +568,7 @@ export function TrajectoryEditor(props: Props) {
                 stroke={isSelected ? "#fff" : "rgba(0,0,0,0.5)"}
                 strokeWidth={isSelected ? 1.5 : 1}
                 transform={`rotate(45, ${sx}, ${sy})`}
+                pointerEvents="none"
               />
               {/* Number badge */}
               <text
@@ -609,10 +625,17 @@ export function TrajectoryEditor(props: Props) {
               borderRadius: 0,
               minWidth: 100,
               pointerEvents: "auto",
+              background: "#0b0b0b",
+              color: "#eee",
+              border: "1px solid rgba(255,255,255,0.9)",
             }}
           >
             {TRAJECTORY_MOTION_OPTIONS.map((opt) => (
-              <option key={opt.id} value={opt.id}>
+              <option
+                key={opt.id}
+                value={opt.id}
+                style={{ background: "#0b0b0b", color: "#eee" }}
+              >
                 {opt.label}
               </option>
             ))}

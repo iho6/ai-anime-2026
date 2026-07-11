@@ -15,7 +15,9 @@ import {
   aspectRatio,
   clamp,
   clipImageRect,
+  clipTransformAtPlayhead,
   clipTransformFromRectCenter,
+  playbackEndPlayhead,
   snapClipRectToFrame,
   snapClipScaleToFrame,
   sourceTimeAt,
@@ -26,7 +28,6 @@ import {
 } from "./timelineUtil";
 import type { TimelineTrack } from "../../lib/api";
 import { TrajectoryEditor, TrajectoryWaypoint } from "./TrajectoryEditor";
-import { resolveTrajectoryTransformAt } from "./trajectoryMotion";
 import { volumeGainAt } from "./volumeAutomation";
 import type { TrajectoryMotionId } from "../../lib/api";
 import { GeometryClipLayer } from "./GeometryClipLayer";
@@ -37,19 +38,8 @@ import { TextStyleBar, type TextStyleModal } from "./TextStyleBar";
 import { TextPickerModals } from "./TextPickerModals";
 import { ClipColoringCanvas } from "./ClipColoringCanvas";
 import { clipNeedsColoringCanvas } from "../../lib/clipColoring";
-function clipTransform(
-  clip: TimelineClip,
-  playhead: number,
-  isTrajectoryActive: boolean,
-  isPlaying: boolean
-): ClipTransform {
-  if (isPlaying || isTrajectoryActive) {
-    const traj = resolveTrajectoryTransformAt(clip, playhead, {
-      applyMotion: isPlaying || isTrajectoryActive,
-    });
-    if (traj) return traj;
-  }
-  return { ...(clip.transform ?? { x: 0, y: 0, scale: 1 }), rotation: 0, opacity: 1 };
+function clipTransform(clip: TimelineClip, playhead: number): ClipTransform {
+  return clipTransformAtPlayhead(clip, playhead);
 }
 
 export function TimelinePreviewPlayer(props: {
@@ -180,7 +170,7 @@ export function TimelinePreviewPlayer(props: {
       if (!a) return;
       const t = a.head + (performance.now() - a.wall) / 1000;
       if (total > 0 && t >= total) {
-        onPlayheadChange(total);
+        onPlayheadChange(playbackEndPlayhead(total, manifest.fps));
         onEnded();
         return;
       }
@@ -290,7 +280,7 @@ export function TimelinePreviewPlayer(props: {
       clipId: p.clip.id,
       startX: p.startX,
       startY: p.startY,
-      orig: clipTransform(p.clip, playhead, p.clip.id === trajectoryClipId, playing),
+      orig: clipTransform(p.clip, playhead),
       w: frameSize.w || 1,
       h: frameSize.h || 1,
     };
@@ -317,7 +307,7 @@ export function TimelinePreviewPlayer(props: {
       clipId: clip.id,
       startX: e.clientX,
       startY: e.clientY,
-      orig: clipTransform(clip, playhead, clip.id === trajectoryClipId, playing),
+      orig: clipTransform(clip, playhead),
       w: frameSize.w || 1,
       h: frameSize.h || 1,
     };
@@ -583,7 +573,7 @@ export function TimelinePreviewPlayer(props: {
     selectedClip?.type === "text" && selectedClipId
       ? clipImageRect(
           selectedClip,
-          clipTransform(selectedClip, playhead, false, playing),
+          clipTransform(selectedClip, playhead),
           frameSize.w,
           frameSize.h
         )
@@ -593,7 +583,7 @@ export function TimelinePreviewPlayer(props: {
     if (!geometryEditClipId || frameSize.w < 1) return null;
     const gClip = videoTracks.flatMap((t) => t.clips).find((c) => c.id === geometryEditClipId);
     if (!gClip?.geometry) return null;
-    const tf = clipTransform(gClip, playhead, false, playing);
+    const tf = clipTransform(gClip, playhead);
     const clipRect = clipImageRect(gClip, tf, frameSize.w, frameSize.h);
     const styleBand = GEOMETRY_STYLE_BAR_OFFSET + 8;
     return {
@@ -608,7 +598,7 @@ export function TimelinePreviewPlayer(props: {
     if (!textEditClipId || frameSize.w < 1) return null;
     const tClip = videoTracks.flatMap((t) => t.clips).find((c) => c.id === textEditClipId);
     if (!tClip || tClip.type !== "text") return null;
-    const tf = clipTransform(tClip, playhead, false, playing);
+    const tf = clipTransform(tClip, playhead);
     return clipImageRect(tClip, tf, frameSize.w, frameSize.h);
   }, [textEditClipId, videoTracks, playhead, playing, frameSize.w, frameSize.h]);
 
@@ -621,9 +611,19 @@ export function TimelinePreviewPlayer(props: {
     return x >= left && x <= left + rect.width && y >= top && y <= top + rect.height;
   }
 
+  function pointInAnyClipImage(x: number, y: number): boolean {
+    if (frameSize.w < 1) return false;
+    for (const { clip } of interactionLayers) {
+      const tf = clipTransform(clip, playhead);
+      const rect = clipImageRect(clip, tf, frameSize.w, frameSize.h);
+      if (pointInRect(x, y, rect)) return true;
+    }
+    return false;
+  }
+
   function handleFramePointerDownCapture(e: React.PointerEvent) {
     if (!editable || playing || !onExitClipEditModes) return;
-    if (!textEditClipId && !geometryEditClipId) return;
+    if (!textEditClipId && !geometryEditClipId && !trajectoryClipId) return;
 
     const target = e.target as HTMLElement;
     if (target.closest("[data-text-style-bar]")) return;
@@ -632,6 +632,7 @@ export function TimelinePreviewPlayer(props: {
     if (target.closest("[data-geometry-editor]")) return;
     if (target.closest("[data-trajectory-editor]")) return;
     if (target.closest("[data-trajectory-toolbar]")) return;
+    if (target.closest("[data-preview-clip-hit]")) return;
     if (geometryStyleModalOpen) return;
 
     const { clientX: x, clientY: y } = e;
@@ -648,6 +649,9 @@ export function TimelinePreviewPlayer(props: {
         geometryEditRect != null &&
         pointInRect(x, y, geometryEditRect);
       if (!inGeometry) shouldExit = true;
+    }
+    if (trajectoryClipId) {
+      if (!pointInAnyClipImage(x, y)) shouldExit = true;
     }
 
     if (shouldExit) {
@@ -683,7 +687,7 @@ export function TimelinePreviewPlayer(props: {
       >
         <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
           {videoRenderLayers.map(({ clip, layer, trackZ, track }) => {
-            const tf = clipTransform(clip, playhead, clip.id === trajectoryClipId, playing);
+            const tf = clipTransform(clip, playhead);
             const rect = clipImageRect(clip, tf, frameSize.w, frameSize.h);
             const rot = tf.rotation ?? 0;
             const op = (tf.opacity ?? 1) * layer.opacity;
@@ -724,7 +728,7 @@ export function TimelinePreviewPlayer(props: {
         </div>
 
         {interactionLayers.map(({ clip, trackZ }) => {
-          const tf = clipTransform(clip, playhead, clip.id === trajectoryClipId, playing);
+          const tf = clipTransform(clip, playhead);
           const rect = clipImageRect(clip, tf, frameSize.w, frameSize.h);
           const selected = clip.id === selectedClipId;
           const inShapeEdit = geometryEditClipId === clip.id;
@@ -782,9 +786,9 @@ export function TimelinePreviewPlayer(props: {
                 top: rect.top,
                 width: rect.width,
                 height: rect.height,
-                zIndex: trackZ + 100,
+                zIndex: selected ? 10000 : trackZ + 100,
                 cursor:
-                  editable && !inShapeEdit && !isTextEditing && !inTrajectoryEdit
+                  editable && !inShapeEdit && !isTextEditing
                     ? isText
                       ? "default"
                       : "move"
@@ -797,7 +801,7 @@ export function TimelinePreviewPlayer(props: {
                     : "none",
                 outlineOffset: 2,
                 pointerEvents:
-                  inShapeEdit || isTextEditing || inTrajectoryEdit ? "none" : "auto",
+                  inShapeEdit || isTextEditing ? "none" : "auto",
               }}
             >
               {isText && selected && editable && !inShapeEdit && !isTextEditing ? (
@@ -819,7 +823,7 @@ export function TimelinePreviewPlayer(props: {
                   }}
                 />
               ) : null}
-              {!isText && selected && editable && !inShapeEdit && !inTrajectoryEdit ? (
+              {!isText && selected && editable && !inShapeEdit ? (
                 <div
                   onPointerDown={(e) => beginDrag(e, clip, "scale")}
                   onPointerMove={onDragMove}
@@ -849,7 +853,7 @@ export function TimelinePreviewPlayer(props: {
             if (!editClip) return null;
             const layer = interactionLayers.find((l) => l.clip.id === editClip.id);
             const trackZ = layer?.trackZ ?? 1;
-            const tf = clipTransform(editClip, playhead, false, playing);
+            const tf = clipTransform(editClip, playhead);
             const rect = clipImageRect(editClip, tf, frameSize.w, frameSize.h);
             return (
               <div
@@ -930,7 +934,7 @@ export function TimelinePreviewPlayer(props: {
         {geometryEditClipId && (() => {
           const gClip = videoTracks.flatMap((t) => t.clips).find((c) => c.id === geometryEditClipId);
           if (!gClip || !gClip.geometry) return null;
-          const tf = clipTransform(gClip, playhead, false, playing);
+          const tf = clipTransform(gClip, playhead);
           return (
             <GeometryEditor
               key={gClip.id}
