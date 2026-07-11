@@ -60,6 +60,7 @@ export function DesktopContextMenu(props: {
 }) {
   const { open, x, y, items, footerItems = [], onClose } = props;
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const innerColRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [layout, setLayout] = useState<MenuLayout | null>(null);
@@ -69,7 +70,7 @@ export function DesktopContextMenu(props: {
   const activeItem = items.find((it) => it.key === activeSubmenuKey && it.submenu);
 
   const applyViewportFit = React.useCallback(() => {
-    const el = rootRef.current;
+    const el = panelRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const margin = VIEWPORT_MARGIN;
@@ -176,8 +177,9 @@ export function DesktopContextMenu(props: {
   const maxInnerHeight = layout?.maxInnerHeight;
 
   return (
-    <div ref={rootRef}>
+    <div ref={rootRef} style={{ width: "fit-content" }}>
       <div
+        ref={panelRef}
         onMouseDown={(e) => e.stopPropagation()}
         style={{
           position: "fixed",

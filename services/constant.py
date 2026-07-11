@@ -40,3 +40,9 @@ mimetypes.add_type("image/webp", ".webp")
 mimetypes.add_type("image/avif", ".avif")
 mimetypes.add_type("image/heif", ".heif")
 mimetypes.add_type("image/heic", ".heic")
+
+# Wan 2.2 I2V / FLF (CreateVideo fps in workflow JSON).
+WAN_VIDEO_FPS = 16
+WAN_VIDEO_MIN_LENGTH = 25
+WAN_VIDEO_MAX_LENGTH = 121
+WAN_VIDEO_DEFAULT_LENGTH = 121

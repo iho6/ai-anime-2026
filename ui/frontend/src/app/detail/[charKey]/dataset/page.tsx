@@ -28,6 +28,7 @@ import {
   type RemoveBgImageRunOptions,
   type AngleGroup,
 } from "../../../../lib/api";
+import { runCharacterGeneration } from "../../../../lib/characterGeneration";
 import {
   DesktopContextMenu,
   ContextMenuItem,
@@ -378,11 +379,6 @@ export default function DatasetPage() {
     const hasExpr = sel.exprItems.length > 0 || sel.exprPrompts.length > 0;
     if (!hasAngles && !hasPose && !hasExpr) return;
 
-    // Wrap short prompt descriptions the same way the /create checklist does.
-    const wrapPose = (s: string) =>
-      `Edit the subject to ${s.trim()}, keep identity and clothing coherent unless impossible.`;
-    const wrapExpr = (s: string) => `Edit the face to show ${s.trim()}, keep identity coherent.`;
-
     beginSession({ title: "Batch generating", clearLog: true });
     let sessionOk = false;
     try {
@@ -419,7 +415,7 @@ export default function DatasetPage() {
       // ── Catalog + custom prompts: per selected tile, base = its source image ──
       const tilesWithRel = selected.filter((e) => e.sourceRelPath);
       const runCatalogAndPrompts = async (
-        suffix: "/pose/ws" | "/expression/ws",
+        kind: "pose" | "expression",
         items: { catalogId: number; label: string }[],
         prompts: string[]
       ) => {
@@ -431,7 +427,7 @@ export default function DatasetPage() {
             );
             const done = await runDetailWsJob({
               charKey,
-              pathSuffix: suffix,
+              pathSuffix: kind === "pose" ? "/pose/ws" : "/expression/ws",
               payload: { job: "generate_catalog", baseRelPath: e.sourceRelPath, items },
               onLogLine: onJobLogLine,
             });
@@ -444,10 +440,11 @@ export default function DatasetPage() {
             setRunningStatus(
               `Tile ${tileIdx + 1}/${tilesWithRel.length}: prompts (${prompts.length})…`
             );
-            const done = await runDetailWsJob({
+            const done = await runCharacterGeneration({
               charKey,
-              pathSuffix: suffix,
-              payload: { job: "generate_prompts", baseRelPath: e.sourceRelPath, prompts },
+              kind,
+              baseRelPath: e.sourceRelPath,
+              rawPrompts: prompts,
               onLogLine: onJobLogLine,
             });
             if (!done.ok) {
@@ -460,19 +457,11 @@ export default function DatasetPage() {
       };
 
       if (hasExpr) {
-        const ok = await runCatalogAndPrompts(
-          "/expression/ws",
-          sel.exprItems,
-          sel.exprPrompts.map(wrapExpr)
-        );
+        const ok = await runCatalogAndPrompts("expression", sel.exprItems, sel.exprPrompts);
         if (!ok) return;
       }
       if (hasPose) {
-        const ok = await runCatalogAndPrompts(
-          "/pose/ws",
-          sel.poseItems,
-          sel.posePrompts.map(wrapPose)
-        );
+        const ok = await runCatalogAndPrompts("pose", sel.poseItems, sel.posePrompts);
         if (!ok) return;
       }
 

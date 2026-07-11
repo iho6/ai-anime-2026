@@ -17,9 +17,10 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from fastapi.responses import Response
 
 from services import logic, timeline_asset_storage, timeline_saved_shapes, timeline_storage
+from services.constant import WAN_VIDEO_DEFAULT_LENGTH
 from services.clip_coloring import apply_clip_coloring_rgba
 from services.character_storage import sanitize_for_folder
-from services.timeline_export import _VideoFrameDecoder
+from services.timeline_preview_cache import preview_decoder_cache
 from .storage_paths import (
     TIMELINES_STORAGE_ROOT,
     resolve_storage_rel_file,
@@ -99,6 +100,7 @@ def timeline_hub_delete(timeline_key: str) -> dict[str, bool]:
     d = _timeline_dir(timeline_key)
     if d.is_dir():
         shutil.rmtree(d)
+    preview_decoder_cache.invalidate_timeline(timeline_key)
     return {"ok": True}
 
 
@@ -187,14 +189,10 @@ def timeline_clip_rgba_frame(
     if clip_type == "image":
         with Image.open(abs_p) as im:
             rgba = im.convert("RGBA")
+        rgba = apply_clip_coloring_rgba(rgba, clip.get("coloring"))
     else:
-        decoder = _VideoFrameDecoder(abs_p, clip, log_cb=None)
-        try:
-            rgba = decoder.frame_at_source_time(st)
-        finally:
-            decoder.close()
+        rgba = preview_decoder_cache.get_rgba_frame(timeline_key, clip, abs_p, st)
 
-    rgba = apply_clip_coloring_rgba(rgba, clip.get("coloring"))
     buf = BytesIO()
     rgba.save(buf, format="PNG")
     return Response(content=buf.getvalue(), media_type="image/png")
@@ -208,6 +206,7 @@ def timeline_put_manifest(timeline_key: str, body: dict[str, Any]) -> dict[str, 
     if not isinstance(body, dict):
         raise HTTPException(400, "Manifest must be an object.")
     timeline_storage.write_manifest(timeline_key, body)
+    preview_decoder_cache.invalidate_timeline(timeline_key)
     return {"ok": True}
 
 
@@ -587,6 +586,50 @@ async def timeline_import_sequence_ws(ws: WebSocket, timeline_key: str) -> None:
         await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
 
 
+@router.websocket("/timeline/{timeline_key}/extract_video_frame/ws")
+async def timeline_extract_video_frame_ws(ws: WebSocket, timeline_key: str) -> None:
+    """Extract one trimmed video frame into timeline clips storage."""
+    await ws.accept()
+    try:
+        msg = await ws.receive_json()
+    except WebSocketDisconnect:
+        return
+    try:
+        if not _timeline_dir(timeline_key).is_dir():
+            raise ValueError("Timeline not found.")
+        rel = (msg.get("videoRelPath") or "").strip()
+        if not rel:
+            raise ValueError("videoRelPath is required.")
+        edge = (msg.get("edge") or "first").strip().lower()
+        if edge not in ("first", "last", "start", "end"):
+            raise ValueError("edge must be first or last.")
+        in_point = float(msg.get("inPoint") or 0)
+        out_point = float(msg.get("outPoint") or 0)
+
+        def work(log_cb: Any) -> dict[str, Any]:
+            info = logic.extract_video_trim_frame_to_timeline_clip(
+                rel,
+                in_point,
+                out_point,
+                timeline_storage.timeline_clips_dir(timeline_key),
+                edge=edge,
+                log_cb=log_cb,
+            )
+            return {
+                "srcRelPath": storage_rel_from_abs(info["absPath"]),
+                "width": info.get("width") or 0,
+                "height": info.get("height") or 0,
+            }
+
+        result, err = await run_with_log_stream(ws, work)
+        if err:
+            await safe_send_json(ws, {"type": "done", "ok": False, "error": err})
+        else:
+            await safe_send_json(ws, {"type": "done", "ok": True, "result": result})
+    except Exception as e:
+        await safe_send_json(ws, {"type": "done", "ok": False, "error": str(e)})
+
+
 @router.websocket("/timeline/{timeline_key}/flf/ws")
 async def timeline_flf_ws(ws: WebSocket, timeline_key: str) -> None:
     """FLF (first-last-frame) between two timeline image clips → new video clip."""
@@ -604,7 +647,7 @@ async def timeline_flf_ws(ws: WebSocket, timeline_key: str) -> None:
             raise ValueError("imageRelPathA and imageRelPathB are required.")
         abs_a = str(resolve_storage_rel_file(rel_a))
         abs_b = str(resolve_storage_rel_file(rel_b))
-        length = int(msg.get("length") or 33)
+        length = int(msg.get("length") or WAN_VIDEO_DEFAULT_LENGTH)
 
         def work(log_cb: Any) -> dict[str, Any]:
             info = logic.generate_flf_to_timeline_clip(
@@ -649,7 +692,7 @@ async def timeline_i2v_ws(ws: WebSocket, timeline_key: str) -> None:
         if not prompt:
             raise ValueError("prompt is required.")
         src_abs = str(resolve_storage_rel_file(rel))
-        length = int(msg.get("length") or 129)
+        length = int(msg.get("length") or WAN_VIDEO_DEFAULT_LENGTH)
         width = msg.get("width")
         height = msg.get("height")
 
@@ -962,7 +1005,7 @@ async def timeline_strip_i2v_ws(ws: WebSocket, timeline_key: str) -> None:
         image_rel = (msg.get("imageRelPath") or "").strip()
         output_dir_rel = (msg.get("outputDirRel") or "").strip()
         prompt = (msg.get("prompt") or "").strip()
-        length = int(msg.get("length") or 129)
+        length = int(msg.get("length") or WAN_VIDEO_DEFAULT_LENGTH)
         if not image_rel:
             raise ValueError("imageRelPath is required.")
         if not output_dir_rel:
@@ -1007,7 +1050,7 @@ async def timeline_strip_flf_ws(ws: WebSocket, timeline_key: str) -> None:
         rel_a = (msg.get("imageRelPathA") or "").strip()
         rel_b = (msg.get("imageRelPathB") or "").strip()
         output_dir_rel = (msg.get("outputDirRel") or "").strip()
-        length = int(msg.get("length") or 33)
+        length = int(msg.get("length") or WAN_VIDEO_DEFAULT_LENGTH)
         if not rel_a or not rel_b:
             raise ValueError("imageRelPathA and imageRelPathB are required.")
         if not output_dir_rel:

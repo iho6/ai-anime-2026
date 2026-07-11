@@ -419,70 +419,15 @@ export function TrajectoryEditor(props: Props) {
   }
 
   return (
-    <>
-      {/* Motion toolbar */}
-      <div
-        data-trajectory-editor
-        style={{
-          position: "absolute",
-          top: 8,
-          left: 8,
-          zIndex: 55,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "6px 10px",
-          background: "rgba(20,20,20,0.88)",
-          border: "1px solid rgba(255,255,255,0.15)",
-          borderRadius: 4,
-          fontSize: 12,
-          color: "#eee",
-          pointerEvents: "all",
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <label
-          style={{ display: "flex", alignItems: "center", gap: 6 }}
-          title="Procedural motion on the path (applied in preview and MP4 export)"
-        >
-          <span style={{ opacity: 0.85 }}>Motion</span>
-          <select
-            value={motion}
-            onChange={(e) =>
-              onMotionChange?.(e.target.value as TrajectoryMotionId, motionAmount)
-            }
-            style={{
-              background: "#2a2a2a",
-              color: "#eee",
-              border: "1px solid rgba(255,255,255,0.2)",
-              borderRadius: 3,
-              padding: "2px 6px",
-              fontSize: 12,
-            }}
-          >
-            {TRAJECTORY_MOTION_OPTIONS.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ opacity: 0.85 }}>Intensity</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={motionAmount}
-            onChange={(e) =>
-              onMotionChange?.(motion, Number(e.target.value))
-            }
-            style={{ width: 88, opacity: motion === "none" ? 0.45 : 1 }}
-          />
-          <span style={{ minWidth: 24, opacity: 0.7, fontSize: 11 }}>{motionAmount}</span>
-        </label>
-      </div>
-
+    <div
+      data-trajectory-editor
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 10001,
+        pointerEvents: "none",
+      }}
+    >
       {/* Ghost image when waypoint selected */}
       {ghostWp && ghostSrc && (() => {
         const r = ghostRect(ghostWp);
@@ -494,9 +439,9 @@ export function TrajectoryEditor(props: Props) {
               top: r.top,
               width: r.width,
               height: r.height,
-              zIndex: 49,
               pointerEvents: "none",
               userSelect: "none",
+              zIndex: 0,
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -520,17 +465,17 @@ export function TrajectoryEditor(props: Props) {
                 background: "#ffd166",
                 border: "1px solid #000",
                 cursor: "nwse-resize",
-                pointerEvents: "all",
+                pointerEvents: "auto",
+                zIndex: 3,
               }}
             />
           </div>
         );
       })()}
 
-      {/* SVG overlay — above all clip divs (which use zIndex 1–N) */}
+      {/* SVG overlay — below toolbar so motion controls stay clickable */}
       <svg
         ref={svgRef}
-        data-trajectory-editor
         viewBox={`0 0 ${frameW || 1} ${frameH || 1}`}
         preserveAspectRatio="none"
         style={{
@@ -539,8 +484,9 @@ export function TrajectoryEditor(props: Props) {
           width: "100%",
           height: "100%",
           overflow: "visible",
-          zIndex: 50,
           cursor: playing ? "default" : "crosshair",
+          pointerEvents: "auto",
+          zIndex: 1,
         }}
         onPointerDown={onSvgPointerDown}
         onPointerMove={onSvgPointerMove}
@@ -624,6 +570,79 @@ export function TrajectoryEditor(props: Props) {
         })}
       </svg>
 
+      {/* Motion toolbar — rendered above SVG for hit testing */}
+      <div
+        data-trajectory-toolbar
+        style={{
+          position: "absolute",
+          top: 8,
+          left: 8,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "4px 8px",
+          background: "rgba(11,11,11,0.92)",
+          border: "1px solid rgba(255,255,255,0.25)",
+          borderRadius: 0,
+          fontSize: 11,
+          color: "#eee",
+          pointerEvents: "auto",
+          zIndex: 2,
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <label
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
+          title="Procedural motion on the path (applied in preview and MP4 export)"
+        >
+          <span style={{ opacity: 0.85 }}>Motion</span>
+          <select
+            className="ui-btn-black"
+            value={motion}
+            onChange={(e) =>
+              onMotionChange?.(e.target.value as TrajectoryMotionId, motionAmount)
+            }
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{
+              fontSize: 11,
+              padding: "4px 8px",
+              borderRadius: 0,
+              minWidth: 100,
+              pointerEvents: "auto",
+            }}
+          >
+            {TRAJECTORY_MOTION_OPTIONS.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            opacity: motion === "none" ? 0.45 : 1,
+          }}
+        >
+          <span style={{ opacity: 0.85 }}>Intensity</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={motionAmount}
+            disabled={motion === "none"}
+            onChange={(e) =>
+              onMotionChange?.(motion, Number(e.target.value))
+            }
+            onPointerDown={(e) => e.stopPropagation()}
+            style={{ width: 88, pointerEvents: "auto" }}
+          />
+          <span style={{ minWidth: 24, opacity: 0.7, fontSize: 11 }}>{motionAmount}</span>
+        </label>
+      </div>
+
       {/* Right-click context menu */}
       {ctxMenu && (
         <div
@@ -633,8 +652,9 @@ export function TrajectoryEditor(props: Props) {
             left: ctxMenu.x,
             background: "#1e1e1e",
             border: "1px solid rgba(255,255,255,0.2)",
-            zIndex: 9999,
+            zIndex: 10003,
             minWidth: 140,
+            pointerEvents: "all",
           }}
           onMouseLeave={() => setCtxMenu(null)}
         >
@@ -657,7 +677,7 @@ export function TrajectoryEditor(props: Props) {
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }
 

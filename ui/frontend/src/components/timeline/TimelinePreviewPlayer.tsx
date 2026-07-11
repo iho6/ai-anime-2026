@@ -34,6 +34,7 @@ import { GeometryEditor } from "./GeometryEditor";
 import { GEOMETRY_STYLE_BAR_OFFSET } from "./GeometryStyleBar";
 import { TextClipLayer } from "./TextClipLayer";
 import { TextStyleBar, type TextStyleModal } from "./TextStyleBar";
+import { TextPickerModals } from "./TextPickerModals";
 import { ClipColoringCanvas } from "./ClipColoringCanvas";
 import { clipNeedsColoringCanvas } from "../../lib/clipColoring";
 function clipTransform(
@@ -502,6 +503,8 @@ export function TimelinePreviewPlayer(props: {
             clip={clip}
             timelineKey={timelineKey}
             sourceTimeSec={sourceTimeSec}
+            playing={playing}
+            previewFps={manifest.fps}
             style={{
               width: "100%",
               height: "100%",
@@ -537,6 +540,8 @@ export function TimelinePreviewPlayer(props: {
             clip={clip}
             timelineKey={timelineKey}
             sourceTimeSec={sourceTimeSec}
+            playing={playing}
+            previewFps={manifest.fps}
             setVideoRef={(el) => {
               if (el) mediaRefs.current.set(clip.id, el);
               else mediaRefs.current.delete(clip.id);
@@ -625,6 +630,8 @@ export function TimelinePreviewPlayer(props: {
     if (target.closest("[data-geometry-style-bar]")) return;
     if (target.closest("[data-geometry-picker-modal]")) return;
     if (target.closest("[data-geometry-editor]")) return;
+    if (target.closest("[data-trajectory-editor]")) return;
+    if (target.closest("[data-trajectory-toolbar]")) return;
     if (geometryStyleModalOpen) return;
 
     const { clientX: x, clientY: y } = e;
@@ -675,7 +682,7 @@ export function TimelinePreviewPlayer(props: {
         }}
       >
         <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
-          {videoRenderLayers.map(({ clip, layer, trackZ }) => {
+          {videoRenderLayers.map(({ clip, layer, trackZ, track }) => {
             const tf = clipTransform(clip, playhead, clip.id === trajectoryClipId, playing);
             const rect = clipImageRect(clip, tf, frameSize.w, frameSize.h);
             const rot = tf.rotation ?? 0;
@@ -690,7 +697,7 @@ export function TimelinePreviewPlayer(props: {
             ].filter(Boolean);
             return (
               <div
-                key={`${clip.id}-${layer.role}-${layer.progress}`}
+                key={`${clip.id}-${layer.role}`}
                 style={{
                   position: "absolute",
                   left: rect.left,
@@ -721,6 +728,7 @@ export function TimelinePreviewPlayer(props: {
           const rect = clipImageRect(clip, tf, frameSize.w, frameSize.h);
           const selected = clip.id === selectedClipId;
           const inShapeEdit = geometryEditClipId === clip.id;
+          const inTrajectoryEdit = clip.id === trajectoryClipId;
           const isText = clip.type === "text";
           const isGeometry = clip.type === "geometry";
           const isTextEditing = isText && textEditClipId === clip.id;
@@ -776,20 +784,20 @@ export function TimelinePreviewPlayer(props: {
                 height: rect.height,
                 zIndex: trackZ + 100,
                 cursor:
-                  editable && !inShapeEdit && !isTextEditing
+                  editable && !inShapeEdit && !isTextEditing && !inTrajectoryEdit
                     ? isText
                       ? "default"
                       : "move"
                     : "pointer",
                 outline:
-                  selected && !inShapeEdit && !isText
+                  selected && !inShapeEdit && !isText && !inTrajectoryEdit
                     ? editable
                       ? "2px dashed rgba(255,255,255,0.85)"
                       : "2px solid rgba(255,255,255,0.55)"
                     : "none",
                 outlineOffset: 2,
                 pointerEvents:
-                  inShapeEdit || isTextEditing ? "none" : "auto",
+                  inShapeEdit || isTextEditing || inTrajectoryEdit ? "none" : "auto",
               }}
             >
               {isText && selected && editable && !inShapeEdit && !isTextEditing ? (
@@ -811,7 +819,7 @@ export function TimelinePreviewPlayer(props: {
                   }}
                 />
               ) : null}
-              {!isText && selected && editable && !inShapeEdit ? (
+              {!isText && selected && editable && !inShapeEdit && !inTrajectoryEdit ? (
                 <div
                   onPointerDown={(e) => beginDrag(e, clip, "scale")}
                   onPointerMove={onDragMove}

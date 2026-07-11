@@ -2,15 +2,41 @@
 
 import React from "react";
 
-/** Wan FLF: 4k+1 step 4 from 25 through 121 (see flf2video_ai_service README). */
-export const SEQUENCE_FLF_OUTPUT_LENGTHS: readonly number[] = Object.freeze(
+/** Wan 2.2 I2V / FLF workflow CreateVideo fps. */
+export const WAN_VIDEO_FPS = 16;
+
+/** Practical single-pass max (4n+1, step 4). */
+export const WAN_VIDEO_MAX_LENGTH = 121;
+
+export const WAN_VIDEO_DEFAULT_LENGTH = 121;
+
+/** Wan I2V / FLF: 4n+1 step 4 from 25 through 121. */
+export const WAN_VIDEO_OUTPUT_LENGTHS: readonly number[] = Object.freeze(
   Array.from({ length: Math.floor((121 - 25) / 4) + 1 }, (_, i) => 25 + i * 4)
 );
 
-/** Hunyuan I2V: discrete latent lengths (approx. duration at 24fps). */
-export const SEQUENCE_I2V_OUTPUT_LENGTHS: readonly number[] = Object.freeze([
-  25, 49, 73, 97, 121, 129,
-]);
+/** @deprecated Use WAN_VIDEO_OUTPUT_LENGTHS */
+export const SEQUENCE_FLF_OUTPUT_LENGTHS = WAN_VIDEO_OUTPUT_LENGTHS;
+
+/** @deprecated Use WAN_VIDEO_OUTPUT_LENGTHS */
+export const SEQUENCE_I2V_OUTPUT_LENGTHS = WAN_VIDEO_OUTPUT_LENGTHS;
+
+export function wanVideoDurationSec(frames: number, fps: number = WAN_VIDEO_FPS): number {
+  return frames / fps;
+}
+
+export function formatWanVideoLengthHint(
+  frames: number = WAN_VIDEO_DEFAULT_LENGTH,
+  fps: number = WAN_VIDEO_FPS
+): string {
+  const sec = wanVideoDurationSec(frames, fps);
+  const rounded = sec >= 10 ? sec.toFixed(1) : sec.toFixed(1).replace(/\.0$/, "");
+  return `${frames} (~${rounded}s @ ${fps}fps)`;
+}
+
+export const WAN_VIDEO_LENGTH_HINT =
+  `Output length (frames, 4n+1: 25–${WAN_VIDEO_MAX_LENGTH}). ` +
+  `Default ${formatWanVideoLengthHint(WAN_VIDEO_DEFAULT_LENGTH)}.`;
 
 export function sequenceVideoLengthIndex(value: number, lengths: readonly number[]): number {
   if (!lengths.length) return 0;

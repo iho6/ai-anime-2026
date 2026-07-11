@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from services import logic
+from services.constant import WAN_VIDEO_DEFAULT_LENGTH
 
 from .storage_paths import resolve_storage_rel_file
 
@@ -101,12 +102,12 @@ class SequenceDuplicateBody(BaseModel):
 class SequenceGenerateFlfBody(BaseModel):
     startIndex: int
     endIndex: int
-    length: int = 33
+    length: int = WAN_VIDEO_DEFAULT_LENGTH
 
 
 class SequenceGenerateI2vBody(BaseModel):
     frameIndex: int
-    length: int = 129
+    length: int = WAN_VIDEO_DEFAULT_LENGTH
     width: int | None = None
     height: int | None = None
     positivePrompt: str | None = None
@@ -253,7 +254,7 @@ def sequence_generate_i2v(
 class SequenceStripI2vBody(BaseModel):
     sourceRelPath: str
     outputDirRel: str
-    length: int = 129
+    length: int = WAN_VIDEO_DEFAULT_LENGTH
     width: int | None = None
     height: int | None = None
     positivePrompt: str
@@ -263,7 +264,7 @@ class SequenceStripFlfBody(BaseModel):
     imageRelPathA: str
     imageRelPathB: str
     outputDirRel: str
-    length: int = 33
+    length: int = WAN_VIDEO_DEFAULT_LENGTH
 
 
 @router.post("/detail/{char_key}/sequence/{sequence_name}/strip_generate_i2v")

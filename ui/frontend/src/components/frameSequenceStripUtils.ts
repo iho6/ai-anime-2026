@@ -1,5 +1,86 @@
-import type { FrameSequencePayload, FrameSequenceStripSlot } from "../lib/api";
+import type {
+  FrameSequencePayload,
+  FrameSequenceStripSlot,
+  SequenceCrop,
+  TimelineFrameEdit,
+} from "../lib/api";
 import { cloneCrop } from "../lib/sequenceCrop";
+
+/** Mirror backend ``_frame_sequence_strip_slot_visible_for_export``. */
+export function stripSlotVisibleForExport(slot: FrameSequenceStripSlot | undefined): boolean {
+  return (
+    slot?.kind === "image" &&
+    slot.hidden !== true &&
+    !!slot.relPath?.trim()
+  );
+}
+
+function cropEqual(a?: SequenceCrop, b?: SequenceCrop): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return (
+    a.translateXFrac === b.translateXFrac &&
+    a.translateYFrac === b.translateYFrac &&
+    a.scale === b.scale
+  );
+}
+
+function stripSlotEqual(a: FrameSequenceStripSlot, b: FrameSequenceStripSlot): boolean {
+  return (
+    a.kind === b.kind &&
+    (a.relPath ?? "") === (b.relPath ?? "") &&
+    !!a.hidden === !!b.hidden &&
+    cropEqual(a.crop, b.crop)
+  );
+}
+
+export function frameSequencePayloadEqual(
+  a: FrameSequencePayload,
+  b: FrameSequencePayload
+): boolean {
+  if (a.sequenceGroupId !== b.sequenceGroupId) return false;
+  if (a.strip.length !== b.strip.length) return false;
+  return a.strip.every((slot, i) => stripSlotEqual(slot, b.strip[i]!));
+}
+
+function applyTrimHidden(slot: FrameSequenceStripSlot, outside: boolean): FrameSequenceStripSlot {
+  if (outside) {
+    return slot.hidden ? slot : { ...slot, hidden: true };
+  }
+  if (!slot.hidden) return slot;
+  const { hidden: _hidden, ...rest } = slot;
+  return rest;
+}
+
+/** Auto-hide strip frames outside clip inPoint/outPoint (timeline video edit). */
+export function syncTrimHiddenToFrameSequence(
+  frameSequence: FrameSequencePayload,
+  clip: { inPoint: number; outPoint: number },
+  frameEdit: TimelineFrameEdit | undefined,
+  fps: number
+): FrameSequencePayload {
+  const inPoint = clip.inPoint ?? 0;
+  const outPoint = clip.outPoint ?? 0;
+  const rate = Math.max(1, frameEdit?.extractFps ?? fps);
+  const mp4Aligned = frameEdit?.mp4Aligned === true;
+  let mp4Frame = 0;
+
+  const nextStrip = frameSequence.strip.map((slot, stripIndex) => {
+    if (slot.kind !== "image") return slot;
+    if (mp4Aligned) {
+      if (!stripSlotVisibleForExport(slot)) return slot;
+      const sourceSec = mp4Frame / rate;
+      mp4Frame += 1;
+      const outside = sourceSec < inPoint || sourceSec >= outPoint;
+      return applyTrimHidden(slot, outside);
+    }
+    const sourceSec = (frameEdit?.extractInPointSec ?? 0) + stripIndex / rate;
+    const outside = sourceSec < inPoint || sourceSec >= outPoint;
+    return applyTrimHidden(slot, outside);
+  });
+
+  return { ...frameSequence, strip: nextStrip, hidden: [] };
+}
 
 export function frameSequenceStripSlotHasImage(
   slot: FrameSequenceStripSlot | undefined

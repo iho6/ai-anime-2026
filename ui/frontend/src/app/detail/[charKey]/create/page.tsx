@@ -43,6 +43,10 @@ import {
   type SequenceManifest,
   API_BASE_URL,
 } from "../../../../lib/api";
+import {
+  keypointRefToGenRef,
+  runCharacterGeneration,
+} from "../../../../lib/characterGeneration";
 import { fetchVideoExport, runVideoExportJob, sanitizeDownloadBaseName } from "../../../../lib/downloadVideo";
 import { SequenceEditor } from "../dataset/SequenceEditor";
 import { SequencePreviewLightbox } from "../dataset/SequencePreviewLightbox";
@@ -145,18 +149,6 @@ function dedupeStartingCandidatesForPose000(candidates: CoverCandidate[]): Cover
     if (/(^|[\\/])(base_img|base)\.(png|jpg|jpeg|webp|bmp)$/i.test(r)) return false;
     return true;
   });
-}
-
-function buildPosePromptFromLabel(shortDesc: string): string {
-  const desc = shortDesc.trim();
-  if (!desc) return "";
-  return `Edit the subject to ${desc}, keep identity and clothing coherent unless impossible.`;
-}
-
-function buildExpressionPromptFromLabel(shortDesc: string): string {
-  const desc = shortDesc.trim();
-  if (!desc) return "";
-  return `Edit the face to show ${desc}, keep identity coherent.`;
 }
 
 /** Best-effort image preload so an id/URL swap doesn't flash blank. Resolves on load/error/timeout. */
@@ -755,19 +747,6 @@ export default function CreatePage() {
     })().catch(() => {});
   }, [charKey, refreshCharSections, clearPosePromptUiForKeypointReference]);
 
-  // Single-prompt generate: wrap by type unless a keypoint ref supplies pose authority.
-  const promptTextsForGeneration = useMemo(() => {
-    const raw = singlePrompt.trim();
-    if (!raw) return [];
-    if (genType === "pose" && keypointRefHasFrames(activeReference)) {
-      return [raw];
-    }
-    const buildPromptFromLabel =
-      genType === "pose" ? buildPosePromptFromLabel : buildExpressionPromptFromLabel;
-    const f = buildPromptFromLabel(raw);
-    return f ? [f] : [];
-  }, [singlePrompt, genType, activeReference]);
-
   async function loadStartingImageCandidates(): Promise<{
     pose: CoverCandidate[];
     expression: CoverCandidate[];
@@ -1045,94 +1024,23 @@ export default function CreatePage() {
         ? (line: string) =>
             onJobLogLine(`[${batchCtx.index}/${batchCtx.total}] ${line}`)
         : onJobLogLine;
-    const videoRef =
-      entry?.kind === "video"
-        ? entry.ref
-        : entry
-          ? null
-          : activeReference?.kind === "video"
-            ? activeReference.ref
-            : null;
-    const folderRef =
-      entry?.kind === "folder"
-        ? entry
-        : entry
-          ? null
-          : activeReference?.kind === "folder"
-            ? activeReference
-            : null;
-    const keypointRelPath =
-      entry?.kind === "single"
-        ? entry.ref.keypointRelPath
-        : entry
-          ? undefined
-          : activeReference?.kind === "single"
-            ? activeReference.ref.keypointRelPath
-            : undefined;
-    if (!promptTextsForGeneration.length && !keypointRelPath && !videoRef && !folderRef) {
+    const keypointRef = keypointRefToGenRef(entry ?? activeReference ?? null);
+    const rawPrompts = singlePrompt.trim() ? [singlePrompt.trim()] : [];
+    if (!rawPrompts.length && !keypointRef) {
       showError({ message: "Enter a prompt (or load a reference keypoint) first." });
       return false;
     }
-    if (folderRef) {
-      const done = await runDetailWsJob<{
-        sequenceName: string;
-        galleryItemId: string;
-      }>({
-        charKey,
-        pathSuffix: wsSuffix,
-        payload: {
-          job: "generate_folder_ref_sequence",
-          folderId: folderRef.folderId,
-          baseRelPath: activeStartingRel,
-          prompts: promptTextsForGeneration,
-        },
-        onLogLine: onLog,
-      });
-      if (!done.ok) {
-        failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
-        return false;
-      }
-      const r = done.result!;
-      await refreshCharSections();
-      if (r.sequenceName) setActiveSequence(r.sequenceName);
-      return true;
-    }
-    if (videoRef) {
-      const done = await runDetailWsJob<{
-        sequenceName: string;
-        galleryItemId: string;
-      }>({
-        charKey,
-        pathSuffix: wsSuffix,
-        payload: {
-          job: "generate_video_ref_sequence",
-          videoRefId: videoRef.id,
-          baseRelPath: activeStartingRel,
-          prompts: promptTextsForGeneration,
-        },
-        onLogLine: onLog,
-      });
-      if (!done.ok) {
-        failSession(new Error(done.error ?? "Generation failed"), "Generation failed");
-        return false;
-      }
-      const r = done.result!;
-      await refreshCharSections();
-      if (r.sequenceName) setActiveSequence(r.sequenceName);
-      return true;
-    }
-    const done = await runDetailWsJob<{
-      firstPoseKey: string | null;
-      lastInputRelPath: string;
+    const done = await runCharacterGeneration<{
+      sequenceName?: string;
+      galleryItemId?: string;
+      firstPoseKey?: string | null;
+      lastInputRelPath?: string;
     }>({
       charKey,
-      pathSuffix: wsSuffix,
-      payload: {
-        job: "generate_prompts",
-        baseRelPath: activeStartingRel,
-        prompts: promptTextsForGeneration,
-        ...(keypointRelPath ? { keypointRelPath } : {}),
-      },
+      kind: genType,
+      baseRelPath: activeStartingRel,
+      rawPrompts,
+      keypointRef,
       onLogLine: onLog,
     });
     if (!done.ok) {
@@ -1141,9 +1049,10 @@ export default function CreatePage() {
     }
     const r = done.result!;
     if (r.lastInputRelPath) {
-      setStarting((prev) => mergeStackAfterGeneration(prev, r.lastInputRelPath));
+      setStarting((prev) => mergeStackAfterGeneration(prev, r.lastInputRelPath!));
     }
     await refreshCharSections();
+    if (r.sequenceName) setActiveSequence(r.sequenceName);
     return true;
   }
 

@@ -43,6 +43,10 @@ from services.character_storage import (
     write_base_image_from_url,
 )
 from services import prompts
+from services.constant import (
+    WAN_VIDEO_DEFAULT_LENGTH,
+    WAN_VIDEO_FPS,
+)
 from services.prompts import (
     ANIME_DEFAULT_STYLE_PREFIX,
     NEW_CHARACTER_POSITIVE_LEAD,
@@ -53,6 +57,8 @@ from services.prompts import (
     build_positive_prompt,
     build_shot_prompt,
     compose_keypoint_pose_edit_prompt,
+    compose_expression_generation_prompt,
+    compose_pose_generation_prompt,
     compose_new_character_positive_prompt,
     compose_new_location_positive_prompt,
     compose_reference_base_t2i_prompt,
@@ -3987,10 +3993,11 @@ def generate_pose_starting_image_from_prompt(
     kp = (keypoint_image_path or "").strip()
     close_abs = character_base_closeup_composite_abs_path(character_name) if kp else None
     use_closeup_sheet = bool(kp and close_abs and not skip_closeup)
-    if kp:
-        effective = compose_keypoint_pose_edit_prompt(
-            effective, with_closeup_sheet=use_closeup_sheet
-        )
+    effective = compose_pose_generation_prompt(
+        effective,
+        has_keypoint=bool(kp),
+        with_closeup_sheet=use_closeup_sheet,
+    )
 
     if log_cb:
         aux_log = (([close_abs] if close_abs else []) if not skip_closeup else []) + ([kp] if kp else [])
@@ -4075,14 +4082,16 @@ def generate_pose_starting_images_from_prompts(
             if not kp:
                 raise ValueError("No prompt text provided.")
             return [
-                compose_keypoint_pose_edit_prompt("", with_closeup_sheet=use_closeup_sheet)
+                compose_pose_generation_prompt(
+                    "", has_keypoint=True, with_closeup_sheet=use_closeup_sheet
+                )
             ]
-        if kp:
-            return [
-                compose_keypoint_pose_edit_prompt(p, with_closeup_sheet=use_closeup_sheet)
-                for p in user_prompts
-            ]
-        return user_prompts
+        return [
+            compose_pose_generation_prompt(
+                p, has_keypoint=bool(kp), with_closeup_sheet=use_closeup_sheet
+            )
+            for p in user_prompts
+        ]
 
     prompts = _composed_for_batch(nonempty_prompts)
 
@@ -4285,12 +4294,16 @@ def _generate_pose_image_edit_url(
     kp = (keypoint_image_path or "").strip()
     use_closeup_sheet = bool(kp and not skip_closeup and character_base_closeup_composite_abs_path(character_name))
     if kp:
-        effective = compose_keypoint_pose_edit_prompt(
-            effective, with_closeup_sheet=use_closeup_sheet
+        effective = compose_pose_generation_prompt(
+            effective, has_keypoint=True, with_closeup_sheet=use_closeup_sheet
         )
         _log_composed_prompt_snippet(effective, log_cb)
     elif not effective:
         raise ValueError("No prompt text provided.")
+    else:
+        effective = compose_pose_generation_prompt(
+            effective, has_keypoint=False, with_closeup_sheet=False
+        )
 
     from services import reference_storage
 
@@ -4748,6 +4761,7 @@ def generate_expression_starting_image_from_prompt(
     effective = (prompt_text_override or "").strip()
     if not effective:
         effective = expr_opt.prompt_text
+    effective = compose_expression_generation_prompt(effective)
 
     body = _run_service_testmode(
         "services.image_edit_ai_service.serverless",
@@ -4796,6 +4810,7 @@ def generate_expression_starting_images_from_prompts(
     prompts = [p for p in prompts if p]
     if not prompts:
         raise ValueError("No prompt text provided.")
+    prompts = [compose_expression_generation_prompt(p) for p in prompts]
 
     body = _run_service_testmode(
         "services.image_edit_ai_service.serverless",
@@ -11060,7 +11075,7 @@ def generate_flf_sequence(
     *,
     start_index: int,
     end_index: int,
-    length: int = 33,
+    length: int = WAN_VIDEO_DEFAULT_LENGTH,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """
@@ -11126,14 +11141,14 @@ def generate_i2v_sequence(
     sequence_name: str,
     *,
     frame_index: int,
-    length: int = 129,
+    length: int = WAN_VIDEO_DEFAULT_LENGTH,
     width: int | None = None,
     height: int | None = None,
     positive_prompt: str | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """
-    Run img2video (Hunyuan 1.5 I2V) with per-frame PNG output; save under sequence
+    Run img2video (Wan 2.2 I2V) with per-frame PNG output; save under sequence
     gallery and return a gallery item dict with ``frameSequence`` for the UI manifest.
     """
     manifest = read_sequence_manifest(char_key, sequence_name)
@@ -11184,6 +11199,18 @@ def generate_i2v_sequence(
 # ---------------------------------------------------------------------------
 
 
+def normalize_wan_video_length(length: int) -> int:
+    """Clamp to Wan 2.2 range and snap to nearest valid 4n+1 step (25…121)."""
+    from services.constant import WAN_VIDEO_MAX_LENGTH, WAN_VIDEO_MIN_LENGTH
+
+    n = int(length)
+    n = max(WAN_VIDEO_MIN_LENGTH, min(WAN_VIDEO_MAX_LENGTH, n))
+    max_k = (WAN_VIDEO_MAX_LENGTH - WAN_VIDEO_MIN_LENGTH) // 4
+    k = round((n - WAN_VIDEO_MIN_LENGTH) / 4)
+    k = max(0, min(max_k, k))
+    return WAN_VIDEO_MIN_LENGTH + 4 * k
+
+
 def _run_flf_service(
     path_a: Path,
     path_b: Path,
@@ -11192,6 +11219,7 @@ def _run_flf_service(
     log_cb: Callable[[str], None] | None = None,
 ) -> list[str]:
     """Invoke flf2video with two endpoint image paths; return ordered frame URLs."""
+    length = normalize_wan_video_length(length)
     body = _run_service_testmode(
         "services.flf2video_ai_service.serverless",
         [
@@ -11205,7 +11233,7 @@ def _run_flf_service(
             "--frames",
             "1,2",
             "--length",
-            str(int(length)),
+            str(length),
         ],
         log_cb=log_cb,
     )
@@ -11233,6 +11261,7 @@ def _run_i2v_service(
     log_cb: Callable[[str], None] | None = None,
 ) -> list[str]:
     """Invoke img2video with one image + prompt; return ordered frame URLs."""
+    length = normalize_wan_video_length(length)
     argv: list[str] = [
         "--test-mode",
         "--enable-default",
@@ -11242,7 +11271,7 @@ def _run_i2v_service(
         "--image-url",
         str(path_img),
         "--length",
-        str(max(1, int(length))),
+        str(length),
         "--positive-prompt",
         prompt_text,
     ]
@@ -11361,7 +11390,7 @@ def generate_flf_to_timeline_clip(
     image_b_abs_path: str,
     dest_dir: Path | str,
     *,
-    length: int = 33,
+    length: int = WAN_VIDEO_DEFAULT_LENGTH,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """FLF between two image files → mp4 clip in ``dest_dir``; returns clip meta."""
@@ -11372,7 +11401,7 @@ def generate_flf_to_timeline_clip(
     if log_cb:
         log_cb(f"FLF: {pa.name} → {pb.name} (length={int(length)})")
     frame_urls = _run_flf_service(pa, pb, int(length), log_cb=log_cb)
-    return _frames_to_timeline_clip(frame_urls, dest_dir)
+    return _frames_to_timeline_clip(frame_urls, dest_dir, fps=WAN_VIDEO_FPS)
 
 
 def generate_i2v_to_timeline_clip(
@@ -11380,7 +11409,7 @@ def generate_i2v_to_timeline_clip(
     prompt: str,
     dest_dir: Path | str,
     *,
-    length: int = 129,
+    length: int = WAN_VIDEO_DEFAULT_LENGTH,
     width: int | None = None,
     height: int | None = None,
     log_cb: Callable[[str], None] | None = None,
@@ -11395,7 +11424,7 @@ def generate_i2v_to_timeline_clip(
     if log_cb:
         log_cb(f"I2V: {p.name} (length={int(length)})")
     frame_urls = _run_i2v_service(p, text, int(length), width, height, log_cb=log_cb)
-    return _frames_to_timeline_clip(frame_urls, dest_dir)
+    return _frames_to_timeline_clip(frame_urls, dest_dir, fps=WAN_VIDEO_FPS)
 
 
 _TIMELINE_FRAME_EXTRACT_MAX = 600
@@ -11478,7 +11507,11 @@ def timeline_video_to_frame_sequence(
             "strip": strip,
             "hidden": [],
         },
-        "frameEdit": {"framesDirRel": frames_dir_rel},
+        "frameEdit": {
+            "framesDirRel": frames_dir_rel,
+            "extractInPointSec": float(in_point_sec),
+            "extractFps": float(fps),
+        },
     }
 
 
@@ -12170,6 +12203,55 @@ def extract_video_frame_to_temp(
                 frame.to_image().save(dest)
                 return str(dest)
     raise ValueError(f"Frame index {idx} out of range for {p.name}")
+
+
+def resolve_video_trim_frame_index(
+    video_path: str | Path,
+    in_point_sec: float,
+    out_point_sec: float,
+    *,
+    edge: str,
+) -> int:
+    """Map trimmed clip in/out to a source frame index (first or last in trim)."""
+    fps, total = probe_video_fps_and_frame_count(video_path)
+    if total <= 0:
+        raise ValueError("Could not determine video frame count.")
+    start_idx = max(0, int(round(float(in_point_sec) * fps)))
+    end_idx = min(total - 1, max(start_idx, int(round(float(out_point_sec) * fps)) - 1))
+    edge_norm = str(edge or "").strip().lower()
+    if edge_norm in ("last", "end"):
+        return end_idx
+    return start_idx
+
+
+def extract_video_trim_frame_to_timeline_clip(
+    video_rel: str,
+    in_point_sec: float,
+    out_point_sec: float,
+    dest_dir: Path | str,
+    *,
+    edge: str,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Extract one trimmed video frame into ``dest_dir``; return clip meta."""
+    from services import timeline_storage
+
+    video_abs = timeline_storage.timeline_rel_to_abs(video_rel)
+    if not video_abs.is_file():
+        raise ValueError(f"Video not found: {video_rel}")
+    idx = resolve_video_trim_frame_index(
+        video_abs, in_point_sec, out_point_sec, edge=edge
+    )
+    if log_cb:
+        log_cb(f"Extracting frame {idx} ({edge}) from {video_abs.name}")
+    temp_png = extract_video_frame_to_temp(video_abs, idx)
+    try:
+        return import_image_to_timeline_clip(temp_png, dest_dir)
+    finally:
+        try:
+            Path(temp_png).unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def _normalize_sam3_options(raw: Any) -> dict[str, Any]:

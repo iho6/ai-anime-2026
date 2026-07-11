@@ -47,6 +47,8 @@ import {
   SEQUENCE_I2V_OUTPUT_LENGTHS,
   SequenceOutputLengthStepper,
   sequenceVideoLengthIndex,
+  WAN_VIDEO_DEFAULT_LENGTH,
+  WAN_VIDEO_LENGTH_HINT,
 } from "../../../../components/sequenceOutputLength";
 import {
   normalizeSequencePreviewAspect,
@@ -1529,7 +1531,7 @@ export function SequenceEditor(props: {
         key: "flf",
         label: "Generate FLF video",
         onSelect: () =>
-          setFlfDialog({ open: true, start: flf.start, end: flf.end, length: 33 }),
+          setFlfDialog({ open: true, start: flf.start, end: flf.end, length: WAN_VIDEO_DEFAULT_LENGTH }),
       });
     }
     if (i2v.ok) {
@@ -1537,7 +1539,7 @@ export function SequenceEditor(props: {
         key: "i2v",
         label: "Generate I2V video",
         onSelect: () =>
-          setI2vDialog({ open: true, frameIndex: i2v.frameIndex, length: 129, prompt: "" }),
+          setI2vDialog({ open: true, frameIndex: i2v.frameIndex, length: WAN_VIDEO_DEFAULT_LENGTH, prompt: "" }),
       });
     }
     if (editGalleryIx >= 0) {
@@ -1915,9 +1917,7 @@ export function SequenceEditor(props: {
               Timeline {flfDialog.start} → {flfDialog.end} (endpoints only; gap must be empty).
             </div>
             <div style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
-              <span style={{ display: "block", marginBottom: 2 }}>
-                Output length (frames, 4k+1 step 4: 25–121)
-              </span>
+              <span style={{ display: "block", marginBottom: 2 }}>{WAN_VIDEO_LENGTH_HINT}</span>
               <SequenceOutputLengthStepper
                 lengths={SEQUENCE_FLF_OUTPUT_LENGTHS}
                 value={flfDialog.length}
@@ -2040,10 +2040,7 @@ export function SequenceEditor(props: {
               Timeline frame {i2vDialog.frameIndex} (single start image).
             </div>
             <div style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
-              <span style={{ display: "block", marginBottom: 2 }}>
-                Output length (latent frames): 25 (~1s), 49 (~2s), 73 (~3s), 97 (~4s), 121 (~5s),
-                129 (~5.4s, default)
-              </span>
+              <span style={{ display: "block", marginBottom: 2 }}>{WAN_VIDEO_LENGTH_HINT}</span>
               <SequenceOutputLengthStepper
                 lengths={SEQUENCE_I2V_OUTPUT_LENGTHS}
                 value={i2vDialog.length}

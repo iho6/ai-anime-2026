@@ -261,6 +261,47 @@ def build_expression_prompt_from_label(short_desc: str) -> str:
     return f"Edit the face to show {desc}, keep identity coherent."
 
 
+_EXPRESSION_USER_CATALOG_WRAP_RE = (
+    r"^Edit the face to show (.+?), keep identity coherent\.?$"
+)
+
+
+def normalize_expression_user_description(text: str) -> str:
+    """Strip UI/catalog expression wrappers; return a short description phrase."""
+    u = (text or "").strip()
+    if not u:
+        return ""
+    m = re.match(_EXPRESSION_USER_CATALOG_WRAP_RE, u, flags=re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+    return u
+
+
+def compose_pose_generation_prompt(
+    user_text: str,
+    *,
+    has_keypoint: bool,
+    with_closeup_sheet: bool,
+) -> str:
+    """
+    Full Qwen image-edit prompt for pose generation (text-only or keypoint-assisted).
+
+    Idempotent: unwraps catalog/UI wrappers before re-wrapping text-only prompts.
+    """
+    if has_keypoint:
+        return compose_keypoint_pose_edit_prompt(
+            user_text, with_closeup_sheet=with_closeup_sheet
+        )
+    short = normalize_keypoint_user_description(user_text)
+    return build_pose_prompt_from_label(short)
+
+
+def compose_expression_generation_prompt(user_text: str) -> str:
+    """Full Qwen image-edit prompt for expression generation (idempotent unwrap + wrap)."""
+    short = normalize_expression_user_description(user_text)
+    return build_expression_prompt_from_label(short)
+
+
 # ============================================================================
 # MULTI-ANGLE
 #   services/multi_angle_ai_service/serverless.py + run_batch_angles.py

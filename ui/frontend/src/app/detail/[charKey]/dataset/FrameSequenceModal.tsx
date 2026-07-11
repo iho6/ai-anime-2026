@@ -34,6 +34,7 @@ import {
   SEQUENCE_FLF_OUTPUT_LENGTHS,
   SEQUENCE_I2V_OUTPUT_LENGTHS,
   SequenceOutputLengthStepper,
+  WAN_VIDEO_DEFAULT_LENGTH,
 } from "../../../../components/sequenceOutputLength";
 import {
   alignFrameStripsToLength,
@@ -45,6 +46,7 @@ import {
   relPathsFromStripSelection,
   reverseStripSelection,
   spliceStripFrames,
+  frameSequencePayloadEqual,
 } from "../../../../components/frameSequenceStripUtils";
 
 export type FrameSequenceEditorMode = "sequence" | "timeline";
@@ -505,6 +507,8 @@ export function FrameSequenceModal(props: {
   const [playIx, setPlayIx] = useState(0);
   const undoStack = useRef<FrameSequencePayload[]>([]);
   const redoStack = useRef<FrameSequencePayload[]>([]);
+  const initialSnapshotRef = useRef(initial);
+  const groupInitialSnapshotRef = useRef<Record<string, FrameSequencePayload>>({});
   const groupUndoStack = useRef<FrameSequenceStripSlot[][][]>([]);
   const groupRedoStack = useRef<FrameSequenceStripSlot[][][]>([]);
   /** Anchor for Shift+click range selection (strip index). */
@@ -723,7 +727,7 @@ export function FrameSequenceModal(props: {
           setStripI2vDialog({
             relPath: i2v.relPath,
             index: i2v.index,
-            length: 129,
+            length: WAN_VIDEO_DEFAULT_LENGTH,
             prompt: "",
           }),
       });
@@ -744,7 +748,7 @@ export function FrameSequenceModal(props: {
               relPathB: relB,
               start: flf.start,
               end: flf.end,
-              length: 33,
+              length: WAN_VIDEO_DEFAULT_LENGTH,
             }),
         });
       }
@@ -788,6 +792,12 @@ export function FrameSequenceModal(props: {
 
   useEffect(() => {
     if (!open) return;
+    initialSnapshotRef.current = initial;
+    if (groupLayers) {
+      groupInitialSnapshotRef.current = Object.fromEntries(
+        groupLayers.map((g) => [g.clipId, g.initial])
+      );
+    }
     if (isGroupMode && groupLayers) {
       const aligned = alignFrameStripsToLength(
         groupLayers.map((g) => migrateLegacyFrameSequence(g.initial))
@@ -1202,7 +1212,13 @@ export function FrameSequenceModal(props: {
   const { active } = useDndContext();
   const stripSlotDragActive = active?.data.current?.kind === "frameSeqStripSlot";
   const showAddToGalleryHint = Boolean(
-    !disableStripDrag && stripSlotDragActive && isOverBackdrop
+    editorMode !== "timeline" &&
+      !disableStripDrag &&
+      stripSlotDragActive &&
+      isOverBackdrop
+  );
+  const showDropOnTimelineHint = Boolean(
+    editorMode === "timeline" && !disableStripDrag && stripSlotDragActive
   );
 
   if (!open) return null;
@@ -1222,6 +1238,8 @@ export function FrameSequenceModal(props: {
         alignItems: "center",
         justifyContent: "center",
         padding: 16,
+        pointerEvents:
+          editorMode === "timeline" && stripSlotDragActive ? "none" : "auto",
       }}
       onMouseDown={(e) => {
         if (e.target !== e.currentTarget) return;
@@ -1236,6 +1254,28 @@ export function FrameSequenceModal(props: {
         onClose();
       }}
     >
+      {showDropOnTimelineHint ? (
+        <div
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: 28,
+            transform: "translateX(-50%)",
+            zIndex: 4500,
+            pointerEvents: "none",
+            padding: "8px 14px",
+            background: "rgba(20,60,120,0.92)",
+            color: "#fff",
+            fontSize: 13,
+            border: "1px solid rgba(255,255,255,0.35)",
+            borderRadius: 0,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.35)",
+          }}
+        >
+          Drop frame on timeline
+        </div>
+      ) : null}
       {showAddToGalleryHint ? (
         <div
           aria-live="polite"
@@ -1690,11 +1730,22 @@ export function FrameSequenceModal(props: {
                 if (isGroupMode && onSaveGroup && onApplyVideoGroup) {
                   const payloads = groupPayloadsFromState();
                   onSaveGroup(payloads);
-                  onApplyVideoGroup(payloads);
+                  const changed: Record<string, FrameSequencePayload> = {};
+                  for (const [clipId, payload] of Object.entries(payloads)) {
+                    const initialPayload = groupInitialSnapshotRef.current[clipId];
+                    if (!initialPayload || !frameSequencePayloadEqual(payload, initialPayload)) {
+                      changed[clipId] = payload;
+                    }
+                  }
+                  if (Object.keys(changed).length > 0) {
+                    onApplyVideoGroup(changed);
+                  }
                 } else {
                   const payload = payloadFromState(initial.sequenceGroupId, strip);
                   onSave(payload);
-                  onApplyVideo?.(payload);
+                  if (!frameSequencePayloadEqual(payload, initialSnapshotRef.current)) {
+                    onApplyVideo?.(payload);
+                  }
                 }
               } else {
                 if (isGroupMode && onSaveGroup) {

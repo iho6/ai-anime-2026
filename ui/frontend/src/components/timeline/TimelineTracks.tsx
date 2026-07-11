@@ -8,12 +8,14 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useDroppable } from "@dnd-kit/core";
 import {
   TimelineManifest,
   TimelineClip,
   TimelineTrack,
   TimelineTransitionOut,
 } from "../../lib/api";
+import { TIMELINE_STRIP_FRAME_DROP_PREFIX } from "../../app/detail/[charKey]/dataset/sequenceGalleryUtils";
 import { ClipTransitionMenu } from "./ClipTransitionMenu";
 import { TrackLabelTag } from "./TrackLabelTag";
 import { VolumeAutomationEditor } from "./VolumeAutomationEditor";
@@ -30,6 +32,7 @@ import {
 } from "./timelineUtil";
 
 const LABEL_W = 120;
+export const TIMELINE_TRACKS_LABEL_W = LABEL_W;
 const ROW_H = 56;
 const RULER_H = 22;
 
@@ -69,6 +72,45 @@ const MIN_PXPS = 20;
 const MAX_PXPS = 400;
 const SNAP_PX = 8; // pixel radius for snapping clip edges to the playhead.
 const PLAYHEAD_HIT_W = 12;
+
+export function timeFromClientX(
+  clientX: number,
+  laneEl: HTMLElement,
+  pxPerSec: number
+): number {
+  const rect = laneEl.getBoundingClientRect();
+  return (clientX - rect.left + laneEl.scrollLeft - LABEL_W) / pxPerSec;
+}
+
+function TrackLaneDropZone(props: {
+  trackId: string;
+  dropActive: boolean;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+  onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onContextMenu?: (e: React.MouseEvent<HTMLDivElement>) => void;
+}) {
+  const { trackId, dropActive, style, children, onPointerDown, onContextMenu } = props;
+  const { setNodeRef, isOver } = useDroppable({
+    id: `${TIMELINE_STRIP_FRAME_DROP_PREFIX}${trackId}`,
+    data: { trackId },
+    disabled: !dropActive,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        ...style,
+        outline: dropActive && isOver ? "2px solid rgba(110,181,255,0.85)" : undefined,
+        outlineOffset: -2,
+      }}
+      onPointerDown={onPointerDown}
+      onContextMenu={onContextMenu}
+    >
+      {children}
+    </div>
+  );
+}
 
 type RulerTick = { sec: number; label: string | null; major: boolean };
 
@@ -124,6 +166,7 @@ type DragState = {
 
 export type TimelineTracksHandle = {
   ensurePlayheadVisible: (t?: number) => void;
+  timeAtClientX: (clientX: number) => number;
 };
 
 export const TimelineTracks = forwardRef<TimelineTracksHandle, {
@@ -136,6 +179,7 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
   onChange: (updater: (prev: TimelineManifest) => TimelineManifest) => void;
   onCommit: () => void;
   setPxPerSec: (updater: (prev: number) => number) => void;
+  externalStripDropActive?: boolean;
   onClipContextMenu: (
     trackId: string,
     clipId: string,
@@ -182,6 +226,7 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
     onVolumePointsChange,
     onVolumeSeek,
     onVolumeClear,
+    externalStripDropActive = false,
   } = props;
 
   const dragRef = useRef<DragState | null>(null);
@@ -213,7 +258,18 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
     }
   }, [pxPerSec]);
 
-  useImperativeHandle(ref, () => ({ ensurePlayheadVisible }), [ensurePlayheadVisible]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      ensurePlayheadVisible,
+      timeAtClientX: (clientX: number) => {
+        const el = laneAreaRef.current;
+        if (!el) return 0;
+        return clamp(timeFromClientX(clientX, el, pxPerSec), 0, Infinity);
+      },
+    }),
+    [ensurePlayheadVisible, pxPerSec]
+  );
 
   // Track drag-to-reorder state.
   const trackDragRef = useRef<{ trackId: string; startY: number } | null>(null);
@@ -618,10 +674,7 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
   function seekFromClientX(clientX: number) {
     const el = laneAreaRef.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    // The ruler/lanes begin after the sticky LABEL_W column; subtract it so the
-    // click maps to the same content-x the playhead overlay is drawn at.
-    const t = (clientX - rect.left + el.scrollLeft - LABEL_W) / pxPerSec;
+    const t = timeFromClientX(clientX, el, pxPerSec);
     onSeek(clamp(t, 0, Infinity));
   }
 
@@ -741,7 +794,9 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
               onContextMenu={(x, y) => onTrackContextMenu(track.id, x, y)}
               onDragHandlePointerDown={(e) => startTrackDrag(track.id, e)}
             />
-            <div
+            <TrackLaneDropZone
+              trackId={track.id}
+              dropActive={externalStripDropActive && track.kind !== "audio"}
               style={{
                 position: "relative",
                 width: laneWidth,
@@ -944,7 +999,7 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
                     );
                   })
                 : null}
-            </div>
+            </TrackLaneDropZone>
             </div>  {/* close row div */}
           </React.Fragment>
         ))}

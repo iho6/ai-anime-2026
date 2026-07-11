@@ -5,6 +5,8 @@ import {
   apiHubCharacters,
   apiHubDelete,
   apiNewCharacterDiscard,
+  apiPoseGallerySplit,
+  apiExpressionGallerySplit,
   apiSequenceFolderDuplicate,
   apiSequenceFolderDelete,
   apiSequenceFolderRename,
@@ -12,15 +14,19 @@ import {
   apiSequencePut,
   assetUrlFromRelPath,
   runDetailWsJob,
-  runShotMakeAngleWsJob,
+  type GallerySplit,
   type SequenceFrameItem,
   type SequenceManifest,
 } from "../lib/api";
 import { SequenceEditor } from "../app/detail/[charKey]/dataset/SequenceEditor";
 import {
-  type KeypointRefEntry,
   keypointRefHasFrames,
+  type KeypointRefEntry,
 } from "../lib/keypointRefGeneration";
+import {
+  keypointRefToGenRef,
+  runCharacterGeneration,
+} from "../lib/characterGeneration";
 import { buildKeypointRefQueueFromSelection } from "../lib/referencePickerSelection";
 import { KeypointReferenceSlot } from "./KeypointReferenceSlot";
 import { CollapsibleGallerySection } from "./CollapsibleGallerySection";
@@ -51,6 +57,30 @@ import {
   NewCharacterCreatePanel,
   type NewCharacterCreatePanelHandle,
 } from "./create/NewCharacterCreatePanel";
+
+/** Server bucket key for the flat pose gallery (see ``POSE_FLAT_BUCKET`` in logic). */
+const POSE_FLAT_FOLDER_KEY = "flat";
+
+function splitRelPaths(split: GallerySplit): Set<string> {
+  return new Set([
+    ...split.visible.map((x) => x.relPath),
+    ...split.hidden.map((x) => x.relPath),
+  ]);
+}
+
+function newRelPathsFromSplits(
+  before: { pose: Set<string>; expr: Set<string> },
+  after: { pose: Set<string>; expr: Set<string> }
+): string[] {
+  const added: string[] = [];
+  for (const p of after.pose) {
+    if (!before.pose.has(p)) added.push(p);
+  }
+  for (const p of after.expr) {
+    if (!before.expr.has(p)) added.push(p);
+  }
+  return added;
+}
 
 type PickerStage = "pick" | "create" | "gallery";
 type CharIcon = { key: string; label: string; coverRelPath: string };
@@ -311,46 +341,21 @@ export function TimelineCharacterPicker(props: {
     baseRelPath: string,
     charKey: string,
   ) {
-    const prompts = newPosePrompt.trim() ? [newPosePrompt.trim()] : [];
-    if (ref?.kind === "folder") {
-      const done = await runDetailWsJob<{ sequenceName: string; galleryItemId: string }>({
-        charKey,
-        pathSuffix: "/pose/ws",
-        payload: { job: "generate_folder_ref_sequence", folderId: ref.folderId, baseRelPath, prompts, skipCloseup, cropPadding, qwenCfg },
-        onLogLine: (line) => pushLog(line),
-      });
-      if (!done.ok || !done.result?.sequenceName) throw new Error(done.error ?? "Pose sequence generation failed.");
-      pushLog(`Sequence: ${done.result.sequenceName}`);
-      return;
-    }
-    if (ref?.kind === "video") {
-      const done = await runDetailWsJob<{ sequenceName: string; galleryItemId: string }>({
-        charKey,
-        pathSuffix: "/pose/ws",
-        payload: { job: "generate_video_ref_sequence", videoRefId: ref.ref.id, baseRelPath, prompts, skipCloseup, cropPadding, qwenCfg },
-        onLogLine: (line) => pushLog(line),
-      });
-      if (!done.ok || !done.result?.sequenceName) throw new Error(done.error ?? "Pose sequence generation failed.");
-      pushLog(`Sequence: ${done.result.sequenceName}`);
-      return;
-    }
-    const done = await runDetailWsJob<{ firstPoseKey: string | null; lastInputRelPath: string }>({
+    const rawPrompts = newPosePrompt.trim() ? [newPosePrompt.trim()] : [];
+    const done = await runCharacterGeneration<{
+      sequenceName?: string;
+      galleryItemId?: string;
+    }>({
       charKey,
-      pathSuffix: "/pose/ws",
-      payload: {
-        job: "generate_prompts",
-        baseRelPath,
-        prompts,
-        ...(ref?.kind === "single" && ref.ref.keypointRelPath
-          ? { keypointRelPath: ref.ref.keypointRelPath }
-          : {}),
-        skipCloseup,
-        cropPadding,
-        qwenCfg,
-      },
+      kind: "pose",
+      baseRelPath,
+      rawPrompts,
+      keypointRef: keypointRefToGenRef(ref),
+      options: { skipCloseup, cropPadding, qwenCfg },
       onLogLine: (line) => pushLog(line),
     });
     if (!done.ok) throw new Error(done.error ?? "Pose generation failed.");
+    if (done.result?.sequenceName) pushLog(`Sequence: ${done.result.sequenceName}`);
   }
 
   async function renameSequence(oldName: string, newName: string) {
@@ -410,21 +415,67 @@ export function TimelineCharacterPicker(props: {
     const relPath = angleSourceRelPath;
     setAngleSourceRelPath("");
     if (!selectedKey || !relPath) return;
+
+    const inPose =
+      charSectionsRaw?.poseSplit.visible.some((x) => x.relPath === relPath) ||
+      charSectionsRaw?.poseSplit.hidden.some((x) => x.relPath === relPath);
+    const inExpr =
+      charSectionsRaw?.exprSplit.visible.some((x) => x.relPath === relPath) ||
+      charSectionsRaw?.exprSplit.hidden.some((x) => x.relPath === relPath);
+    if (!inPose && !inExpr) {
+      showError({ message: "Source image is not in this character gallery." });
+      return;
+    }
+    const angType = inPose ? "pose" : "expr";
+
     beginSession({ title: "Generating new angle", clearLog: true });
     await Promise.resolve();
     pushLog("Generating a new camera angle…");
     try {
-      const done = await runShotMakeAngleWsJob({
-        imageRelPath: relPath,
-        angleId,
+      const [posesBefore, exprsBefore] = await Promise.all([
+        apiPoseGallerySplit(selectedKey),
+        apiExpressionGallerySplit(selectedKey),
+      ]);
+      const before = {
+        pose: splitRelPaths(posesBefore),
+        expr: splitRelPaths(exprsBefore),
+      };
+
+      const payload: Record<string, unknown> = {
+        job: "angles",
+        angleIds: [angleId],
+        inputRelPath: relPath,
+      };
+      if (angType === "pose") {
+        payload.poseKeys = [POSE_FLAT_FOLDER_KEY];
+      } else {
+        payload.exprKeys = [POSE_FLAT_FOLDER_KEY];
+      }
+
+      const done = await runDetailWsJob({
+        charKey: selectedKey,
+        pathSuffix: angType === "pose" ? "/pose/ws" : "/expression/ws",
+        payload,
         onLogLine: (line) => pushLog(line),
       });
-      const newRel = done.result?.relPath;
-      if (!done.ok || !newRel) throw new Error(done.error || "Angle generation returned no image.");
+      if (!done.ok) throw new Error(done.error || "Angle generation failed.");
+
       pushLog("Done.");
-      endSession();
       await refreshSections();
-      setSelectedRelPaths((prev) => new Set([...prev, newRel]));
+
+      const [posesAfter, exprsAfter] = await Promise.all([
+        apiPoseGallerySplit(selectedKey),
+        apiExpressionGallerySplit(selectedKey),
+      ]);
+      const after = {
+        pose: splitRelPaths(posesAfter),
+        expr: splitRelPaths(exprsAfter),
+      };
+      const newPaths = newRelPathsFromSplits(before, after);
+      if (newPaths.length) {
+        setSelectedRelPaths((prev) => new Set([...prev, ...newPaths]));
+      }
+      endSession();
     } catch (e) {
       failSession(e, "Angle generation failed.");
     }

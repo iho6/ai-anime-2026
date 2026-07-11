@@ -23,6 +23,7 @@ import sys
 import os
 import shutil
 import time
+import uuid
 import urllib.error
 import urllib.request
 import ssl
@@ -295,6 +296,23 @@ def _is_windows_sharing_violation(exc: BaseException) -> bool:
     return isinstance(exc, OSError) and getattr(exc, "winerror", None) == 32
 
 
+def _unique_part_path(destination_path: Path) -> Path:
+    """Return a process-unique temporary path beside the destination file."""
+    token = f"{os.getpid()}.{uuid.uuid4().hex[:12]}"
+    return destination_path.with_name(f"{destination_path.name}.part.{token}")
+
+
+def _safe_unlink(path: Path | None) -> None:
+    if path is None:
+        return
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
+
 def _replace_with_retry(part: Path, dest: Path) -> None:
     """Commit ``.part`` to final path; retry on transient Windows file locks (WinError 32)."""
     max_attempts = 25
@@ -329,14 +347,8 @@ def download_file(
     destination_path = Path(destination)
     destination_path.parent.mkdir(parents=True, exist_ok=True)
 
-    part_path = destination_path.with_suffix(destination_path.suffix + ".part")
+    part_path: Path | None = None
     if force_redownload:
-        if part_path.exists():
-            try:
-                part_path.unlink()
-            except OSError as e:
-                print(f"  ERROR: Could not remove partial download {part_path}: {e}")
-                return False
         if destination_path.exists():
             try:
                 destination_path.unlink()
@@ -366,11 +378,7 @@ def download_file(
         if hf_token and "huggingface.co" in url:
             req.add_header("Authorization", f"Bearer {hf_token}")
 
-        if part_path.exists():
-            try:
-                part_path.unlink()
-            except Exception:
-                pass
+        part_path = _unique_part_path(destination_path)
 
         with urllib.request.urlopen(req, context=ssl_context) as resp:
             total = resp.headers.get("Content-Length")
@@ -402,18 +410,17 @@ def download_file(
         part_size = part_path.stat().st_size if part_path.exists() else 0
         if part_size <= 0:
             print("  ERROR: Download failed - empty file")
-            try:
-                part_path.unlink()
-            except Exception:
-                pass
+            _safe_unlink(part_path)
             return False
 
         _replace_with_retry(part_path, destination_path)
+        part_path = None
         file_size = destination_path.stat().st_size
         print(f"  OK  Successfully downloaded ({file_size / (1024*1024):.1f} MB)")
         return True
 
     except urllib.error.HTTPError as e:
+        _safe_unlink(part_path)
         if e.code in (401, 403):
             print(f"  ERROR: Authorization failed: {e}")
             print("    Get your token from: https://huggingface.co/settings/tokens")
@@ -423,15 +430,7 @@ def download_file(
         return False
     except Exception as e:
         print(f"  ERROR: Download failed: {e}")
-        try:
-            part_path  # type: ignore[name-defined]
-        except Exception:
-            part_path = None
-        if part_path:
-            try:
-                Path(part_path).unlink()
-            except Exception:
-                pass
+        _safe_unlink(part_path)
         return False
 
 

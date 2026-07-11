@@ -57,7 +57,7 @@ individual_frames_default = False
 
 API_KEY = "video_wan2_2_14B_i2v"
 
-DEFAULT_LENGTH = 33
+DEFAULT_LENGTH = 121
 DEFAULT_WIDTH = 640
 DEFAULT_HEIGHT = 640
 
@@ -547,7 +547,7 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help=(
-            "Per-image frame length(s), comma-separated (default 33, must follow 4n+1: 9,13,…,33,…,81). "
+            "Per-image frame length(s), comma-separated (default 121, must follow 4n+1: 25,29,…,121). "
             "e.g. 33 or 33,37,41 for multiple images"
         ),
     )

@@ -1,6 +1,15 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  DndContext,
+  DragEndEvent,
+  DragMoveEvent,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { useParams, useRouter } from "next/navigation";
 import {
   apiTimelineGet,
@@ -47,6 +56,7 @@ import {
   TimelineText,
   TimelineTransitionOut,
   FrameSequencePayload,
+  TimelineFrameEdit,
   ShotLayerMeta,
   TrajectoryMotionId,
 } from "../../../lib/api";
@@ -112,18 +122,29 @@ import {
   resolveImportDimensions,
   timelineDuration,
 } from "../../../components/timeline/timelineUtil";
-import { rasterizeGeometryToPngBase64 } from "../../../components/timeline/geometryRasterize";
+import {
+  flfEndpointLabel,
+  resolveFlfEndpoint,
+  selectedFlfClips,
+} from "../../../components/timeline/timelineFlfUtils";
+import {
+  frameSequencePayloadEqual,
+  syncTrimHiddenToFrameSequence,
+} from "../../../components/frameSequenceStripUtils";
 import { measureTextClipNaturalSize } from "../../../components/timeline/textMeasure";
 import {
   SEQUENCE_FLF_OUTPUT_LENGTHS,
   SEQUENCE_I2V_OUTPUT_LENGTHS,
   SequenceOutputLengthStepper,
+  WAN_VIDEO_DEFAULT_LENGTH,
+  WAN_VIDEO_LENGTH_HINT,
 } from "../../../components/sequenceOutputLength";
 import {
   FrameSequenceModal,
   type FrameSequenceStripActions,
 } from "../../detail/[charKey]/dataset/FrameSequenceModal";
 import { SequenceEditor } from "../../detail/[charKey]/dataset/SequenceEditor";
+import { TIMELINE_STRIP_FRAME_DROP_PREFIX } from "../../detail/[charKey]/dataset/sequenceGalleryUtils";
 import { sanitizeDownloadBaseName } from "../../../lib/downloadVideo";
 import { sanitizeClipColoringForSave } from "../../../lib/clipColoring";
 import { ClipColoringFlyout } from "../../../components/timeline/ClipColoringFlyout";
@@ -250,6 +271,11 @@ export default function TimelineEditorPage() {
   const [stripAiEditImageSrc, setStripAiEditImageSrc] = useState("");
   const stripAiEditResolveRef = useRef<((rel: string) => void) | null>(null);
   const stripAiEditRelRef = useRef<string | null>(null);
+  const [stripDragPreviewPath, setStripDragPreviewPath] = useState<string | null>(null);
+  const stripDragPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const stripDropSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
 
   // Context menus.
   const [clipMenu, setClipMenu] = useState<{
@@ -1606,6 +1632,13 @@ export default function TimelineEditorPage() {
     return null;
   }
 
+  /** Selected FLF endpoint clips (image, video, geometry), ordered by timeline start. */
+  function getSelectedFlfClips(): TimelineClip[] {
+    if (!manifest) return [];
+    const all = manifest.tracks.flatMap((t) => t.clips);
+    return selectedFlfClips(all, selectedClipIds);
+  }
+
   /** Selected image-like clips (images + geometries), ordered by timeline start. */
   function selectedImageClips(): TimelineClip[] {
     if (!manifest) return [];
@@ -1658,6 +1691,77 @@ export default function TimelineEditorPage() {
       ),
     }));
   }
+
+  async function insertFrameFromEditorDrop(
+    relPath: string,
+    trackId: string,
+    startSec: number
+  ) {
+    const imported = await apiTimelineImportImage({
+      timelineKey,
+      sourceRelPath: relPath,
+    });
+    const { width, height } = await resolveImportDimensions(
+      imported.srcRelPath,
+      imported.width || 0,
+      imported.height || 0
+    );
+    const clip = buildImageClip({
+      srcRelPath: imported.srcRelPath,
+      width,
+      height,
+      start: startSec,
+    });
+    commit();
+    insertClipOnSameTrack(clip, trackId, startSec);
+    setPlaying(false);
+    setPlayhead(startSec);
+    selectClip(clip.id, false);
+  }
+
+  const onStripFrameDragMove = useCallback((ev: DragMoveEvent) => {
+    const activeData = ev.active.data.current as { kind?: string } | undefined;
+    if (activeData?.kind !== "frameSeqStripSlot") return;
+    const start = ev.activatorEvent;
+    if (!(start instanceof PointerEvent)) return;
+    stripDragPointerRef.current = {
+      x: start.clientX + ev.delta.x,
+      y: start.clientY + ev.delta.y,
+    };
+  }, []);
+
+  const onStripFrameDragEnd = useCallback(
+    (ev: DragEndEvent) => {
+      setStripDragPreviewPath(null);
+      const activeData = ev.active.data.current as
+        | { kind?: string; relPath?: string }
+        | undefined;
+      if (activeData?.kind !== "frameSeqStripSlot" || !activeData.relPath?.trim()) {
+        stripDragPointerRef.current = null;
+        return;
+      }
+      const overId = ev.over?.id != null ? String(ev.over.id) : "";
+      if (!overId.startsWith(TIMELINE_STRIP_FRAME_DROP_PREFIX)) {
+        stripDragPointerRef.current = null;
+        return;
+      }
+      const trackId = (ev.over?.data.current as { trackId?: string } | undefined)?.trackId;
+      if (!trackId) {
+        stripDragPointerRef.current = null;
+        return;
+      }
+      const ptr = stripDragPointerRef.current;
+      stripDragPointerRef.current = null;
+      const startSec = ptr
+        ? clamp(tracksRef.current?.timeAtClientX(ptr.x) ?? playhead, 0, Infinity)
+        : playhead;
+      void insertFrameFromEditorDrop(activeData.relPath.trim(), trackId, startSec).catch((e) =>
+        showError({ message: "Could not add frame to timeline.", error: e })
+      );
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timelineKey, playhead]
+  );
 
   async function openAiEdit(clipId: string) {
     const found = findClip(clipId);
@@ -1888,14 +1992,18 @@ export default function TimelineEditorPage() {
   async function runFlf(clipIdA: string, clipIdB: string, length: number) {
     const a = findClip(clipIdA);
     const b = findClip(clipIdB);
-    if (!a || !b || !clipActsAsImage(a.clip) || !clipActsAsImage(b.clip)) return;
+    if (!a || !b) return;
+    const ordered = [a.clip, b.clip].sort((x, y) => x.start - y.start);
+    const [earlier, later] = ordered;
     beginSession({ title: "Generating video (FLF)", clearLog: true });
     await Promise.resolve();
-    pushLog("Rasterizing sources…");
+    pushLog(
+      `Resolving FLF endpoints: ${flfEndpointLabel(earlier, "start")} → ${flfEndpointLabel(later, "end")}…`
+    );
     try {
       const [relA, relB] = await Promise.all([
-        resolveClipImageRelPath(timelineKey, a.clip),
-        resolveClipImageRelPath(timelineKey, b.clip),
+        resolveFlfEndpoint(timelineKey, earlier, "start", pushLog),
+        resolveFlfEndpoint(timelineKey, later, "end", pushLog),
       ]);
       pushLog("Generating first-last-frame video…");
       const done = await runTimelineFlfWsJob({
@@ -1922,7 +2030,7 @@ export default function TimelineEditorPage() {
           naturalW: r.width || undefined,
           naturalH: r.height || undefined,
         },
-        a.clip.start,
+        earlier.start,
         "FLF"
       );
       endSession();
@@ -1931,9 +2039,34 @@ export default function TimelineEditorPage() {
     }
   }
 
+  function syncVideoFrameTrimHiddenInManifest(
+    m: TimelineManifest,
+    clipIds: string[]
+  ): TimelineManifest {
+    const fps = Math.max(1, m.fps ?? 24);
+    const idSet = new Set(clipIds);
+    return {
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => {
+          if (!idSet.has(c.id) || !c.frameSequence?.strip?.length) return c;
+          const synced = syncTrimHiddenToFrameSequence(
+            c.frameSequence,
+            { inPoint: c.inPoint ?? 0, outPoint: c.outPoint ?? 0 },
+            c.frameEdit,
+            fps
+          );
+          if (frameSequencePayloadEqual(synced, c.frameSequence)) return c;
+          return { ...c, frameSequence: synced };
+        }),
+      })),
+    };
+  }
+
   function updateClipFrameSequence(
     clipId: string,
-    patch: { frameSequence: FrameSequencePayload; frameEdit?: { framesDirRel: string } }
+    patch: { frameSequence: FrameSequencePayload; frameEdit?: TimelineFrameEdit }
   ) {
     historyUpdate((m) => ({
       ...m,
@@ -1968,9 +2101,17 @@ export default function TimelineEditorPage() {
     if (!done.ok || !done.result?.frameSequence) {
       throw new Error(done.error || "Frame extraction returned no strip.");
     }
+    const fps = Math.max(1, manifest?.fps ?? 24);
+    const frameEdit = done.result.frameEdit;
+    const synced = syncTrimHiddenToFrameSequence(
+      done.result.frameSequence,
+      { inPoint: clip.inPoint ?? 0, outPoint: clip.outPoint ?? 0 },
+      frameEdit,
+      fps
+    );
     updateClipFrameSequence(clipId, {
-      frameSequence: done.result.frameSequence,
-      frameEdit: done.result.frameEdit,
+      frameSequence: synced,
+      frameEdit,
     });
     if (trackId) {
       setVideoFrameEditor({
@@ -2033,6 +2174,7 @@ export default function TimelineEditorPage() {
         : [clipId];
     const ok = await ensureVideoFramesExtracted(clipIds);
     if (!ok) return;
+    historyUpdate((m) => syncVideoFrameTrimHiddenInManifest(m, clipIds));
     setVideoFrameEditor({
       clipIds,
       primaryClipId: clipId,
@@ -2173,7 +2315,12 @@ export default function TimelineEditorPage() {
         const dur = r.durationSec || found.clip.duration;
         const framePatch = {
           frameSequence: jobStrip,
-          frameEdit: found.clip.frameEdit,
+          frameEdit: {
+            framesDirRel: found.clip.frameEdit?.framesDirRel ?? "",
+            extractInPointSec: 0,
+            extractFps: manifest.fps,
+            mp4Aligned: true,
+          },
         };
         if (mode === "replace") {
           historyUpdate((m) => ({
@@ -2340,7 +2487,7 @@ export default function TimelineEditorPage() {
     const isImage = rc?.clip.type === "image";
     const isRaster = rc?.clip ? clipActsAsImage(rc.clip) : false;
     const isCharImage = isImage && Boolean(rc?.clip.source?.charKey);
-    const twoImagesSelected = selectedImageClips().length === 2;
+    const twoFlfSelected = getSelectedFlfClips().length === 2;
     const pair = getOverlappingCharBgPair();
     const isVideo = rc?.clip.type === "video";
     const isGeometry = rc?.clip.type === "geometry";
@@ -2489,32 +2636,33 @@ export default function TimelineEditorPage() {
         disabled: busy,
         onSelect: () => void openAiEdit(clipMenu.clipId),
       });
-      items.push(
-        {
-          key: "i2v",
-          label: "I2V (image to video)",
-          disabled: busy,
-          onSelect: () =>
-            setI2vDialog({ open: true, clipId: clipMenu.clipId, length: 129, prompt: "" }),
+      items.push({
+        key: "i2v",
+        label: "I2V (image to video)",
+        disabled: busy,
+        onSelect: () =>
+          setI2vDialog({ open: true, clipId: clipMenu.clipId, length: WAN_VIDEO_DEFAULT_LENGTH, prompt: "" }),
+      });
+    }
+
+    if ((isRaster || isVideo || isGeometry) && !pair) {
+      items.push({
+        key: "flf",
+        label: twoFlfSelected
+          ? "FLF (selected 2 clips to video)"
+          : "FLF (select 2 image/video clips first)",
+        disabled: busy || !twoFlfSelected,
+        onSelect: () => {
+          const sel = getSelectedFlfClips();
+          if (sel.length !== 2) return;
+          setFlfDialog({
+            open: true,
+            clipIdA: sel[0]!.id,
+            clipIdB: sel[1]!.id,
+            length: WAN_VIDEO_DEFAULT_LENGTH,
+          });
         },
-        {
-          key: "flf",
-          label: twoImagesSelected
-            ? "FLF (selected 2 images to video)"
-            : "FLF (select 2 image clips first)",
-          disabled: busy || !twoImagesSelected,
-          onSelect: () => {
-            const sel = selectedImageClips();
-            if (sel.length !== 2) return;
-            setFlfDialog({
-              open: true,
-              clipIdA: sel[0]!.id,
-              clipIdB: sel[1]!.id,
-              length: 33,
-            });
-          },
-        }
-      );
+      });
     }
 
     if (isImage || isVideo || isGeometry || isText) {
@@ -2674,6 +2822,21 @@ export default function TimelineEditorPage() {
   }
 
   return (
+    <DndContext
+      sensors={stripDropSensors}
+      onDragStart={(ev) => {
+        const d = ev.active.data.current as { kind?: string; relPath?: string } | undefined;
+        if (d?.kind === "frameSeqStripSlot" && d.relPath) {
+          setStripDragPreviewPath(d.relPath);
+        }
+      }}
+      onDragMove={onStripFrameDragMove}
+      onDragEnd={onStripFrameDragEnd}
+      onDragCancel={() => {
+        setStripDragPreviewPath(null);
+        stripDragPointerRef.current = null;
+      }}
+    >
     <div style={{ minHeight: "100vh", background: "#0e0e0e", color: "#eee" }}>
       {/* Header nav */}
       <div
@@ -2987,6 +3150,7 @@ export default function TimelineEditorPage() {
             pxPerSec={pxPerSec}
             playhead={playhead}
             selectedClipIds={selectedClipIds}
+            externalStripDropActive={Boolean(videoFrameEditor)}
             onSeek={(t) => {
               setPlaying(false);
               setPlayhead(t);
@@ -3174,10 +3338,7 @@ export default function TimelineEditorPage() {
           >
             <div style={{ fontWeight: 600, marginBottom: 8 }}>Image → Video (I2V)</div>
             <div style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
-              <span style={{ display: "block", marginBottom: 2 }}>
-                Output length (latent frames): 25 (~1s), 49 (~2s), 73 (~3s), 97 (~4s), 121 (~5s),
-                129 (~5.4s, default)
-              </span>
+              <span style={{ display: "block", marginBottom: 2 }}>{WAN_VIDEO_LENGTH_HINT}</span>
               <SequenceOutputLengthStepper
                 lengths={SEQUENCE_I2V_OUTPUT_LENGTHS}
                 value={i2vDialog.length}
@@ -3255,7 +3416,6 @@ export default function TimelineEditorPage() {
             charKey=""
             sequenceName=""
             previewFps={Math.max(1, manifest.fps)}
-            disableStripDrag
             stripActions={videoFrameStripActions}
             groupLayers={groupLayers}
             getStripActionsForClip={getVideoFrameStripActions}
@@ -3362,12 +3522,11 @@ export default function TimelineEditorPage() {
           >
             <div style={{ fontWeight: 600, marginBottom: 8 }}>First–Last Frame (FLF)</div>
             <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 12 }}>
-              Two selected image clips will be used as start and end frames.
+              The two selected clips (ordered by timeline position) supply start and end frames.
+              Videos use the first/last trimmed frame automatically.
             </div>
             <div style={{ display: "block", fontSize: 13, marginBottom: 6 }}>
-              <span style={{ display: "block", marginBottom: 2 }}>
-                Output length (frames, 4k+1 step 4: 25–121)
-              </span>
+              <span style={{ display: "block", marginBottom: 2 }}>{WAN_VIDEO_LENGTH_HINT}</span>
               <SequenceOutputLengthStepper
                 lengths={SEQUENCE_FLF_OUTPUT_LENGTHS}
                 value={flfDialog.length}
@@ -3396,6 +3555,24 @@ export default function TimelineEditorPage() {
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
     </div>
+    <DragOverlay dropAnimation={null}>
+      {stripDragPreviewPath ? (
+        <img
+          src={assetUrlFromRelPath(stripDragPreviewPath)}
+          alt=""
+          style={{
+            width: 72,
+            height: 72,
+            objectFit: "contain",
+            opacity: 0.85,
+            pointerEvents: "none",
+            border: "1px solid rgba(255,255,255,0.35)",
+            background: "#111",
+          }}
+        />
+      ) : null}
+    </DragOverlay>
+    </DndContext>
   );
 }
 

@@ -63,6 +63,9 @@ export const SEQUENCE_BUILDER_DRAG_MIME = "application/x-anime2026-seq-source";
 /** @dnd-kit droppable on frame-sequence modal backdrop: add strip image to sequence gallery. */
 export const FS_MODAL_GALLERY_BACKDROP_DROP_ID = "seq-fs-add-to-gallery-backdrop";
 
+/** Per-track droppable prefix when dragging a frame-sequence strip slot onto the timeline. */
+export const TIMELINE_STRIP_FRAME_DROP_PREFIX = "timeline-track-drop:";
+
 /** Matches SequenceEditor strip length: min cells, max occupied index + tail padding. */
 export function computeSequenceTimelineSpan(manifest: SequenceManifest): number {
   const MIN_FRAMES = 48;

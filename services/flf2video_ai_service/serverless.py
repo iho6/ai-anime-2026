@@ -55,7 +55,7 @@ convert_local_to_url = False
 individual_frames_default = False
 
 API_KEY = "video_wan2_2_14B_flf2v_lightning_api"
-DEFAULT_LENGTH = 33
+DEFAULT_LENGTH = 121
 
 
 def _find_wan_flf_nodes(workflow: dict[str, Any]) -> tuple[str, str, str]:
@@ -465,7 +465,7 @@ def _parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help=(
-            "Per-pair frame length(s), comma-separated (default 33). "
+            "Per-pair frame length(s), comma-separated (default 121). "
             "e.g. 33 or 33,37,41 for multiple pairs"
         ),
     )

@@ -556,7 +556,7 @@ export type TimelineClip = {
   transitionOut?: TimelineTransitionOut;
   /** Per-frame strip for video frame editing (persisted across re-opens). */
   frameSequence?: FrameSequencePayload;
-  frameEdit?: { framesDirRel: string };
+  frameEdit?: TimelineFrameEdit;
   /** FFv1 alpha companion for WebM bg-removed clips (``{stem}.alpha.mkv``). */
   alphaRelPath?: string;
   /** Per-clip RGB / opacity / lightness adjustments (preview + export). */
@@ -1018,10 +1018,43 @@ export function runTimelineI2vWsJob(params: {
   );
 }
 
+export type TimelineFrameEdit = {
+  framesDirRel: string;
+  /** Source seconds mapped to strip index 0 at extraction time. */
+  extractInPointSec?: number;
+  /** FPS used for strip-index → source-time mapping. */
+  extractFps?: number;
+  /** After encode-from-strip, visible slots map to consecutive MP4 frames. */
+  mp4Aligned?: boolean;
+};
+
 export type TimelineFrameExtractResult = {
   frameSequence: FrameSequencePayload;
-  frameEdit: { framesDirRel: string };
+  frameEdit: TimelineFrameEdit;
 };
+
+export type TimelineExtractVideoFrameResult = {
+  srcRelPath: string;
+  width: number;
+  height: number;
+};
+
+/** Extract one trimmed video frame (first/last) into timeline clips storage. */
+export function runTimelineExtractVideoFrameWsJob(params: {
+  timelineKey: string;
+  videoRelPath: string;
+  inPoint: number;
+  outPoint: number;
+  edge: "first" | "last";
+  onLogLine: (line: string) => void;
+}): Promise<WsDoneMessage<TimelineExtractVideoFrameResult>> {
+  const { timelineKey, onLogLine, ...payload } = params;
+  return runTimelineGenWsJob<TimelineExtractVideoFrameResult>(
+    `/timeline/${encodeURIComponent(timelineKey)}/extract_video_frame/ws`,
+    payload,
+    onLogLine
+  );
+}
 
 /** Extract trimmed video clip frames for per-frame editing. */
 export function runTimelineVideoFramesExtractWsJob(params: {
@@ -4578,7 +4611,7 @@ export async function apiSequenceGenerateFlf(params: {
       body: JSON.stringify({
         startIndex: params.startIndex,
         endIndex: params.endIndex,
-        length: params.length ?? 33,
+        length: params.length ?? 121,
       }),
       credentials: "omit",
     }
@@ -4597,7 +4630,7 @@ export async function apiSequenceGenerateI2v(params: {
 }): Promise<{ galleryItem: SequenceGalleryItem }> {
   const body: Record<string, unknown> = {
     frameIndex: params.frameIndex,
-    length: params.length ?? 129,
+    length: params.length ?? 121,
     positivePrompt: params.positivePrompt,
   };
   if (params.width != null) body.width = params.width;
@@ -4627,7 +4660,7 @@ export async function apiSequenceStripGenerateI2v(params: {
   const body: Record<string, unknown> = {
     sourceRelPath: params.sourceRelPath,
     outputDirRel: params.outputDirRel,
-    length: params.length ?? 129,
+    length: params.length ?? 121,
     positivePrompt: params.positivePrompt,
   };
   if (params.width != null) body.width = params.width;
@@ -4661,7 +4694,7 @@ export async function apiSequenceStripGenerateFlf(params: {
         imageRelPathA: params.imageRelPathA,
         imageRelPathB: params.imageRelPathB,
         outputDirRel: params.outputDirRel,
-        length: params.length ?? 33,
+        length: params.length ?? 121,
       }),
       credentials: "omit",
     }
