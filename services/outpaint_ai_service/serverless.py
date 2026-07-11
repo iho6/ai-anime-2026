@@ -1,6 +1,6 @@
 """
-Flux-fill outpaint — RunPod serverless handler.
-Extends a source image in any direction using the Flux-fill model.
+Nunchaku Qwen Lightning outpaint — RunPod serverless handler.
+Extends a source image in any direction using the Qwen inpainting workflow.
 """
 
 from __future__ import annotations
@@ -55,20 +55,38 @@ logger.info("Loaded %s workflow(s): %s", len(workflows), list(workflows.keys()))
 local_servers: dict[str, str] = {}
 convert_local_to_url = False
 
-WORKFLOW_STEM = "flux_fill_outpaint"
+WORKFLOW_STEM = "nunchaku_qwen_lightning_outpainting_api"
+PAD_STEP = 8
 
-# Workflow node IDs
-_NODE_LOAD_IMAGE = "17"
-_NODE_PAD = "44"
-_NODE_CLIP_TEXT = "23"
+# Workflow node IDs (nunchaku_qwen_lightning_outpainting_api.json)
+_NODE_LOAD_IMAGE = "116"
+_NODE_PAD = "132"
+_NODE_CLIP_TEXT = "6"
 _NODE_KSAMPLER = "3"
-_NODE_FLUX_GUIDANCE = "26"
+
+
+def snap_outpaint_padding(value: int, *, step: int = PAD_STEP) -> int:
+    """Round padding to ComfyUI ImagePadForOutpaint step (default 8px)."""
+    v = max(0, int(value))
+    if v == 0:
+        return 0
+    return max(step, int(round(v / step)) * step)
 
 
 def normalize_outpaint_inputs(task: dict) -> dict[str, Any]:
     image_url = task.get("image_url")
     if not image_url or not str(image_url).strip():
         raise ValueError("image_url is required")
+
+    def _pad(key: str, default: int = 0) -> int:
+        v = task.get(key, default)
+        try:
+            v = int(v)
+        except (TypeError, ValueError):
+            raise ValueError(f"{key} must be an integer, got {v!r}")
+        if v < 0:
+            raise ValueError(f"{key} must be >= 0, got {v}")
+        return snap_outpaint_padding(v)
 
     def _int(key: str, default: int, min_val: int = 0) -> int:
         v = task.get(key, default)
@@ -90,6 +108,13 @@ def normalize_outpaint_inputs(task: dict) -> dict[str, Any]:
             raise ValueError(f"{key} must be between {min_val} and {max_val}, got {v}")
         return v
 
+    left = _pad("left", 0)
+    top = _pad("top", 0)
+    right = _pad("right", 0)
+    bottom = _pad("bottom", 0)
+    if left + top + right + bottom == 0:
+        raise ValueError("At least one padding side (left/top/right/bottom) must be > 0")
+
     seed = task.get("seed")
     if seed is None:
         seed = random.randint(0, 2**32 - 1)
@@ -102,14 +127,13 @@ def normalize_outpaint_inputs(task: dict) -> dict[str, Any]:
     return {
         "image_url": str(image_url).strip(),
         "prompt": str(task.get("prompt", prompts.DEFAULT_OUTPAINT_PROMPT)).strip(),
-        "left": _int("left", 400),
-        "top": _int("top", 0),
-        "right": _int("right", 400),
-        "bottom": _int("bottom", 400),
-        "feathering": _int("feathering", 24),
+        "left": left,
+        "top": top,
+        "right": right,
+        "bottom": bottom,
+        "feathering": _int("feathering", 40),
         "seed": seed,
-        "steps": _int("steps", 20, min_val=1),
-        "guidance": _float("guidance", 30.0, min_val=0.0),
+        "steps": _int("steps", 8, min_val=1),
         "denoise": _float("denoise", 1.0, min_val=0.0, max_val=1.0),
     }
 
@@ -137,8 +161,6 @@ def run_outpaint(
     ks["seed"] = inputs["seed"]
     ks["steps"] = inputs["steps"]
     ks["denoise"] = inputs["denoise"]
-
-    w[_NODE_FLUX_GUIDANCE]["inputs"]["guidance"] = inputs["guidance"]
 
     return task_queue(w, server_address)
 
@@ -263,20 +285,19 @@ def handler(job_input: dict[str, Any]) -> dict[str, Any]:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Flux-fill outpaint AI service")
+    parser = argparse.ArgumentParser(description="Nunchaku Qwen Lightning outpaint AI service")
     parser.add_argument("--test-mode", action="store_true")
     parser.add_argument("--enable-default", action="store_true")
     parser.add_argument("--default-port", type=int, default=8188)
     parser.add_argument("--image-url", type=str)
     parser.add_argument("--prompt", type=str, default=prompts.DEFAULT_OUTPAINT_PROMPT)
-    parser.add_argument("--left", type=int, default=400)
+    parser.add_argument("--left", type=int, default=0)
     parser.add_argument("--top", type=int, default=0)
-    parser.add_argument("--right", type=int, default=400)
-    parser.add_argument("--bottom", type=int, default=400)
-    parser.add_argument("--feathering", type=int, default=24)
+    parser.add_argument("--right", type=int, default=0)
+    parser.add_argument("--bottom", type=int, default=256)
+    parser.add_argument("--feathering", type=int, default=40)
     parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument("--steps", type=int, default=20)
-    parser.add_argument("--guidance", type=float, default=30.0)
+    parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--denoise", type=float, default=1.0)
     parser.add_argument(
         "--convert-local-to-url",
@@ -309,7 +330,6 @@ def _run_test_mode(args: argparse.Namespace) -> None:
         "bottom": args.bottom,
         "feathering": args.feathering,
         "steps": args.steps,
-        "guidance": args.guidance,
         "denoise": args.denoise,
     }
     if args.seed is not None:

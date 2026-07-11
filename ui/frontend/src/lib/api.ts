@@ -2657,20 +2657,70 @@ export async function apiLocationAiEdit(params: {
   return readJson<{ relPath: string }>(res);
 }
 
-export async function apiLocationOutpaint(params: {
+export async function apiLocationOutpaintStream(params: {
   locationKey: string;
-  promptText: string;
+  sourceRelPath: string;
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  feathering?: number;
+  promptText?: string;
+  onLogLine: (line: string) => void;
+  signal?: AbortSignal;
 }): Promise<{ relPath: string }> {
   const res = await fetch(
     `${API_BASE_URL}/detail/${encodeURIComponent(params.locationKey)}/location/outpaint`,
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ promptText: params.promptText }),
+      headers: {
+        "content-type": "application/json",
+        accept: "application/x-ndjson, application/json",
+      },
+      body: JSON.stringify({
+        sourceRelPath: params.sourceRelPath,
+        left: params.left,
+        top: params.top,
+        right: params.right,
+        bottom: params.bottom,
+        ...(params.feathering != null ? { feathering: params.feathering } : {}),
+        ...(params.promptText ? { promptText: params.promptText } : {}),
+      }),
       credentials: "omit",
+      signal: params.signal,
     }
   );
-  return readJson<{ relPath: string }>(res);
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(formatFastApiDetailMessage(res.status, t) ?? `API error ${res.status}`);
+  }
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No response body");
+  const dec = new TextDecoder();
+  let buf = "";
+  let relPath = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (value) buf += dec.decode(value, { stream: true });
+    const parts = buf.split("\n");
+    buf = parts.pop() ?? "";
+    for (const line of parts) {
+      const s = line.trim();
+      if (!s) continue;
+      const obj = JSON.parse(s) as
+        | { type: "log"; line: string }
+        | { type: "done"; ok: boolean; relPath?: string }
+        | { type: "error"; detail: unknown };
+      if (obj.type === "log") params.onLogLine(obj.line);
+      else if (obj.type === "done") {
+        relPath = obj.relPath ?? "";
+        return { relPath };
+      } else if (obj.type === "error")
+        throw new Error(formatFastApiDetailMessage(500, obj.detail) ?? "Outpaint failed.");
+    }
+    if (done) break;
+  }
+  throw new Error("Stream ended without done or error.");
 }
 
 export async function apiNewCharacterSaveUploaded(params: {

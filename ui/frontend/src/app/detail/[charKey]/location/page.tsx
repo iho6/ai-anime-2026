@@ -10,6 +10,7 @@ import {
   apiLocationGalleryReorder,
   apiLocationGenerateAnglesStream,
   apiLocationHide,
+  apiLocationOutpaintStream,
   apiLocationSaveViewCopy,
   apiLocationUnhide,
   assetDownloadUrlFromRelPath,
@@ -30,6 +31,20 @@ import { GalleryImageLightbox } from "../../../../components/GalleryImageLightbo
 import type { SharedLogStreamHandle } from "../../../../components/SharedLogStream";
 import { ConnectedJobRunModal } from "../../../../components/ConnectedJobRunModal";
 import { useJobRunSession } from "../../../../hooks/useJobRunSession";
+import { truncateJobModalStatusLine } from "../../../../lib/jobModalStatus";
+import {
+  clampMaxOutpaintPerPass,
+  DEFAULT_MAX_OUTPAINT_PER_PASS,
+  hasOutpaintPadding,
+  initialOutpaintBox,
+  MAX_MAX_OUTPAINT_PER_PASS,
+  MAX_OUTPAINT_PER_PASS_STEP,
+  MIN_MAX_OUTPAINT_PER_PASS,
+  paddingFromOutpaintBox,
+  splitOutpaintIntoStages,
+  type OutpaintBoxPx,
+  type OutpaintStage,
+} from "../../../../lib/outpaintPadding";
 
 const PREVIEW_MAX_W = "100%";
 const PREVIEW_MAX_H = "min(360px, 50vh)";
@@ -49,14 +64,267 @@ function imageContainRect(containerW: number, containerH: number, natW: number, 
 
 type CropPx = { tx: number; ty: number; side: number };
 
-function truncateJobModalStatusLine(raw: string, maxLen = 120): string {
-  const s = raw
-    .replace(/\r\n/g, "\n")
-    .replace(/\n/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (s.length <= maxLen) return s;
-  return `${s.slice(0, maxLen - 1)}…`;
+function LocationOutpaintPreview(props: {
+  imageSrc: string;
+  box: OutpaintBoxPx | null;
+  onBoxChange: (b: OutpaintBoxPx) => void;
+  onNatChange?: (nat: { w: number; h: number }) => void;
+}) {
+  const { imageSrc, box, onBoxChange, onNatChange } = props;
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
+  const [layout, setLayout] = useState({ cw: 200, ch: 200 });
+  const dragRef = useRef<
+    | null
+    | {
+        edge: "left" | "right" | "top" | "bottom";
+        orig: OutpaintBoxPx;
+        startIx: number;
+        startIy: number;
+      }
+  >(null);
+
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+    const onLoad = () => {
+      if (img.naturalWidth > 0) {
+        const next = { w: img.naturalWidth, h: img.naturalHeight };
+        setNat(next);
+        onNatChange?.(next);
+      }
+    };
+    onLoad();
+    img.addEventListener("load", onLoad);
+    return () => img.removeEventListener("load", onLoad);
+  }, [imageSrc, onNatChange]);
+
+  useEffect(() => {
+    if (!nat || box != null) return;
+    onBoxChange(initialOutpaintBox(nat));
+  }, [nat, box, onBoxChange]);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      setLayout({ cw: Math.max(1, el.clientWidth), ch: Math.max(1, el.clientHeight) });
+    });
+    ro.observe(el);
+    setLayout({ cw: Math.max(1, el.clientWidth), ch: Math.max(1, el.clientHeight) });
+    return () => ro.disconnect();
+  }, []);
+
+  const clientToImage = useCallback(
+    (clientX: number, clientY: number): { ix: number; iy: number } | null => {
+      const wrap = wrapRef.current;
+      const n = nat;
+      if (!wrap || !n) return null;
+      const rect = wrap.getBoundingClientRect();
+      const { ox, oy, dw, dh } = imageContainRect(rect.width, rect.height, n.w, n.h);
+      const lx = clientX - rect.left - ox;
+      const ly = clientY - rect.top - oy;
+      return { ix: (lx / dw) * n.w, iy: (ly / dh) * n.h };
+    },
+    [nat]
+  );
+
+  const edgeHitPx = () => 14 * Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
+
+  const pickEdge = (ix: number, iy: number, b: OutpaintBoxPx): "left" | "right" | "top" | "bottom" | null => {
+    const t = edgeHitPx();
+    const onVert = iy >= b.by0 - t && iy <= b.by1 + t;
+    const onHorz = ix >= b.bx0 - t && ix <= b.bx1 + t;
+    const dL = Math.abs(ix - b.bx0);
+    const dR = Math.abs(ix - b.bx1);
+    const dT = Math.abs(iy - b.by0);
+    const dB = Math.abs(iy - b.by1);
+    const candidates: Array<{ edge: "left" | "right" | "top" | "bottom"; d: number }> = [];
+    if (onVert) {
+      candidates.push({ edge: "left", d: dL });
+      candidates.push({ edge: "right", d: dR });
+    }
+    if (onHorz) {
+      candidates.push({ edge: "top", d: dT });
+      candidates.push({ edge: "bottom", d: dB });
+    }
+    candidates.sort((a, b2) => a.d - b2.d);
+    const best = candidates[0];
+    if (!best || best.d > t) return null;
+    return best.edge;
+  };
+
+  const onOverlayPointerDown = (e: React.PointerEvent) => {
+    if (!nat || !box) return;
+    const p = clientToImage(e.clientX, e.clientY);
+    if (!p) return;
+    const edge = pickEdge(p.ix, p.iy, box);
+    if (!edge) return;
+    dragRef.current = { edge, orig: { ...box }, startIx: p.ix, startIy: p.iy };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    const n = nat;
+    if (!d || !n) return;
+    const cur = clientToImage(e.clientX, e.clientY);
+    if (!cur) return;
+    const dx = cur.ix - d.startIx;
+    const dy = cur.iy - d.startIy;
+    const o = d.orig;
+    let bx0 = o.bx0;
+    let by0 = o.by0;
+    let bx1 = o.bx1;
+    let by1 = o.by1;
+    if (d.edge === "left") bx0 = Math.min(0, o.bx0 + dx);
+    if (d.edge === "right") bx1 = Math.max(n.w, o.bx1 + dx);
+    if (d.edge === "top") by0 = Math.min(0, o.by0 + dy);
+    if (d.edge === "bottom") by1 = Math.max(n.h, o.by1 + dy);
+    onBoxChange({ bx0, by0, bx1, by1 });
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (dragRef.current) {
+      dragRef.current = null;
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  const overlayGeom = useMemo(() => {
+    if (!nat || !box) return null;
+    const { cw, ch } = layout;
+    const { ox, oy, dw, dh } = imageContainRect(cw, ch, nat.w, nat.h);
+    const left = ox + (box.bx0 / nat.w) * dw;
+    const top = oy + (box.by0 / nat.h) * dh;
+    const width = ((box.bx1 - box.bx0) / nat.w) * dw;
+    const height = ((box.by1 - box.by0) / nat.h) * dh;
+    const imgLeft = ox;
+    const imgTop = oy;
+    const imgW = dw;
+    const imgH = dh;
+    return { ox, oy, dw, dh, left, top, width, height, imgLeft, imgTop, imgW, imgH, cw, ch };
+  }, [nat, box, layout]);
+
+  const outerStyle: React.CSSProperties = {
+    border: "1px solid rgba(0,0,0,0.35)",
+    background: "rgba(0,0,0,0.02)",
+    maxWidth: "100%",
+    width: "100%",
+    boxSizing: "border-box",
+    position: "relative",
+    height: PREVIEW_MAX_H,
+    minHeight: 120,
+  };
+
+  return (
+    <div ref={wrapRef} style={outerStyle}>
+      <img
+        ref={imgRef}
+        src={imageSrc}
+        alt=""
+        draggable={false}
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+          display: "block",
+          pointerEvents: "none",
+          userSelect: "none",
+        }}
+      />
+      {overlayGeom && box ? (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "auto",
+            touchAction: "none",
+            cursor: "crosshair",
+          }}
+          onPointerDown={onOverlayPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        >
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: overlayGeom.cw,
+              height: overlayGeom.top,
+              background: "rgba(0,0,0,0.5)",
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: overlayGeom.top,
+              width: overlayGeom.left,
+              height: overlayGeom.height,
+              background: "rgba(0,0,0,0.5)",
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: overlayGeom.left + overlayGeom.width,
+              top: overlayGeom.top,
+              width: overlayGeom.cw - overlayGeom.left - overlayGeom.width,
+              height: overlayGeom.height,
+              background: "rgba(0,0,0,0.5)",
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              top: overlayGeom.top + overlayGeom.height,
+              width: overlayGeom.cw,
+              height: overlayGeom.ch - overlayGeom.top - overlayGeom.height,
+              background: "rgba(0,0,0,0.5)",
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: overlayGeom.left,
+              top: overlayGeom.top,
+              width: overlayGeom.width,
+              height: overlayGeom.height,
+              boxSizing: "border-box",
+              border: "2px dashed rgba(255,255,255,0.9)",
+              boxShadow: "0 0 0 1px rgba(0,0,0,0.45)",
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: overlayGeom.imgLeft,
+              top: overlayGeom.imgTop,
+              width: overlayGeom.imgW,
+              height: overlayGeom.imgH,
+              boxSizing: "border-box",
+              border: "1px solid rgba(255,255,255,0.35)",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function LocationBaseCropPreview(props: {
@@ -366,6 +634,14 @@ export default function LocationDetailPage() {
   const [busy, setBusy] = useState(false);
   const [cropMode, setCropMode] = useState(false);
   const [cropPx, setCropPx] = useState<CropPx | null>(null);
+  const [outpaintMode, setOutpaintMode] = useState(false);
+  const [outpaintBox, setOutpaintBox] = useState<OutpaintBoxPx | null>(null);
+  const [outpaintNat, setOutpaintNat] = useState<{ w: number; h: number } | null>(null);
+  const [maxOutpaintPerPass, setMaxOutpaintPerPass] = useState(DEFAULT_MAX_OUTPAINT_PER_PASS);
+  const [outpaintStages, setOutpaintStages] = useState<OutpaintStage[] | null>(null);
+  const [outpaintStageIndex, setOutpaintStageIndex] = useState(0);
+  const [outpaintStageResult, setOutpaintStageResult] = useState<string | null>(null);
+  const [outpaintStageInputRel, setOutpaintStageInputRel] = useState<string | null>(null);
   const [angleGroups, setAngleGroups] = useState<AngleGroup[]>([]);
   const [angleDialogOpen, setAngleDialogOpen] = useState(false);
 
@@ -409,9 +685,23 @@ export default function LocationDetailPage() {
       .catch((e) => showError({ message: "Could not load angle groups.", error: e }));
   }, [locationKey, showError]);
 
+  const clearOutpaintStageState = useCallback(() => {
+    setOutpaintStages(null);
+    setOutpaintStageIndex(0);
+    setOutpaintStageResult(null);
+    setOutpaintStageInputRel(null);
+  }, []);
+
   const toggleCropMode = () => {
     setCropMode((m) => {
-      if (m) setCropPx(null);
+      if (!m) {
+        setOutpaintMode(false);
+        setOutpaintBox(null);
+        setOutpaintNat(null);
+        clearOutpaintStageState();
+      } else {
+        setCropPx(null);
+      }
       return !m;
     });
   };
@@ -420,6 +710,26 @@ export default function LocationDetailPage() {
     setCropMode(false);
     setCropPx(null);
   }, []);
+
+  const toggleOutpaintMode = () => {
+    setOutpaintMode((m) => {
+      if (!m) {
+        exitCropMode();
+      } else {
+        clearOutpaintStageState();
+        setOutpaintBox(null);
+        setOutpaintNat(null);
+      }
+      return !m;
+    });
+  };
+
+  const exitOutpaintMode = useCallback(() => {
+    setOutpaintMode(false);
+    setOutpaintBox(null);
+    setOutpaintNat(null);
+    clearOutpaintStageState();
+  }, [clearOutpaintStageState]);
 
   const saveEditCopy = async () => {
     const baseRel = split?.baseRelPath ?? null;
@@ -488,6 +798,115 @@ export default function LocationDetailPage() {
     } finally {
       if (sessionOk) endSession();
     }
+  }
+
+  async function runOutpaintStage(params: {
+    sourceRelPath: string;
+    stage: OutpaintStage;
+    stageIndex: number;
+    totalStages: number;
+    finishOnDone: boolean;
+  }) {
+    const { sourceRelPath, stage, stageIndex, totalStages, finishOnDone } = params;
+    beginSession({
+      title:
+        totalStages > 1
+          ? `Outpainting (${stageIndex + 1}/${totalStages})`
+          : "Outpainting location",
+      clearLog: true,
+    });
+    let sessionOk = false;
+    try {
+      const result = await apiLocationOutpaintStream({
+        locationKey,
+        sourceRelPath,
+        left: stage.left,
+        top: stage.top,
+        right: stage.right,
+        bottom: stage.bottom,
+        onLogLine: (line) => {
+          logRef.current?.pushLine(line);
+          setRunningStatus(truncateJobModalStatusLine(line));
+        },
+      });
+      await refresh();
+      if (finishOnDone) {
+        exitOutpaintMode();
+      } else {
+        setOutpaintStageResult(result.relPath);
+      }
+      sessionOk = true;
+    } catch (e) {
+      failSession(e, "Outpaint failed");
+    } finally {
+      if (sessionOk) endSession();
+    }
+  }
+
+  async function confirmOutpaint() {
+    const baseRelPath = split?.baseRelPath ?? null;
+    if (!locationKey || !baseRelPath || !outpaintBox || !outpaintNat) {
+      showError({ message: "Define an outpaint area first." });
+      return;
+    }
+    const pad = paddingFromOutpaintBox(outpaintBox, outpaintNat);
+    if (!hasOutpaintPadding(pad)) {
+      showError({ message: "Drag a box edge outward to extend the canvas." });
+      return;
+    }
+    const stages = splitOutpaintIntoStages(pad, maxOutpaintPerPass);
+    setOutpaintStages(stages);
+    setOutpaintStageIndex(0);
+    setOutpaintStageInputRel(baseRelPath);
+    setOutpaintStageResult(null);
+    await runOutpaintStage({
+      sourceRelPath: baseRelPath,
+      stage: stages[0],
+      stageIndex: 0,
+      totalStages: stages.length,
+      finishOnDone: stages.length === 1,
+    });
+  }
+
+  async function regenOutpaintStage() {
+    if (!locationKey || !outpaintStages || outpaintStageInputRel == null) return;
+    const stage = outpaintStages[outpaintStageIndex];
+    if (!stage || !hasOutpaintPadding(stage)) return;
+    setOutpaintStageResult(null);
+    await runOutpaintStage({
+      sourceRelPath: outpaintStageInputRel,
+      stage,
+      stageIndex: outpaintStageIndex,
+      totalStages: outpaintStages.length,
+      finishOnDone: false,
+    });
+  }
+
+  async function continueOutpaintStage() {
+    if (!locationKey || !outpaintStages || !outpaintStageResult) return;
+    const nextIndex = outpaintStageIndex + 1;
+    if (nextIndex >= outpaintStages.length) {
+      await refresh();
+      exitOutpaintMode();
+      return;
+    }
+    const nextStage = outpaintStages[nextIndex];
+    const inputRel = outpaintStageResult;
+    setOutpaintStageInputRel(inputRel);
+    setOutpaintStageIndex(nextIndex);
+    setOutpaintStageResult(null);
+    await runOutpaintStage({
+      sourceRelPath: inputRel,
+      stage: nextStage,
+      stageIndex: nextIndex,
+      totalStages: outpaintStages.length,
+      finishOnDone: false,
+    });
+  }
+
+  async function finishOutpaintStages() {
+    await refresh();
+    exitOutpaintMode();
   }
 
   const menuItems: ContextMenuItem[] = useMemo(() => {
@@ -593,6 +1012,27 @@ export default function LocationDetailPage() {
   const baseRel = split?.baseRelPath ?? null;
   const previewSrc = baseRel ? `${assetUrlFromRelPath(baseRel)}?v=${previewVersion}` : "";
   const canSaveCrop = Boolean(cropMode && cropPx && baseRel);
+  const outpaintPad = useMemo(() => {
+    if (!outpaintBox || !outpaintNat) return null;
+    return paddingFromOutpaintBox(outpaintBox, outpaintNat);
+  }, [outpaintBox, outpaintNat]);
+  const plannedOutpaintStages = useMemo(() => {
+    if (!outpaintPad || !hasOutpaintPadding(outpaintPad)) return null;
+    return splitOutpaintIntoStages(outpaintPad, maxOutpaintPerPass);
+  }, [outpaintPad, maxOutpaintPerPass]);
+  const outpaintInStageReview = Boolean(outpaintMode && outpaintStageResult && outpaintStages);
+  const outpaintIsLastStageDone =
+    outpaintInStageReview &&
+    outpaintStages != null &&
+    outpaintStageIndex >= outpaintStages.length - 1;
+  const canRunOutpaint = Boolean(
+    outpaintMode &&
+      baseRel &&
+      outpaintPad &&
+      hasOutpaintPadding(outpaintPad) &&
+      !outpaintStageResult &&
+      !jobRunning
+  );
 
   const previewList = useMemo(
     () => [...(split?.view ?? []), ...(split?.lighting ?? [])],
@@ -647,6 +1087,39 @@ export default function LocationDetailPage() {
           {baseRel ? (
             cropMode ? (
               <LocationBaseCropPreview imageSrc={previewSrc} crop={cropPx} onCropChange={setCropPx} />
+            ) : outpaintMode && outpaintStageResult ? (
+              <div
+                style={{
+                  border: "1px solid rgba(0,0,0,0.35)",
+                  background: "rgba(0,0,0,0.02)",
+                  maxWidth: "100%",
+                  width: "100%",
+                  boxSizing: "border-box",
+                  position: "relative",
+                  height: PREVIEW_MAX_H,
+                  minHeight: 120,
+                }}
+              >
+                <img
+                  src={`${assetUrlFromRelPath(outpaintStageResult)}?v=${previewVersion}`}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    display: "block",
+                    userSelect: "none",
+                  }}
+                />
+              </div>
+            ) : outpaintMode ? (
+              <LocationOutpaintPreview
+                imageSrc={previewSrc}
+                box={outpaintBox}
+                onBoxChange={setOutpaintBox}
+                onNatChange={setOutpaintNat}
+              />
             ) : (
               <StartingImagePreview
                 storageRelPath={effectiveRelPath}
@@ -691,6 +1164,43 @@ export default function LocationDetailPage() {
           )}
         </div>
 
+        {outpaintMode && !outpaintStageResult ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              marginBottom: 10,
+              flexWrap: "wrap",
+            }}
+          >
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
+              <span style={{ whiteSpace: "nowrap" }}>Max per pass</span>
+              <input
+                type="range"
+                min={MIN_MAX_OUTPAINT_PER_PASS}
+                max={MAX_MAX_OUTPAINT_PER_PASS}
+                step={MAX_OUTPAINT_PER_PASS_STEP}
+                value={maxOutpaintPerPass}
+                disabled={uiBusy}
+                onChange={(e) => setMaxOutpaintPerPass(clampMaxOutpaintPerPass(Number(e.target.value)))}
+              />
+              <span style={{ minWidth: 44 }}>{maxOutpaintPerPass}px</span>
+            </label>
+            {plannedOutpaintStages && plannedOutpaintStages.length > 1 ? (
+              <span style={{ fontSize: 13, opacity: 0.75 }}>
+                Will run in {plannedOutpaintStages.length} stages
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        {outpaintInStageReview && outpaintStages ? (
+          <div style={{ marginBottom: 10, fontSize: 14, opacity: 0.85 }}>
+            Stage {outpaintStageIndex + 1}/{outpaintStages.length} complete
+          </div>
+        ) : null}
+
         <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
           <button
             type="button"
@@ -705,11 +1215,11 @@ export default function LocationDetailPage() {
           </button>
           <button
             type="button"
-            disabled={uiBusy}
-            style={toolBtnStyle()}
+            disabled={uiBusy || !baseRel}
+            style={toolBtnStyle(outpaintMode)}
             onClick={() => {
-              exitCropMode();
-              showError({ message: "Coming soon" });
+              if (!baseRel) return;
+              toggleOutpaintMode();
             }}
           >
             Outpaint
@@ -719,7 +1229,7 @@ export default function LocationDetailPage() {
             disabled={uiBusy}
             style={toolBtnStyle()}
             onClick={() => {
-              exitCropMode();
+              exitOutpaintMode();
               setAngleDialogOpen(true);
             }}
           >
@@ -731,6 +1241,7 @@ export default function LocationDetailPage() {
             style={toolBtnStyle()}
             onClick={() => {
               exitCropMode();
+              exitOutpaintMode();
               showError({ message: "Coming soon" });
             }}
           >
@@ -750,12 +1261,74 @@ export default function LocationDetailPage() {
             padding: "12px 14px",
             cursor: uiBusy || !canSaveCrop ? "not-allowed" : "pointer",
             fontSize: 15,
-            marginBottom: 16,
+            marginBottom: outpaintMode ? 8 : 16,
             opacity: uiBusy || !canSaveCrop ? 0.5 : 1,
+            display: cropMode ? "block" : "none",
           }}
         >
           Save Edit as Copy
         </button>
+
+        <button
+          type="button"
+          disabled={uiBusy || !canRunOutpaint}
+          onClick={() => void confirmOutpaint()}
+          style={{
+            width: "100%",
+            borderRadius: 0,
+            border: "1px solid rgba(0,0,0,0.55)",
+            background: "rgba(0,0,0,0.06)",
+            padding: "12px 14px",
+            cursor: uiBusy || !canRunOutpaint ? "not-allowed" : "pointer",
+            fontSize: 15,
+            marginBottom: outpaintInStageReview ? 8 : 16,
+            opacity: uiBusy || !canRunOutpaint ? 0.5 : 1,
+            display: outpaintMode && !outpaintStageResult ? "block" : "none",
+          }}
+        >
+          Run Outpaint
+        </button>
+
+        {outpaintInStageReview ? (
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <button
+              type="button"
+              disabled={uiBusy}
+              onClick={() => void regenOutpaintStage()}
+              style={{
+                flex: 1,
+                borderRadius: 0,
+                border: "1px solid rgba(0,0,0,0.55)",
+                background: "rgba(0,0,0,0.06)",
+                padding: "12px 14px",
+                cursor: uiBusy ? "not-allowed" : "pointer",
+                fontSize: 15,
+                opacity: uiBusy ? 0.5 : 1,
+              }}
+            >
+              Regen
+            </button>
+            <button
+              type="button"
+              disabled={uiBusy}
+              onClick={() =>
+                void (outpaintIsLastStageDone ? finishOutpaintStages() : continueOutpaintStage())
+              }
+              style={{
+                flex: 1,
+                borderRadius: 0,
+                border: "1px solid rgba(0,0,0,0.55)",
+                background: "rgba(0,0,0,0.06)",
+                padding: "12px 14px",
+                cursor: uiBusy ? "not-allowed" : "pointer",
+                fontSize: 15,
+                opacity: uiBusy ? 0.5 : 1,
+              }}
+            >
+              {outpaintIsLastStageDone ? "Finish" : "Continue"}
+            </button>
+          </div>
+        ) : null}
 
         <SortableMultiGrid
           disabled={uiBusy}

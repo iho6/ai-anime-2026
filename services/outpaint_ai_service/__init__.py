@@ -1,1 +1,1 @@
-"""Flux-fill outpaint service — extends an image in any direction via RunPod serverless."""
+"""Nunchaku Qwen Lightning outpaint service — extends an image via RunPod serverless."""

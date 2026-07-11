@@ -652,6 +652,110 @@ def location_delete_items(location_key: str, body: dict[str, Any]) -> dict[str, 
     return {"ok": True}
 
 
+@router.post("/detail/{location_key}/location/outpaint")
+async def location_outpaint(location_key: str, request: Request) -> StreamingResponse:
+    try:
+        body = await request.json()
+    except Exception as e:
+        async def bad_json() -> Any:
+            yield json.dumps({"type": "error", "detail": str(e)}) + "\n"
+
+        return StreamingResponse(bad_json(), media_type="application/x-ndjson")
+
+    if not isinstance(body, dict):
+        async def bad_body() -> Any:
+            yield json.dumps({"type": "error", "detail": "JSON object required"}) + "\n"
+
+        return StreamingResponse(bad_body(), media_type="application/x-ndjson")
+
+    source_rel = (str(body.get("sourceRelPath") or "")).strip()
+    prompt_text = (str(body.get("promptText") or "")).strip() or None
+
+    def _parse_pad(key: str) -> int:
+        v = body.get(key, 0)
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            raise ValueError(f"{key} must be an integer")
+
+    try:
+        left = _parse_pad("left")
+        top = _parse_pad("top")
+        right = _parse_pad("right")
+        bottom = _parse_pad("bottom")
+        feathering = _parse_pad("feathering") if body.get("feathering") is not None else 40
+    except ValueError as e:
+        async def bad_pad() -> Any:
+            yield json.dumps({"type": "error", "detail": str(e)}) + "\n"
+
+        return StreamingResponse(bad_pad(), media_type="application/x-ndjson")
+
+    input_abs: str | None = None
+    if source_rel:
+        try:
+            input_abs = str(resolve_location_rel_file(source_rel).resolve())
+        except HTTPException as e:
+            async def bad_src() -> Any:
+                yield json.dumps({"type": "error", "detail": e.detail}) + "\n"
+
+            return StreamingResponse(bad_src(), media_type="application/x-ndjson")
+    else:
+        base = _base_image_for_location(location_key)
+        if base and base.is_file():
+            input_abs = str(base.resolve())
+
+    if not input_abs:
+        async def no_input() -> Any:
+            yield json.dumps(
+                {"type": "error", "detail": "No input image (sourceRelPath or base)"}
+            ) + "\n"
+
+        return StreamingResponse(no_input(), media_type="application/x-ndjson")
+
+    errors: list[BaseException] = []
+    result_rel: str | None = None
+    log_queue: Queue[str | None] = Queue()
+
+    def worker() -> None:
+        nonlocal result_rel
+
+        def log_cb(line: str) -> None:
+            log_queue.put(json.dumps({"type": "log", "line": line}) + "\n")
+
+        try:
+            dest_abs = logic.location_outpaint_to_view_file(
+                location_key,
+                input_abs,
+                left=left,
+                top=top,
+                right=right,
+                bottom=bottom,
+                feathering=feathering,
+                prompt_text=prompt_text,
+                log_cb=log_cb,
+            )
+            result_rel = storage_rel_from_abs(dest_abs)
+        except BaseException as e:
+            errors.append(e)
+        finally:
+            log_queue.put(None)
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    async def event_gen() -> Any:
+        while True:
+            chunk = await asyncio.to_thread(log_queue.get)
+            if chunk is None:
+                break
+            yield chunk
+        if errors:
+            yield json.dumps({"type": "error", "detail": {"error": str(errors[0])}}) + "\n"
+            return
+        yield json.dumps({"type": "done", "ok": True, "relPath": result_rel}) + "\n"
+
+    return StreamingResponse(event_gen(), media_type="application/x-ndjson")
+
+
 @router.post("/detail/{location_key}/location/ai_edit")
 def location_ai_edit(location_key: str, body: dict[str, str]) -> dict[str, str]:
     rel = (body.get("sourceRelPath") or "").strip()

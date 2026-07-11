@@ -5183,6 +5183,84 @@ def generate_multi_angle_subset_for_location(
     return "ok"
 
 
+def _extract_first_service_result_url(body: dict[str, Any]) -> str:
+    results = body.get("results") or []
+    if not results:
+        raise RuntimeError("Outpaint service returned no results.")
+    url = results[0].get("url")
+    if not isinstance(url, str) or not url.strip():
+        raise RuntimeError("Outpaint service result missing url.")
+    return url.strip()
+
+
+def location_outpaint_to_view_file(
+    location_key: str,
+    input_image_path: str,
+    *,
+    left: int,
+    top: int,
+    right: int,
+    bottom: int,
+    feathering: int = 40,
+    prompt_text: str | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> str:
+    """
+    Run Nunchaku Qwen outpaint and save into ``locations/<key>/view/``.
+    Returns the output file absolute path.
+    """
+    key = sanitize_for_folder(location_key)
+    loc_root = (LOCATION_STORAGE_ROOT / key).resolve()
+    view_dir = loc_root / "view"
+    ensure_dirs(view_dir)
+
+    input_source = Path(input_image_path).resolve()
+    if not input_source.is_file():
+        raise ValueError("Outpaint input image not found.")
+
+    prompt = (prompt_text or prompts.DEFAULT_OUTPAINT_PROMPT).strip()
+    if log_cb:
+        log_cb(f"Outpainting: L={left} T={top} R={right} B={bottom} feather={feathering}")
+        if prompt:
+            log_cb(f"  prompt: {prompt}")
+
+    body = _run_service_testmode(
+        "services.outpaint_ai_service.serverless",
+        [
+            "--test-mode",
+            "--enable-default",
+            "--default-port",
+            str(COMFY_PORT),
+            "--image-url",
+            str(input_source),
+            "--left",
+            str(left),
+            "--top",
+            str(top),
+            "--right",
+            str(right),
+            "--bottom",
+            str(bottom),
+            "--feathering",
+            str(feathering),
+            "--prompt",
+            prompt,
+            "--convert-local-to-url",
+        ],
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise RuntimeError(str(body["error"]))
+
+    url = _extract_first_service_result_url(body)
+    ext_final = infer_ext_from_url(url)
+    dest = view_dir / f"view_outpaint_{unique_suffix(12)}{ext_final}"
+    download_url_to_file(url, dest)
+    if log_cb:
+        log_cb(f"Saved outpaint to {dest.name}")
+    return str(dest.resolve())
+
+
 def _next_angle_id_for_gallery_folder(folder: Path) -> int:
     """Next numeric angle id for a new flat file in a pose/expression folder root."""
     max_id = 0
