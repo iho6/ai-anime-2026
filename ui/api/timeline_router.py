@@ -13,10 +13,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
 
 from services import logic, timeline_asset_storage, timeline_saved_shapes, timeline_storage
+from services.clip_coloring import apply_clip_coloring_rgba
 from services.character_storage import sanitize_for_folder
+from services.timeline_export import _VideoFrameDecoder
 from .storage_paths import (
     TIMELINES_STORAGE_ROOT,
     resolve_storage_rel_file,
@@ -135,6 +138,66 @@ def timeline_get_manifest(timeline_key: str) -> dict[str, Any]:
         manifest = timeline_storage.default_manifest()
         timeline_storage.write_manifest(timeline_key, manifest)
         return manifest
+
+
+def _find_timeline_clip(manifest: dict[str, Any], clip_id: str) -> dict[str, Any] | None:
+    want = str(clip_id or "").strip()
+    if not want:
+        return None
+    for track in manifest.get("tracks") or []:
+        for clip in track.get("clips") or []:
+            if str(clip.get("id") or "") == want:
+                return clip
+    return None
+
+
+@router.get("/timeline/{timeline_key}/clip-rgba-frame")
+def timeline_clip_rgba_frame(
+    timeline_key: str,
+    clipId: str = Query(...),
+    sourceTimeSec: float = Query(0.0),
+) -> Response:
+    """RGBA PNG for a timeline clip frame (alpha companion composited + coloring applied)."""
+    if not _timeline_dir(timeline_key).is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    try:
+        manifest = timeline_storage.read_manifest(timeline_key)
+    except FileNotFoundError:
+        raise HTTPException(404, "Timeline not found.") from None
+    clip = _find_timeline_clip(manifest, clipId)
+    if clip is None:
+        raise HTTPException(404, "Clip not found.")
+    clip_type = str(clip.get("type") or "")
+    if clip_type not in ("image", "video"):
+        raise HTTPException(400, "Clip type must be image or video.")
+    rel = str(clip.get("srcRelPath") or "").strip()
+    if not rel:
+        raise HTTPException(400, "Clip has no srcRelPath.")
+    abs_p = resolve_storage_rel_file(rel)
+    in_point = float(clip.get("inPoint", 0))
+    out_point = float(clip.get("outPoint", 0))
+    st = max(float(sourceTimeSec), in_point)
+    if out_point > 0:
+        st = min(st, out_point)
+
+    from io import BytesIO
+
+    from PIL import Image
+
+    if clip_type == "image":
+        with Image.open(abs_p) as im:
+            rgba = im.convert("RGBA")
+    else:
+        decoder = _VideoFrameDecoder(abs_p, clip, log_cb=None)
+        try:
+            rgba = decoder.frame_at_source_time(st)
+        finally:
+            decoder.close()
+
+    rgba = apply_clip_coloring_rgba(rgba, clip.get("coloring"))
+    buf = BytesIO()
+    rgba.save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png")
 
 
 @router.put("/timeline/{timeline_key}/manifest")

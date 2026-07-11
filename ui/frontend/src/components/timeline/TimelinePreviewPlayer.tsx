@@ -34,7 +34,8 @@ import { GeometryEditor } from "./GeometryEditor";
 import { GEOMETRY_STYLE_BAR_OFFSET } from "./GeometryStyleBar";
 import { TextClipLayer } from "./TextClipLayer";
 import { TextStyleBar, type TextStyleModal } from "./TextStyleBar";
-import { TextPickerModals } from "./TextPickerModals";
+import { ClipColoringCanvas } from "./ClipColoringCanvas";
+import { clipNeedsColoringCanvas } from "../../lib/clipColoring";
 function clipTransform(
   clip: TimelineClip,
   playhead: number,
@@ -52,6 +53,7 @@ function clipTransform(
 
 export function TimelinePreviewPlayer(props: {
   manifest: TimelineManifest;
+  timelineKey: string;
   playing: boolean;
   playhead: number;
   selectedClipId: string | null;
@@ -86,6 +88,7 @@ export function TimelinePreviewPlayer(props: {
 }) {
   const {
     manifest,
+    timelineKey,
     playing,
     playhead,
     selectedClipId,
@@ -463,7 +466,12 @@ export function TimelinePreviewPlayer(props: {
 
   const noVisibleLayer = videoRenderLayers.length === 0;
 
-  function renderClipContent(clip: TimelineClip, op: number) {
+  function renderClipContent(
+    clip: TimelineClip,
+    op: number,
+    sourceTimeSec: number,
+    track: TimelineTrack
+  ) {
     if (clip.type === "geometry") {
       return (
         <GeometryClipLayer
@@ -488,6 +496,22 @@ export function TimelinePreviewPlayer(props: {
     }
     if (clip.type === "image") {
       const src = assetUrlFromRelPath(clip.srcRelPath);
+      if (clipNeedsColoringCanvas(clip)) {
+        return (
+          <ClipColoringCanvas
+            clip={clip}
+            timelineKey={timelineKey}
+            sourceTimeSec={sourceTimeSec}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              pointerEvents: "none",
+              opacity: op,
+            }}
+          />
+        );
+      }
       return (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -507,6 +531,26 @@ export function TimelinePreviewPlayer(props: {
     }
     if (clip.type === "video") {
       const src = assetUrlFromRelPath(clip.srcRelPath);
+      if (clipNeedsColoringCanvas(clip)) {
+        return (
+          <ClipColoringCanvas
+            clip={clip}
+            timelineKey={timelineKey}
+            sourceTimeSec={sourceTimeSec}
+            setVideoRef={(el) => {
+              if (el) mediaRefs.current.set(clip.id, el);
+              else mediaRefs.current.delete(clip.id);
+            }}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              pointerEvents: "none",
+              opacity: op,
+            }}
+          />
+        );
+      }
       return (
         <video
           ref={(el) => {
@@ -661,7 +705,12 @@ export function TimelinePreviewPlayer(props: {
                   transformOrigin: "center center",
                 }}
               >
-                {renderClipContent(clip, 1)}
+                {renderClipContent(
+                  clip,
+                  1,
+                  sourceTimeAtWithTransition(clip, playhead, track),
+                  track
+                )}
               </div>
             );
           })}

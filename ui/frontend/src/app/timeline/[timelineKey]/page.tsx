@@ -125,6 +125,8 @@ import {
 } from "../../detail/[charKey]/dataset/FrameSequenceModal";
 import { SequenceEditor } from "../../detail/[charKey]/dataset/SequenceEditor";
 import { sanitizeDownloadBaseName } from "../../../lib/downloadVideo";
+import { sanitizeClipColoringForSave } from "../../../lib/clipColoring";
+import { ClipColoringFlyout } from "../../../components/timeline/ClipColoringFlyout";
 
 export default function TimelineEditorPage() {
   const router = useRouter();
@@ -1129,6 +1131,38 @@ export default function TimelineEditorPage() {
         clips: t.clips.map((c) =>
           c.id === clipId ? { ...c, volumeAutomation } : c
         ),
+      })),
+    }));
+  }
+
+  function updateClipColoringLive(clipId: string, coloring: TimelineClip["coloring"]) {
+    updateManifest((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => {
+          if (c.id !== clipId) return c;
+          const sanitized = sanitizeClipColoringForSave(coloring);
+          if (sanitized) return { ...c, coloring: sanitized };
+          const { coloring: _drop, ...rest } = c;
+          return rest as TimelineClip;
+        }),
+      })),
+    }));
+  }
+
+  function updateClipColoringCommit(clipId: string) {
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => {
+          if (c.id !== clipId) return c;
+          const sanitized = sanitizeClipColoringForSave(c.coloring);
+          if (sanitized) return { ...c, coloring: sanitized };
+          const { coloring: _drop, ...rest } = c;
+          return rest as TimelineClip;
+        }),
       })),
     }));
   }
@@ -2406,6 +2440,18 @@ export default function TimelineEditorPage() {
         disabled: busy,
         onSelect: () => openSegment(clipMenu.clipId),
       });
+      items.push({
+        key: "coloring",
+        label: "Coloring",
+        keepOpenOnSelect: true,
+        submenu: (
+          <ClipColoringFlyout
+            coloring={rc?.clip.coloring}
+            onChange={(coloring) => updateClipColoringLive(clipMenu.clipId, coloring)}
+            onCommit={() => updateClipColoringCommit(clipMenu.clipId)}
+          />
+        ),
+      });
     }
 
     if (isImage && !pair) {
@@ -2707,6 +2753,7 @@ export default function TimelineEditorPage() {
 
         <TimelinePreviewPlayer
           manifest={manifest}
+          timelineKey={timelineKey}
           playing={playing}
           playhead={playhead}
           selectedClipId={selectedClipIds[selectedClipIds.length - 1] ?? null}

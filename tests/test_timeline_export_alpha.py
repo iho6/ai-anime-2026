@@ -138,6 +138,21 @@ def test_strip_frame_index_respects_in_point() -> None:
     assert idx == 12
 
 
+def test_export_coloring_preserves_alpha_holes_on_video_frame(tmp_path: Path) -> None:
+    from services.clip_coloring import apply_clip_coloring_rgba
+
+    webm = _write_webm_with_alpha_companion(tmp_path, stem="clip_color")
+    clip = {"id": "v1", "type": "video", "coloring": {"lightness": 100}}
+    dec = _VideoFrameDecoder(webm, clip)
+    try:
+        frame = dec.frame_at_source_time(0.0)
+        colored = apply_clip_coloring_rgba(frame, clip.get("coloring"))
+        assert colored.getpixel((4, 4))[3] == 0
+        assert colored.getpixel((30, 30))[:3] == (255, 255, 255)
+    finally:
+        dec.close()
+
+
 def test_compositor_prefers_frame_sequence_over_src(tmp_path: Path) -> None:
     strip_png = tmp_path / "strip.png"
     Image.new("RGBA", (40, 40), (0, 0, 255, 255)).save(strip_png)

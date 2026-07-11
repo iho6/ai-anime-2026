@@ -455,3 +455,82 @@ input[type="checkbox"]:disabled {
     background: transparent;
   }
 }
+
+/* Square minimal range sliders (timeline Coloring flyout, etc.) */
+.ui-square-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 10px;
+  margin: 0;
+  padding: 0;
+  background: #0b0b0b;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.ui-square-range:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+.ui-square-range::-webkit-slider-runnable-track {
+  height: 8px;
+  background: #0b0b0b;
+  border-radius: 0;
+}
+
+.ui-square-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -1px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.ui-square-range:hover::-webkit-slider-thumb {
+  background: #fff;
+  border-color: #000;
+}
+
+.ui-square-range::-moz-range-track {
+  height: 8px;
+  background: #0b0b0b;
+  border: none;
+  border-radius: 0;
+}
+
+.ui-square-range::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.ui-square-range:hover::-moz-range-thumb {
+  background: #fff;
+  border-color: #000;
+}
+
+.clip-coloring-flyout-enter {
+  transform-origin: left center;
+  animation: clipColoringFlyoutGrow 120ms ease forwards;
+}
+
+@keyframes clipColoringFlyoutGrow {
+  from {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}

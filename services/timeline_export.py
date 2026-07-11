@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from services.character_storage import DEFAULT_STORAGE_ROOT
+from services.clip_coloring import apply_clip_coloring_rgba, is_default_clip_coloring
 from services.logic import probe_video_meta
 from utils.video_utils import require_ffmpeg as _require_ffmpeg
 
@@ -1512,6 +1513,9 @@ def _render_video_track(
                         wipe_mask = _layer_wipe_mask(rect, layer)
                         source_t = _source_time_at_with_transition(clip, t, track)
                         rgba = state.get_rgba_frame(clip_dim, abs_p, source_t)
+                        coloring = clip.get("coloring")
+                        if coloring and not is_default_clip_coloring(coloring):
+                            rgba = apply_clip_coloring_rgba(rgba, coloring)
                         _draw_clip_on_canvas(
                             canvas,
                             rgba,

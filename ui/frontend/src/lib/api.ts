@@ -481,6 +481,17 @@ export type TrajectoryMotionId =
   | "wiggle"
   | "jitter";
 
+export type ClipColoring = {
+  /** Per-channel gain 0–200, 100 = neutral. */
+  r?: number;
+  g?: number;
+  b?: number;
+  /** 0–100, 100 = fully opaque subject. */
+  opacity?: number;
+  /** −100 (solid black on subject) … 0 (neutral) … +100 (solid white). */
+  lightness?: number;
+};
+
 export type TimelineClip = {
   id: string;
   type: TimelineClipType;
@@ -548,6 +559,8 @@ export type TimelineClip = {
   frameEdit?: { framesDirRel: string };
   /** FFv1 alpha companion for WebM bg-removed clips (``{stem}.alpha.mkv``). */
   alphaRelPath?: string;
+  /** Per-clip RGB / opacity / lightness adjustments (preview + export). */
+  coloring?: ClipColoring;
 };
 
 export type TimelineTrack = {
@@ -640,6 +653,18 @@ export async function apiTimelinePut(
     }
   );
   return readJson<{ ok: boolean }>(res);
+}
+
+export function apiTimelineClipRgbaFrameUrl(
+  timelineKey: string,
+  clipId: string,
+  sourceTimeSec: number
+): string {
+  const q = new URLSearchParams({
+    clipId,
+    sourceTimeSec: String(sourceTimeSec),
+  });
+  return `${API_BASE_URL}/timeline/${encodeURIComponent(timelineKey)}/clip-rgba-frame?${q.toString()}`;
 }
 
 /** Copy a location/shot/character image into the timeline as an image clip. */
