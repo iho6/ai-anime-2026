@@ -1200,33 +1200,99 @@ def extract_video_frames_range_to_pngs(
     max_frames: int = 600,
 ) -> list[str]:
     """Decode a contiguous frame range to PNGs. Returns ordered absolute paths."""
+    return extract_video_frames_range_to_rgba_pngs(
+        video_path,
+        dest_dir,
+        start_frame=start_frame,
+        end_frame=end_frame,
+        max_frames=max_frames,
+        alpha_path=None,
+    )
+
+
+def extract_video_frames_range_to_rgba_pngs(
+    video_path: str,
+    dest_dir: str,
+    *,
+    start_frame: int = 0,
+    end_frame: int | None = None,
+    max_frames: int = 600,
+    alpha_path: str | None = None,
+) -> list[str]:
+    """Decode a contiguous frame range to PNGs.
+
+    When ``alpha_path`` points at a companion FFv1 gray alpha track, write RGBA
+    PNGs (color rgb24 + alpha). Otherwise write opaque RGB PNGs.
+    """
     import av  # type: ignore
+    import numpy as np  # type: ignore
     from PIL import Image  # type: ignore
 
     os.makedirs(dest_dir, exist_ok=True)
     start = max(0, int(start_frame))
     end = int(end_frame) if end_frame is not None else None
     paths: list[str] = []
+    alpha_abs = str(alpha_path).strip() if alpha_path else ""
+    use_alpha = bool(alpha_abs) and osp.isfile(alpha_abs)
     try:
         with av.open(video_path) as container:
             if not container.streams.video:
                 raise RuntimeError("no video stream in output file")
             stream = container.streams.video[0]
             stream.thread_type = "AUTO"
-            for i, frame in enumerate(container.decode(stream)):
-                if i < start:
-                    continue
-                if end is not None and i > end:
-                    break
-                if len(paths) >= max_frames:
-                    raise RuntimeError(
-                        f"video frame extraction exceeds max_frames={max_frames}"
-                    )
-                arr = frame.to_ndarray(format="rgb24")
-                im = Image.fromarray(arr)
-                out_path = osp.join(dest_dir, f"frame_{len(paths) + 1:06d}.png")
-                im.save(out_path)
-                paths.append(osp.abspath(out_path))
+            color_iter = container.decode(stream)
+
+            alpha_container = None
+            alpha_iter = None
+            if use_alpha:
+                alpha_container = av.open(alpha_abs)
+                if not alpha_container.streams.video:
+                    alpha_container.close()
+                    raise RuntimeError("no video stream in alpha companion")
+                alpha_iter = alpha_container.decode(alpha_container.streams.video[0])
+
+            try:
+                for i, frame in enumerate(color_iter):
+                    if i < start:
+                        if alpha_iter is not None:
+                            try:
+                                next(alpha_iter)
+                            except StopIteration:
+                                pass
+                        continue
+                    if end is not None and i > end:
+                        break
+                    if len(paths) >= max_frames:
+                        raise RuntimeError(
+                            f"video frame extraction exceeds max_frames={max_frames}"
+                        )
+                    color_np = frame.to_ndarray(format="rgb24")
+                    if alpha_iter is not None:
+                        try:
+                            alpha_frame = next(alpha_iter)
+                            alpha_np = alpha_frame.to_ndarray(format="gray")
+                            if alpha_np.shape[:2] != color_np.shape[:2]:
+                                alpha_im = Image.fromarray(alpha_np, mode="L")
+                                alpha_im = alpha_im.resize(
+                                    (color_np.shape[1], color_np.shape[0]),
+                                    Image.Resampling.BILINEAR,
+                                )
+                                alpha_np = np.asarray(alpha_im, dtype=np.uint8)
+                            combined = np.dstack([color_np, alpha_np])
+                            im = Image.fromarray(combined, mode="RGBA")
+                        except StopIteration:
+                            im = Image.fromarray(color_np)
+                    else:
+                        im = Image.fromarray(color_np)
+                    out_path = osp.join(dest_dir, f"frame_{len(paths) + 1:06d}.png")
+                    im.save(out_path)
+                    paths.append(osp.abspath(out_path))
+            finally:
+                if alpha_container is not None:
+                    try:
+                        alpha_container.close()
+                    except Exception:
+                        pass
     except RuntimeError:
         raise
     except Exception as e:

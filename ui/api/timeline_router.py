@@ -20,7 +20,9 @@ from services import logic, timeline_asset_storage, timeline_saved_shapes, timel
 from services.constant import WAN_VIDEO_DEFAULT_LENGTH
 from services.character_storage import sanitize_for_folder
 from services.timeline_preview_cache import preview_decoder_cache
+from services.timeline_preview_frame_cache import preview_frame_cache
 from services.timeline_preview_frames import timeline_preview_rgba
+from services.timeline_proxy import ensure_manifest_proxies
 from .storage_paths import (
     TIMELINES_STORAGE_ROOT,
     resolve_storage_rel_file,
@@ -101,6 +103,7 @@ def timeline_hub_delete(timeline_key: str) -> dict[str, bool]:
     if d.is_dir():
         shutil.rmtree(d)
     preview_decoder_cache.invalidate_timeline(timeline_key)
+    preview_frame_cache.invalidate_timeline(timeline_key)
     return {"ok": True}
 
 
@@ -140,6 +143,39 @@ def timeline_get_manifest(timeline_key: str) -> dict[str, Any]:
         manifest = timeline_storage.default_manifest()
         timeline_storage.write_manifest(timeline_key, manifest)
         return manifest
+
+
+def _clip_media_signatures(manifest: dict[str, Any]) -> dict[str, tuple]:
+    """Map clip id -> a signature of the fields that affect decoded media.
+
+    Only ``srcRelPath`` / ``alphaRelPath`` / ``frameSequence`` require dropping a
+    cached decoder. Transform, coloring, timing, etc. are applied after decode
+    (or are path-keyed) and must NOT trigger invalidation, otherwise every
+    autosave would race the in-flight preview decodes.
+    """
+    sigs: dict[str, tuple] = {}
+    for track in manifest.get("tracks") or []:
+        for clip in track.get("clips") or []:
+            cid = str(clip.get("id") or "")
+            if not cid:
+                continue
+            fs = clip.get("frameSequence")
+            fs_sig: Any
+            if isinstance(fs, dict):
+                strip = fs.get("strip") or []
+                fs_sig = tuple(
+                    (str(s.get("relPath") or ""), bool(s.get("hidden")))
+                    for s in strip
+                    if isinstance(s, dict)
+                )
+            else:
+                fs_sig = None
+            sigs[cid] = (
+                str(clip.get("srcRelPath") or ""),
+                str(clip.get("alphaRelPath") or ""),
+                fs_sig,
+            )
+    return sigs
 
 
 def _find_timeline_clip(manifest: dict[str, Any], clip_id: str) -> dict[str, Any] | None:
@@ -182,13 +218,20 @@ def timeline_clip_rgba_frame(
     if out_point > 0:
         st = min(st, out_point)
 
+    coloring = clip.get("coloring")
+    cached = preview_frame_cache.get(timeline_key, clipId, st, coloring)
+    if cached is not None:
+        return Response(content=cached, media_type="image/png")
+
     from io import BytesIO
 
     rgba = timeline_preview_rgba(timeline_key, manifest, clip, abs_p, st)
 
     buf = BytesIO()
     rgba.save(buf, format="PNG")
-    return Response(content=buf.getvalue(), media_type="image/png")
+    png = buf.getvalue()
+    preview_frame_cache.put(timeline_key, clipId, st, coloring, png)
+    return Response(content=png, media_type="image/png")
 
 
 @router.put("/timeline/{timeline_key}/manifest")
@@ -198,9 +241,48 @@ def timeline_put_manifest(timeline_key: str, body: dict[str, Any]) -> dict[str, 
         raise HTTPException(404, "Timeline not found.")
     if not isinstance(body, dict):
         raise HTTPException(400, "Manifest must be an object.")
+    try:
+        prev = timeline_storage.read_manifest(timeline_key)
+    except FileNotFoundError:
+        prev = None
     timeline_storage.write_manifest(timeline_key, body)
-    preview_decoder_cache.invalidate_timeline(timeline_key)
+    # Only drop decoders for clips whose media source actually changed. Autosave
+    # fires on every transform/coloring/timing edit, so a blanket invalidation
+    # here races in-flight clip-rgba-frame decodes (Container is not open).
+    if prev is None:
+        preview_decoder_cache.invalidate_timeline(timeline_key)
+        preview_frame_cache.invalidate_timeline(timeline_key)
+    else:
+        old_sigs = _clip_media_signatures(prev)
+        new_sigs = _clip_media_signatures(body)
+        for cid, new_sig in new_sigs.items():
+            if old_sigs.get(cid) != new_sig:
+                preview_decoder_cache.invalidate_clip(timeline_key, cid)
+                preview_frame_cache.invalidate_clip(timeline_key, cid)
+        for cid in old_sigs.keys() - new_sigs.keys():
+            preview_decoder_cache.invalidate_clip(timeline_key, cid)
+            preview_frame_cache.invalidate_clip(timeline_key, cid)
     return {"ok": True}
+
+
+@router.post("/timeline/{timeline_key}/ensure-proxies")
+def timeline_ensure_proxies(timeline_key: str) -> dict[str, Any]:
+    """Generate missing ~480p preview proxies for video clips (idempotent).
+
+    Safe to call on load: clips that already have a fresh proxy (or are small
+    enough to preview from the master) are skipped. Returns the updated manifest
+    when any proxy fields changed so the client can refresh without a reload.
+    """
+    if not _timeline_dir(timeline_key).is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    try:
+        manifest = timeline_storage.read_manifest(timeline_key)
+    except FileNotFoundError:
+        raise HTTPException(404, "Timeline not found.") from None
+    updated = ensure_manifest_proxies(manifest)
+    if updated:
+        timeline_storage.write_manifest(timeline_key, manifest)
+    return {"ok": True, "updated": updated, "manifest": manifest if updated else None}
 
 
 @router.post("/timeline/{timeline_key}/import_audio")
@@ -243,6 +325,26 @@ def timeline_import_image(timeline_key: str, body: dict[str, str]) -> dict[str, 
         "width": info.get("width") or 0,
         "height": info.get("height") or 0,
     }
+
+
+@router.post("/timeline/{timeline_key}/duplicate_frame_asset")
+def timeline_duplicate_frame_asset(timeline_key: str, body: dict[str, str]) -> dict[str, str]:
+    """Copy a frame image into ``timelines/<key>/frames/<clip_id>/`` for strip paste."""
+    d = _timeline_dir(timeline_key)
+    if not d.is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    clip_id = (body.get("clipId") or "").strip()
+    rel = (body.get("sourceRelPath") or "").strip()
+    if not clip_id:
+        raise HTTPException(400, "clipId is required.")
+    if not rel:
+        raise HTTPException(400, "sourceRelPath is required.")
+    src_abs = str(resolve_storage_rel_file(rel))
+    try:
+        new_rel = logic.duplicate_timeline_frame_asset(timeline_key, clip_id, src_abs)
+    except ValueError as ex:
+        raise HTTPException(400, str(ex)) from ex
+    return {"relPath": new_rel}
 
 
 @router.post("/timeline/{timeline_key}/import_png_base64")
@@ -912,6 +1014,7 @@ async def timeline_video_frames_extract_ws(ws: WebSocket, timeline_key: str) -> 
             raise ValueError("Timeline not found.")
         clip_id = (msg.get("clipId") or "").strip()
         video_rel = (msg.get("videoRelPath") or "").strip()
+        alpha_rel = (msg.get("alphaRelPath") or "").strip() or None
         if not clip_id:
             raise ValueError("clipId is required.")
         if not video_rel:
@@ -928,6 +1031,7 @@ async def timeline_video_frames_extract_ws(ws: WebSocket, timeline_key: str) -> 
                 video_rel,
                 in_point_sec=in_point,
                 out_point_sec=out_point,
+                alpha_rel=alpha_rel,
                 log_cb=log_cb,
             )
 
@@ -942,7 +1046,7 @@ async def timeline_video_frames_extract_ws(ws: WebSocket, timeline_key: str) -> 
 
 @router.websocket("/timeline/{timeline_key}/video_frames/encode/ws")
 async def timeline_video_frames_encode_ws(ws: WebSocket, timeline_key: str) -> None:
-    """Encode a frame-sequence strip to a new timeline clip MP4."""
+    """Encode a frame-sequence strip to a new timeline clip (MP4 or WebM+alpha)."""
     await ws.accept()
     try:
         msg = await ws.receive_json()
@@ -959,21 +1063,21 @@ async def timeline_video_frames_encode_ws(ws: WebSocket, timeline_key: str) -> N
 
         def work(log_cb: Any) -> dict[str, Any]:
             if log_cb:
-                log_cb("Encoding frame sequence to MP4…")
+                log_cb("Encoding frame sequence…")
             info = logic.timeline_frame_sequence_to_video(
                 timeline_key,
                 frame_sequence,
                 fps=fps,
                 output_basename=output_basename,
             )
-            return {
-                "type": "video",
-                "srcRelPath": info.get("srcRelPath") or storage_rel_from_abs(info["absPath"]),
-                "durationSec": info.get("durationSec") or 0,
-                "width": info.get("width") or 0,
-                "height": info.get("height") or 0,
-                "fps": info.get("fps") or fps,
-            }
+            return _timeline_video_clip_result(
+                info["absPath"],
+                type="video",
+                durationSec=info.get("durationSec") or 0,
+                width=info.get("width") or 0,
+                height=info.get("height") or 0,
+                fps=info.get("fps") or fps,
+            )
 
         result, err = await run_with_log_stream(ws, work)
         if err:

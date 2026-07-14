@@ -95,27 +95,30 @@ function alignIncomingStart(
   incoming: TimelineClip,
   target: { x: number; y: number; scale: number }
 ): TimelineClip {
-  if (clipHasTrajectory(incoming)) {
-    const waypoints = incoming.trajectory!.waypoints.map((w) => ({ ...w }));
-    let startIdx = 0;
-    for (let i = 1; i < waypoints.length; i++) {
-      if (waypoints[i].t < waypoints[startIdx].t) startIdx = i;
-    }
-    waypoints[startIdx] = {
-      ...waypoints[startIdx],
-      x: target.x,
-      y: target.y,
-      scale: target.scale,
-    };
-    return {
-      ...incoming,
-      trajectory: { ...incoming.trajectory!, waypoints },
-    };
-  }
-
-  return {
+  // Always stamp transform so static clips and mixed video↔image share the same frame coords.
+  const withTransform: TimelineClip = {
     ...incoming,
     transform: { x: target.x, y: target.y, scale: target.scale },
+  };
+
+  if (!clipHasTrajectory(withTransform)) {
+    return withTransform;
+  }
+
+  const waypoints = withTransform.trajectory!.waypoints.map((w) => ({ ...w }));
+  let startIdx = 0;
+  for (let i = 1; i < waypoints.length; i++) {
+    if (waypoints[i].t < waypoints[startIdx].t) startIdx = i;
+  }
+  waypoints[startIdx] = {
+    ...waypoints[startIdx],
+    x: target.x,
+    y: target.y,
+    scale: target.scale,
+  };
+  return {
+    ...withTransform,
+    trajectory: { ...withTransform.trajectory!, waypoints },
   };
 }
 
@@ -130,7 +133,12 @@ export function syncMotionPair(
   const endPlayhead = clipEnd(outgoing) - sampleEps;
   const tailSec = Math.max(0, motionTailSec);
   const outgoingWithTail = applyMotionTailToOutgoing(outgoing, tailSec);
-  const target = endTargetTransform(outgoingWithTail, endPlayhead, tailSec);
+  // Prefer effective on-screen pose (path + motion) when tail is 0; with positive
+  // tail, align to settled path end so the handoff matches faded motion.
+  const target =
+    tailSec > 0
+      ? endTargetTransform(outgoingWithTail, endPlayhead, tailSec)
+      : clipTransformAtPlayhead(outgoingWithTail, endPlayhead);
   const syncedIncoming = alignIncomingStart(incoming, target);
   return { outgoing: outgoingWithTail, incoming: syncedIncoming };
 }

@@ -16,11 +16,14 @@ def _strip_slot_visible_for_export(slot: dict[str, Any]) -> bool:
 
 def _apply_trim_hidden(slot: dict[str, Any], outside: bool) -> dict[str, Any]:
     if outside:
-        return slot if slot.get("hidden") is True else {**slot, "hidden": True}
-    if slot.get("hidden") is not True:
+        if slot.get("hidden") is True and slot.get("trimHidden") is not True:
+            return slot
+        return {**slot, "hidden": True, "trimHidden": True}
+    if slot.get("trimHidden") is not True:
         return slot
     out = dict(slot)
     out.pop("hidden", None)
+    out.pop("trimHidden", None)
     return out
 
 
@@ -44,7 +47,10 @@ def sync_trim_hidden_to_frame_sequence(
             next_strip.append(slot)
             continue
         if mp4_aligned:
-            if not _strip_slot_visible_for_export(slot):
+            rel = str(slot.get("relPath") or "").strip()
+            if not rel or (
+                slot.get("hidden") is True and slot.get("trimHidden") is not True
+            ):
                 next_strip.append(slot)
                 continue
             source_sec = mp4_frame / rate
@@ -84,6 +90,7 @@ def test_linear_trim_hides_outside_range() -> None:
     out = synced["strip"]
     for i in range(48):
         assert out[i].get("hidden") is True, f"index {i} should be hidden"
+        assert out[i].get("trimHidden") is True, f"index {i} should be trim-hidden"
     for i in range(48, 100):
         assert out[i].get("hidden") is not True, f"index {i} should be visible"
 
@@ -138,8 +145,25 @@ def test_mp4_aligned_trim_hides_visible_frames_outside_range() -> None:
     )
     out = synced["strip"]
     assert out[0].get("hidden") is True
+    assert out[0].get("trimHidden") is True
     assert out[1].get("hidden") is not True
     assert out[2].get("hidden") is not True
     assert out[3].get("hidden") is not True
     assert out[4].get("hidden") is True
     assert out[5].get("hidden") is True
+
+
+def test_trim_expansion_unhides_only_automatic_frames() -> None:
+    strip = [
+        {**_image_slot("auto.png", hidden=True), "trimHidden": True},
+        _image_slot("manual.png", hidden=True),
+    ]
+    synced = sync_trim_hidden_to_frame_sequence(
+        {"sequenceGroupId": "clip1", "strip": strip, "hidden": []},
+        in_point=0.0,
+        out_point=2.0,
+        extract_fps=1.0,
+    )
+    assert synced["strip"][0].get("hidden") is not True
+    assert "trimHidden" not in synced["strip"][0]
+    assert synced["strip"][1].get("hidden") is True

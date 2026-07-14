@@ -156,6 +156,11 @@ describe("syncMotionIncomingToOutgoing", () => {
     expect(startWp.x).toBeCloseTo(endPose.x, 5);
     expect(startWp.y).toBeCloseTo(endPose.y, 5);
     expect(startWp.scale).toBeCloseTo(endPose.scale, 5);
+    expect(synced.transform).toEqual({
+      x: endPose.x,
+      y: endPose.y,
+      scale: endPose.scale,
+    });
     expect(clipTransformAtPlayhead(synced, synced.start).x).toBeCloseTo(
       endPose.x,
       5
@@ -271,5 +276,66 @@ describe("syncMotionPair", () => {
       y: endPose.y,
       scale: endPose.scale,
     });
+  });
+
+  it("syncs coordinates from video outgoing to static image incoming", () => {
+    const outgoing: TimelineClip = {
+      id: "clip_v",
+      type: "video",
+      srcRelPath: "clips/v.mp4",
+      start: 0,
+      inPoint: 0,
+      outPoint: 2,
+      speed: 1,
+      duration: 2,
+      srcDuration: 2,
+      transform: { x: 0.22, y: -0.18, scale: 1.35 },
+    };
+    const incoming = imageClip("clip_i", 2, {
+      transform: { x: 0, y: 0, scale: 1 },
+    });
+    const synced = syncMotionPair(outgoing, incoming, 24, 0);
+    expect(synced.incoming.type).toBe("image");
+    expect(synced.incoming.transform).toEqual({
+      x: 0.22,
+      y: -0.18,
+      scale: 1.35,
+    });
+  });
+
+  it("syncs coordinates from image outgoing to video incoming (transform + traj start)", () => {
+    const outgoing = imageClip("clip_i", 0, {
+      transform: { x: -0.1, y: 0.25, scale: 0.85 },
+    });
+    const incoming: TimelineClip = {
+      id: "clip_v",
+      type: "video",
+      srcRelPath: "clips/v.mp4",
+      start: 2,
+      inPoint: 0,
+      outPoint: 2,
+      speed: 1,
+      duration: 2,
+      srcDuration: 2,
+      transform: { x: 0, y: 0, scale: 1 },
+      trajectory: {
+        motion: "none",
+        motionAmount: 50,
+        waypoints: [
+          { t: 0, x: 0.4, y: 0.4, scale: 2 },
+          { t: 1, x: 0.4, y: 0.4, scale: 2 },
+        ],
+      },
+    };
+    const synced = syncMotionPair(outgoing, incoming, 24, 0);
+    expect(synced.incoming.transform).toEqual({
+      x: -0.1,
+      y: 0.25,
+      scale: 0.85,
+    });
+    const startWp = synced.incoming.trajectory!.waypoints.find((w) => w.t === 0)!;
+    expect(startWp.x).toBe(-0.1);
+    expect(startWp.y).toBe(0.25);
+    expect(startWp.scale).toBe(0.85);
   });
 });

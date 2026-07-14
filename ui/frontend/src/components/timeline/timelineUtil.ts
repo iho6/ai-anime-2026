@@ -36,17 +36,110 @@ export function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
-/** Stacking for selection outline/handles above clip hit targets and timeline tracks. */
+/** Visual selection outline (pointer-events none); below interactive hit targets. */
 export const PREVIEW_SELECTION_CHROME_Z = 300;
 
-/** Preview hit-target stacking: selected clips stay above unselected overlaps. */
+/** Interactive clip hit targets stack above selection chrome. */
+export const PREVIEW_HIT_Z = 310;
+/**
+ * Integer gap per track so CSS z-index (integer-only) keeps higher tracks on top.
+ * Fractional steps (e.g. 0.01) collapse to the same integer and lower tracks steal clicks.
+ */
+export const PREVIEW_HIT_TRACK_STEP = 2;
+
+/**
+ * Trajectory / geometry / text edit overlays sit above clip hit targets.
+ * Headroom allows ~90 tracks at PREVIEW_HIT_TRACK_STEP before colliding.
+ */
+export const PREVIEW_EDIT_Z = 500;
+/** Scale handles for selection and trajectory ghost. */
+export const PREVIEW_HANDLE_Z = 501;
+/** Trajectory toolbar, style bars, etc. */
+export const PREVIEW_EDIT_TOOLBAR_Z = 502;
+
+export const PREVIEW_NUDGE_PX = 1;
+export const PREVIEW_NUDGE_SHIFT_PX = 8;
+
+/** Trajectory waypoint pointer targets: capped so zoomed clips stay clickable. */
+export const TRAJECTORY_WAYPOINT_HIT_MIN_PX = 32;
+export const TRAJECTORY_WAYPOINT_HIT_MAX_PX = 64;
+export const TRAJECTORY_WAYPOINT_HIT_BASE_PX = 40;
+
+/** Hit radius (px) around a waypoint diamond; scales mildly with clip scale, capped. */
+export function trajectoryWaypointHitRadiusPx(scale: number): number {
+  const s = Math.max(0.1, scale ?? 1);
+  const sized = TRAJECTORY_WAYPOINT_HIT_BASE_PX * 0.5 * Math.sqrt(s);
+  return clamp(sized, TRAJECTORY_WAYPOINT_HIT_MIN_PX / 2, TRAJECTORY_WAYPOINT_HIT_MAX_PX / 2);
+}
+
+/** Square hit rect centered on a waypoint (SVG / frame px). */
+export function trajectoryWaypointHitRectAt(
+  centerSx: number,
+  centerSy: number,
+  scale: number
+): ClipRect {
+  const r = trajectoryWaypointHitRadiusPx(scale);
+  return { left: centerSx - r, top: centerSy - r, width: r * 2, height: r * 2 };
+}
+
+export function pointInTrajectoryWaypointHit(
+  sx: number,
+  sy: number,
+  centerSx: number,
+  centerSy: number,
+  scale: number
+): boolean {
+  const { left, top, width, height } = trajectoryWaypointHitRectAt(centerSx, centerSy, scale);
+  return sx >= left && sx <= left + width && sy >= top && sy <= top + height;
+}
+
+/** Preview hit-target stacking: track order dominates; selected tie-break (+1). */
 export function previewClipHitZIndex(opts: {
   trackZ: number;
   selected: boolean;
-  inEditMode: boolean;
 }): number {
-  if (opts.inEditMode) return 50;
-  return opts.selected ? opts.trackZ + 150 : opts.trackZ + 100;
+  return (
+    PREVIEW_HIT_Z +
+    opts.trackZ * PREVIEW_HIT_TRACK_STEP +
+    (opts.selected ? 1 : 0)
+  );
+}
+
+/**
+ * Pointer displacement in frame-local space, compensating for the preview frame
+ * shifting on screen when drag padding/scroll changes layout under the cursor.
+ */
+export function pointerClientDeltaInFrameSpace(params: {
+  clientX: number;
+  clientY: number;
+  startClientX: number;
+  startClientY: number;
+  frameLeft: number;
+  frameTop: number;
+  startFrameLeft: number;
+  startFrameTop: number;
+}): { dx: number; dy: number } {
+  const shiftX = params.frameLeft - params.startFrameLeft;
+  const shiftY = params.frameTop - params.startFrameTop;
+  return {
+    dx: params.clientX - params.startClientX - shiftX,
+    dy: params.clientY - params.startClientY - shiftY,
+  };
+}
+
+/** Apply a pixel nudge to fractional clip transform (preview frame space). */
+export function nudgeClipTransform(
+  tf: ClipTransform,
+  dxPx: number,
+  dyPx: number,
+  frameW: number,
+  frameH: number
+): ClipTransform {
+  return {
+    ...tf,
+    x: tf.x + (frameW > 0 ? dxPx / frameW : 0),
+    y: tf.y + (frameH > 0 ? dyPx / frameH : 0),
+  };
 }
 
 /** Logical output frame for fit math (preview + export reference). */
@@ -157,17 +250,209 @@ export function translateClipRect(rect: ClipRect, dxPx: number, dyPx: number): C
 /** Minimum on-screen strip (px) kept inside the frame so a dragged clip stays reachable. */
 export const PREVIEW_MIN_VISIBLE_PX = 24;
 
+export type PreviewFrameExtension = {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+};
+
+export const PREVIEW_FRAME_EXTENSION_NONE: PreviewFrameExtension = {
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+};
+
+export const PREVIEW_OVERFLOW_PAD_PX = 32;
+
+export function mergePreviewFrameExtension(
+  a: PreviewFrameExtension,
+  b: PreviewFrameExtension
+): PreviewFrameExtension {
+  return {
+    top: Math.max(a.top, b.top),
+    right: Math.max(a.right, b.right),
+    bottom: Math.max(a.bottom, b.bottom),
+    left: Math.max(a.left, b.left),
+  };
+}
+
+/**
+ * Display-only growth past a drag-start baseline so already-overflowing clips
+ * do not instantly open a huge canvas; pad grows as the gesture pushes further out.
+ */
+export function growExtensionFromBaseline(
+  current: PreviewFrameExtension,
+  baseline: PreviewFrameExtension
+): PreviewFrameExtension {
+  return {
+    top: Math.max(0, current.top - baseline.top),
+    right: Math.max(0, current.right - baseline.right),
+    bottom: Math.max(0, current.bottom - baseline.bottom),
+    left: Math.max(0, current.left - baseline.left),
+  };
+}
+
+/** Map inner-frame clip rect to extended-layer local coords (inside negative inset). */
+export function clipRectInExtendedLayer(
+  rect: ClipRect,
+  extend: PreviewFrameExtension
+): ClipRect {
+  return {
+    left: rect.left + extend.left,
+    top: rect.top + extend.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+/** Dimmed opacity for clip pixels outside the white frame during pointer drag. */
+export const PREVIEW_OUTSIDE_FRAME_OPACITY = 0.35;
+
+/**
+ * clip-path polygon (evenodd) for the extended canvas that excludes the inner
+ * frame rectangle — used to render only out-of-frame pixels in the overflow pass.
+ * Coordinates are in extended-layer local space (origin = top-left of extended box).
+ */
+export function clipPathOutsideInnerFrame(
+  frameW: number,
+  frameH: number,
+  extend: PreviewFrameExtension
+): string {
+  const W = frameW + extend.left + extend.right;
+  const H = frameH + extend.top + extend.bottom;
+  if (W <= 0 || H <= 0) return "polygon(0 0, 0 0, 0 0)";
+  const L = extend.left;
+  const T = extend.top;
+  const R = L + frameW;
+  const B = T + frameH;
+  return `polygon(evenodd, 0 0, ${W}px 0, ${W}px ${H}px, 0 ${H}px, 0 0, ${L}px ${T}px, ${R}px ${T}px, ${R}px ${B}px, ${L}px ${B}px, ${L}px ${T}px)`;
+}
+
+/** Overflow (+ pad) required to fit the given clip rects inside an expandable canvas. */
+export function previewFrameExtensionForRects(
+  rects: ClipRect[],
+  frameW: number,
+  frameH: number,
+  padPx = PREVIEW_OVERFLOW_PAD_PX
+): PreviewFrameExtension {
+  let top = 0;
+  let right = 0;
+  let bottom = 0;
+  let left = 0;
+  if (frameW <= 0 || frameH <= 0) {
+    return PREVIEW_FRAME_EXTENSION_NONE;
+  }
+  for (const rect of rects) {
+    top = Math.max(top, Math.max(0, -rect.top));
+    left = Math.max(left, Math.max(0, -rect.left));
+    right = Math.max(right, Math.max(0, rect.left + rect.width - frameW));
+    bottom = Math.max(bottom, Math.max(0, rect.top + rect.height - frameH));
+  }
+  // Pad only sides that actually overflow — never grow empty axes.
+  const edge = (v: number) => (v > 0 ? Math.ceil(v + padPx) : 0);
+  return {
+    top: edge(top),
+    right: edge(right),
+    bottom: edge(bottom),
+    left: edge(left),
+  };
+}
+
+/** Equal padding on all sides (max of edges) so the inner frame stays visually centered. */
+export function symmetricPreviewFrameExtension(
+  ext: PreviewFrameExtension
+): PreviewFrameExtension {
+  const m = Math.max(ext.top, ext.right, ext.bottom, ext.left);
+  return { top: m, right: m, bottom: m, left: m };
+}
+
+/** Extra px above waypoint diamond for the number badge in trajectory edit UI. */
+const TRAJECTORY_WAYPOINT_BADGE_PX = 12;
+
+/** Display margin for trajectory edit from waypoint hits (+ optional clip rect at playhead). */
+export function computeTrajectoryEditFrameExtension(
+  waypoints: NonNullable<TimelineClip["trajectory"]>["waypoints"],
+  frameW: number,
+  frameH: number,
+  padPx = PREVIEW_OVERFLOW_PAD_PX,
+  clipBounds?: ClipRect | null
+): PreviewFrameExtension {
+  if (frameW <= 0 || frameH <= 0) {
+    return PREVIEW_FRAME_EXTENSION_NONE;
+  }
+  const rects: ClipRect[] = [];
+  if (clipBounds) rects.push(clipBounds);
+  for (const wp of waypoints) {
+    const sx = frameW / 2 + wp.x * frameW;
+    const sy = frameH / 2 + wp.y * frameH;
+    const r = trajectoryWaypointHitRadiusPx(wp.scale ?? 1);
+    rects.push({
+      left: sx - r,
+      top: sy - r - TRAJECTORY_WAYPOINT_BADGE_PX,
+      width: r * 2,
+      height: r * 2 + TRAJECTORY_WAYPOINT_BADGE_PX,
+    });
+  }
+  if (rects.length === 0) return PREVIEW_FRAME_EXTENSION_NONE;
+  return previewFrameExtensionForRects(rects, frameW, frameH, padPx);
+}
+
+function clipHasPreviewDimensions(clip: TimelineClip): boolean {
+  if (clip.type === "geometry" || clip.type === "text") return true;
+  return (clip.naturalW ?? 0) > 0 && (clip.naturalH ?? 0) > 0;
+}
+
+/** Max clip overflow beyond base frame on each side (+ pad), in frame px. */
+export function computePreviewFrameExtension(
+  clips: TimelineClip[],
+  playhead: number,
+  frameW: number,
+  frameH: number,
+  padPx = PREVIEW_OVERFLOW_PAD_PX
+): PreviewFrameExtension {
+  let top = 0;
+  let right = 0;
+  let bottom = 0;
+  let left = 0;
+  if (frameW <= 0 || frameH <= 0) {
+    return PREVIEW_FRAME_EXTENSION_NONE;
+  }
+  for (const clip of clips) {
+    if (!clipHasPreviewDimensions(clip)) continue;
+    const tf = clipTransformAtPlayhead(clip, playhead);
+    const rect = clipImageRect(clip, tf, frameW, frameH);
+    top = Math.max(top, Math.max(0, -rect.top));
+    left = Math.max(left, Math.max(0, -rect.left));
+    right = Math.max(right, Math.max(0, rect.left + rect.width - frameW));
+    bottom = Math.max(bottom, Math.max(0, rect.top + rect.height - frameH));
+  }
+  const edge = (v: number) => (v > 0 ? Math.ceil(v + padPx) : 0);
+  return {
+    top: edge(top),
+    right: edge(right),
+    bottom: edge(bottom),
+    left: edge(left),
+  };
+}
+
 /**
  * Keep a dragged clip reachable: at least `minVisible` px of the rect must remain
- * inside the frame on each axis (or 10% of the smaller frame dimension, whichever
- * is larger). Large scaled clips still move freely, they just can't leave a
- * grabbable strip inside the frame.
+ * inside the expanded canvas on each axis (or 10% of the smaller frame dimension,
+ * whichever is larger). Large scaled clips still move freely, they just can't leave a
+ * grabbable strip inside the canvas.
+ *
+ * Rects and the returned position use **inner-frame coordinates** (0,0 = white-frame
+ * top-left). Top/left extension opens the canvas into negative coords
+ * (`[-extend.top, frameH + extend.bottom]`), not a shifted positive origin.
  */
 export function clampClipRectToFrame(
   rect: ClipRect,
   frameW: number,
   frameH: number,
-  minVisiblePx = PREVIEW_MIN_VISIBLE_PX
+  minVisiblePx = PREVIEW_MIN_VISIBLE_PX,
+  extend: PreviewFrameExtension = PREVIEW_FRAME_EXTENSION_NONE
 ): ClipRect {
   const { left, top, width, height } = rect;
   const minVisible = Math.max(minVisiblePx, 0.1 * Math.min(frameW, frameH));
@@ -175,17 +460,20 @@ export function clampClipRectToFrame(
   const clampAxis = (
     pos: number,
     size: number,
-    frameExtent: number
+    marginBefore: number,
+    baseExtent: number,
+    marginAfter: number
   ): number => {
-    const lo = minVisible - size;
-    const hi = frameExtent - minVisible;
+    // Canvas span in frame space: [-marginBefore, baseExtent + marginAfter]
+    const lo = -marginBefore + minVisible - size;
+    const hi = baseExtent + marginAfter - minVisible;
     if (lo > hi) return pos;
     return clamp(pos, lo, hi);
   };
 
   return {
-    left: clampAxis(left, width, frameW),
-    top: clampAxis(top, height, frameH),
+    left: clampAxis(left, width, extend.left, frameW, extend.right),
+    top: clampAxis(top, height, extend.top, frameH, extend.bottom),
     width,
     height,
   };
@@ -293,9 +581,19 @@ export function previewMoveTransformFromPointerDelta(params: {
   clientY: number;
   frameW: number;
   frameH: number;
-}): { to: ClipTransform; guides: AlignGuide[] } {
-  const { orig, startRect, startClientX, startClientY, clientX, clientY, frameW, frameH } =
-    params;
+  extend?: PreviewFrameExtension;
+}): { to: ClipTransform; guides: AlignGuide[]; extend: PreviewFrameExtension } {
+  const {
+    orig,
+    startRect,
+    startClientX,
+    startClientY,
+    clientX,
+    clientY,
+    frameW,
+    frameH,
+    extend = PREVIEW_FRAME_EXTENSION_NONE,
+  } = params;
   const dx = clientX - startClientX;
   const dy = clientY - startClientY;
   const rawRect = translateClipRect(startRect, dx, dy);
@@ -304,11 +602,22 @@ export function previewMoveTransformFromPointerDelta(params: {
     frameW,
     frameH
   );
-  const clampedRect = clampClipRectToFrame(snappedRect, frameW, frameH);
+  const activeExtend = mergePreviewFrameExtension(
+    extend,
+    previewFrameExtensionForRects([snappedRect], frameW, frameH)
+  );
+  const clampedRect = clampClipRectToFrame(
+    snappedRect,
+    frameW,
+    frameH,
+    PREVIEW_MIN_VISIBLE_PX,
+    activeExtend
+  );
   const { x, y } = clipTransformFromRectCenter(clampedRect, frameW, frameH);
   return {
     to: { ...orig, x, y },
     guides,
+    extend: activeExtend,
   };
 }
 
@@ -684,6 +993,13 @@ function soloLayer(clip: TimelineClip): TransitionActiveLayer {
   return { clip, opacity: 1, role: "solo", progress: 0 };
 }
 
+/** How far before a hard-cut junction to mount the incoming clip at opacity 0. */
+export const HARD_CUT_PRELOAD_SEC = 0.35;
+
+function preloadLayer(clip: TimelineClip): TransitionActiveLayer {
+  return { clip, opacity: 0, role: "solo", progress: 0, preload: true };
+}
+
 /** Video-track layers at time t (fade / dissolve / wipe / slide). */
 export function activeLayersAt(track: TimelineTrack, t: number): TransitionActiveLayer[] {
   if (track.kind !== "video") {
@@ -706,9 +1022,34 @@ export function activeLayersAt(track: TimelineTrack, t: number): TransitionActiv
   }
 
   const sorted = sortedTrackClips(track);
-  for (const c of sorted) {
+  for (let i = 0; i < sorted.length; i++) {
+    const c = sorted[i]!;
     if (t >= c.start && t < clipEnd(c)) {
-      return [soloLayer(c)];
+      const layers: TransitionActiveLayer[] = [soloLayer(c)];
+      const next = sorted[i + 1];
+      // Hard cut: start decoding the next clip early so video↔image doesn't flash black.
+      if (
+        next &&
+        isConnectedPair(c, next) &&
+        !c.transitionOut &&
+        t >= next.start - HARD_CUT_PRELOAD_SEC &&
+        t < next.start
+      ) {
+        layers.push(preloadLayer(next));
+      }
+      return layers;
+    }
+  }
+
+  // Float gap within CONNECT_EPS: hold the incoming clip so the playhead isn't empty.
+  for (let i = 1; i < sorted.length; i++) {
+    const outgoing = sorted[i - 1]!;
+    const incoming = sorted[i]!;
+    if (!isConnectedPair(outgoing, incoming)) continue;
+    const gapLo = Math.min(clipEnd(outgoing), incoming.start);
+    const gapHi = Math.max(clipEnd(outgoing), incoming.start);
+    if (t >= gapLo && t < gapHi) {
+      return [soloLayer(incoming)];
     }
   }
 
@@ -720,6 +1061,36 @@ export function activeClipAt(track: TimelineTrack, t: number): TimelineClip | nu
   const layers = activeLayersAt(track, t);
   if (layers.length === 0) return null;
   return layers[layers.length - 1].clip;
+}
+
+function previewLayerVisible(layer: TransitionActiveLayer): boolean {
+  if (layer.preload) return true;
+  if (layer.opacity > 0.001) return true;
+  if (layer.clipPath) return true;
+  if (layer.slideOffsetX || layer.slideOffsetY) return true;
+  return false;
+}
+
+/** Unique preview clips visible at playhead (matches TimelinePreviewPlayer interaction layers). */
+export function collectPreviewInteractionClips(
+  manifest: TimelineManifest,
+  playhead: number
+): TimelineClip[] {
+  const seen = new Set<string>();
+  const out: TimelineClip[] = [];
+  const videoTracks = manifest.tracks.filter((t) => t.kind === "video" || t.kind === undefined);
+  for (const track of videoTracks) {
+    const layers = activeLayersAt(track, playhead).filter(
+      (l) => previewLayerVisible(l) && !l.preload
+    );
+    for (let j = layers.length - 1; j >= 0; j--) {
+      const clip = layers[j]!.clip;
+      if (seen.has(clip.id)) continue;
+      seen.add(clip.id);
+      out.push(clip);
+    }
+  }
+  return out;
 }
 
 /** Timeline time for video seek when clip is in fade-in region before its start. */
@@ -735,8 +1106,17 @@ export function sourceTimeAtWithTransition(
   const idx = sorted.findIndex((c) => c.id === clip.id);
   if (idx <= 0) return sourceTimeAt(clip, t);
 
-  const outgoing = sorted[idx - 1];
-  if (!isConnectedPair(outgoing, clip) || !outgoing.transitionOut) {
+  const outgoing = sorted[idx - 1]!;
+  if (!isConnectedPair(outgoing, clip)) {
+    return sourceTimeAt(clip, t);
+  }
+
+  // Hard-cut preload: pin to the first media frame (don't seek before inPoint).
+  if (!outgoing.transitionOut && t < clip.start) {
+    return clip.reversed ? clip.outPoint : clip.inPoint;
+  }
+
+  if (!outgoing.transitionOut) {
     return sourceTimeAt(clip, t);
   }
 

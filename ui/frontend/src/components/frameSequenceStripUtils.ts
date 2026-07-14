@@ -15,6 +15,10 @@ export function stripSlotVisibleForExport(slot: FrameSequenceStripSlot | undefin
   );
 }
 
+export function frameSequenceHasExportableFrames(payload: FrameSequencePayload): boolean {
+  return payload.strip.some(stripSlotVisibleForExport);
+}
+
 function cropEqual(a?: SequenceCrop, b?: SequenceCrop): boolean {
   if (!a && !b) return true;
   if (!a || !b) return false;
@@ -30,7 +34,10 @@ function stripSlotEqual(a: FrameSequenceStripSlot, b: FrameSequenceStripSlot): b
     a.kind === b.kind &&
     (a.relPath ?? "") === (b.relPath ?? "") &&
     !!a.hidden === !!b.hidden &&
-    cropEqual(a.crop, b.crop)
+    !!a.trimHidden === !!b.trimHidden &&
+    cropEqual(a.crop, b.crop) &&
+    (a.sourceKeypointRelPath ?? "") === (b.sourceKeypointRelPath ?? "") &&
+    JSON.stringify(a.placedFigure ?? null) === JSON.stringify(b.placedFigure ?? null)
   );
 }
 
@@ -45,10 +52,11 @@ export function frameSequencePayloadEqual(
 
 function applyTrimHidden(slot: FrameSequenceStripSlot, outside: boolean): FrameSequenceStripSlot {
   if (outside) {
-    return slot.hidden ? slot : { ...slot, hidden: true };
+    if (slot.hidden && !slot.trimHidden) return slot;
+    return slot.hidden && slot.trimHidden ? slot : { ...slot, hidden: true, trimHidden: true };
   }
-  if (!slot.hidden) return slot;
-  const { hidden: _hidden, ...rest } = slot;
+  if (!slot.trimHidden) return slot;
+  const { hidden: _hidden, trimHidden: _trimHidden, ...rest } = slot;
   return rest;
 }
 
@@ -68,7 +76,9 @@ export function syncTrimHiddenToFrameSequence(
   const nextStrip = frameSequence.strip.map((slot, stripIndex) => {
     if (slot.kind !== "image") return slot;
     if (mp4Aligned) {
-      if (!stripSlotVisibleForExport(slot)) return slot;
+      // Manual-hidden frames were omitted from the encoded MP4. Auto-hidden
+      // frames still own an MP4 frame and must participate in future trim sync.
+      if (!slot.relPath?.trim() || (slot.hidden && !slot.trimHidden)) return slot;
       const sourceSec = mp4Frame / rate;
       mp4Frame += 1;
       const outside = sourceSec < inPoint || sourceSec >= outPoint;
@@ -189,18 +199,10 @@ export function buildFrameSequencePayload(
 ): FrameSequencePayload {
   return {
     sequenceGroupId,
-    strip: strip.map((s) =>
-      s.kind === "image"
-        ? {
-            kind: "image",
-            relPath: s.relPath || "",
-            crop: cloneCrop(s.crop),
-            ...(s.hidden ? { hidden: true } : {}),
-          }
-        : s.hidden
-          ? { kind: "empty", hidden: true }
-          : { kind: "empty" }
-    ),
+    strip: strip.map((s) => ({
+      ...s,
+      ...(s.kind === "image" ? { relPath: s.relPath || "", crop: cloneCrop(s.crop) } : {}),
+    })),
     hidden: [],
   };
 }

@@ -66,6 +66,37 @@ def test_trajectory_linear_midpoint() -> None:
     assert tf["scale"] == pytest.approx(1.1, abs=1e-9)
 
 
+def test_trajectory_hold_sec_mid_segment() -> None:
+    clip = _sample_trajectory_clip()
+    clip["trajectory"]["waypoints"][0]["holdSec"] = 2
+    tf = _trajectory_transform_at(clip, 1.0)
+    assert tf is not None
+    assert tf["x"] == pytest.approx(-0.1, abs=1e-9)
+    assert tf["scale"] == pytest.approx(1.0, abs=1e-9)
+
+
+def test_trajectory_hold_pct_legacy_migration() -> None:
+    clip = _sample_trajectory_clip()
+    clip["trajectory"]["waypoints"][0]["holdPct"] = 50
+    tf = _trajectory_transform_at(clip, 1.0)
+    assert tf is not None
+    assert tf["x"] == pytest.approx(-0.1, abs=1e-9)
+    assert tf["scale"] == pytest.approx(1.0, abs=1e-9)
+
+
+def test_trajectory_glide_ease_slower_approach() -> None:
+    clip = _sample_trajectory_clip()
+    clip["trajectory"]["waypoints"] = [
+        {"t": 0, "x": 0, "y": 0, "scale": 1, "holdSec": 1, "blendEase": 0},
+        {"t": 1, "x": 0.2, "y": 0, "scale": 1, "holdSec": 0.5, "blendEase": 100},
+    ]
+    linear = _trajectory_transform_at(clip, 3.5)
+    clip["trajectory"]["waypoints"][0]["blendEase"] = 100
+    glide = _trajectory_transform_at(clip, 3.5)
+    assert linear is not None and glide is not None
+    assert glide["x"] < linear["x"]
+
+
 def test_motion_pulse_nonzero() -> None:
     clip = _sample_trajectory_clip()
     off = _motion_offset_at(clip, 0.25)

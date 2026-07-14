@@ -11,6 +11,7 @@ from services.logic import (
     _encode_slideshow_video,
     _frames_need_webm,
     _image_has_transparency,
+    timeline_frame_sequence_to_video,
 )
 
 
@@ -73,3 +74,43 @@ def test_encode_slideshow_video_auto_format(
         assert result["mediaType"] == "video/webm"
     else:
         assert result["mediaType"] == "video/mp4"
+
+
+def test_transparent_timeline_strip_round_trips_alpha_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from services import timeline_storage
+    from ui.api import storage_paths
+    from ui.api.timeline_router import _timeline_video_clip_result
+
+    timelines_root = tmp_path / "timelines"
+    monkeypatch.setattr(timeline_storage, "TIMELINES_STORAGE_ROOT", timelines_root)
+    monkeypatch.setattr(storage_paths, "TIMELINES_STORAGE_ROOT", timelines_root)
+    frame_dir = timeline_storage.timeline_frames_dir("timeline-1", "group-1")
+    frame_dir.mkdir(parents=True)
+    frame = frame_dir / "transparent.png"
+    Image.new("RGBA", (64, 64), (200, 100, 50, 0)).save(frame)
+    frame_rel = timeline_storage.timeline_abs_to_rel(frame)
+
+    encoded = timeline_frame_sequence_to_video(
+        "timeline-1",
+        {
+            "sequenceGroupId": "group-1",
+            "strip": [{"kind": "image", "relPath": frame_rel}],
+            "hidden": [],
+        },
+        fps=12,
+        output_basename="transparent-strip",
+    )
+    webm = Path(encoded["absPath"])
+    alpha = webm.with_name(f"{webm.stem}.alpha.mkv")
+    result = _timeline_video_clip_result(encoded["absPath"])
+
+    assert webm.suffix == ".webm"
+    assert webm.is_file()
+    assert alpha.is_file()
+    assert encoded["srcRelPath"] == "timelines/timeline-1/clips/transparent-strip.webm"
+    assert result["srcRelPath"] == encoded["srcRelPath"]
+    assert result["alphaRelPath"] == (
+        "timelines/timeline-1/clips/transparent-strip.alpha.mkv"
+    )

@@ -490,6 +490,10 @@ export type ClipColoring = {
   opacity?: number;
   /** −100 (solid black on subject) … 0 (neutral) … +100 (solid white). */
   lightness?: number;
+  /** 0–100, 0 = off. Feathers the subject's alpha edge. */
+  borderBlur?: number;
+  /** 0–100, 0 = off. Gaussian blur over the whole image. */
+  imageBlur?: number;
 };
 
 export type TimelineClip = {
@@ -530,6 +534,12 @@ export type TimelineClip = {
       scale: number;   // same as transform.scale
       cpx?: number;    // bezier control point for the outgoing segment
       cpy?: number;
+      /** Seconds to hold at this waypoint before moving toward the next (absolute). */
+      holdSec?: number;
+      /** @deprecated Legacy % of segment; migrated to holdSec on read. */
+      holdPct?: number;
+      /** 0–100: temporal glide (0 = linear speed, 100 = smooth decel into pause). */
+      blendEase?: number;
     }>;
   };
   /** Clip volume envelope (audio clips): 0–100 level, 50 = unity gain. */
@@ -561,6 +571,10 @@ export type TimelineClip = {
   frameEdit?: TimelineFrameEdit;
   /** FFv1 alpha companion for WebM bg-removed clips (``{stem}.alpha.mkv``). */
   alphaRelPath?: string;
+  /** ~480p preview proxy (export still uses ``srcRelPath``). */
+  proxyRelPath?: string;
+  /** Alpha companion for the preview proxy (bg-removed clips). */
+  proxyAlphaRelPath?: string;
   /** Per-clip RGB / opacity / lightness adjustments (preview + export). */
   coloring?: ClipColoring;
 };
@@ -657,6 +671,22 @@ export async function apiTimelinePut(
   return readJson<{ ok: boolean }>(res);
 }
 
+/** Generate missing ~480p preview proxies (idempotent). Returns updated manifest when changed. */
+export async function apiTimelineEnsureProxies(
+  timelineKey: string
+): Promise<{ ok: boolean; updated: number; manifest: TimelineManifest | null }> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(timelineKey)}/ensure-proxies`,
+    { method: "POST", credentials: "omit" }
+  );
+  return readJson<{ ok: boolean; updated: number; manifest: TimelineManifest | null }>(res);
+}
+
+/** Relative path to use for PREVIEW media: the proxy when present, else the master. */
+export function previewSrcRelPath(clip: TimelineClip): string {
+  return clip.proxyRelPath?.trim() ? clip.proxyRelPath : clip.srcRelPath;
+}
+
 export function apiTimelineClipRgbaFrameUrl(
   timelineKey: string,
   clipId: string,
@@ -684,6 +714,27 @@ export async function apiTimelineImportImage(params: {
     }
   );
   return readJson<{ type: "image"; srcRelPath: string; width: number; height: number }>(res);
+}
+
+/** Copy a frame image into a timeline clip's frames folder (strip paste). */
+export async function apiTimelineDuplicateFrameAsset(params: {
+  timelineKey: string;
+  clipId: string;
+  sourceRelPath: string;
+}): Promise<{ relPath: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(params.timelineKey)}/duplicate_frame_asset`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        clipId: params.clipId,
+        sourceRelPath: params.sourceRelPath,
+      }),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ relPath: string }>(res);
 }
 
 /** Save a client-rasterized PNG (e.g. geometry clip) into the timeline clips folder. */
@@ -1065,6 +1116,7 @@ export function runTimelineVideoFramesExtractWsJob(params: {
   videoRelPath: string;
   inPoint: number;
   outPoint: number;
+  alphaRelPath?: string;
   onLogLine: (line: string) => void;
 }): Promise<WsDoneMessage<TimelineFrameExtractResult>> {
   const { timelineKey, onLogLine, ...payload } = params;
@@ -4363,6 +4415,8 @@ export type FrameSequenceStripSlot = {
   crop?: SequenceCrop;
   /** When true (image slots), strip keeps order but modal preview/play skips; timeline treats like empty hold. */
   hidden?: boolean;
+  /** Internal marker for frames hidden automatically by timeline trim synchronization. */
+  trimHidden?: boolean;
   /** Placement metadata stored by batch Qwen generation for no-backdrop preview. */
   placedFigure?: PlacedFigureMeta;
   /** Source keypoint file path (relative to storage root) stored at generation time to allow regeneration. */

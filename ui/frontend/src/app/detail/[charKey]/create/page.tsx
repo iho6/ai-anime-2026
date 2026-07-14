@@ -50,6 +50,7 @@ import {
 import { fetchVideoExport, runVideoExportJob, sanitizeDownloadBaseName } from "../../../../lib/downloadVideo";
 import { SequenceEditor } from "../dataset/SequenceEditor";
 import { SequencePreviewLightbox } from "../dataset/SequencePreviewLightbox";
+import { SequenceWorkspaceShell } from "../../../../components/sequenceWorkspace/SequenceWorkspaceShell";
 import { addImageToSequenceGallery } from "../dataset/datasetSequenceDrop";
 import {
   SortableMultiGrid,
@@ -2224,54 +2225,22 @@ export default function CreatePage() {
       ) : null}
 
       {activeSequence ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.55)",
-            zIndex: 10030,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-          onMouseDown={() => void closeSequenceEditor()}
+        <SequenceWorkspaceShell
+          title={`Sequence: ${activeSequence}`}
+          onClose={() => void closeSequenceEditor()}
         >
-          <div
-            style={{
-              background: "#fff",
-              border: "1px solid rgba(0,0,0,0.4)",
-              borderRadius: 0,
-              padding: 14,
-              maxWidth: "min(1100px, 96vw)",
-              maxHeight: "92vh",
-              overflow: "auto",
+          <SequenceEditor
+            charKey={charKey}
+            sequenceName={activeSequence}
+            onError={(msg, err) => showError({ message: msg, error: err })}
+            onAiEditSequenceGallery={openAiEditSequenceGallery}
+            onNewAngleSequenceGallery={openNewAngleSequenceGallery}
+            jobModal={{ begin: beginSession, end: endSession, fail: failSession, log: pushLog }}
+            registerFlushSave={(fn) => {
+              sequenceFlushRef.current = fn;
             }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div>Sequence: {activeSequence}</div>
-              <button
-                type="button"
-                onClick={() => void closeSequenceEditor()}
-                style={{ borderRadius: 0, border: "1px solid rgba(0,0,0,0.5)", background: "transparent", padding: "4px 12px", cursor: "pointer" }}
-              >
-                Close
-              </button>
-            </div>
-            <SequenceEditor
-              charKey={charKey}
-              sequenceName={activeSequence}
-              onError={(msg, err) => showError({ message: msg, error: err })}
-              onAiEditSequenceGallery={openAiEditSequenceGallery}
-              onNewAngleSequenceGallery={openNewAngleSequenceGallery}
-              jobModal={{ begin: beginSession, end: endSession, fail: failSession, log: pushLog }}
-              registerFlushSave={(fn) => {
-                sequenceFlushRef.current = fn;
-              }}
-            />
-          </div>
-        </div>
+          />
+        </SequenceWorkspaceShell>
       ) : null}
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />

@@ -12,15 +12,18 @@ import {
 } from "@dnd-kit/core";
 import { useParams, useRouter } from "next/navigation";
 import {
+  apiTimelineEnsureProxies,
   apiTimelineGet,
   apiTimelineImportAudio,
   apiTimelineImportImage,
+  apiTimelineDuplicateFrameAsset,
   apiTimelinePut,
   apiTimelineSavedShapes,
   apiSaveTimelineShape,
   AudioReference,
   runReferenceAudioGenerateWsJob,
   assetUrlFromRelPath,
+  previewSrcRelPath,
   runTimelineAiEditWsJob,
   runTimelineExportMp4WsJob,
   runTimelineFlfWsJob,
@@ -111,14 +114,26 @@ import {
   clipEnd,
   clipHasEditableTrajectory,
   clamp,
+  clampClipRectToFrame,
+  clipImageRect,
+  clipTransformAtPlayhead,
+  clipTransformFromRectCenter,
   defaultImageClipTransform,
   formatTime,
   genId,
+  mergePreviewFrameExtension,
+  nudgeClipTransform,
+  previewFrameExtensionForRects,
+  PREVIEW_FRAME_EXTENSION_NONE,
+  PREVIEW_MIN_VISIBLE_PX,
   newAudioTrack,
   newNeutralTrack,
   newVideoTrack,
   pasteTimelineClipClipboard,
+  PREVIEW_NUDGE_PX,
+  PREVIEW_NUDGE_SHIFT_PX,
   promoteTrackKind,
+  aspectRatio,
   dedupeTimelineManifestClips,
   defaultTrackNameForKind,
   overlayShotLayerPlacement,
@@ -127,13 +142,16 @@ import {
   resolveImportDimensions,
   timelineDuration,
   type ClipTransform,
+  type PreviewFrameExtension,
   type TimelineClipClipboard,
 } from "../../../components/timeline/timelineUtil";
 import {
-  findTrajectorySyncPair,
+  createPlayheadStore,
+  type PlayheadStore,
+} from "../../../components/timeline/timelinePlayback";
+import {
   syncMotionPair,
 } from "../../../components/timeline/trajectorySync";
-import { SyncMotionFlyout } from "../../../components/timeline/SyncMotionFlyout";
 import {
   flfEndpointLabel,
   resolveFlfEndpoint,
@@ -141,8 +159,13 @@ import {
 } from "../../../components/timeline/timelineFlfUtils";
 import {
   frameSequencePayloadEqual,
+  frameSequenceHasExportableFrames,
   syncTrimHiddenToFrameSequence,
 } from "../../../components/frameSequenceStripUtils";
+import {
+  applyEncodedFrameSequenceReplacements,
+  applyFrameSequencePayloads,
+} from "../../../components/timeline/frameSequenceManifestOps";
 import { measureTextClipNaturalSize } from "../../../components/timeline/textMeasure";
 import {
   SEQUENCE_FLF_OUTPUT_LENGTHS,
@@ -160,12 +183,23 @@ import { TIMELINE_STRIP_FRAME_DROP_PREFIX } from "../../detail/[charKey]/dataset
 import { sanitizeDownloadBaseName } from "../../../lib/downloadVideo";
 import { sanitizeClipColoringForSave } from "../../../lib/clipColoring";
 import { ClipColoringFlyout } from "../../../components/timeline/ClipColoringFlyout";
+import { ClipSpeedFlyout } from "../../../components/timeline/ClipSpeedFlyout";
+import { RemoveBgRmbgFlyout } from "../../../components/timeline/RemoveBgRmbgFlyout";
+import { TimelineClipFrameWorkspace } from "../../../components/timeline/TimelineClipFrameWorkspace";
+import { rasterizeGeometryToPngBase64 } from "../../../components/timeline/geometryRasterize";
+import { usePlayheadValue } from "../../../components/timeline/timelinePlayback";
+
+/** Time readout that subscribes to the live playhead store (no page re-render). */
+function PlayheadTimeLabel({ store }: { store: PlayheadStore }) {
+  const playhead = usePlayheadValue(store);
+  return <>{formatTime(playhead)}</>;
+}
 
 export default function TimelineEditorPage() {
   const router = useRouter();
   const params = useParams<{ timelineKey: string }>();
   const timelineKey = params?.timelineKey ?? "";
-  const { showError, askText } = useAppError();
+  const { showError } = useAppError();
 
   const logRef = useRef<SharedLogStreamHandle | null>(null);
   const {
@@ -180,11 +214,55 @@ export default function TimelineEditorPage() {
   const [manifest, setManifest] = useState<TimelineManifest | null>(null);
   const [playing, setPlaying] = useState(false);
   const [playhead, setPlayhead] = useState(0);
+  // Live playhead store (smooth 60fps for preview/ruler/time) + a ref that is
+  // always current for event handlers. React `playhead` state is a throttled
+  // mirror so the large page tree does not reconcile on every rAF tick.
+  const playheadStoreRef = useRef<PlayheadStore | null>(null);
+  if (!playheadStoreRef.current) playheadStoreRef.current = createPlayheadStore(0);
+  const playheadStore = playheadStoreRef.current;
+  const playheadRef = useRef(0);
+  const playheadThrottleRef = useRef(0);
+
+  const commitLivePlayhead = useCallback(
+    (t: number) => {
+      playheadRef.current = t;
+      playheadStore.set(t);
+      const now = performance.now();
+      if (now - playheadThrottleRef.current >= 120) {
+        playheadThrottleRef.current = now;
+        setPlayhead(t);
+      }
+    },
+    [playheadStore]
+  );
+
+  const seekPlayhead = useCallback(
+    (t: number) => {
+      playheadRef.current = t;
+      playheadStore.set(t);
+      playheadThrottleRef.current = performance.now();
+      setPlayhead(t);
+    },
+    [playheadStore]
+  );
+
+  // When playback stops, make sure React state matches the final live value
+  // (the last throttled tick may have been skipped).
+  useEffect(() => {
+    if (!playing) {
+      setPlayhead(playheadRef.current);
+    }
+  }, [playing]);
+
   const [pxPerSec, setPxPerSec] = useState(80);
   const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
   const clipClipboardRef = useRef<TimelineClipClipboard | null>(null);
   const [hasClipClipboard, setHasClipClipboard] = useState(false);
   const [previewHeight, setPreviewHeight] = useState(260);
+  const [previewFrameExtension, setPreviewFrameExtension] =
+    useState<PreviewFrameExtension>(PREVIEW_FRAME_EXTENSION_NONE);
+  const previewFrameExtensionRef = useRef(previewFrameExtension);
+  previewFrameExtensionRef.current = previewFrameExtension;
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [trajectoryClipId, setTrajectoryClipId] = useState<string | null>(null);
@@ -239,6 +317,36 @@ export default function TimelineEditorPage() {
   } | null>(null);
   const previewResizeRef = useRef<{ startY: number; orig: number } | null>(null);
 
+  useEffect(() => {
+    const prevBodyBg = document.body.style.background;
+    const prevHtmlBg = document.documentElement.style.background;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.background = "#0e0e0e";
+    document.documentElement.style.background = "#0e0e0e";
+    // Global overflow-x:hidden makes overflow-y compute to auto, which clips
+    // absolute preview spill above/beside the white frame. Downward spill works.
+    // Set both axes explicitly so stylesheet overflow-x is fully overridden.
+    document.body.style.overflowX = "visible";
+    document.body.style.overflowY = "visible";
+    document.documentElement.style.overflowX = "visible";
+    document.documentElement.style.overflowY = "visible";
+    return () => {
+      document.body.style.background = prevBodyBg;
+      document.documentElement.style.background = prevHtmlBg;
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflowX = "";
+      document.body.style.overflowY = "";
+      document.documentElement.style.overflowX = "";
+      document.documentElement.style.overflowY = "";
+    };
+  }, []);
+
+  useEffect(() => {
+    setPreviewFrameExtension(PREVIEW_FRAME_EXTENSION_NONE);
+  }, [timelineKey]);
+
   // Drag-start waypoint snapshot so trajectory preview-drag stays absolute (no accumulation).
   const trajDragOriginRef = useRef<{
     clipId: string;
@@ -278,12 +386,15 @@ export default function TimelineEditorPage() {
     primaryClipId: string;
     primaryTrackId: string;
   } | null>(null);
+  const [timelineFrameWorkspace, setTimelineFrameWorkspace] = useState<{
+    clipIds: string[];
+    primaryClipId: string;
+    primaryTrackId: string;
+  } | null>(null);
   const [seqEditorSource, setSeqEditorSource] = useState<{
     charKey: string;
     sequenceName: string;
   } | null>(null);
-  const [videoFrameApplyPickIds, setVideoFrameApplyPickIds] = useState<string[]>([]);
-  const [videoFrameApplyIsGroup, setVideoFrameApplyIsGroup] = useState(false);
   const videoFrameApplyStripRef = useRef<FrameSequencePayload | null>(null);
   const videoFrameApplyGroupRef = useRef<Record<string, FrameSequencePayload> | null>(null);
   const videoFrameApplyEditorRef = useRef<{ clipIds: string[]; primaryClipId: string; primaryTrackId: string } | null>(null);
@@ -329,6 +440,37 @@ export default function TimelineEditorPage() {
         const { manifest: cleaned } = dedupeTimelineManifestClips(m);
         setManifest(cleaned);
         loadedRef.current = true;
+        // Lazily generate ~480p preview proxies in the background; merge just
+        // the proxy fields back so preview decodes the smaller media.
+        void apiTimelineEnsureProxies(timelineKey)
+          .then((res) => {
+            if (!res.updated || !res.manifest) return;
+            const proxies = new Map(
+              res.manifest.tracks
+                .flatMap((t) => t.clips)
+                .map((c) => [
+                  c.id,
+                  { proxyRelPath: c.proxyRelPath, proxyAlphaRelPath: c.proxyAlphaRelPath },
+                ])
+            );
+            setManifest((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    tracks: prev.tracks.map((t) => ({
+                      ...t,
+                      clips: t.clips.map((c) => {
+                        const p = proxies.get(c.id);
+                        return p && p.proxyRelPath && p.proxyRelPath !== c.proxyRelPath
+                          ? { ...c, ...p }
+                          : c;
+                      }),
+                    })),
+                  }
+                : prev
+            );
+          })
+          .catch(() => {});
       })
       .catch((e) => showError({ message: "Could not load timeline.", error: e }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -433,13 +575,13 @@ export default function TimelineEditorPage() {
   function addClip(kind: "video" | "audio", clip: TimelineClip) {
     historyUpdate((m) => {
       const { m: m2, trackId } = resolveTarget(m, kind);
-      const placed = { ...clip, start: playhead };
+      const placed = { ...clip, start: playheadRef.current };
       return {
         ...m2,
         tracks: m2.tracks.map((t) => {
           if (t.id !== trackId) return t;
           const shifted = t.clips.map((c) =>
-            c.start >= playhead ? { ...c, start: c.start + placed.duration } : c
+            c.start >= playheadRef.current ? { ...c, start: c.start + placed.duration } : c
           );
           return { ...t, clips: [...shifted, placed] };
         }),
@@ -451,13 +593,13 @@ export default function TimelineEditorPage() {
   function addVectorClipAtPlayhead(clip: TimelineClip) {
     historyUpdate((m) => {
       const { m: m2, trackId } = resolveTarget(m, "video");
-      const placed = { ...clip, start: playhead };
+      const placed = { ...clip, start: playheadRef.current };
       return {
         ...m2,
         tracks: m2.tracks.map((t) => {
           if (t.id !== trackId) return t;
           const shifted = t.clips.map((c) =>
-            c.start >= playhead ? { ...c, start: c.start + placed.duration } : c
+            c.start >= playheadRef.current ? { ...c, start: c.start + placed.duration } : c
           );
           return { ...t, clips: [...shifted, placed] };
         }),
@@ -1015,7 +1157,7 @@ export default function TimelineEditorPage() {
         backdrop,
         overlay,
         previewAspect: manifest.previewAspect,
-        playhead,
+        playhead: playheadRef.current,
       });
       const placement = overlayShotLayerPlacement({
         ovRect: compositeResult.ovRect,
@@ -1164,6 +1306,41 @@ export default function TimelineEditorPage() {
     }));
   }
 
+  function updateClipSpeedLive(clipId: string, speed: number) {
+    const sp = Math.max(0.01, speed);
+    updateManifest((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) =>
+          c.id !== clipId
+            ? c
+            : { ...c, speed: sp, duration: (c.outPoint - c.inPoint) / sp }
+        ),
+      })),
+    }));
+  }
+
+  function updateClipSpeedCommit(clipId: string) {
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => (c.id === clipId ? { ...c } : c)),
+      })),
+    }));
+  }
+
+  function updateClipReverseLive(clipId: string, reversed: boolean) {
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => (c.id !== clipId ? c : { ...c, reversed })),
+      })),
+    }));
+  }
+
   function onVolumePointsChange(clipId: string, points: VolumeAutomationPoint[]) {
     updateManifest((m) => ({
       ...m,
@@ -1192,6 +1369,10 @@ export default function TimelineEditorPage() {
     }));
   }
 
+  function onWaypointPatchCommit() {
+    commit();
+  }
+
   function onMotionChange(clipId: string, motion: TrajectoryMotionId, motionAmount: number) {
     updateManifest((m) => ({
       ...m,
@@ -1204,17 +1385,6 @@ export default function TimelineEditorPage() {
         ),
       })),
     }));
-  }
-
-  function openRemoveBgImageForClip(clipId: string) {
-    const found = findClip(clipId);
-    if (!found || found.clip.type !== "image") return;
-    removeBgImagePendingRef.current = {
-      clipId,
-      relPaths: [found.clip.srcRelPath],
-    };
-    setRemoveBgImageOpen(true);
-    setClipMenu((s) => ({ ...s, open: false }));
   }
 
   async function runRemoveBgImage(options: RemoveBgImageRunOptions) {
@@ -1289,27 +1459,6 @@ export default function TimelineEditorPage() {
     } catch (e) {
       failSession(e, "Background removal failed.");
     }
-  }
-
-  async function removeClipBg(clipId: string) {
-    openRemoveBgImageForClip(clipId);
-  }
-
-  function openRemoveBgVideo(clipId: string) {
-    const found = findClip(clipId);
-    if (!found || found.clip.type !== "video") return;
-    const c = found.clip;
-    removeBgVideoTargetRef.current = {
-      clipId,
-      srcRelPath: c.srcRelPath,
-      start: found.clip.start,
-      naturalW: c.naturalW,
-      naturalH: c.naturalH,
-      duration: c.duration,
-      source: c.source,
-    };
-    setRemoveBgVideoOpen(true);
-    setClipMenu((s) => ({ ...s, open: false }));
   }
 
   function insertVideoBgClip(
@@ -1466,17 +1615,18 @@ export default function TimelineEditorPage() {
   }
 
   function splitClipAtPlayhead(trackId: string, clipId: string) {
+    const head = playheadRef.current;
     historyUpdate((m) => ({
       ...m,
       tracks: m.tracks.map((t) => {
         if (t.id !== trackId) return t;
         const clips: TimelineClip[] = [];
         for (const c of t.clips) {
-          if (c.id !== clipId || playhead <= c.start || playhead >= clipEnd(c)) {
+          if (c.id !== clipId || head <= c.start || head >= clipEnd(c)) {
             clips.push(c);
             continue;
           }
-          const leftDur = playhead - c.start;
+          const leftDur = head - c.start;
           const hasSrc = c.type === "video" || c.type === "audio";
           const cutPoint = hasSrc
             ? c.reversed
@@ -1492,9 +1642,9 @@ export default function TimelineEditorPage() {
             clips.push({
               ...c,
               id: genId("clip"),
-              start: playhead,
+              start: head,
               outPoint: cutPoint,
-              duration: clipEnd(c) - playhead,
+              duration: clipEnd(c) - head,
             });
           } else {
             clips.push({
@@ -1505,64 +1655,14 @@ export default function TimelineEditorPage() {
             clips.push({
               ...c,
               id: genId("clip"),
-              start: playhead,
+              start: head,
               inPoint: hasSrc ? cutPoint : c.inPoint,
-              duration: clipEnd(c) - playhead,
+              duration: clipEnd(c) - head,
             });
           }
         }
         return { ...t, clips };
       }),
-    }));
-  }
-
-  function toggleClipReverse(trackId: string, clipId: string) {
-    historyUpdate((m) => ({
-      ...m,
-      tracks: m.tracks.map((t) =>
-        t.id !== trackId
-          ? t
-          : {
-              ...t,
-              clips: t.clips.map((c) =>
-                c.id !== clipId ? c : { ...c, reversed: !c.reversed }
-              ),
-            }
-      ),
-    }));
-    setClipMenu((s) => ({ ...s, open: false }));
-  }
-
-  async function changeClipSpeed(trackId: string, clipId: string) {
-    const track = manifest?.tracks.find((t) => t.id === trackId);
-    const clip = track?.clips.find((c) => c.id === clipId);
-    if (!clip) return;
-    const ans = await askText({
-      title: "Clip speed",
-      message: "Speed multiplier (e.g. 0.5 = slower, 2 = faster):",
-      defaultValue: String(clip.speed),
-      confirmText: "Apply",
-    });
-    const sp = Number(ans);
-    if (!ans || !isFinite(sp) || sp <= 0) return;
-    historyUpdate((m) => ({
-      ...m,
-      tracks: m.tracks.map((t) =>
-        t.id !== trackId
-          ? t
-          : {
-              ...t,
-              clips: t.clips.map((c) =>
-                c.id !== clipId
-                  ? c
-                  : {
-                      ...c,
-                      speed: sp,
-                      duration: (c.outPoint - c.inPoint) / sp,
-                    }
-              ),
-            }
-      ),
     }));
   }
 
@@ -1574,6 +1674,11 @@ export default function TimelineEditorPage() {
     setGeometryEditClipId(null);
     setTextEditClipId(null);
   }
+
+  const exitTrajectoryEdit = useCallback(() => {
+    commit();
+    setTrajectoryClipId(null);
+  }, [commit]);
 
   function selectClip(clipId: string | null, additive: boolean) {
     if (clipId == null) {
@@ -1600,6 +1705,18 @@ export default function TimelineEditorPage() {
     });
   }
 
+  function selectClips(clipIds: string[], additive: boolean) {
+    exitClipEditModes();
+    setSelectedClipIds((prev) => {
+      if (additive) {
+        const next = new Set(prev);
+        for (const id of clipIds) next.add(id);
+        return [...next];
+      }
+      return [...clipIds];
+    });
+  }
+
   function findClip(clipId: string): { trackId: string; clip: TimelineClip } | null {
     if (!manifest) return null;
     for (const t of manifest.tracks) {
@@ -1623,7 +1740,7 @@ export default function TimelineEditorPage() {
     if (!cb) return;
     let newClipIds: string[] = [];
     historyUpdate((m) => {
-      const result = pasteTimelineClipClipboard(m, cb, playhead);
+      const result = pasteTimelineClipClipboard(m, cb, playheadRef.current);
       newClipIds = result.newClipIds;
       return result.manifest;
     });
@@ -1631,7 +1748,7 @@ export default function TimelineEditorPage() {
     setSelectedClipIds(newClipIds);
     setPlaying(false);
     exitClipEditModes();
-  }, [playhead, historyUpdate]);
+  }, [historyUpdate]);
 
   useEffect(() => {
     function isEditableTarget(target: EventTarget | null): boolean {
@@ -1652,11 +1769,29 @@ export default function TimelineEditorPage() {
       );
     }
 
+    function editorBlocksTimelineShortcuts(): boolean {
+      return Boolean(videoFrameEditor || seqEditorSource || timelineFrameWorkspace);
+    }
+
     function onKey(e: KeyboardEvent) {
       if (isEditableTarget(e.target)) return;
 
+      if (trajectoryClipId && !modalBlocksShortcuts()) {
+        if (e.key === "Escape" || e.key === "Enter") {
+          e.preventDefault();
+          exitTrajectoryEdit();
+          return;
+        }
+      }
+
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (!e.ctrlKey && !e.metaKey && !modalBlocksShortcuts() && selectedClipIds.length > 0) {
+        if (
+          !e.ctrlKey &&
+          !e.metaKey &&
+          !modalBlocksShortcuts() &&
+          !editorBlocksTimelineShortcuts() &&
+          selectedClipIds.length > 0
+        ) {
           e.preventDefault();
           const ids = [...selectedClipIds];
           deleteClips(ids);
@@ -1676,32 +1811,107 @@ export default function TimelineEditorPage() {
         return;
       }
 
-      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-        if (modalBlocksShortcuts() || !manifest) return;
+      const arrowKeys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"] as const;
+      if (arrowKeys.includes(e.key as (typeof arrowKeys)[number])) {
+        if (modalBlocksShortcuts() || editorBlocksTimelineShortcuts() || !manifest) return;
+
+        const inClipEdit =
+          !!textEditClipId ||
+          !!geometryEditClipId ||
+          !!trajectoryClipId ||
+          !!volumeEditClipId;
+
+        const canNudgeClip =
+          selectedClipIds.length > 0 &&
+          !playing &&
+          !inClipEdit;
+
+        if (canNudgeClip) {
+          e.preventDefault();
+          const stepPx = e.shiftKey ? PREVIEW_NUDGE_SHIFT_PX : PREVIEW_NUDGE_PX;
+          let dx = 0;
+          let dy = 0;
+          if (e.key === "ArrowLeft") dx = -1;
+          else if (e.key === "ArrowRight") dx = 1;
+          else if (e.key === "ArrowUp") dy = -1;
+          else if (e.key === "ArrowDown") dy = 1;
+
+          const ratio = aspectRatio(manifest.previewAspect);
+          const frameH = previewHeight;
+          const frameW = previewHeight * ratio;
+
+          let mergedExtend: PreviewFrameExtension = PREVIEW_FRAME_EXTENSION_NONE;
+          historyUpdate((m) => {
+            let next = m;
+            for (const clipId of selectedClipIds) {
+              const found = next.tracks
+                .flatMap((t) => t.clips.map((c) => ({ clip: c })))
+                .find(({ clip }) => clip.id === clipId);
+              const clip = found?.clip;
+              if (
+                !clip ||
+                (clip.type !== "image" &&
+                  clip.type !== "video" &&
+                  clip.type !== "geometry" &&
+                  clip.type !== "text")
+              ) {
+                continue;
+              }
+              const from = clipTransformAtPlayhead(clip, playheadRef.current);
+              const nudged = nudgeClipTransform(from, dx * stepPx, dy * stepPx, frameW, frameH);
+              const rect = clipImageRect(clip, nudged, frameW, frameH);
+              const activeExtend = mergePreviewFrameExtension(
+                previewFrameExtensionRef.current,
+                previewFrameExtensionForRects([rect], frameW, frameH)
+              );
+              const clamped = clampClipRectToFrame(
+                rect,
+                frameW,
+                frameH,
+                PREVIEW_MIN_VISIBLE_PX,
+                activeExtend
+              );
+              const { x, y } = clipTransformFromRectCenter(clamped, frameW, frameH);
+              const to = { ...from, x, y };
+              next = applyClipPreviewTransform(next, clipId, from, to, "move", null);
+              mergedExtend = mergePreviewFrameExtension(
+                mergedExtend,
+                previewFrameExtensionForRects([clamped], frameW, frameH)
+              );
+            }
+            return next;
+          });
+          previewFrameExtensionRef.current = mergedExtend;
+          setPreviewFrameExtension(mergedExtend);
+          return;
+        }
+
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+
         e.preventDefault();
         const dir = e.key === "ArrowRight" ? 1 : -1;
         const fps = Math.max(1, manifest.fps || 24);
         const step = e.shiftKey ? 1 : e.altKey ? 0.1 : 1 / fps;
         setPlaying(false);
-        setPlayhead((p) => {
-          const next = clamp(p + dir * step, 0, total);
+        {
+          const next = clamp(playheadRef.current + dir * step, 0, total);
           tracksRef.current?.ensurePlayheadVisible(next);
-          return next;
-        });
+          seekPlayhead(next);
+        }
         return;
       }
 
       if (!(e.ctrlKey || e.metaKey)) return;
       const k = e.key.toLowerCase();
       if (k === "c") {
-        if (modalBlocksShortcuts() || seqEditorSource || videoFrameEditor) return;
+        if (modalBlocksShortcuts() || seqEditorSource || videoFrameEditor || timelineFrameWorkspace) return;
         if (selectedClipIds.length === 0) return;
         e.preventDefault();
         copySelectedClips();
         return;
       }
       if (k === "v") {
-        if (modalBlocksShortcuts() || seqEditorSource || videoFrameEditor) return;
+        if (modalBlocksShortcuts() || seqEditorSource || videoFrameEditor || timelineFrameWorkspace) return;
         if (!clipClipboardRef.current) return;
         e.preventDefault();
         pasteClips();
@@ -1736,9 +1946,16 @@ export default function TimelineEditorPage() {
     seqPickerOpen,
     seqEditorSource,
     videoFrameEditor,
+    timelineFrameWorkspace,
     jobModalProps.open,
     manifest,
     total,
+    playing,
+    previewHeight,
+    historyUpdate,
+    seekPlayhead,
+    commit,
+    exitTrajectoryEdit,
   ]);
 
   /** Selected FLF endpoint clips (image, video, geometry), ordered by timeline start. */
@@ -1748,32 +1965,63 @@ export default function TimelineEditorPage() {
     return selectedFlfClips(all, selectedClipIds);
   }
 
-  function getTrajectorySyncPair() {
-    if (!manifest) return null;
-    return findTrajectorySyncPair(manifest, selectedClipIds);
-  }
-
-  function syncSelectedClipMotion(tailSec: number = syncMotionTailSec) {
-    const pair = getTrajectorySyncPair();
-    if (!pair || !manifest) return;
+  function syncJunctionClipMotion(
+    trackId: string,
+    outgoingClipId: string,
+    incomingClipId: string,
+    tailSec: number = syncMotionTailSec
+  ) {
+    if (!manifest) return;
+    const track = manifest.tracks.find((t) => t.id === trackId);
+    const outgoing = track?.clips.find((c) => c.id === outgoingClipId);
+    const incoming = track?.clips.find((c) => c.id === incomingClipId);
+    if (!outgoing || !incoming) return;
     const fps = Math.max(1, manifest.fps || 24);
-    const synced = syncMotionPair(pair.outgoing, pair.incoming, fps, tailSec);
+    const synced = syncMotionPair(outgoing, incoming, fps, tailSec);
     historyUpdate((m) => ({
       ...m,
       tracks: m.tracks.map((t) =>
-        t.id !== pair.trackId
+        t.id !== trackId
           ? t
           : {
               ...t,
               clips: t.clips.map((c) => {
-                if (c.id === pair.outgoing.id) return synced.outgoing;
-                if (c.id === pair.incoming.id) return synced.incoming;
+                if (c.id === outgoing.id) return synced.outgoing;
+                if (c.id === incoming.id) return synced.incoming;
                 return c;
               }),
             }
       ),
     }));
-    setClipMenu((s) => ({ ...s, open: false }));
+  }
+
+  function syncJunctionClipColor(
+    trackId: string,
+    outgoingClipId: string,
+    incomingClipId: string
+  ) {
+    if (!manifest) return;
+    const track = manifest.tracks.find((t) => t.id === trackId);
+    const outgoing = track?.clips.find((c) => c.id === outgoingClipId);
+    const incoming = track?.clips.find((c) => c.id === incomingClipId);
+    if (!outgoing || !incoming) return;
+    const sanitized = sanitizeClipColoringForSave(outgoing.coloring);
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) =>
+        t.id !== trackId
+          ? t
+          : {
+              ...t,
+              clips: t.clips.map((c) => {
+                if (c.id !== incoming.id) return c;
+                if (sanitized) return { ...c, coloring: sanitized };
+                const { coloring: _drop, ...rest } = c;
+                return rest;
+              }),
+            }
+      ),
+    }));
   }
 
   /** Selected image-like clips (images + geometries), ordered by timeline start. */
@@ -1801,6 +2049,42 @@ export default function TimelineEditorPage() {
     return base || clip.id.slice(0, 8);
   }
 
+  function applyClipPreviewTransform(
+    m: TimelineManifest,
+    clipId: string,
+    from: ClipTransform,
+    to: ClipTransform,
+    mode: "move" | "scale",
+    trajOrigin: { clipId: string; waypoints: TrajectoryWaypoint[] } | null
+  ): TimelineManifest {
+    return {
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => {
+          if (c.id !== clipId) return c;
+          if (clipHasEditableTrajectory(c)) {
+            const baseClip =
+              trajOrigin && trajOrigin.clipId === clipId && c.trajectory
+                ? { ...c, trajectory: { ...c.trajectory, waypoints: trajOrigin.waypoints } }
+                : c;
+            const trajectory = applyPreviewDragToTrajectory(baseClip, from, to, mode);
+            if (trajectory) return { ...c, trajectory };
+          }
+          return {
+            ...c,
+            transform: {
+              ...(c.transform ?? defaultImageClipTransform()),
+              x: to.x,
+              y: to.y,
+              scale: to.scale,
+            },
+          };
+        }),
+      })),
+    };
+  }
+
   function setClipTransformFromPreview(
     clipId: string,
     from: ClipTransform,
@@ -1821,33 +2105,9 @@ export default function TimelineEditorPage() {
         };
       }
     }
-    updateManifest((m) => ({
-      ...m,
-      tracks: m.tracks.map((t) => ({
-        ...t,
-        clips: t.clips.map((c) => {
-          if (c.id !== clipId) return c;
-          if (clipHasEditableTrajectory(c)) {
-            const origin = trajDragOriginRef.current;
-            const baseClip =
-              origin && origin.clipId === clipId && c.trajectory
-                ? { ...c, trajectory: { ...c.trajectory, waypoints: origin.waypoints } }
-                : c;
-            const trajectory = applyPreviewDragToTrajectory(baseClip, from, to, mode);
-            if (trajectory) return { ...c, trajectory };
-          }
-          return {
-            ...c,
-            transform: {
-              ...(c.transform ?? defaultImageClipTransform()),
-              x: to.x,
-              y: to.y,
-              scale: to.scale,
-            },
-          };
-        }),
-      })),
-    }));
+    updateManifest((m) =>
+      applyClipPreviewTransform(m, clipId, from, to, mode, trajDragOriginRef.current)
+    );
   }
 
   /** Insert a generated clip on a NEW video track placed above existing tracks. */
@@ -1891,9 +2151,12 @@ export default function TimelineEditorPage() {
     commit();
     insertClipOnSameTrack(clip, trackId, startSec);
     setPlaying(false);
-    setPlayhead(startSec);
+    seekPlayhead(startSec);
     selectClip(clip.id, false);
   }
+
+  const insertFrameFromEditorDropRef = useRef(insertFrameFromEditorDrop);
+  insertFrameFromEditorDropRef.current = insertFrameFromEditorDrop;
 
   const onStripFrameDragMove = useCallback((ev: DragMoveEvent) => {
     const activeData = ev.active.data.current as { kind?: string } | undefined;
@@ -1906,38 +2169,45 @@ export default function TimelineEditorPage() {
     };
   }, []);
 
-  const onStripFrameDragEnd = useCallback(
-    (ev: DragEndEvent) => {
-      setStripDragPreviewPath(null);
-      const activeData = ev.active.data.current as
-        | { kind?: string; relPath?: string }
-        | undefined;
-      if (activeData?.kind !== "frameSeqStripSlot" || !activeData.relPath?.trim()) {
-        stripDragPointerRef.current = null;
-        return;
-      }
-      const overId = ev.over?.id != null ? String(ev.over.id) : "";
-      if (!overId.startsWith(TIMELINE_STRIP_FRAME_DROP_PREFIX)) {
-        stripDragPointerRef.current = null;
-        return;
-      }
-      const trackId = (ev.over?.data.current as { trackId?: string } | undefined)?.trackId;
-      if (!trackId) {
-        stripDragPointerRef.current = null;
-        return;
-      }
-      const ptr = stripDragPointerRef.current;
+  const onStripFrameDragEnd = useCallback((ev: DragEndEvent) => {
+    setStripDragPreviewPath(null);
+    const activeData = ev.active.data.current as
+      | { kind?: string; relPath?: string }
+      | undefined;
+    if (activeData?.kind !== "frameSeqStripSlot" || !activeData.relPath?.trim()) {
       stripDragPointerRef.current = null;
-      const startSec = ptr
-        ? clamp(tracksRef.current?.timeAtClientX(ptr.x) ?? playhead, 0, Infinity)
-        : playhead;
-      void insertFrameFromEditorDrop(activeData.relPath.trim(), trackId, startSec).catch((e) =>
-        showError({ message: "Could not add frame to timeline.", error: e })
-      );
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [timelineKey, playhead]
-  );
+      return;
+    }
+    const overId = ev.over?.id != null ? String(ev.over.id) : "";
+    if (!overId.startsWith(TIMELINE_STRIP_FRAME_DROP_PREFIX)) {
+      stripDragPointerRef.current = null;
+      if (overId) {
+        showError({
+          message: "Drop the frame on a timeline track.",
+          error: new Error(`Unexpected drop target: ${overId}`),
+        });
+      }
+      return;
+    }
+    const fromData = (ev.over?.data.current as { trackId?: string } | undefined)?.trackId;
+    const trackId = (fromData?.trim() || overId.slice(TIMELINE_STRIP_FRAME_DROP_PREFIX.length)).trim();
+    if (!trackId) {
+      stripDragPointerRef.current = null;
+      showError({
+        message: "Could not resolve timeline track for drop.",
+        error: new Error(`Missing trackId for over.id=${overId}`),
+      });
+      return;
+    }
+    const ptr = stripDragPointerRef.current;
+    stripDragPointerRef.current = null;
+    const startSec = ptr
+      ? clamp(tracksRef.current?.timeAtClientX(ptr.x) ?? playheadRef.current, 0, Infinity)
+      : playheadRef.current;
+    void insertFrameFromEditorDropRef
+      .current(activeData.relPath.trim(), trackId, startSec)
+      .catch((e) => showError({ message: "Could not add frame to timeline.", error: e }));
+  }, [showError]);
 
   async function openAiEdit(clipId: string) {
     const found = findClip(clipId);
@@ -1960,7 +2230,7 @@ export default function TimelineEditorPage() {
     if (!found) return;
     const c = found.clip;
     if (c.type !== "image" && c.type !== "video") return;
-    const localTimeSec = Math.max(0, playhead - c.start);
+    const localTimeSec = Math.max(0, playheadRef.current - c.start);
     const inPoint = c.inPoint ?? 0;
     const speed = c.speed && c.speed > 0 ? c.speed : 1;
     const sourceSeekSec = inPoint + localTimeSec * speed;
@@ -2272,6 +2542,7 @@ export default function TimelineEditorPage() {
       videoRelPath: clip.srcRelPath,
       inPoint: clip.inPoint,
       outPoint: clip.outPoint,
+      ...(clip.alphaRelPath ? { alphaRelPath: clip.alphaRelPath } : {}),
       onLogLine: (line) => pushLog(line),
     });
     if (!done.ok || !done.result?.frameSequence) {
@@ -2351,10 +2622,21 @@ export default function TimelineEditorPage() {
     const ok = await ensureVideoFramesExtracted(clipIds);
     if (!ok) return;
     historyUpdate((m) => syncVideoFrameTrimHiddenInManifest(m, clipIds));
-    setVideoFrameEditor({
+    setTimelineFrameWorkspace({
       clipIds,
       primaryClipId: clipId,
       primaryTrackId: trackId,
+    });
+  }
+
+  function openTimelineFrameStripFromWorkspace(clipId: string) {
+    const workspace = timelineFrameWorkspace;
+    if (!workspace) return;
+    const clipIds = workspace.clipIds.includes(clipId) ? workspace.clipIds : [clipId];
+    setVideoFrameEditor({
+      clipIds,
+      primaryClipId: clipId,
+      primaryTrackId: workspace.primaryTrackId,
     });
   }
 
@@ -2428,26 +2710,25 @@ export default function TimelineEditorPage() {
 
   function saveVideoFrameGroup(payloads: Record<string, FrameSequencePayload>) {
     if (!videoFrameEditor) return;
-    for (const [clipId, frameSequence] of Object.entries(payloads)) {
-      updateClipFrameSequence(clipId, { frameSequence });
-    }
+    historyUpdate((m) => applyFrameSequencePayloads(m, payloads));
   }
 
   function promptVideoFrameApply(strip: FrameSequencePayload) {
+    if (!frameSequenceHasExportableFrames(strip)) return;
     videoFrameApplyStripRef.current = strip;
     videoFrameApplyGroupRef.current = null;
     videoFrameApplyEditorRef.current = videoFrameEditor;
-    setVideoFrameApplyIsGroup(false);
-    setVideoFrameApplyPickIds(videoFrameEditor ? [videoFrameEditor.primaryClipId] : []);
     void applyVideoFrameStrip("replace");
   }
 
   function promptVideoFrameApplyGroup(payloads: Record<string, FrameSequencePayload>) {
-    videoFrameApplyGroupRef.current = payloads;
+    const exportable = Object.fromEntries(
+      Object.entries(payloads).filter(([, strip]) => frameSequenceHasExportableFrames(strip))
+    );
+    if (Object.keys(exportable).length === 0) return;
+    videoFrameApplyGroupRef.current = exportable;
     videoFrameApplyStripRef.current = null;
     videoFrameApplyEditorRef.current = videoFrameEditor;
-    setVideoFrameApplyIsGroup(true);
-    setVideoFrameApplyPickIds(Object.keys(payloads));
     void applyVideoFrameStrip("replace");
   }
 
@@ -2462,11 +2743,11 @@ export default function TimelineEditorPage() {
 
     const encodeJobs: Array<{ clipId: string; strip: FrameSequencePayload }> = [];
     if (groupPayloads) {
-      for (const clipId of videoFrameApplyPickIds) {
+      for (const clipId of Object.keys(groupPayloads)) {
         const s = groupPayloads[clipId];
-        if (s) encodeJobs.push({ clipId, strip: s });
+        if (s && frameSequenceHasExportableFrames(s)) encodeJobs.push({ clipId, strip: s });
       }
-    } else if (strip) {
+    } else if (strip && frameSequenceHasExportableFrames(strip)) {
       encodeJobs.push({ clipId: editor.primaryClipId, strip });
     }
     if (!encodeJobs.length) return;
@@ -2474,6 +2755,16 @@ export default function TimelineEditorPage() {
     beginSession({ title: "Encoding video from frames", clearLog: true });
     await Promise.resolve();
     try {
+      const encoded: Array<{
+        clipId: string;
+        strip: FrameSequencePayload;
+        sourceClip: TimelineClip;
+        srcRelPath: string;
+        alphaRelPath?: string;
+        durationSec: number;
+        width?: number;
+        height?: number;
+      }> = [];
       for (const { clipId, strip: jobStrip } of encodeJobs) {
         const found = findClip(clipId);
         if (!found || found.clip.type !== "video") continue;
@@ -2488,61 +2779,52 @@ export default function TimelineEditorPage() {
         if (!done.ok || !r?.srcRelPath) {
           throw new Error(done.error || "Encode returned no clip.");
         }
-        const dur = r.durationSec || found.clip.duration;
-        const framePatch = {
-          frameSequence: jobStrip,
-          frameEdit: {
-            framesDirRel: found.clip.frameEdit?.framesDirRel ?? "",
-            extractInPointSec: 0,
-            extractFps: manifest.fps,
-            mp4Aligned: true,
-          },
-        };
-        if (mode === "replace") {
-          historyUpdate((m) => ({
-            ...m,
-            tracks: m.tracks.map((t) => ({
-              ...t,
-              clips: t.clips.map((c) =>
-                c.id === clipId
-                  ? {
-                      ...c,
-                      srcRelPath: r.srcRelPath,
-                      inPoint: 0,
-                      outPoint: dur,
-                      duration: dur / Math.max(0.01, c.speed),
-                      srcDuration: dur,
-                      naturalW: r.width || c.naturalW,
-                      naturalH: r.height || c.naturalH,
-                      ...framePatch,
-                    }
-                  : c
-              ),
-            })),
-          }));
-        } else {
-          insertClipOnNewTrack(
+        encoded.push({
+          clipId,
+          strip: jobStrip,
+          sourceClip: found.clip,
+          srcRelPath: r.srcRelPath,
+          ...(r.alphaRelPath ? { alphaRelPath: r.alphaRelPath } : {}),
+          durationSec: r.durationSec || found.clip.duration,
+          width: r.width || undefined,
+          height: r.height || undefined,
+        });
+      }
+
+      if (mode === "replace") {
+        historyUpdate((m) => applyEncodedFrameSequenceReplacements(m, encoded));
+      } else {
+        const newTracks = encoded.map((item) => ({
+          ...newVideoTrack("Edited frames"),
+          clips: [
             {
               id: genId("clip"),
-              type: "video",
-              srcRelPath: r.srcRelPath,
-              start: 0,
+              type: "video" as const,
+              srcRelPath: item.srcRelPath,
+              ...(item.alphaRelPath ? { alphaRelPath: item.alphaRelPath } : {}),
+              start: item.sourceClip.start,
               inPoint: 0,
-              outPoint: dur,
+              outPoint: item.durationSec,
               speed: 1,
-              duration: dur,
-              srcDuration: dur,
-              naturalW: r.width || undefined,
-              naturalH: r.height || undefined,
-              ...framePatch,
+              duration: item.durationSec,
+              srcDuration: item.durationSec,
+              naturalW: item.width,
+              naturalH: item.height,
+              frameSequence: item.strip,
+              frameEdit: {
+                framesDirRel: item.sourceClip.frameEdit?.framesDirRel ?? "",
+                extractInPointSec: 0,
+                extractFps: manifest.fps,
+                mp4Aligned: true,
+              },
             },
-            found.clip.start,
-            "Edited frames"
-          );
-        }
+          ],
+        }));
+        historyUpdate((m) => ({ ...m, tracks: [...newTracks.reverse(), ...m.tracks] }));
       }
       endSession();
       setVideoFrameEditor(null);
+      setTimelineFrameWorkspace(null);
     } catch (e) {
       failSession(e, "Could not encode video from frames.");
     }
@@ -2665,7 +2947,6 @@ export default function TimelineEditorPage() {
     const isCharImage = isImage && Boolean(rc?.clip.source?.charKey);
     const twoFlfSelected = getSelectedFlfClips().length === 2;
     const pair = getOverlappingCharBgPair();
-    const trajectorySyncPair = getTrajectorySyncPair();
     const isVideo = rc?.clip.type === "video";
     const isGeometry = rc?.clip.type === "geometry";
     const isText = rc?.clip.type === "text";
@@ -2673,48 +2954,12 @@ export default function TimelineEditorPage() {
 
     const items: ContextMenuItem[] = [];
 
-    items.push(
-      {
-        key: "copy",
-        label: "Copy",
-        disabled: selectedClipIds.length === 0,
-        onSelect: () => {
-          copySelectedClips();
-          setClipMenu((s) => ({ ...s, open: false }));
-        },
-      },
-      {
-        key: "paste",
-        label: "Paste",
-        disabled: !hasClipClipboard,
-        onSelect: () => {
-          pasteClips();
-          setClipMenu((s) => ({ ...s, open: false }));
-        },
-      }
-    );
-
-    if (clipMenu.fromTrack) {
-      items.push(
-        {
-          key: "split",
-          label: "Split at playhead",
-          onSelect: () => splitClipAtPlayhead(clipMenu.trackId, clipMenu.clipId),
-        },
-        {
-          key: "speed",
-          label: "Speed",
-          onSelect: () => void changeClipSpeed(clipMenu.trackId, clipMenu.clipId),
-        }
-      );
-      if (isVideo || isAudio) {
-        items.push({
-          key: "invert",
-          label: rc?.clip.reversed ? "Un-invert" : "Invert",
-          onSelect: () => toggleClipReverse(clipMenu.trackId, clipMenu.clipId),
-        });
-      }
-    }
+    // 1. Split at playhead (always)
+    items.push({
+      key: "split",
+      label: "Split at playhead",
+      onSelect: () => splitClipAtPlayhead(clipMenu.trackId, clipMenu.clipId),
+    });
 
     if (pair) {
       items.push(
@@ -2733,6 +2978,74 @@ export default function TimelineEditorPage() {
       );
     }
 
+    // 2. Speed (video or audio)
+    if (isVideo || isAudio) {
+      items.push({
+        key: "speed",
+        label: "Speed",
+        keepOpenOnSelect: true,
+        submenu: (
+          <ClipSpeedFlyout
+            speed={rc?.clip.speed ?? 1}
+            reversed={rc?.clip.reversed ?? false}
+            onSpeedChange={(speed) => updateClipSpeedLive(clipMenu.clipId, speed)}
+            onSpeedCommit={() => updateClipSpeedCommit(clipMenu.clipId)}
+            onInvertChange={(reversed) =>
+              updateClipReverseLive(clipMenu.clipId, reversed)
+            }
+          />
+        ),
+      });
+    }
+
+    // Audio: Adjust Volume (after Speed)
+    if (isAudio) {
+      items.push({
+        key: "adjustVolume",
+        label: volumeEditClipId === clipMenu.clipId ? "Exit Volume Edit" : "Adjust Volume",
+        onSelect: () => {
+          const clip = rc!.clip;
+          if (!clip.volumeAutomation) {
+            updateClipVolumeAutomation(clip.id, {
+              points: defaultVolumeAutomationPoints(),
+            });
+          }
+          setTrajectoryClipId(null);
+          setGeometryEditClipId(null);
+          setVolumeEditClipId(volumeEditClipId === clip.id ? null : clip.id);
+          setClipMenu((s) => ({ ...s, open: false }));
+        },
+      });
+    }
+
+    // 3. Coloring/Effect (image or video)
+    if (isImage || isVideo) {
+      items.push({
+        key: "coloring",
+        label: "Coloring/Effect",
+        keepOpenOnSelect: true,
+        submenu: (
+          <ClipColoringFlyout
+            clipId={clipMenu.clipId}
+            coloring={rc?.clip.coloring}
+            onChange={(coloring) => updateClipColoringLive(clipMenu.clipId, coloring)}
+            onCommit={() => updateClipColoringCommit(clipMenu.clipId)}
+          />
+        ),
+      });
+    }
+
+    // 4. Segment (image or video)
+    if (isImage || isVideo) {
+      items.push({
+        key: "segment",
+        label: "Segment",
+        disabled: busy,
+        onSelect: () => openSegment(clipMenu.clipId),
+      });
+    }
+
+    // Image-only: New Angle, Change Pose (after Segment)
     if (isImage && !pair) {
       items.push({
         key: "newAngle",
@@ -2754,6 +3067,118 @@ export default function TimelineEditorPage() {
       }
     }
 
+    // 5. Remove Background (image non-pair, or video) — RMBG flyout
+    if (isImage && !pair) {
+      items.push({
+        key: "removeBg",
+        label: "Remove Background",
+        disabled: busy,
+        keepOpenOnSelect: true,
+        submenu: (
+          <RemoveBgRmbgFlyout
+            mediaKind="image"
+            busy={busy}
+            onRun={(opts) => {
+              const found = findClip(clipMenu.clipId);
+              if (!found || found.clip.type !== "image") return;
+              removeBgImagePendingRef.current = {
+                clipId: found.clip.id,
+                relPaths: [found.clip.srcRelPath],
+              };
+              setClipMenu((s) => ({ ...s, open: false }));
+              void runRemoveBgImage({ engine: "rmbg", rmbg: opts.rmbg });
+            }}
+          />
+        ),
+      });
+    } else if (isVideo) {
+      items.push({
+        key: "removeVideoBg",
+        label: "Remove Background",
+        disabled: busy,
+        keepOpenOnSelect: true,
+        submenu: (
+          <RemoveBgRmbgFlyout
+            mediaKind="video"
+            busy={busy}
+            onRun={(opts) => {
+              const found = findClip(clipMenu.clipId);
+              if (!found || found.clip.type !== "video") return;
+              const c = found.clip;
+              removeBgVideoTargetRef.current = {
+                clipId: c.id,
+                srcRelPath: c.srcRelPath,
+                start: c.start,
+                naturalW: c.naturalW,
+                naturalH: c.naturalH,
+                duration: c.duration,
+                source: c.source,
+              };
+              setClipMenu((s) => ({ ...s, open: false }));
+              void runRemoveBgRmbg({
+                outputFps24: Boolean(opts.everyFrame),
+                recycleMask: false,
+                rmbg: opts.rmbg,
+              });
+            }}
+          />
+        ),
+      });
+    }
+
+    // 6. Edit Video Frames / Group (video)
+    if (isVideo) {
+      items.push({
+        key: "editVideoFrames",
+        label: selectedVideoClips().length >= 2 ? "Edit Video Group" : "Edit Video Frames",
+        disabled: busy,
+        onSelect: () => void openVideoFrameEditor(clipMenu.clipId, clipMenu.trackId),
+      });
+    }
+
+    // 7. I2V (raster, non-pair)
+    if (isRaster && !pair) {
+      items.push({
+        key: "i2v",
+        label: "I2V (image to video)",
+        disabled: busy,
+        onSelect: () =>
+          setI2vDialog({ open: true, clipId: clipMenu.clipId, length: WAN_VIDEO_DEFAULT_LENGTH, prompt: "" }),
+      });
+    }
+
+    // 8. FLF (raster/video/geometry, non-pair)
+    if ((isRaster || isVideo || isGeometry) && !pair) {
+      items.push({
+        key: "flf",
+        label: twoFlfSelected
+          ? "FLF (selected 2 clips to video)"
+          : "FLF (select 2 image/video clips first)",
+        disabled: busy || !twoFlfSelected,
+        onSelect: () => {
+          const sel = getSelectedFlfClips();
+          if (sel.length !== 2) return;
+          setFlfDialog({
+            open: true,
+            clipIdA: sel[0]!.id,
+            clipIdB: sel[1]!.id,
+            length: WAN_VIDEO_DEFAULT_LENGTH,
+          });
+        },
+      });
+    }
+
+    // Raster: AI Edit (after FLF)
+    if (isRaster && !pair) {
+      items.push({
+        key: "aiedit",
+        label: "AI Edit",
+        disabled: busy,
+        onSelect: () => void openAiEdit(clipMenu.clipId),
+      });
+    }
+
+    // Geometry: Edit Shape / Save Shape
     if (isGeometry) {
       items.push({
         key: "editShape",
@@ -2778,113 +3203,8 @@ export default function TimelineEditorPage() {
       }
     }
 
-    if (isImage || isVideo) {
-      items.push({
-        key: "segment",
-        label: "Segment",
-        disabled: busy,
-        onSelect: () => openSegment(clipMenu.clipId),
-      });
-      items.push({
-        key: "coloring",
-        label: "Coloring",
-        keepOpenOnSelect: true,
-        submenu: (
-          <ClipColoringFlyout
-            coloring={rc?.clip.coloring}
-            onChange={(coloring) => updateClipColoringLive(clipMenu.clipId, coloring)}
-            onCommit={() => updateClipColoringCommit(clipMenu.clipId)}
-          />
-        ),
-      });
-    }
-
-    if (isImage && !pair) {
-      items.push({
-        key: "removeBg",
-        label: "Remove Background…",
-        disabled: busy,
-        onSelect: () => openRemoveBgImageForClip(clipMenu.clipId),
-      });
-    } else if (isVideo) {
-      items.push({
-        key: "removeVideoBg",
-        label: "Remove Background…",
-        disabled: busy,
-        onSelect: () => openRemoveBgVideo(clipMenu.clipId),
-      });
-      items.push({
-        key: "editVideoFrames",
-        label: selectedVideoClips().length >= 2 ? "Edit Video Group" : "Edit Video Frames",
-        disabled: busy,
-        onSelect: () => void openVideoFrameEditor(clipMenu.clipId, clipMenu.trackId),
-      });
-      items.push({
-        key: "downloadClip",
-        label: "Download",
-        disabled: busy,
-        onSelect: () => void downloadVideoClip(clipMenu.clipId),
-      });
-    }
-
-    if (isRaster && !pair) {
-      items.push({
-        key: "aiedit",
-        label: "AI Edit",
-        disabled: busy,
-        onSelect: () => void openAiEdit(clipMenu.clipId),
-      });
-      items.push({
-        key: "i2v",
-        label: "I2V (image to video)",
-        disabled: busy,
-        onSelect: () =>
-          setI2vDialog({ open: true, clipId: clipMenu.clipId, length: WAN_VIDEO_DEFAULT_LENGTH, prompt: "" }),
-      });
-    }
-
-    if ((isRaster || isVideo || isGeometry) && !pair) {
-      items.push({
-        key: "flf",
-        label: twoFlfSelected
-          ? "FLF (selected 2 clips to video)"
-          : "FLF (select 2 image/video clips first)",
-        disabled: busy || !twoFlfSelected,
-        onSelect: () => {
-          const sel = getSelectedFlfClips();
-          if (sel.length !== 2) return;
-          setFlfDialog({
-            open: true,
-            clipIdA: sel[0]!.id,
-            clipIdB: sel[1]!.id,
-            length: WAN_VIDEO_DEFAULT_LENGTH,
-          });
-        },
-      });
-    }
-
     if (isImage || isVideo || isGeometry || isText) {
-      items.push({
-        key: "syncMotion",
-        label: trajectorySyncPair
-          ? "Sync Motion"
-          : "Sync Motion (2 connected clips, one with trajectory)",
-        disabled: busy || !trajectorySyncPair,
-        keepOpenOnSelect: true,
-        submenu: (
-          <SyncMotionFlyout
-            motionTailSec={syncMotionTailSec}
-            disabled={busy || !trajectorySyncPair}
-            onMotionTailSecChange={setSyncMotionTailSec}
-            onApply={() => syncSelectedClipMotion(syncMotionTailSec)}
-          />
-        ),
-      });
-      items.push({
-        key: "resetPosition",
-        label: "Reset position",
-        onSelect: () => resetClipPosition(clipMenu.clipId),
-      });
+      // 9. Edit Trajectory / Add Trajectory
       items.push({
         key: "trajectory",
         label: rc?.clip.trajectory ? "Edit Trajectory" : "Add Trajectory",
@@ -2892,12 +3212,14 @@ export default function TimelineEditorPage() {
           const clip = rc!.clip;
           if (!clip.trajectory) {
             const tf = clip.transform ?? { x: 0, y: 0, scale: 1 };
+            // Seed a short visible span so start/end are not stacked (zero-length path).
+            const endX = tf.x + 0.22;
             updateClipTrajectory(clip.id, {
               motion: "none",
               motionAmount: 50,
               waypoints: [
                 { t: 0, x: tf.x, y: tf.y, scale: tf.scale },
-                { t: 1, x: tf.x, y: tf.y, scale: tf.scale },
+                { t: 1, x: endX, y: tf.y, scale: tf.scale },
               ],
             });
           }
@@ -2906,32 +3228,27 @@ export default function TimelineEditorPage() {
           setTrajectoryClipId(clip.id);
         },
       });
+      // 10. Reset position
+      items.push({
+        key: "resetPosition",
+        label: "Reset position",
+        onSelect: () => resetClipPosition(clipMenu.clipId),
+      });
     }
 
-    if (isAudio) {
+    // 12. Download (video, last)
+    if (isVideo) {
       items.push({
-        key: "adjustVolume",
-        label: volumeEditClipId === clipMenu.clipId ? "Exit Volume Edit" : "Adjust Volume",
-        onSelect: () => {
-          const clip = rc!.clip;
-          if (!clip.volumeAutomation) {
-            updateClipVolumeAutomation(clip.id, {
-              points: defaultVolumeAutomationPoints(),
-            });
-          }
-          setTrajectoryClipId(null);
-          setGeometryEditClipId(null);
-          setVolumeEditClipId(
-            volumeEditClipId === clip.id ? null : clip.id
-          );
-          setClipMenu((s) => ({ ...s, open: false }));
-        },
+        key: "downloadClip",
+        label: "Download",
+        disabled: busy,
+        onSelect: () => void downloadVideoClip(clipMenu.clipId),
       });
     }
 
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clipMenu, playhead, manifest, busy, selectedClipIds, hasClipClipboard, syncMotionTailSec]);
+  }, [clipMenu, playhead, manifest, busy, selectedClipIds]);
 
   const trackMenuItems: ContextMenuItem[] = useMemo(() => {
     if (!trackMenu.open) return [];
@@ -3029,7 +3346,7 @@ export default function TimelineEditorPage() {
     if (total <= 0) return;
     setPlaying((p) => {
       const next = !p;
-      if (next && playhead >= total) setPlayhead(0);
+      if (next && playheadRef.current >= total) seekPlayhead(0);
       return next;
     });
   }
@@ -3053,6 +3370,7 @@ export default function TimelineEditorPage() {
     cameraAngleOpen ||
     stripAiEditOpen ||
     Boolean(videoFrameEditor) ||
+    Boolean(timelineFrameWorkspace) ||
     Boolean(seqEditorSource) ||
     Boolean(i2vDialog?.open) ||
     Boolean(flfDialog?.open) ||
@@ -3136,7 +3454,7 @@ export default function TimelineEditorPage() {
 
       {/* Preview */}
       <div
-        style={{ position: "relative", zIndex: 10, overflow: "visible", padding: "12px 20px" }}
+        style={{ position: "relative", zIndex: 10, overflow: "visible", padding: "12px 20px", background: "#0e0e0e" }}
         onPointerDown={(e) => {
           const t = e.target as HTMLElement;
           if (t.closest("[data-timeline-preview-frame]")) return;
@@ -3175,11 +3493,11 @@ export default function TimelineEditorPage() {
           manifest={manifest}
           timelineKey={timelineKey}
           playing={playing}
-          playhead={playhead}
+          playheadStore={playheadStore}
           selectedClipId={selectedClipIds[selectedClipIds.length - 1] ?? null}
           suppressSelectionChrome={nonTrajectoryUiActive || clipMenu.open}
           editable={!playing}
-          onPlayheadChange={setPlayhead}
+          onPlayheadChange={commitLivePlayhead}
           onEnded={() => setPlaying(false)}
           onSelectClip={(id, additive) => selectClip(id, additive ?? false)}
           onClipTransformChange={setClipTransformFromPreview}
@@ -3196,8 +3514,10 @@ export default function TimelineEditorPage() {
           geometryEditClipId={geometryEditClipId}
           textEditClipId={textEditClipId}
           onWaypointChange={onWaypointChange}
+          onWaypointPatchCommit={onWaypointPatchCommit}
           onMotionChange={onMotionChange}
           onDeleteTrajectory={(clipId) => { updateClipTrajectory(clipId, undefined); setTrajectoryClipId(null); }}
+          onExitTrajectoryEdit={exitTrajectoryEdit}
           onGeometryChange={updateClipGeometry}
           onGeometryCommit={commit}
           onExitGeometryEdit={() => setGeometryEditClipId(null)}
@@ -3222,6 +3542,8 @@ export default function TimelineEditorPage() {
             setClipMenu({ open: true, x, y, trackId: rc.trackId, clipId, fromTrack: false });
           }}
           height={previewHeight}
+          frameExtension={previewFrameExtension}
+          onFrameExtensionChange={(ext) => setPreviewFrameExtension(ext)}
         />
 
         {/* Drag handle to resize the preview height */}
@@ -3245,6 +3567,8 @@ export default function TimelineEditorPage() {
           }}
           title="Drag to resize preview"
           style={{
+            position: "relative",
+            zIndex: 5,
             height: 10,
             margin: "4px auto 0",
             width: 80,
@@ -3260,14 +3584,14 @@ export default function TimelineEditorPage() {
           <button
             onClick={() => {
               setPlaying(false);
-              setPlayhead(0);
+              seekPlayhead(0);
             }}
             style={toolBtn}
           >
             ⏮ Start
           </button>
           <span style={{ fontSize: 12, color: "#aaa", fontVariantNumeric: "tabular-nums" }}>
-            {formatTime(playhead)} / {formatTime(total)}
+            <PlayheadTimeLabel store={playheadStore} /> / {formatTime(total)}
           </span>
           <span style={{ flex: 1 }} />
           <button onClick={() => setPxPerSec((z) => Math.max(20, z - 20))} style={toolBtn}>
@@ -3422,13 +3746,15 @@ export default function TimelineEditorPage() {
             manifest={manifest}
             pxPerSec={pxPerSec}
             playhead={playhead}
+            playheadStore={playheadStore}
             selectedClipIds={selectedClipIds}
             externalStripDropActive={Boolean(videoFrameEditor)}
             onSeek={(t) => {
               setPlaying(false);
-              setPlayhead(t);
+              seekPlayhead(t);
             }}
             onSelectClip={selectClip}
+            onSelectClips={selectClips}
             onChange={(updater) => setManifest((prev) => (prev ? updater(prev) : prev))}
             onCommit={commit}
             setPxPerSec={setPxPerSec}
@@ -3443,11 +3769,20 @@ export default function TimelineEditorPage() {
             onTransitionChange={updateClipTransition}
             onTransitionCommit={commit}
             onPruneTransitions={pruneTransitionsAfterEdit}
+            syncMotionTailSec={syncMotionTailSec}
+            onSyncMotionTailSecChange={setSyncMotionTailSec}
+            onSyncMotionApply={(trackId, outgoingId, incomingId) =>
+              syncJunctionClipMotion(trackId, outgoingId, incomingId, syncMotionTailSec)
+            }
+            onSyncColorApply={(trackId, outgoingId, incomingId) =>
+              syncJunctionClipColor(trackId, outgoingId, incomingId)
+            }
+            syncBusy={busy}
             volumeEditClipId={volumeEditClipId}
             onVolumePointsChange={onVolumePointsChange}
             onVolumeSeek={(t) => {
               setPlaying(false);
-              setPlayhead(t);
+              seekPlayhead(t);
             }}
             onVolumeClear={(clipId) => {
               updateClipVolumeAutomation(clipId, {
@@ -3659,6 +3994,56 @@ export default function TimelineEditorPage() {
         </div>
       ) : null}
 
+      {timelineFrameWorkspace && !videoFrameEditor && manifest ? (
+        <TimelineClipFrameWorkspace
+          open
+          title={
+            timelineFrameWorkspace.clipIds.length >= 2
+              ? `Edit Video Group (${timelineFrameWorkspace.clipIds.length} videos)`
+              : "Edit Video Frames"
+          }
+          primaryClipId={timelineFrameWorkspace.primaryClipId}
+          fps={Math.max(1, manifest.fps)}
+          busy={busy}
+          items={timelineFrameWorkspace.clipIds
+            .map((id) => {
+              const found = findClip(id);
+              if (
+                !found ||
+                found.clip.type !== "video" ||
+                !found.clip.frameSequence
+              ) return null;
+              const stripThumb = found.clip.frameSequence?.strip.find(
+                (s) => s.kind === "image" && s.relPath && !s.hidden
+              )?.relPath;
+              return {
+                clipId: id,
+                label: clipVideoLabel(found.clip),
+                thumbRelPath: stripThumb || previewSrcRelPath(found.clip),
+                frameSequence: found.clip.frameSequence,
+              };
+            })
+            .filter((x): x is NonNullable<typeof x> => x != null)}
+          onClose={() => {
+            setTimelineFrameWorkspace(null);
+            setVideoFrameEditor(null);
+          }}
+          onFrameSequenceChange={(clipId, frameSequence) =>
+            updateClipFrameSequence(clipId, { frameSequence })
+          }
+          duplicateFrameAsset={(targetClipId, sourceRelPath) =>
+            apiTimelineDuplicateFrameAsset({
+              timelineKey,
+              clipId: targetClipId,
+              sourceRelPath,
+            }).then((r) => r.relPath)
+          }
+          onError={(message, error) => showError({ message, error })}
+          onEditFrameSequence={openTimelineFrameStripFromWorkspace}
+          onDownloadVideo={(clipId) => void downloadVideoClip(clipId)}
+        />
+      ) : null}
+
       {videoFrameEditor && manifest ? (() => {
         const { clipIds, primaryClipId } = videoFrameEditor;
         const isGroup = clipIds.length > 1;
@@ -3699,6 +4084,14 @@ export default function TimelineEditorPage() {
             onSaveGroup={saveVideoFrameGroup}
             onApplyVideo={(strip) => promptVideoFrameApply(strip)}
             onApplyVideoGroup={(payloads) => promptVideoFrameApplyGroup(payloads)}
+            onNotify={(message) => pushLog(message)}
+            duplicateStripAsset={(targetClipId, sourceRelPath) =>
+              apiTimelineDuplicateFrameAsset({
+                timelineKey,
+                clipId: targetClipId || primaryClipId,
+                sourceRelPath,
+              }).then((r) => r.relPath)
+            }
             onReExtract={() => void reExtractVideoFrames()}
           />
         );

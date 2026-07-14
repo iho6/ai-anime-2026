@@ -335,6 +335,162 @@ def _source_time_at(clip: dict[str, Any], t: float) -> float:
 # ── Trajectory + motion (keep in sync with trajectoryMotion.ts) ───────────────
 
 
+def _normalize_hold_pct(v: Any) -> int:
+    if v is None:
+        return 0
+    try:
+        return int(max(0, min(100, round(float(v)))))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _normalize_blend_ease(v: Any) -> int:
+    if v is None:
+        return 0
+    try:
+        return int(max(0, min(100, round(float(v)))))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _normalize_hold_sec(v: Any, max_sec: float) -> float:
+    if v is None:
+        return 0.0
+    try:
+        val = float(v)
+        if not math.isfinite(val):
+            return 0.0
+        return max(0.0, min(max(0.0, max_sec), round(val, 2)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _effective_hold_sec(
+    wp: dict[str, Any], a_t: float, b_t: float, duration_sec: float
+) -> float:
+    span = b_t - a_t
+    max_sec = max(0.0, span * duration_sec)
+    hold_sec = wp.get("holdSec")
+    if hold_sec is not None:
+        return _normalize_hold_sec(hold_sec, max_sec)
+    hold_pct = wp.get("holdPct")
+    if hold_pct is not None:
+        from_pct = (_normalize_hold_pct(hold_pct) / 100.0) * max_sec
+        return _normalize_hold_sec(from_pct, max_sec)
+    return 0.0
+
+
+def _hold_t_end(
+    wp: dict[str, Any], a_t: float, b_t: float, duration_sec: float
+) -> float:
+    span = b_t - a_t
+    if span < 1e-9 or duration_sec <= 0:
+        return a_t
+    hold_sec = _effective_hold_sec(wp, a_t, b_t, duration_sec)
+    return a_t + min(hold_sec / duration_sec, span)
+
+
+def _apply_glide_ease(s: float, ease_pct: Any, mode: str) -> float:
+    w = _normalize_blend_ease(ease_pct) / 100.0
+    if w <= 0:
+        return s
+    if mode == "arrival":
+        eased = 1.0 - (1.0 - s) ** 3
+    else:
+        eased = s**3
+    return s + (eased - s) * w
+
+
+def _hold_t_from_pct(hold_pct: Any, a_t: float, b_t: float) -> float:
+    span = b_t - a_t
+    if span < 1e-9:
+        return a_t
+    return a_t + (_normalize_hold_pct(hold_pct) / 100.0) * span
+
+
+def _linear_t(t: float, start: float, end: float) -> float:
+    span = end - start
+    if span <= 0:
+        return 1.0 if t >= end else 0.0
+    return max(0.0, min(1.0, (t - start) / span))
+
+
+def _catmull_rom(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
+    t2 = t * t
+    t3 = t2 * t
+    return 0.5 * (
+        2 * p1
+        + (-p0 + p2) * t
+        + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+        + (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+    )
+
+
+def _waypoint_pose(wp: dict[str, Any]) -> dict[str, float]:
+    return {
+        "x": float(wp.get("x", 0)),
+        "y": float(wp.get("y", 0)),
+        "scale": float(wp.get("scale", 1)),
+    }
+
+
+def _phantom_before(curr: dict[str, float], nxt: dict[str, float]) -> dict[str, float]:
+    return {
+        "x": nxt["x"] + 2 * (curr["x"] - nxt["x"]),
+        "y": nxt["y"] + 2 * (curr["y"] - nxt["y"]),
+        "scale": nxt["scale"] + 2 * (curr["scale"] - nxt["scale"]),
+    }
+
+
+def _phantom_after(curr: dict[str, float], prev: dict[str, float]) -> dict[str, float]:
+    return {
+        "x": prev["x"] + 2 * (curr["x"] - prev["x"]),
+        "y": prev["y"] + 2 * (curr["y"] - prev["y"]),
+        "scale": prev["scale"] + 2 * (curr["scale"] - prev["scale"]),
+    }
+
+
+def _segment_catmull_pose(
+    pa: dict[str, float],
+    pb: dict[str, float],
+    p_prev: dict[str, float],
+    p_next: dict[str, float],
+    t: float,
+) -> dict[str, float]:
+    return {
+        "x": _catmull_rom(p_prev["x"], pa["x"], pb["x"], p_next["x"], t),
+        "y": _catmull_rom(p_prev["y"], pa["y"], pb["y"], p_next["y"], t),
+        "scale": _catmull_rom(p_prev["scale"], pa["scale"], pb["scale"], p_next["scale"], t),
+    }
+
+
+def _blend_poses(a: dict[str, float], b: dict[str, float], ease: float) -> dict[str, float]:
+    return {
+        "x": a["x"] + (b["x"] - a["x"]) * ease,
+        "y": a["y"] + (b["y"] - a["y"]) * ease,
+        "scale": a["scale"] + (b["scale"] - a["scale"]) * ease,
+    }
+
+
+def _linear_pose_at_s(a: dict[str, Any], b: dict[str, Any], s: float) -> dict[str, float]:
+    cpx = a.get("cpx")
+    cpy = a.get("cpy")
+    ax, ay = float(a.get("x", 0)), float(a.get("y", 0))
+    bx, by = float(b.get("x", 0)), float(b.get("y", 0))
+    if cpx is not None and cpy is not None:
+        cp_x, cp_y = float(cpx), float(cpy)
+        x = (1 - s) ** 2 * ax + 2 * (1 - s) * s * cp_x + s**2 * bx
+        y = (1 - s) ** 2 * ay + 2 * (1 - s) * s * cp_y + s**2 * by
+    else:
+        x = _lerp(ax, bx, s)
+        y = _lerp(ay, by, s)
+    return {
+        "x": x,
+        "y": y,
+        "scale": _lerp(float(a.get("scale", 1)), float(b.get("scale", 1)), s),
+    }
+
+
 def _trajectory_transform_at(
     clip: dict[str, Any], playhead: float
 ) -> dict[str, float] | None:
@@ -356,28 +512,30 @@ def _trajectory_transform_at(
 
     a = wps[seg_i]
     b = wps[seg_i + 1]
-    span = float(b.get("t", 0)) - float(a.get("t", 0))
-    s = 0.0 if span < 1e-9 else _clamp((t - float(a.get("t", 0))) / span, 0, 1)
+    a_t = float(a.get("t", 0))
+    b_t = float(b.get("t", 0))
 
-    cpx = a.get("cpx")
-    cpy = a.get("cpy")
-    if cpx is not None and cpy is not None:
-        cp_x, cp_y = float(cpx), float(cpy)
-        x = (1 - s) ** 2 * float(a.get("x", 0)) + 2 * (1 - s) * s * cp_x + s**2 * float(
-            b.get("x", 0)
-        )
-        y = (1 - s) ** 2 * float(a.get("y", 0)) + 2 * (1 - s) * s * cp_y + s**2 * float(
-            b.get("y", 0)
-        )
-    else:
-        x = _lerp(float(a.get("x", 0)), float(b.get("x", 0)), s)
-        y = _lerp(float(a.get("y", 0)), float(b.get("y", 0)), s)
+    hold_t = _hold_t_end(a, a_t, b_t, dur)
+    if t < hold_t:
+        return _waypoint_pose(a)
+    if hold_t >= b_t:
+        return _waypoint_pose(b)
 
-    return {
-        "x": x,
-        "y": y,
-        "scale": _lerp(float(a.get("scale", 1)), float(b.get("scale", 1)), s),
-    }
+    s = _linear_t(t, hold_t, b_t)
+
+    pause_at_a = hold_t > a_t + 1e-9
+    if pause_at_a:
+        s = _apply_glide_ease(s, a.get("blendEase"), "departure")
+
+    next_wp = wps[seg_i + 2] if seg_i + 2 < len(wps) else None
+    next_t = float(next_wp.get("t", 0)) if next_wp else b_t
+    pause_at_b = _effective_hold_sec(b, b_t, next_t, dur) > 0
+    # Final waypoint: allow arrival glide even without a following pause segment.
+    arrive_at_final = next_wp is None and _normalize_blend_ease(b.get("blendEase")) > 0
+    if pause_at_b or arrive_at_final:
+        s = _apply_glide_ease(s, b.get("blendEase"), "arrival")
+
+    return _linear_pose_at_s(a, b, s)
 
 
 # ── Volume automation (keep in sync with volumeAutomation.ts) ────────────────
@@ -714,6 +872,19 @@ def _clip_has_exportable_frame_sequence(clip: dict[str, Any]) -> bool:
     )
 
 
+def _clip_prefers_alpha_decode_over_strip(clip: dict[str, Any]) -> bool:
+    """Opaque RGB strips must not override a companion alpha matte."""
+    return bool(str(clip.get("alphaRelPath") or "").strip()) or bool(
+        str(clip.get("proxyAlphaRelPath") or "").strip()
+    )
+
+
+def _clip_should_use_frame_sequence_strip(clip: dict[str, Any]) -> bool:
+    if _clip_prefers_alpha_decode_over_strip(clip):
+        return False
+    return _clip_has_exportable_frame_sequence(clip)
+
+
 def _strip_frame_index_at_source_time(
     clip: dict[str, Any],
     strip: list[dict[str, Any]],
@@ -840,6 +1011,7 @@ class _VideoFrameDecoder:
         self._clip = clip
         self._log_cb = log_cb
         self._warned = warned if warned is not None else set()
+        self._closed = False
         self._container = av.open(str(path))
         self._stream = self._container.streams.video[0]
         rate = self._stream.average_rate or self._stream.base_rate
@@ -880,9 +1052,31 @@ class _VideoFrameDecoder:
     def frame_at_source_time(self, source_time: float) -> Any:
         from PIL import Image
 
+        # If the container was closed underneath us (e.g. cache eviction /
+        # invalidation from another thread), reopen before decoding rather
+        # than raising ``Container is not open``.
+        if self._closed or self._container is None or self._iter is None:
+            self._reopen()
+
         target = max(0, int(round(source_time * self._fps)))
         if target < self._idx:
             self._reopen()
+
+        try:
+            self._advance_to(target)
+        except (AssertionError, StopIteration):
+            # A concurrent close can surface as a closed-container assertion
+            # mid-decode; recover once by reopening and replaying to target.
+            self._reopen()
+            self._advance_to(target)
+
+        if self._last is None:
+            return Image.new("RGBA", (64, 64), (0, 0, 0, 255))
+        return self._last.copy()
+
+    def _advance_to(self, target: int) -> None:
+        from PIL import Image
+
         while self._idx < target:
             try:
                 av_frame = next(self._iter)
@@ -902,9 +1096,6 @@ class _VideoFrameDecoder:
                     self._last = _av_frame_to_rgba_image(av_frame)
             except StopIteration:
                 break
-        if self._last is None:
-            return Image.new("RGBA", (64, 64), (0, 0, 0, 255))
-        return self._last.copy()
 
     def _reopen(self) -> None:
         import av
@@ -924,13 +1115,25 @@ class _VideoFrameDecoder:
         else:
             self._alpha_container = None
             self._alpha_iter = None
+        self._closed = False
 
     def close(self) -> None:
+        self._closed = True
+        # Drop iterators first so a concurrent decode sees ``None`` and
+        # reopens instead of touching a closing/closed container.
+        self._iter = None
+        self._alpha_iter = None
         if self._container is not None:
-            self._container.close()
+            try:
+                self._container.close()
+            except Exception:
+                pass
             self._container = None
         if self._alpha_container is not None:
-            self._alpha_container.close()
+            try:
+                self._alpha_container.close()
+            except Exception:
+                pass
             self._alpha_container = None
 
 
@@ -983,7 +1186,7 @@ class _CompositorState:
             st = min(st, out_point)
         st = max(st, in_point)
 
-        if _clip_has_exportable_frame_sequence(clip):
+        if _clip_should_use_frame_sequence_strip(clip):
             return self._strip_rgba_at_source_time(clip, st)
 
         key = str(abs_path)

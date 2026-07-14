@@ -51,10 +51,10 @@ export function RemoveBgNumberField(props: {
 
 export const DEFAULT_RMBG_OPTIONS: RmbgBgOptions = {
   sensitivity: 1,
-  mask_offset: 0,
-  mask_blur: 0,
+  mask_offset: -1,
+  mask_blur: 1,
   process_res: 1024,
-  refine_foreground: false,
+  refine_foreground: true,
 };
 
 export const DEFAULT_ANIME_SEG_OPTIONS: AnimeSegBgOptions = {

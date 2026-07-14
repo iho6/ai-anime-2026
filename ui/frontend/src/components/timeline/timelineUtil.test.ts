@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
 import type { TimelineClip, TimelineManifest, TimelineTrack } from "../../lib/api";
 import {
+  activeLayersAt,
   applyPreviewDragToTrajectory,
   buildTimelineClipClipboard,
   clampClipRectToFrame,
   clipImageRect,
+  clipPathOutsideInnerFrame,
+  clipRectInExtendedLayer,
+  clipTransformFromRectCenter,
+  computePreviewFrameExtension,
+  computeTrajectoryEditFrameExtension,
+  HARD_CUT_PRELOAD_SEC,
+  PREVIEW_OUTSIDE_FRAME_OPACITY,
+  mergePreviewFrameExtension,
+  growExtensionFromBaseline,
+  symmetricPreviewFrameExtension,
   cloneTimelineClipForPaste,
   clipTransformAtPlayhead,
   dedupeTimelineManifestClips,
@@ -12,10 +23,21 @@ import {
   pasteTimelineClipClipboard,
   playbackEndPlayhead,
   previewClipHitZIndex,
+  pointerClientDeltaInFrameSpace,
   previewMoveTransformFromPointerDelta,
+  PREVIEW_EDIT_Z,
+  PREVIEW_HIT_Z,
+  PREVIEW_HIT_TRACK_STEP,
   PREVIEW_MIN_VISIBLE_PX,
   PREVIEW_SELECTION_CHROME_Z,
+  nudgeClipTransform,
+  PREVIEW_NUDGE_PX,
+  PREVIEW_NUDGE_SHIFT_PX,
   snapClipRectToFrameScaleAware,
+  trajectoryWaypointHitRadiusPx,
+  trajectoryWaypointHitRectAt,
+  TRAJECTORY_WAYPOINT_HIT_MAX_PX,
+  TRAJECTORY_WAYPOINT_HIT_MIN_PX,
   translateClipRect,
 } from "./timelineUtil";
 import { createGeometryData } from "./geometryTemplates";
@@ -421,10 +443,10 @@ describe("preview move drag helpers", () => {
     expect(clampClipRectToFrame(inside, frameW, frameH)).toEqual(inside);
   });
 
-  it("previewMoveTransformFromPointerDelta clamps a huge fling to stay reachable", () => {
+  it("previewMoveTransformFromPointerDelta clamps a huge fling to stay reachable in expanded canvas", () => {
     const minVisible = Math.max(PREVIEW_MIN_VISIBLE_PX, 0.1 * Math.min(frameW, frameH));
     const startRect = clipImageRect(scaledClip, orig, frameW, frameH);
-    const { to } = previewMoveTransformFromPointerDelta({
+    const { to, extend } = previewMoveTransformFromPointerDelta({
       orig,
       startRect,
       startClientX: 0,
@@ -435,27 +457,486 @@ describe("preview move drag helpers", () => {
       frameH,
     });
     const rect = clipImageRect(scaledClip, to, frameW, frameH);
-    const overlapX = Math.min(frameW, rect.left + rect.width) - Math.max(0, rect.left);
-    const overlapY = Math.min(frameH, rect.top + rect.height) - Math.max(0, rect.top);
+    const canvasLeft = -extend.left;
+    const canvasTop = -extend.top;
+    const canvasRight = frameW + extend.right;
+    const canvasBottom = frameH + extend.bottom;
+    const overlapX =
+      Math.min(canvasRight, rect.left + rect.width) - Math.max(canvasLeft, rect.left);
+    const overlapY =
+      Math.min(canvasBottom, rect.top + rect.height) - Math.max(canvasTop, rect.top);
     expect(overlapX).toBeGreaterThanOrEqual(minVisible - 0.001);
     expect(overlapY).toBeGreaterThanOrEqual(minVisible - 0.001);
+  });
+
+  it("clampClipRectToFrame with bottom extension allows further downward drag", () => {
+    const minVisible = Math.max(PREVIEW_MIN_VISIBLE_PX, 0.1 * Math.min(frameW, frameH));
+    const rect = { left: 100, top: frameH - minVisible + 80, width: 200, height: 120 };
+    const baseClamped = clampClipRectToFrame(rect, frameW, frameH);
+    expect(baseClamped.top).toBeLessThanOrEqual(frameH - minVisible);
+    const extended = clampClipRectToFrame(rect, frameW, frameH, PREVIEW_MIN_VISIBLE_PX, {
+      top: 0,
+      right: 0,
+      bottom: 200,
+      left: 0,
+    });
+    expect(extended.top).toBeGreaterThan(baseClamped.top);
+  });
+
+  it("clampClipRectToFrame with top extension allows further upward drag", () => {
+    const minVisible = Math.max(PREVIEW_MIN_VISIBLE_PX, 0.1 * Math.min(frameW, frameH));
+    const rect = { left: 100, top: minVisible - 80 - 120, width: 200, height: 120 };
+    const baseClamped = clampClipRectToFrame(rect, frameW, frameH);
+    expect(baseClamped.top).toBeGreaterThanOrEqual(minVisible - 120);
+    const extended = clampClipRectToFrame(rect, frameW, frameH, PREVIEW_MIN_VISIBLE_PX, {
+      top: 200,
+      right: 0,
+      bottom: 0,
+      left: 0,
+    });
+    expect(extended.top).toBeLessThan(baseClamped.top);
+    expect(extended.top).toBe(rect.top);
+  });
+
+  it("clampClipRectToFrame with left extension allows further leftward drag", () => {
+    const minVisible = Math.max(PREVIEW_MIN_VISIBLE_PX, 0.1 * Math.min(frameW, frameH));
+    const rect = { left: minVisible - 80 - 200, top: 100, width: 200, height: 120 };
+    const baseClamped = clampClipRectToFrame(rect, frameW, frameH);
+    const extended = clampClipRectToFrame(rect, frameW, frameH, PREVIEW_MIN_VISIBLE_PX, {
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 200,
+    });
+    expect(extended.left).toBeLessThan(baseClamped.left);
+    expect(extended.left).toBe(rect.left);
+  });
+
+  it("previewMoveTransformFromPointerDelta expands canvas when dragging past top", () => {
+    const startRect = clipImageRect(scaledClip, orig, frameW, frameH);
+    const { to, extend } = previewMoveTransformFromPointerDelta({
+      orig,
+      startRect,
+      startClientX: 0,
+      startClientY: 0,
+      clientX: 0,
+      clientY: -400,
+      frameW,
+      frameH,
+    });
+    expect(extend.top).toBeGreaterThan(0);
+    const rect = clipImageRect(scaledClip, to, frameW, frameH);
+    expect(rect.top).toBeLessThan(1);
+  });
+
+  it("previewMoveTransformFromPointerDelta expands canvas when dragging past left", () => {
+    const startRect = clipImageRect(scaledClip, orig, frameW, frameH);
+    const { to, extend } = previewMoveTransformFromPointerDelta({
+      orig,
+      startRect,
+      startClientX: 0,
+      startClientY: 0,
+      clientX: -400,
+      clientY: 0,
+      frameW,
+      frameH,
+    });
+    expect(extend.left).toBeGreaterThan(0);
+    const rect = clipImageRect(scaledClip, to, frameW, frameH);
+    expect(rect.left).toBeLessThan(1);
+  });
+
+  it("computePreviewFrameExtension reports overflow on each side", () => {
+    const clip: TimelineClip = {
+      ...scaledClip,
+      transform: { x: 0, y: 1.2, scale: 1 },
+    };
+    const ext = computePreviewFrameExtension([clip], 0, frameW, frameH, 0);
+    expect(ext.bottom).toBeGreaterThan(0);
+    expect(ext.top).toBe(0);
+  });
+
+  it("previewMoveTransformFromPointerDelta expands canvas when dragging past bottom", () => {
+    const startRect = clipImageRect(scaledClip, orig, frameW, frameH);
+    const { to, extend } = previewMoveTransformFromPointerDelta({
+      orig,
+      startRect,
+      startClientX: 0,
+      startClientY: 0,
+      clientX: 0,
+      clientY: 400,
+      frameW,
+      frameH,
+    });
+    expect(extend.bottom).toBeGreaterThan(0);
+    const rect = clipImageRect(scaledClip, to, frameW, frameH);
+    expect(rect.top + rect.height).toBeGreaterThan(frameH - 1);
+  });
+
+  it("previewMoveTransformFromPointerDelta grows extension monotonically across drag steps", () => {
+    const startRect = clipImageRect(scaledClip, orig, frameW, frameH);
+    const step1 = previewMoveTransformFromPointerDelta({
+      orig,
+      startRect,
+      startClientX: 0,
+      startClientY: 0,
+      clientX: 200,
+      clientY: 0,
+      frameW,
+      frameH,
+    });
+    const step2 = previewMoveTransformFromPointerDelta({
+      orig,
+      startRect,
+      startClientX: 0,
+      startClientY: 0,
+      clientX: 500,
+      clientY: 0,
+      frameW,
+      frameH,
+      extend: step1.extend,
+    });
+    expect(step2.extend.right).toBeGreaterThanOrEqual(step1.extend.right);
+    expect(step2.extend.right).toBeGreaterThan(0);
+  });
+
+  it("clipRectInExtendedLayer offsets by extension margins", () => {
+    const rect = { left: 10, top: -50, width: 100, height: 80 };
+    const extend = { top: 200, right: 30, bottom: 40, left: 25 };
+    const layer = clipRectInExtendedLayer(rect, extend);
+    expect(layer.left).toBe(35);
+    expect(layer.top).toBe(150);
+    expect(layer.width).toBe(100);
+    expect(layer.height).toBe(80);
+    // Visual position from frame origin: inset.top + layer.top === rect.top
+    expect(-extend.top + layer.top).toBe(rect.top);
+  });
+
+  it("clipPathOutsideInnerFrame returns evenodd polygon with inner hole", () => {
+    const extend = { top: 50, right: 20, bottom: 30, left: 40 };
+    const path = clipPathOutsideInnerFrame(320, 180, extend);
+    expect(path).toMatch(/^polygon\(evenodd,/);
+    expect(path).toContain("40px 50px");
+    expect(path).toContain("360px 50px");
+    expect(path).toContain("360px 230px");
+    expect(path).toContain("40px 230px");
+    expect(path).toContain("380px 0");
+    expect(path).toContain("380px 260px");
+  });
+
+  it("clipPathOutsideInnerFrame degenerates when canvas has no size", () => {
+    expect(clipPathOutsideInnerFrame(0, 180, { top: 0, right: 0, bottom: 0, left: 0 })).toBe(
+      "polygon(0 0, 0 0, 0 0)"
+    );
+  });
+
+  it("PREVIEW_OUTSIDE_FRAME_OPACITY matches trajectory ghost", () => {
+    expect(PREVIEW_OUTSIDE_FRAME_OPACITY).toBe(0.35);
+  });
+
+  it("computeTrajectoryEditFrameExtension expands right when waypoints past frame edge", () => {
+    const frameW = 320;
+    const frameH = 180;
+    const wps = [
+      { t: 0, x: 0.57, y: 0.07, scale: 1 },
+      { t: 1, x: -0.09, y: 0.07, scale: 1 },
+    ] as const;
+    const ext = computeTrajectoryEditFrameExtension([...wps], frameW, frameH, 0);
+    expect(ext.right).toBeGreaterThan(0);
+  });
+
+  it("computeTrajectoryEditFrameExtension expands top when waypoints above frame", () => {
+    const frameW = 320;
+    const frameH = 180;
+    const wps = [
+      { t: 0, x: 0, y: -0.8, scale: 1 },
+      { t: 1, x: 0.1, y: 0, scale: 1 },
+    ] as const;
+    const ext = computeTrajectoryEditFrameExtension([...wps], frameW, frameH, 0);
+    expect(ext.top).toBeGreaterThan(0);
+  });
+
+  it("computeTrajectoryEditFrameExtension expands left when waypoints past left edge", () => {
+    const frameW = 320;
+    const frameH = 180;
+    const wps = [
+      { t: 0, x: -0.8, y: 0, scale: 1 },
+      { t: 1, x: 0, y: 0, scale: 1 },
+    ] as const;
+    const ext = computeTrajectoryEditFrameExtension([...wps], frameW, frameH, 0);
+    expect(ext.left).toBeGreaterThan(0);
+  });
+
+  it("computeTrajectoryEditFrameExtension grows from out-of-frame clip bounds", () => {
+    const frameW = 320;
+    const frameH = 180;
+    const wps = [
+      { t: 0, x: 0, y: 0, scale: 0.35 },
+      { t: 1, x: 0.05, y: 0, scale: 0.35 },
+    ] as const;
+    const without = computeTrajectoryEditFrameExtension([...wps], frameW, frameH, 0);
+    expect(without).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    const withClip = computeTrajectoryEditFrameExtension(
+      [...wps],
+      frameW,
+      frameH,
+      0,
+      { left: -80, top: 40, width: 100, height: 80 }
+    );
+    expect(withClip.left).toBeGreaterThan(0);
+  });
+
+  it("computeTrajectoryEditFrameExtension is zero for in-bounds waypoints", () => {
+    const frameW = 320;
+    const frameH = 180;
+    const wps = [
+      { t: 0, x: 0, y: 0, scale: 0.35 },
+      { t: 1, x: 0.1, y: -0.1, scale: 0.35 },
+    ] as const;
+    const ext = computeTrajectoryEditFrameExtension([...wps], frameW, frameH, 0);
+    expect(ext).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+  });
+
+  it("computeTrajectoryEditFrameExtension default pad does not grow empty sides", () => {
+    const frameW = 320;
+    const frameH = 180;
+    const wps = [
+      { t: 0, x: 0, y: 0, scale: 0.35 },
+      { t: 1, x: 0.1, y: -0.1, scale: 0.35 },
+    ] as const;
+    const inFrame = computeTrajectoryEditFrameExtension([...wps], frameW, frameH);
+    expect(inFrame).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+    const above = computeTrajectoryEditFrameExtension(
+      [
+        { t: 0, x: 0, y: -0.8, scale: 1 },
+        { t: 1, x: 0, y: -0.8, scale: 1 },
+      ],
+      frameW,
+      frameH
+    );
+    expect(above.top).toBeGreaterThan(0);
+    expect(above.left).toBe(0);
+    expect(above.right).toBe(0);
+    expect(above.bottom).toBe(0);
+  });
+
+  it("symmetricPreviewFrameExtension uses max edge on all sides", () => {
+    expect(
+      symmetricPreviewFrameExtension({ top: 5, right: 20, bottom: 10, left: 3 })
+    ).toEqual({ top: 20, right: 20, bottom: 20, left: 20 });
+  });
+
+  it("computeTrajectoryEditFrameExtension is stable for same waypoints", () => {
+    const frameW = 320;
+    const frameH = 180;
+    const wps = [
+      { t: 0, x: 0.57, y: 0.07, scale: 1 },
+      { t: 1, x: -0.09, y: 0.07, scale: 1 },
+    ] as const;
+    const extA = computeTrajectoryEditFrameExtension([...wps], frameW, frameH, 0);
+    const extB = computeTrajectoryEditFrameExtension([...wps], frameW, frameH, 0);
+    expect(extA).toEqual(extB);
+    const extC = computeTrajectoryEditFrameExtension(
+      [{ t: 0, x: 0.57, y: 0.07, scale: 1 }, { t: 0.5, x: 0.9, y: 0, scale: 1 }, { t: 1, x: -0.09, y: 0.07, scale: 1 }],
+      frameW,
+      frameH,
+      0
+    );
+    expect(extC.right).toBeGreaterThan(extA.right);
+  });
+
+  it("computePreviewFrameExtension shrinks when clip returns in-bounds", () => {
+    const outClip: TimelineClip = {
+      ...scaledClip,
+      transform: { x: 0, y: -1.5, scale: 1 },
+    };
+    const outExt = computePreviewFrameExtension([outClip], 0, frameW, frameH, 0);
+    expect(outExt.top).toBeGreaterThan(0);
+
+    const inClip: TimelineClip = {
+      ...scaledClip,
+      transform: { x: 0, y: 0, scale: 1 },
+    };
+    const inExt = computePreviewFrameExtension([inClip], 0, frameW, frameH, 0);
+    expect(inExt.top).toBeLessThan(outExt.top);
+    expect(inExt.top).toBe(0);
+  });
+});
+
+describe("growExtensionFromBaseline", () => {
+  it("returns zero when current matches baseline", () => {
+    const base = { top: 40, right: 10, bottom: 20, left: 5 };
+    expect(growExtensionFromBaseline(base, base)).toEqual({
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+    });
+  });
+
+  it("keeps only growth past the baseline per edge", () => {
+    const baseline = { top: 100, right: 0, bottom: 0, left: 50 };
+    const current = { top: 140, right: 30, bottom: 0, left: 40 };
+    expect(growExtensionFromBaseline(current, baseline)).toEqual({
+      top: 40,
+      right: 30,
+      bottom: 0,
+      left: 0,
+    });
+  });
+});
+
+describe("pointerClientDeltaInFrameSpace", () => {
+  it("matches raw viewport delta when the frame has not moved", () => {
+    const { dx, dy } = pointerClientDeltaInFrameSpace({
+      clientX: 140,
+      clientY: 220,
+      startClientX: 100,
+      startClientY: 200,
+      frameLeft: 50,
+      frameTop: 80,
+      startFrameLeft: 50,
+      startFrameTop: 80,
+    });
+    expect(dx).toBe(40);
+    expect(dy).toBe(20);
+  });
+
+  it("subtracts frame shift so padding growth does not invert drag", () => {
+    // Mouse moved up 100px; frame also shifted down 60px from top padding growth.
+    const { dx, dy } = pointerClientDeltaInFrameSpace({
+      clientX: 100,
+      clientY: 100,
+      startClientX: 100,
+      startClientY: 200,
+      frameLeft: 50,
+      frameTop: 140,
+      startFrameLeft: 50,
+      startFrameTop: 80,
+    });
+    expect(dx).toBe(0);
+    // Viewport dy = -100; frame moved +60 → frame-local dy = -160 (still upward).
+    expect(dy).toBe(-160);
   });
 });
 
 describe("previewClipHitZIndex", () => {
-  it("keeps selected top-track clip above unselected lower-track overlap", () => {
-    const selectedTop = previewClipHitZIndex({ trackZ: 3, selected: true, inEditMode: false });
-    const unselectedBottom = previewClipHitZIndex({ trackZ: 1, selected: false, inEditMode: false });
-    expect(selectedTop).toBeGreaterThan(unselectedBottom);
+  it("orders hits by trackZ so higher tracks win overlap", () => {
+    const topTrack = previewClipHitZIndex({ trackZ: 3, selected: false });
+    const bottomTrack = previewClipHitZIndex({ trackZ: 1, selected: false });
+    expect(topTrack).toBeGreaterThan(bottomTrack);
+    expect(topTrack - bottomTrack).toBe(2 * PREVIEW_HIT_TRACK_STEP);
   });
 
-  it("uses low z-index while editing so editors stay on top", () => {
-    expect(previewClipHitZIndex({ trackZ: 3, selected: true, inEditMode: true })).toBe(50);
+  it("uses integer steps so CSS z-index truncation cannot collapse tracks", () => {
+    expect(Number.isInteger(PREVIEW_HIT_TRACK_STEP)).toBe(true);
+    expect(Number.isInteger(previewClipHitZIndex({ trackZ: 1, selected: false }))).toBe(
+      true
+    );
+    expect(Number.isInteger(previewClipHitZIndex({ trackZ: 2, selected: true }))).toBe(
+      true
+    );
+  });
+
+  it("does not let selected lower track beat unselected higher track", () => {
+    const selectedLow = previewClipHitZIndex({ trackZ: 1, selected: true });
+    const unselectedHigh = previewClipHitZIndex({ trackZ: 3, selected: false });
+    expect(unselectedHigh).toBeGreaterThan(selectedLow);
+  });
+
+  it("gives selected clip a +1 tie-break on the same trackZ", () => {
+    const selected = previewClipHitZIndex({ trackZ: 2, selected: true });
+    const unselected = previewClipHitZIndex({ trackZ: 2, selected: false });
+    expect(selected).toBeGreaterThan(unselected);
+    expect(selected - unselected).toBe(1);
   });
 });
 
-describe("PREVIEW_SELECTION_CHROME_Z", () => {
-  it("stacks above clip hit targets and timeline track UI", () => {
-    expect(PREVIEW_SELECTION_CHROME_Z).toBeGreaterThan(previewClipHitZIndex({ trackZ: 99, selected: true, inEditMode: false }));
+describe("PREVIEW_HIT_Z and PREVIEW_SELECTION_CHROME_Z", () => {
+  it("stacks hit targets above visual selection chrome", () => {
+    expect(PREVIEW_HIT_Z).toBeGreaterThan(PREVIEW_SELECTION_CHROME_Z);
+    expect(previewClipHitZIndex({ trackZ: 99, selected: false })).toBeGreaterThan(
+      PREVIEW_SELECTION_CHROME_Z
+    );
+  });
+
+  it("stacks edit overlays above typical clip hit targets", () => {
+    expect(PREVIEW_EDIT_Z).toBeGreaterThan(
+      previewClipHitZIndex({ trackZ: 90, selected: true })
+    );
+  });
+});
+
+describe("trajectoryWaypointHitRadiusPx", () => {
+  it("caps hit size for large waypoint scale", () => {
+    expect(trajectoryWaypointHitRadiusPx(6)).toBe(TRAJECTORY_WAYPOINT_HIT_MAX_PX / 2);
+  });
+
+  it("keeps a minimum hit size for tiny scale", () => {
+    expect(trajectoryWaypointHitRadiusPx(0.05)).toBe(TRAJECTORY_WAYPOINT_HIT_MIN_PX / 2);
+  });
+
+  it("centers hit rect on waypoint", () => {
+    const rect = trajectoryWaypointHitRectAt(100, 200, 1);
+    expect(rect.left + rect.width / 2).toBeCloseTo(100);
+    expect(rect.top + rect.height / 2).toBeCloseTo(200);
+  });
+});
+
+describe("nudgeClipTransform", () => {
+  it("converts pixel delta to fractional translate", () => {
+    const tf = { x: 0.1, y: -0.05, scale: 1 };
+    const nudged = nudgeClipTransform(tf, 8, -4, 800, 400);
+    expect(nudged.x).toBeCloseTo(0.11);
+    expect(nudged.y).toBeCloseTo(-0.06);
+    expect(nudged.scale).toBe(1);
+  });
+
+  it("uses nudge step constants", () => {
+    expect(PREVIEW_NUDGE_PX).toBe(1);
+    expect(PREVIEW_NUDGE_SHIFT_PX).toBe(8);
+  });
+});
+
+describe("activeLayersAt hard-cut preload", () => {
+  function imageClip(id: string, start: number, duration = 2): TimelineClip {
+    return {
+      id,
+      type: "image",
+      srcRelPath: `clips/${id}.png`,
+      start,
+      inPoint: 0,
+      outPoint: duration,
+      speed: 1,
+      duration,
+    };
+  }
+
+  it("preloads the next abutting clip before a hard cut", () => {
+    const out = videoClip("v", 0);
+    const inn = imageClip("i", 2);
+    const tr = track("trk", [out, inn]);
+    const layers = activeLayersAt(tr, 2 - HARD_CUT_PRELOAD_SEC / 2);
+    expect(layers.map((l) => l.clip.id)).toEqual(["v", "i"]);
+    expect(layers[1]?.preload).toBe(true);
+    expect(layers[1]?.opacity).toBe(0);
+  });
+
+  it("does not preload far from the junction", () => {
+    const out = videoClip("v", 0);
+    const inn = imageClip("i", 2);
+    const tr = track("trk", [out, inn]);
+    const layers = activeLayersAt(tr, 0.5);
+    expect(layers.map((l) => l.clip.id)).toEqual(["v"]);
+  });
+
+  it("fills a float micro-gap between connected clips", () => {
+    const out = videoClip("v", 0);
+    out.duration = 1.97;
+    out.outPoint = 1.97;
+    const inn = imageClip("i", 2);
+    const tr = track("trk", [out, inn]);
+    const layers = activeLayersAt(tr, 1.985);
+    expect(layers.map((l) => l.clip.id)).toEqual(["i"]);
   });
 });

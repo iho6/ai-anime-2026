@@ -17,6 +17,7 @@ import {
 } from "../../lib/api";
 import { TIMELINE_STRIP_FRAME_DROP_PREFIX } from "../../app/detail/[charKey]/dataset/sequenceGalleryUtils";
 import { ClipTransitionMenu } from "./ClipTransitionMenu";
+import { usePlayheadValue, type PlayheadStore } from "./timelinePlayback";
 import { TrackLabelTag } from "./TrackLabelTag";
 import { VolumeAutomationEditor } from "./VolumeAutomationEditor";
 import { transitionBadge } from "./transitionEffects";
@@ -169,13 +170,115 @@ export type TimelineTracksHandle = {
   timeAtClientX: (clientX: number) => number;
 };
 
+type MarqueeState = {
+  startClientX: number;
+  startClientY: number;
+  curClientX: number;
+  curClientY: number;
+  /** When true, union hit clips into the existing selection. */
+  additive: boolean;
+};
+
+/** Clips whose time range overlaps [t0,t1] on tracks [trackIdx0, trackIdx1] (inclusive). */
+export function clipIdsInMarquee(
+  tracks: TimelineTrack[],
+  t0: number,
+  t1: number,
+  trackIdx0: number,
+  trackIdx1: number
+): string[] {
+  const loT = Math.min(t0, t1);
+  const hiT = Math.max(t0, t1);
+  const loIdx = Math.max(0, Math.min(trackIdx0, trackIdx1));
+  const hiIdx = Math.min(tracks.length - 1, Math.max(trackIdx0, trackIdx1));
+  if (hiIdx < 0 || loIdx > hiIdx) return [];
+  const ids: string[] = [];
+  for (let i = loIdx; i <= hiIdx; i++) {
+    const track = tracks[i];
+    if (!track) continue;
+    for (const clip of track.clips) {
+      const end = clipEnd(clip);
+      if (clip.start < hiT && end > loT) ids.push(clip.id);
+    }
+  }
+  return ids;
+}
+
+/**
+ * Playhead line + drag scrubber, isolated so live 60fps updates re-render only
+ * this element rather than the whole (clip-heavy) tracks tree.
+ */
+function PlayheadOverlay(props: {
+  store: PlayheadStore;
+  pxPerSec: number;
+  labelW: number;
+  hitW: number;
+  total: number;
+  onPointerDown: (e: React.PointerEvent) => void;
+}) {
+  const { store, pxPerSec, labelW, hitW, total, onPointerDown } = props;
+  const playhead = usePlayheadValue(store);
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: labelW + playhead * pxPerSec - 1,
+          width: 2,
+          background: "#ff5d5d",
+          pointerEvents: "none",
+          zIndex: 5,
+        }}
+      />
+      <div
+        role="slider"
+        aria-label="Playhead"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={playhead}
+        onPointerDown={onPointerDown}
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: labelW + playhead * pxPerSec - hitW / 2,
+          width: hitW,
+          cursor: "ew-resize",
+          zIndex: 6,
+          touchAction: "none",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 0,
+            height: 0,
+            borderLeft: "5px solid transparent",
+            borderRight: "5px solid transparent",
+            borderTop: "7px solid #ff5d5d",
+            pointerEvents: "none",
+          }}
+        />
+      </div>
+    </>
+  );
+}
+
 export const TimelineTracks = forwardRef<TimelineTracksHandle, {
   manifest: TimelineManifest;
   pxPerSec: number;
   playhead: number;
+  playheadStore: PlayheadStore;
   selectedClipIds: string[];
   onSeek: (t: number) => void;
   onSelectClip: (clipId: string | null, additive: boolean) => void;
+  /** Box-select result: replace selection, or union when additive. */
+  onSelectClips?: (clipIds: string[], additive: boolean) => void;
   onChange: (updater: (prev: TimelineManifest) => TimelineManifest) => void;
   onCommit: () => void;
   setPxPerSec: (updater: (prev: number) => number) => void;
@@ -199,6 +302,19 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
   ) => void;
   onTransitionCommit?: () => void;
   onPruneTransitions?: () => void;
+  syncMotionTailSec?: number;
+  onSyncMotionTailSecChange?: (sec: number) => void;
+  onSyncMotionApply?: (
+    trackId: string,
+    outgoingClipId: string,
+    incomingClipId: string
+  ) => void;
+  onSyncColorApply?: (
+    trackId: string,
+    outgoingClipId: string,
+    incomingClipId: string
+  ) => void;
+  syncBusy?: boolean;
   onAddTrack?: () => void;
   volumeEditClipId?: string | null;
   onVolumePointsChange?: (clipId: string, points: VolumeAutomationPoint[]) => void;
@@ -209,9 +325,11 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
     manifest,
     pxPerSec,
     playhead,
+    playheadStore,
     selectedClipIds,
     onSeek,
     onSelectClip,
+    onSelectClips,
     onChange,
     onCommit,
     setPxPerSec,
@@ -221,6 +339,11 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
     onTransitionChange,
     onTransitionCommit,
     onPruneTransitions,
+    syncMotionTailSec = 0.5,
+    onSyncMotionTailSecChange,
+    onSyncMotionApply,
+    onSyncColorApply,
+    syncBusy = false,
     onAddTrack,
     volumeEditClipId,
     onVolumePointsChange,
@@ -230,6 +353,13 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
   } = props;
 
   const dragRef = useRef<DragState | null>(null);
+  const marqueeRef = useRef<MarqueeState | null>(null);
+  const [marqueeBox, setMarqueeBox] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [hoveredJunction, setHoveredJunction] = useState<string | null>(null);
   const [transitionMenu, setTransitionMenu] = useState<{
     x: number;
@@ -407,12 +537,83 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
 
   /** Which track row the pointer is over (for cross-lane dragging). */
   function trackIdAtClientY(clientY: number): string | null {
-    const el = laneAreaRef.current;
-    if (!el) return null;
-    const rect = el.getBoundingClientRect();
-    const idx = Math.floor((clientY - rect.top - RULER_H) / ROW_H);
+    const idx = trackIndexAtClientY(clientY);
     if (idx < 0 || idx >= manifest.tracks.length) return null;
     return manifest.tracks[idx].id;
+  }
+
+  function trackIndexAtClientY(clientY: number): number {
+    const el = laneAreaRef.current;
+    if (!el) return -1;
+    const rect = el.getBoundingClientRect();
+    return Math.floor((clientY - rect.top - RULER_H) / ROW_H);
+  }
+
+  function contentPointFromClient(clientX: number, clientY: number): { x: number; y: number } {
+    const el = laneAreaRef.current;
+    if (!el) return { x: 0, y: 0 };
+    const rect = el.getBoundingClientRect();
+    return {
+      x: clientX - rect.left + el.scrollLeft,
+      y: clientY - rect.top + el.scrollTop,
+    };
+  }
+
+  function marqueeBoxFromState(m: MarqueeState) {
+    const a = contentPointFromClient(m.startClientX, m.startClientY);
+    const b = contentPointFromClient(m.curClientX, m.curClientY);
+    return {
+      left: Math.min(a.x, b.x),
+      top: Math.min(a.y, b.y),
+      width: Math.abs(a.x - b.x),
+      height: Math.abs(a.y - b.y),
+    };
+  }
+
+  function startMarquee(e: React.PointerEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // Capture on the scroll root so move/up keep flowing through onPointerMove/Up.
+    laneAreaRef.current?.setPointerCapture?.(e.pointerId);
+    const m: MarqueeState = {
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      curClientX: e.clientX,
+      curClientY: e.clientY,
+      additive: e.shiftKey,
+    };
+    marqueeRef.current = m;
+    setMarqueeBox(marqueeBoxFromState(m));
+  }
+
+  function finishMarquee() {
+    const m = marqueeRef.current;
+    marqueeRef.current = null;
+    setMarqueeBox(null);
+    if (!m) return;
+    const el = laneAreaRef.current;
+    if (!el) return;
+    const dx = Math.abs(m.curClientX - m.startClientX);
+    const dy = Math.abs(m.curClientY - m.startClientY);
+    // Tiny gesture: treat as clear (replace) or no-op (additive).
+    if (dx < 4 && dy < 4) {
+      if (!m.additive) onSelectClip(null, false);
+      return;
+    }
+    const t0 = timeFromClientX(m.startClientX, el, pxPerSec);
+    const t1 = timeFromClientX(m.curClientX, el, pxPerSec);
+    const i0 = trackIndexAtClientY(m.startClientY);
+    const i1 = trackIndexAtClientY(m.curClientY);
+    const ids = clipIdsInMarquee(manifest.tracks, t0, t1, i0, i1);
+    if (onSelectClips) {
+      onSelectClips(ids, m.additive);
+    } else if (ids.length === 0) {
+      if (!m.additive) onSelectClip(null, false);
+    } else {
+      onSelectClip(ids[0], false);
+      for (let i = 1; i < ids.length; i++) onSelectClip(ids[i], true);
+    }
   }
 
   function onClipPointerDown(
@@ -477,6 +678,16 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
   }
 
   function onPointerMove(e: React.PointerEvent) {
+    if (marqueeRef.current) {
+      marqueeRef.current = {
+        ...marqueeRef.current,
+        curClientX: e.clientX,
+        curClientY: e.clientY,
+      };
+      setMarqueeBox(marqueeBoxFromState(marqueeRef.current));
+      return;
+    }
+
     if (playheadDragRef.current) {
       seekFromClientX(e.clientX);
       ensurePlayheadVisible();
@@ -606,6 +817,12 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
   }
 
   function onPointerUp(e: React.PointerEvent) {
+    if (marqueeRef.current) {
+      laneAreaRef.current?.releasePointerCapture?.(e.pointerId);
+      finishMarquee();
+      return;
+    }
+
     if (playheadDragRef.current) {
       playheadDragRef.current = false;
       (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
@@ -670,6 +887,16 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
         .find((t) => t.id === transitionMenu.trackId)
         ?.clips.find((c) => c.id === transitionMenu.outgoingClipId)
     : undefined;
+
+  const menuIncomingClip = (() => {
+    if (!transitionMenu || !menuOutgoingClip) return undefined;
+    const track = manifest.tracks.find((t) => t.id === transitionMenu.trackId);
+    if (!track) return undefined;
+    const pair = connectedClipPairs(track).find(
+      (p) => p.outgoing.id === transitionMenu.outgoingClipId
+    );
+    return pair?.incoming;
+  })();
 
   function seekFromClientX(clientX: number) {
     const el = laneAreaRef.current;
@@ -810,10 +1037,13 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
                 opacity: track.hidden ? 0.4 : 1,
               }}
               onPointerDown={(e) => {
-                if (e.target === e.currentTarget) {
-                  onSelectClip(null, false);
-                  startPlayheadDrag(e);
+                if (e.target !== e.currentTarget) return;
+                if (e.ctrlKey || e.metaKey) {
+                  startMarquee(e);
+                  return;
                 }
+                onSelectClip(null, false);
+                startPlayheadDrag(e);
               }}
               onContextMenu={(e) => {
                 if (!onSurfaceContextMenu || e.target !== e.currentTarget) return;
@@ -1008,53 +1238,33 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
           <div style={{ height: 3, background: "#ffd166", marginLeft: LABEL_W, width: laneWidth }} />
         )}
 
-        {/* Playhead line (spans ruler + rows). */}
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: LABEL_W + playhead * pxPerSec - 1,
-            width: 2,
-            background: "#ff5d5d",
-            pointerEvents: "none",
-            zIndex: 5,
-          }}
-        />
-        {/* Draggable playhead scrubber. */}
-        <div
-          role="slider"
-          aria-label="Playhead"
-          aria-valuemin={0}
-          aria-valuemax={total}
-          aria-valuenow={playhead}
+        {/* Playhead line + scrubber (isolated live-updating overlay). */}
+        <PlayheadOverlay
+          store={playheadStore}
+          pxPerSec={pxPerSec}
+          labelW={LABEL_W}
+          hitW={PLAYHEAD_HIT_W}
+          total={total}
           onPointerDown={startPlayheadDrag}
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: LABEL_W + playhead * pxPerSec - PLAYHEAD_HIT_W / 2,
-            width: PLAYHEAD_HIT_W,
-            cursor: "ew-resize",
-            zIndex: 6,
-            touchAction: "none",
-          }}
-        >
+        />
+
+        {marqueeBox && marqueeBox.width + marqueeBox.height > 0 ? (
           <div
+            aria-hidden
             style={{
               position: "absolute",
-              top: 0,
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: 0,
-              height: 0,
-              borderLeft: "5px solid transparent",
-              borderRight: "5px solid transparent",
-              borderTop: "7px solid #ff5d5d",
+              left: marqueeBox.left,
+              top: marqueeBox.top,
+              width: marqueeBox.width,
+              height: marqueeBox.height,
+              border: "1px dashed rgba(255,209,102,0.95)",
+              background: "rgba(255,209,102,0.12)",
               pointerEvents: "none",
+              zIndex: 20,
+              boxSizing: "border-box",
             }}
           />
-        </div>
+        ) : null}
       </div>
       </div>
 
@@ -1065,6 +1275,27 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
         x={transitionMenu?.x ?? 0}
         y={transitionMenu?.y ?? 0}
         transition={menuOutgoingClip?.transitionOut}
+        outgoingClip={menuOutgoingClip}
+        incomingClip={menuIncomingClip}
+        syncMotionTailSec={syncMotionTailSec}
+        syncBusy={syncBusy}
+        onSyncMotionTailSecChange={onSyncMotionTailSecChange}
+        onSyncMotionApply={() => {
+          if (!transitionMenu || !menuIncomingClip) return;
+          onSyncMotionApply?.(
+            transitionMenu.trackId,
+            transitionMenu.outgoingClipId,
+            menuIncomingClip.id
+          );
+        }}
+        onSyncColorApply={() => {
+          if (!transitionMenu || !menuIncomingClip) return;
+          onSyncColorApply?.(
+            transitionMenu.trackId,
+            transitionMenu.outgoingClipId,
+            menuIncomingClip.id
+          );
+        }}
         onChange={(tr) => {
           if (!transitionMenu) return;
           onTransitionChange?.(

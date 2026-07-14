@@ -23,7 +23,7 @@ import {
 import { VECTOR_ARTBOARD_SIZE } from "./geometryTemplates";
 import { GeometryPickerModals } from "./GeometryPickerModals";
 import { GeometryStyleBar, type GeometryStyleModal } from "./GeometryStyleBar";
-import { clipImageRect, type ClipTransform } from "./timelineUtil";
+import { clipImageRect, PREVIEW_EDIT_Z, type ClipTransform } from "./timelineUtil";
 
 type Props = {
   clip: TimelineClip;
@@ -394,7 +394,7 @@ export function GeometryEditor(props: Props) {
           top: rect.top,
           width: rect.width,
           height: rect.height,
-          zIndex: 60,
+          zIndex: PREVIEW_EDIT_Z,
           overflow: "visible",
           pointerEvents: "all",
         }}

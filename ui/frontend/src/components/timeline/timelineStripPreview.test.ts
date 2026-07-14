@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { TimelineClip } from "../../lib/api";
 import {
+  clipPrefersAlphaDecodeOverStrip,
   resolveStripSlotRelPath,
   stripFrameIndexAtSourceTime,
+  timelineEffectiveStripPreviewRelPath,
   timelineStripPreviewRelPath,
 } from "./timelineStripPreview";
 
@@ -53,6 +55,29 @@ describe("timelineStripPreviewRelPath", () => {
   it("returns null without a frameSequence strip", () => {
     expect(
       timelineStripPreviewRelPath({ ...clip, frameSequence: undefined }, 1, 24)
+    ).toBeNull();
+  });
+});
+
+describe("alpha over opaque strip", () => {
+  it("prefers alpha decode when alphaRelPath is set", () => {
+    expect(clipPrefersAlphaDecodeOverStrip(clip)).toBe(false);
+    expect(
+      clipPrefersAlphaDecodeOverStrip({
+        ...clip,
+        alphaRelPath: "timelines/t/clips/clip.alpha.mkv",
+      })
+    ).toBe(true);
+  });
+
+  it("effective strip path is null when alphaRelPath is set", () => {
+    expect(timelineEffectiveStripPreviewRelPath(clip, 2.5, 2)).toBe("frames/3.png");
+    expect(
+      timelineEffectiveStripPreviewRelPath(
+        { ...clip, alphaRelPath: "timelines/t/clips/clip.alpha.mkv" },
+        2.5,
+        2
+      )
     ).toBeNull();
   });
 });

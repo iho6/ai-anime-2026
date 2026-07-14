@@ -10,6 +10,8 @@ export type TransitionActiveLayer = {
   opacity: number;
   role: "outgoing" | "incoming" | "solo";
   progress: number;
+  /** Mounted cold (opacity 0) to warm decode before a hard cut. */
+  preload?: boolean;
   transitionType?: TimelineTransitionType;
   direction?: TransitionDirection;
   slideOffsetX?: number;

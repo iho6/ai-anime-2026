@@ -21,6 +21,7 @@ import { cloneCrop } from "../../../../lib/sequenceCrop";
 import {
   frameSequenceStripSlotHasTimelineImage,
   FS_MODAL_GALLERY_BACKDROP_DROP_ID,
+  TIMELINE_STRIP_FRAME_DROP_PREFIX,
 } from "./sequenceGalleryUtils";
 import {
   SEQUENCE_CROP_OUTER_CLIP_FLEX,
@@ -47,6 +48,7 @@ import {
   reverseStripSelection,
   spliceStripFrames,
   frameSequencePayloadEqual,
+  frameSequenceHasExportableFrames,
 } from "../../../../components/frameSequenceStripUtils";
 
 export type FrameSequenceEditorMode = "sequence" | "timeline";
@@ -109,15 +111,10 @@ const previewTransportBtnStyle: CSSProperties = {
 };
 
 function cloneStripSlot(s: FrameSequenceStripSlot): FrameSequenceStripSlot {
-  if (s.kind === "image") {
-    return {
-      kind: "image",
-      relPath: s.relPath || "",
-      crop: cloneCrop(s.crop),
-      ...(s.hidden ? { hidden: true } : {}),
-    };
-  }
-  return s.hidden ? { kind: "empty", hidden: true } : { kind: "empty" };
+  return {
+    ...s,
+    ...(s.kind === "image" ? { relPath: s.relPath || "", crop: cloneCrop(s.crop) } : {}),
+  };
 }
 
 /** Legacy `hidden[]` → splice hidden image slots into strip; callers use returned strip only. */
@@ -202,24 +199,13 @@ function previewDisplaySlot(
 
 type FrameSeqStripClip = {
   kind: "frameSeqStrip";
-  items: { relPath: string; crop?: SequenceCrop; hidden?: boolean }[];
+  items: Array<FrameSequenceStripSlot & { kind: "image"; relPath: string }>;
 };
 
 function payloadFromState(sequenceGroupId: string, strip: FrameSequenceStripSlot[]): FrameSequencePayload {
   return {
     sequenceGroupId,
-    strip: strip.map((s) =>
-      s.kind === "image"
-        ? {
-            kind: "image",
-            relPath: s.relPath || "",
-            crop: cloneCrop(s.crop),
-            ...(s.hidden ? { hidden: true } : {}),
-          }
-        : s.hidden
-          ? { kind: "empty", hidden: true }
-          : { kind: "empty" }
-    ),
+    strip: strip.map(cloneStripSlot),
     hidden: [],
   };
 }
@@ -460,6 +446,8 @@ export function FrameSequenceModal(props: {
   getStripActionsForClip?: (clipId: string) => FrameSequenceStripActions | undefined;
   onSaveGroup?: (payloads: Record<string, FrameSequencePayload>) => void;
   onApplyVideoGroup?: (payloads: Record<string, FrameSequencePayload>) => void;
+  onNotify?: (message: string) => void;
+  duplicateStripAsset?: (targetClipId: string, sourceRelPath: string) => Promise<string>;
 }) {
   const {
     open,
@@ -481,6 +469,8 @@ export function FrameSequenceModal(props: {
     getStripActionsForClip,
     onSaveGroup,
     onApplyVideoGroup,
+    onNotify,
+    duplicateStripAsset,
   } = props;
   const isGroupMode = Boolean(groupLayers && groupLayers.length > 1);
   const [strip, setStrip] = useState<FrameSequenceStripSlot[]>(() =>
@@ -919,8 +909,8 @@ export function FrameSequenceModal(props: {
 
       if (ev.key === "Delete" || ev.key === "Backspace") {
         if (!ev.ctrlKey && !ev.metaKey) {
+          ev.preventDefault();
           if (selectedIndicesRef.current.size > 0) {
-            ev.preventDefault();
             removeSelectedSlots();
           }
           return;
@@ -935,18 +925,7 @@ export function FrameSequenceModal(props: {
         const u = undoStack.current.pop();
         if (!u) return;
         redoStack.current.push(snapshot());
-        const nextStrip = u.strip.map((s) =>
-          s.kind === "image"
-            ? {
-                kind: "image" as const,
-                relPath: s.relPath || "",
-                crop: cloneCrop(s.crop),
-                ...(s.hidden ? { hidden: true } : {}),
-              }
-            : s.hidden
-              ? ({ kind: "empty" as const, hidden: true } as FrameSequenceStripSlot)
-              : { kind: "empty" as const }
-        );
+        const nextStrip = u.strip.map(cloneStripSlot);
         setStrip(nextStrip);
         const L = nextStrip.length;
         setSelectedIndices((prev) => {
@@ -961,17 +940,18 @@ export function FrameSequenceModal(props: {
 
       if (k === "c") {
         ev.preventDefault();
-        const s = stripRef.current;
+        const s = contextStrip;
         const sel = [...selectedIndicesRef.current].sort((a, b) => a - b);
         const items: FrameSeqStripClip["items"] = [];
         for (const i of sel) {
           const slot = s[i];
           if (slot?.kind === "image" && slot.relPath?.trim()) {
-            items.push({
-              relPath: slot.relPath,
-              crop: cloneCrop(slot.crop),
-              ...(slot.hidden ? { hidden: true } : {}),
-            });
+            items.push(
+              cloneStripSlot(slot) as FrameSequenceStripSlot & {
+                kind: "image";
+                relPath: string;
+              }
+            );
           }
         }
         if (items.length) stripClipRef.current = { kind: "frameSeqStrip", items };
@@ -984,8 +964,11 @@ export function FrameSequenceModal(props: {
           const clip = stripClipRef.current;
           if (!clip?.items.length) return;
           try {
-            pushUndo();
-            const base = [...stripRef.current];
+            const targetLayerIndex = isGroupMode ? contextLayerIndex : 0;
+            const targetClipId = isGroupMode
+              ? groupLayers?.[targetLayerIndex]?.clipId ?? contextLayerId
+              : contextLayerId;
+            const base = [...contextStrip];
             const sel = selectedIndicesRef.current;
             // Insert after right edge of selection; if nothing selected, after focus index.
             const insertAt =
@@ -994,21 +977,32 @@ export function FrameSequenceModal(props: {
                 : Math.min(focusIxRef.current + 1, base.length);
             const newSlots: FrameSequenceStripSlot[] = [];
             for (const it of clip.items) {
-              const { relPath } = await apiSequenceDuplicateAsset({
-                charKey,
-                sequenceName,
-                sourceRelPath: it.relPath,
-                subfolder: "gallery",
-              });
+              const relPath =
+                editorMode === "timeline" && duplicateStripAsset
+                  ? await duplicateStripAsset(targetClipId, it.relPath)
+                  : (
+                      await apiSequenceDuplicateAsset({
+                        charKey,
+                        sequenceName,
+                        sourceRelPath: it.relPath,
+                        subfolder: "gallery",
+                      })
+                    ).relPath;
               newSlots.push({
-                kind: "image",
+                ...cloneStripSlot(it),
+                kind: "image" as const,
                 relPath,
-                crop: cloneCrop(it.crop),
-                ...(it.hidden ? { hidden: true as const } : {}),
               });
             }
+            pushUndo();
             base.splice(insertAt, 0, ...newSlots);
-            setStrip(base);
+            if (isGroupMode) {
+              setLayerStrips((prev) =>
+                prev.map((layerStrip, i) => (i === targetLayerIndex ? base : layerStrip))
+              );
+            } else {
+              setStrip(base);
+            }
             setPlay(false);
             const endIx = insertAt + newSlots.length - 1;
             setSelectedIndices(new Set(newSlots.map((_, j) => insertAt + j)));
@@ -1024,7 +1018,22 @@ export function FrameSequenceModal(props: {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, charKey, sequenceName, stepPreviewFrame, snapshot, pushUndo, removeSelectedSlots]);
+  }, [
+    open,
+    charKey,
+    sequenceName,
+    editorMode,
+    duplicateStripAsset,
+    stepPreviewFrame,
+    snapshot,
+    pushUndo,
+    removeSelectedSlots,
+    isGroupMode,
+    contextLayerIndex,
+    contextLayerId,
+    contextStrip,
+    groupLayers,
+  ]);
 
   useEffect(() => {
     const outer = stripScrollRef.current;
@@ -1056,7 +1065,7 @@ export function FrameSequenceModal(props: {
           i === contextLayerIndex
             ? layerStrip.map((slot, j) =>
                 targets.includes(j) && slot.kind === "image" && slot.relPath
-                  ? { ...slot, hidden: true }
+                  ? { ...slot, hidden: true, trimHidden: undefined }
                   : slot
               )
             : layerStrip
@@ -1066,7 +1075,7 @@ export function FrameSequenceModal(props: {
     }
     const nextStrip = strip.map((slot, j) =>
       targets.includes(j) && slot.kind === "image" && slot.relPath
-        ? { ...slot, hidden: true }
+        ? { ...slot, hidden: true, trimHidden: undefined }
         : slot
     );
     setStrip(nextStrip);
@@ -1091,12 +1100,8 @@ export function FrameSequenceModal(props: {
     const unhideMap = (s: FrameSequenceStripSlot[]) =>
       s.map((slot, j) => {
         if (!targets.includes(j) || slot.kind !== "image" || !slot.hidden) return slot;
-        const { hidden: _h, ...rest } = slot;
-        return {
-          kind: "image" as const,
-          relPath: rest.relPath || "",
-          crop: cloneCrop(rest.crop),
-        };
+        const { hidden: _h, trimHidden: _th, ...rest } = slot;
+        return { ...rest, kind: "image" as const, relPath: rest.relPath || "" };
       });
     if (isGroupMode) {
       setLayerStrips((prev) =>
@@ -1205,11 +1210,13 @@ export function FrameSequenceModal(props: {
   );
   const columnCount = isGroupMode ? displayStrip.length : strip.length;
 
+  const backdropDropDisabled =
+    !open || disableStripDrag || editorMode === "timeline";
   const { setNodeRef: setBackdropDropRef, isOver: isOverBackdrop } = useDroppable({
     id: FS_MODAL_GALLERY_BACKDROP_DROP_ID,
-    disabled: !open || disableStripDrag,
+    disabled: backdropDropDisabled,
   });
-  const { active } = useDndContext();
+  const { active, over } = useDndContext();
   const stripSlotDragActive = active?.data.current?.kind === "frameSeqStripSlot";
   const showAddToGalleryHint = Boolean(
     editorMode !== "timeline" &&
@@ -1217,8 +1224,12 @@ export function FrameSequenceModal(props: {
       stripSlotDragActive &&
       isOverBackdrop
   );
+  const overId = over?.id != null ? String(over.id) : "";
   const showDropOnTimelineHint = Boolean(
-    editorMode === "timeline" && !disableStripDrag && stripSlotDragActive
+    editorMode === "timeline" &&
+      !disableStripDrag &&
+      stripSlotDragActive &&
+      overId.startsWith(TIMELINE_STRIP_FRAME_DROP_PREFIX)
   );
 
   if (!open) return null;
@@ -1737,14 +1748,28 @@ export function FrameSequenceModal(props: {
                       changed[clipId] = payload;
                     }
                   }
-                  if (Object.keys(changed).length > 0) {
-                    onApplyVideoGroup(changed);
+                  const exportable = Object.fromEntries(
+                    Object.entries(changed).filter(([, payload]) =>
+                      frameSequenceHasExportableFrames(payload)
+                    )
+                  );
+                  if (Object.keys(exportable).length > 0) {
+                    onApplyVideoGroup(exportable);
+                  } else if (Object.keys(changed).length > 0) {
+                    onNotify?.(
+                      "Frame strip saved. No visible frames to encode — clip video unchanged. Use Re-extract to rebuild from video."
+                    );
                   }
                 } else {
                   const payload = payloadFromState(initial.sequenceGroupId, strip);
                   onSave(payload);
-                  if (!frameSequencePayloadEqual(payload, initialSnapshotRef.current)) {
+                  const changed = !frameSequencePayloadEqual(payload, initialSnapshotRef.current);
+                  if (changed && frameSequenceHasExportableFrames(payload)) {
                     onApplyVideo?.(payload);
+                  } else if (changed) {
+                    onNotify?.(
+                      "Frame strip saved. No visible frames to encode — clip video unchanged. Use Re-extract to rebuild from video."
+                    );
                   }
                 }
               } else {

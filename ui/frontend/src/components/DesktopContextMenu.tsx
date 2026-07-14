@@ -62,12 +62,30 @@ export function DesktopContextMenu(props: {
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const innerColRef = useRef<HTMLDivElement>(null);
+  const flyoutRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const submenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [layout, setLayout] = useState<MenuLayout | null>(null);
   const [activeSubmenuKey, setActiveSubmenuKey] = useState<string | null>(null);
   const [flyoutLayout, setFlyoutLayout] = useState<FlyoutLayout | null>(null);
 
   const activeItem = items.find((it) => it.key === activeSubmenuKey && it.submenu);
+
+  const cancelSubmenuClose = React.useCallback(() => {
+    if (submenuCloseTimerRef.current) {
+      clearTimeout(submenuCloseTimerRef.current);
+      submenuCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleSubmenuClose = React.useCallback(() => {
+    cancelSubmenuClose();
+    submenuCloseTimerRef.current = setTimeout(() => {
+      setActiveSubmenuKey(null);
+    }, 120);
+  }, [cancelSubmenuClose]);
+
+  useEffect(() => () => cancelSubmenuClose(), [cancelSubmenuClose]);
 
   const applyViewportFit = React.useCallback(() => {
     const el = panelRef.current;
@@ -113,8 +131,10 @@ export function DesktopContextMenu(props: {
     if (!row) return;
     const rowRect = row.getBoundingClientRect();
     const margin = VIEWPORT_MARGIN;
-    const flyoutW = 188;
-    const flyoutH = 220;
+    const flyoutEl = flyoutRef.current;
+    const measured = flyoutEl?.getBoundingClientRect();
+    const flyoutW = measured && measured.width > 0 ? measured.width : 188;
+    const flyoutH = measured && measured.height > 0 ? measured.height : 220;
     let left = rowRect.right;
     let top = rowRect.top + rowRect.height / 2 - flyoutH / 2;
     if (left + flyoutW > window.innerWidth - margin) {
@@ -122,7 +142,9 @@ export function DesktopContextMenu(props: {
     }
     left = clamp(left, margin, Math.max(margin, window.innerWidth - flyoutW - margin));
     top = clamp(top, margin, Math.max(margin, window.innerHeight - flyoutH - margin));
-    setFlyoutLayout({ left, top });
+    setFlyoutLayout((prev) =>
+      prev && prev.left === left && prev.top === top ? prev : { left, top }
+    );
   }, [activeSubmenuKey]);
 
   useLayoutEffect(() => {
@@ -139,6 +161,15 @@ export function DesktopContextMenu(props: {
     if (!open) return;
     applyFlyoutFit();
   }, [open, activeSubmenuKey, layout, applyFlyoutFit]);
+
+  useEffect(() => {
+    if (!open || !activeSubmenuKey) return;
+    const el = flyoutRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => applyFlyoutFit());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, activeSubmenuKey, flyoutLayout, applyFlyoutFit]);
 
   useEffect(() => {
     if (!open) return;
@@ -181,6 +212,8 @@ export function DesktopContextMenu(props: {
       <div
         ref={panelRef}
         onMouseDown={(e) => e.stopPropagation()}
+        onMouseEnter={cancelSubmenuClose}
+        onMouseLeave={scheduleSubmenuClose}
         style={{
           position: "fixed",
           left,
@@ -212,7 +245,8 @@ export function DesktopContextMenu(props: {
               }}
               disabled={it.disabled}
               onMouseEnter={() => {
-                if (it.submenu) setActiveSubmenuKey(it.key);
+                cancelSubmenuClose();
+                setActiveSubmenuKey(it.submenu ? it.key : null);
               }}
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
@@ -275,8 +309,13 @@ export function DesktopContextMenu(props: {
 
       {activeItem?.submenu && flyoutLayout ? (
         <div
+          ref={flyoutRef}
           className="clip-coloring-flyout-enter"
-          onMouseEnter={() => setActiveSubmenuKey(activeItem.key)}
+          onMouseEnter={() => {
+            cancelSubmenuClose();
+            setActiveSubmenuKey(activeItem.key);
+          }}
+          onMouseLeave={scheduleSubmenuClose}
           onMouseDown={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
           style={{

@@ -71,3 +71,33 @@ def test_normalize_clip_coloring_clamps() -> None:
     assert n["g"] == 0
     assert n["lightness"] == -100
     assert n["opacity"] == 100
+
+
+def test_blur_defaults_are_noop() -> None:
+    assert is_default_clip_coloring({"borderBlur": 0, "imageBlur": 0})
+    n = normalize_clip_coloring({})
+    assert n["borderBlur"] == 0
+    assert n["imageBlur"] == 0
+
+
+def test_normalize_clip_coloring_clamps_blur() -> None:
+    n = normalize_clip_coloring({"borderBlur": 999, "imageBlur": -5})
+    assert n["borderBlur"] == 100
+    assert n["imageBlur"] == 0
+
+
+def test_image_blur_changes_pixels() -> None:
+    im = _rgba_with_transparent_corner()
+    assert not is_default_clip_coloring({"imageBlur": 50})
+    out = apply_clip_coloring_rgba(im, {"imageBlur": 100})
+    assert not np.array_equal(np.array(im), np.array(out))
+
+
+def test_border_blur_feathers_alpha_edge() -> None:
+    im = _rgba_with_transparent_corner()
+    out = apply_clip_coloring_rgba(im, {"borderBlur": 100})
+    arr = np.array(out)
+    # The hard boundary between the transparent corner and opaque region
+    # should now contain intermediate alpha values.
+    edge = arr[0:16, 0:16, 3]
+    assert np.any((edge > 0) & (edge < 255))

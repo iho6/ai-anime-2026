@@ -8871,6 +8871,14 @@ def encode_rgba_frames_to_webm(
             out_container.mux(pkt)
         for pkt in alpha_stream.encode():
             alpha_container.mux(pkt)
+        if frame_idx > 0 and out_fps > 0:
+            duration_sec = frame_idx / out_fps
+            meta_us = str(int(round(duration_sec * 1_000_000)))
+            try:
+                out_container.metadata["DURATION"] = meta_us
+                alpha_container.metadata["DURATION"] = meta_us
+            except (AttributeError, TypeError):
+                pass
 
     duration = frame_idx / out_fps if out_fps > 0 else 0.0
     _log(f"WebM written: {out.name} ({frame_idx} frames @ {out_fps:.2f} fps)")
@@ -11458,11 +11466,13 @@ def timeline_video_to_frame_sequence(
     *,
     in_point_sec: float,
     out_point_sec: float,
+    alpha_rel: str | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Extract trimmed video frames into ``timelines/<key>/frames/<clip_id>/``."""
     from services import timeline_storage
-    from services.utils import extract_video_frames_range_to_pngs
+    from services.timeline_export import _alpha_companion_path
+    from services.utils import extract_video_frames_range_to_rgba_pngs
 
     cid = str(clip_id or "").strip()
     if not cid:
@@ -11489,12 +11499,16 @@ def timeline_video_to_frame_sequence(
 
     frames_dir = timeline_storage.timeline_frames_dir(timeline_key, cid)
     frames_dir.mkdir(parents=True, exist_ok=True)
-    png_paths = extract_video_frames_range_to_pngs(
+    alpha_path = _alpha_companion_path(video_abs, alpha_rel)
+    if alpha_path is not None and log_cb:
+        log_cb(f"Compositing companion alpha: {alpha_path.name}")
+    png_paths = extract_video_frames_range_to_rgba_pngs(
         str(video_abs),
         str(frames_dir),
         start_frame=start_idx,
         end_frame=end_idx,
         max_frames=_TIMELINE_FRAME_EXTRACT_MAX,
+        alpha_path=str(alpha_path) if alpha_path is not None else None,
     )
     strip: list[dict[str, Any]] = []
     for abs_p in png_paths:
@@ -11657,7 +11671,10 @@ def timeline_frame_sequence_to_video(
     fps: int = 24,
     output_basename: str | None = None,
 ) -> dict[str, Any]:
-    """Encode a timeline clip frame strip to MP4 in ``clips/``."""
+    """Encode a timeline clip frame strip to video in ``clips/``.
+
+    Uses WebM + ``.alpha.mkv`` when any strip PNG has transparency; otherwise MP4.
+    """
     from services import timeline_storage
 
     fs = frame_sequence if isinstance(frame_sequence, dict) else {}
@@ -11670,16 +11687,43 @@ def timeline_frame_sequence_to_video(
         allowed = timeline_storage.timeline_frames_dir(timeline_key, gid)
         _validate_strip_paths_under_dir(strip, allowed)
 
+    current_path: Path | None = None
+    current_crop: dict[str, Any] | None = None
+    segments: list[tuple[Path | None, dict[str, Any] | None, int]] = []
+    for k, slot in enumerate(strip):
+        if str(slot.get("kind") or "") == "image" and slot.get("hidden") is True:
+            continue
+        if _frame_sequence_strip_slot_visible_for_export(slot):
+            rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+            pth = _timeline_strip_rel_to_abs(rel)
+            if not pth.is_file():
+                raise ValueError(f"Strip slot {k}: missing file {rel!r}.")
+            raw_crop = slot.get("crop")
+            current_crop = raw_crop if isinstance(raw_crop, dict) else None
+            current_path = pth
+        segments.append((current_path, current_crop, 1))
+
+    if not segments:
+        raise ValueError(
+            "No frames to export: frameSequence.strip is only hidden images, "
+            "or has no non-hidden slots that emit a frame."
+        )
+
     clips_dir = timeline_storage.timeline_clips_dir(timeline_key)
     clips_dir.mkdir(parents=True, exist_ok=True)
     base = (output_basename or f"clip_{unique_suffix(12)}").strip()
-    if not base.lower().endswith(".mp4"):
-        base = f"{base}.mp4"
-    out_path = clips_dir / base
-    write_frame_sequence_strip_mp4(strip, out_path, fps=int(fps))
+    # Stem only — _encode_slideshow_video chooses .mp4 / .webm.
+    stem = Path(base).stem or f"clip_{unique_suffix(12)}"
+    out_stem = clips_dir / stem
+    exported = _encode_slideshow_video(
+        segments=segments,
+        fps=float(fps),
+        output_path=out_stem,
+    )
+    out_path = Path(exported["absPath"])
     meta = probe_video_meta(out_path)
     return {
-        "absPath": str(out_path),
+        "absPath": str(out_path.resolve()),
         "srcRelPath": timeline_storage.timeline_abs_to_rel(out_path),
         **meta,
     }
@@ -12754,6 +12798,37 @@ def duplicate_sequence_asset(
     shutil.copy2(src, dest)
     rel = dest.resolve().relative_to(root)
     return str(rel).replace("\\", "/")
+
+
+def duplicate_timeline_frame_asset(
+    timeline_key: str,
+    clip_id: str,
+    source_abs: str,
+) -> str:
+    """
+    Copy ``source_abs`` into ``timelines/<key>/frames/<clip_id>/`` with a unique name.
+    Returns storage-relative path string (``timelines/...``).
+    """
+    from services import timeline_storage
+
+    cid = str(clip_id or "").strip()
+    if not cid:
+        raise ValueError("clip_id is required.")
+    src = Path(source_abs).resolve()
+    if not src.is_file():
+        raise ValueError("Source file not found.")
+    if not timeline_storage.timeline_dir(timeline_key).is_dir():
+        raise ValueError("Timeline not found.")
+    ext = src.suffix.lower() or ".png"
+    if ext not in {".png", ".jpg", ".jpeg", ".webp"}:
+        ext = ".png"
+    frames_dir = timeline_storage.timeline_frames_dir(timeline_key, cid)
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    nid = unique_suffix(12)
+    dest = frames_dir / f"frame_{nid}{ext}"
+    ensure_dirs(dest.parent)
+    shutil.copy2(src, dest)
+    return timeline_storage.timeline_abs_to_rel(dest)
 
 
 def probe_audio_meta(path: Path | str) -> dict[str, Any]:

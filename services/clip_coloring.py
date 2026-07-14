@@ -12,7 +12,12 @@ DEFAULT_CLIP_COLORING: dict[str, int] = {
     "b": 100,
     "opacity": 100,
     "lightness": 0,
+    "borderBlur": 0,
+    "imageBlur": 0,
 }
+
+# Max Gaussian radius (px) at slider value 100; matches the frontend mapping.
+MAX_BLUR_RADIUS_PX = 8.0
 
 
 def _clamp_int(v: float, lo: int, hi: int) -> int:
@@ -73,4 +78,24 @@ def apply_clip_coloring_rgba(im_rgba: Any, coloring: dict[str, Any] | None) -> A
     arr[:, :, :3] = rgb
 
     out = arr.astype(np.uint8)
-    return Image.fromarray(out, mode="RGBA")
+    img = Image.fromarray(out, mode="RGBA")
+    return _apply_blur(img, c)
+
+
+def _apply_blur(img: Any, c: dict[str, int]) -> Any:
+    """Apply whole-image blur then alpha-edge (border) feather blur."""
+    from PIL import Image, ImageFilter
+
+    image_blur = c.get("imageBlur", 0)
+    if image_blur > 0:
+        radius = (image_blur / 100.0) * MAX_BLUR_RADIUS_PX
+        img = img.filter(ImageFilter.GaussianBlur(radius))
+
+    border_blur = c.get("borderBlur", 0)
+    if border_blur > 0:
+        radius = (border_blur / 100.0) * MAX_BLUR_RADIUS_PX
+        r, g, b, a = img.split()
+        a = a.filter(ImageFilter.GaussianBlur(radius))
+        img = Image.merge("RGBA", (r, g, b, a))
+
+    return img

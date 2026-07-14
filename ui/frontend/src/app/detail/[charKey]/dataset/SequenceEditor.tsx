@@ -6,13 +6,10 @@ import {
   DragEndEvent,
   DragOverlay,
   PointerSensor,
-  useDraggable,
-  useDroppable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { arrayMove } from "@dnd-kit/sortable";
 import {
   apiSequenceDuplicateAsset,
   apiSequenceGenerateFlf,
@@ -39,7 +36,6 @@ import {
   type FrameSequenceStripActions,
 } from "./FrameSequenceModal";
 import { outputDirFromRelPath } from "../../../../components/frameSequenceStripUtils";
-import { TriangleIcon } from "../../../../components/IconPrimitives";
 import { AiEditModal } from "../../../../components/AiEditModal";
 import { RemoveBgImageModal } from "../../../../components/removeBg/RemoveBgImageModal";
 import {
@@ -56,17 +52,19 @@ import {
 } from "../../../../lib/sequenceAspect";
 import {
   cloneCrop,
-  SEQUENCE_CROP_OUTER_CLIP_FLEX,
-  sequenceCropTransformWrapperStyle,
 } from "../../../../lib/sequenceCrop";
 import {
   isEditableTarget,
   shouldDeferSequenceEditorClipboard,
   shouldDeferSequenceEditorUndoRedo,
 } from "../../../../lib/nativeClipboardShortcuts";
-import { ResizableScrollGallery } from "../../../../components/ResizableScrollGallery";
 import { SequencePreviewLightbox } from "./SequencePreviewLightbox";
 import { DesktopContextMenu, type ContextMenuItem } from "../../../../components/DesktopContextMenu";
+import { SequenceGalleryPanel } from "../../../../components/sequenceWorkspace/SequenceGalleryPanel";
+import {
+  FrameTimelineViewport,
+  sequenceTimelineCellWidth,
+} from "../../../../components/sequenceWorkspace/FrameTimelineViewport";
 import {
   computeSequenceTimelineSpan,
   FS_MODAL_GALLERY_BACKDROP_DROP_ID,
@@ -77,7 +75,6 @@ import {
 } from "./sequenceGalleryUtils";
 import type { BeginSessionOpts } from "../../../../hooks/useJobRunSession";
 
-const TILE = 120;
 const UNDO_CAP = 50;
 
 type UndoEntry = {
@@ -95,11 +92,6 @@ export type SequenceJobModal = {
   log: (line: string) => void;
 };
 const MIN_FRAMES = 48;
-const BASE_FRAME_CELL = 72;
-const BASE_RULER_H = 22;
-const BASE_FOOTER_H = 18;
-const TIMELINE_ZOOM_MIN = 0.55;
-const TIMELINE_ZOOM_MAX = 3.2;
 
 type FrameMapValue = Pick<
   SequenceFrameItem,
@@ -387,249 +379,6 @@ function canPlaceTimelineShift(
   return true;
 }
 
-function GalleryThumb(props: {
-  id: string;
-  relPath: string;
-  crop: SequenceFrameItem["crop"];
-  frameSequence?: SequenceGalleryItem["frameSequence"];
-  selected: boolean;
-  onSelect: () => void;
-  setFocusGallery: () => void;
-  onGalleryContextMenu: (e: React.MouseEvent, galleryIndex: number) => void;
-  galleryIndex: number;
-  onDoubleClickPreview?: () => void;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: props.id,
-    data: {
-      kind: "gallery" as const,
-      galleryId: props.id,
-      relPath: props.relPath,
-      frameSequence: props.frameSequence,
-    },
-  });
-
-  return (
-    <button
-      type="button"
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      onClick={(e) => {
-        e.stopPropagation();
-        props.setFocusGallery();
-        props.onSelect();
-      }}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        props.onDoubleClickPreview?.();
-      }}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        props.setFocusGallery();
-        props.onGalleryContextMenu(e, props.galleryIndex);
-      }}
-      style={{
-        position: "relative",
-        width: TILE,
-        height: TILE,
-        padding: 0,
-        border: props.selected ? "2px solid #06c" : "1px solid rgba(0,0,0,0.35)",
-        opacity: isDragging ? 0.5 : 1,
-        cursor: "grab",
-        background: "transparent",
-        touchAction: "none",
-        transform: CSS.Transform.toString(transform),
-        transition,
-      }}
-    >
-      {props.frameSequence ? (
-        <>
-          <span
-            style={{
-              position: "absolute",
-              top: 2,
-              right: 2,
-              fontSize: 9,
-              lineHeight: 1,
-              padding: "1px 4px",
-              background: "rgba(140,140,140,0.65)",
-              color: "#eee",
-              zIndex: 1,
-              pointerEvents: "none",
-            }}
-          >
-            Vid
-          </span>
-          <span
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              color: "rgba(255,255,255,0.7)",
-              pointerEvents: "none",
-              display: "flex",
-              zIndex: 1,
-            }}
-          >
-            <TriangleIcon direction="right" size={18} />
-          </span>
-        </>
-      ) : null}
-      <div style={{ ...SEQUENCE_CROP_OUTER_CLIP_FLEX, pointerEvents: "none" }}>
-        <div style={sequenceCropTransformWrapperStyle(props.crop)}>
-          <img
-            src={assetUrlFromRelPath(props.relPath)}
-            alt=""
-            style={{
-              maxWidth: "100%",
-              maxHeight: "100%",
-              width: "auto",
-              height: "auto",
-              objectFit: "contain",
-              display: "block",
-            }}
-          />
-        </div>
-      </div>
-    </button>
-  );
-}
-
-function FrameDropCell(props: {
-  cellW: number;
-  frameIndex: number;
-  relPath: string | null;
-  cellId: string | undefined;
-  crop: SequenceFrameItem["crop"];
-  sequenceGroupId?: string;
-  hidden?: boolean;
-  selected: boolean;
-  onCellClick: (e: React.MouseEvent) => void;
-  onCellDoubleClick?: (frameIndex: number) => void;
-  setFocusTimeline: () => void;
-  onFrameContextMenu: (e: React.MouseEvent, frameIndex: number) => void;
-}) {
-  const { setNodeRef: setDropRef, isOver } = useDroppable({
-    id: `frame:${props.frameIndex}`,
-    data: { frameIndex: props.frameIndex },
-  });
-
-  const canDrag = Boolean(props.relPath && props.cellId) && !props.hidden;
-  const {
-    attributes,
-    listeners,
-    setNodeRef: setDragRef,
-    isDragging,
-  } = useDraggable({
-    id: `tl-drag:${props.frameIndex}`,
-    data: {
-      kind: "timeline" as const,
-      fromIndex: props.frameIndex,
-      cellId: props.cellId,
-      relPath: props.relPath,
-      crop: props.crop,
-      sequenceGroupId: props.sequenceGroupId,
-    },
-    disabled: !canDrag,
-  });
-
-  const setRefs = useCallback(
-    (node: HTMLButtonElement | null) => {
-      setDropRef(node);
-      setDragRef(node);
-    },
-    [setDropRef, setDragRef]
-  );
-
-  const frameBtnClass =
-    "sequenceTimelineFrameBtn" + (props.selected ? " sequenceTimelineFrameBtn--selected" : "");
-
-  return (
-    <button
-      type="button"
-      ref={setRefs}
-      {...(canDrag ? listeners : {})}
-      {...(canDrag ? attributes : {})}
-      className={frameBtnClass}
-      onClick={(e) => {
-        e.stopPropagation();
-        props.setFocusTimeline();
-        props.onCellClick(e);
-      }}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        if (!props.relPath) return;
-        props.onCellDoubleClick?.(props.frameIndex);
-      }}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        props.onFrameContextMenu(e, props.frameIndex);
-      }}
-      style={{
-        width: props.cellW,
-        height: props.cellW,
-        padding: 2,
-        boxSizing: "border-box",
-        position: "relative",
-        border: props.selected
-          ? "2px solid #06c"
-          : `1px solid ${isOver ? "rgba(0,100,200,0.7)" : "rgba(0,0,0,0.25)"}`,
-        background: isOver ? "rgba(0,100,200,0.08)" : "rgba(0,0,0,0.03)",
-        cursor: canDrag ? "grab" : "pointer",
-        opacity: isDragging ? 0.45 : 1,
-        flexShrink: 0,
-      }}
-    >
-      {props.relPath ? (
-        <div style={{ ...SEQUENCE_CROP_OUTER_CLIP_FLEX, pointerEvents: "none" }}>
-          <div style={sequenceCropTransformWrapperStyle(props.crop)}>
-            <img
-              src={assetUrlFromRelPath(props.relPath)}
-              alt=""
-              style={{
-                maxWidth: "100%",
-                maxHeight: "100%",
-                width: "auto",
-                height: "auto",
-                objectFit: "contain",
-                display: "block",
-              }}
-            />
-          </div>
-        </div>
-      ) : null}
-      {props.hidden && props.relPath ? (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(0,0,0,0.55)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 10,
-            color: "#ccc",
-            pointerEvents: "none",
-          }}
-        >
-          Hidden
-        </div>
-      ) : null}
-    </button>
-  );
-}
-
 export function SequenceEditor(props: {
   charKey: string;
   sequenceName: string;
@@ -700,7 +449,6 @@ export function SequenceEditor(props: {
   /** When set, a gallery sequence-set MP4 export is in progress for that gallery item id. */
   const [gallerySetDownloadId, setGallerySetDownloadId] = useState<string | null>(null);
   const editorRootRef = useRef<HTMLDivElement | null>(null);
-  const timelineShellRef = useRef<HTMLDivElement | null>(null);
   const timelineAnchorRef = useRef<number | null>(null);
   const selectedFrameIndicesRef = useRef<Set<number>>(new Set());
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -776,23 +524,6 @@ export function SequenceEditor(props: {
       pending.reject(e);
     }
   }, [jobModal]);
-
-  useEffect(() => {
-    const el = timelineShellRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const delta = e.deltaY;
-      setTimelineScale((prev) => {
-        const step = delta > 0 ? -0.1 : 0.1;
-        return Math.max(TIMELINE_ZOOM_MIN, Math.min(TIMELINE_ZOOM_MAX, prev + step));
-      });
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [manifest]);
 
   const scheduleSave = useCallback(
     (m: SequenceManifest) => {
@@ -1281,7 +1012,7 @@ export function SequenceEditor(props: {
     return visibleTimelineColumnIndices(manifest, frameCount);
   }, [frameCount, manifest]);
 
-  const { logicalFps, viewStep, ticksPerSecond } = useMemo(() => {
+  const { logicalFps, ticksPerSecond } = useMemo(() => {
     if (!manifest) {
       return { logicalFps: 24, viewStep: 1 as const, ticksPerSecond: 24 };
     }
@@ -1333,12 +1064,6 @@ export function SequenceEditor(props: {
     }
     return out;
   }, [manifest]);
-
-  const cellW = Math.max(40, Math.round(BASE_FRAME_CELL * timelineScale));
-  const rulerH = Math.max(16, Math.round(BASE_RULER_H * timelineScale));
-  const footerH = Math.max(14, Math.round(BASE_FOOTER_H * timelineScale));
-  const rulerFont = Math.max(9, Math.round(11 * timelineScale));
-  const footerFont = Math.max(8, Math.round(10 * timelineScale));
 
   const onDragEnd = useCallback(
     async (ev: DragEndEvent) => {
@@ -1857,11 +1582,6 @@ export function SequenceEditor(props: {
     frameSeqModal,
   ]);
 
-  const gallerySortableIds = useMemo(
-    () => (manifest?.gallery ?? []).map((g) => g.id),
-    [manifest]
-  );
-
   if (!manifest) {
     return <div style={{ padding: 16 }}>Loading sequence…</div>;
   }
@@ -2201,38 +1921,14 @@ export function SequenceEditor(props: {
         }}
         onDragCancel={() => setDragPreviewPath(null)}
       >
-        <div
-          style={{ marginBottom: 8 }}
-          onMouseDown={() => setFocusScope("gallery")}
-          role="presentation"
-        >
-          <div style={{ marginBottom: 6 }}>Sequence gallery</div>
-          <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
-            Drag the panel corner to resize · Double-click an image to preview · Ctrl+C / Ctrl+V
-            duplicate full sequence sets (strip + assets) · Delete when gallery is focused
-          </div>
-          <ResizableScrollGallery aria-label="Sequence gallery images">
-            <SortableContext items={gallerySortableIds} strategy={rectSortingStrategy}>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: 4 }}>
-                {manifest.gallery.map((g, idx) => (
-                  <GalleryThumb
-                    key={g.id}
-                    id={g.id}
-                    relPath={g.relPath}
-                    crop={g.crop}
-                    frameSequence={g.frameSequence}
-                    galleryIndex={idx}
-                    selected={selectedGalleryId === g.id}
-                    setFocusGallery={() => setFocusScope("gallery")}
-                    onSelect={() => setSelectedGalleryId(g.id)}
-                    onGalleryContextMenu={onGalleryContextMenu}
-                    onDoubleClickPreview={() => setPreview({ scope: "gallery", index: idx })}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </ResizableScrollGallery>
-        </div>
+        <SequenceGalleryPanel
+          items={manifest.gallery}
+          selectedId={selectedGalleryId}
+          onFocus={() => setFocusScope("gallery")}
+          onSelect={setSelectedGalleryId}
+          onItemContextMenu={onGalleryContextMenu}
+          onItemDoubleClick={(index) => setPreview({ scope: "gallery", index })}
+        />
 
         <div
           style={{ marginTop: 16, marginBottom: 56, paddingBottom: 8 }}
@@ -2314,200 +2010,36 @@ export function SequenceEditor(props: {
               ))}
             </select>
           </div>
-          <div
-            ref={timelineShellRef}
-            style={{
-              width: "min(100%, 960px)",
-              maxWidth: "100%",
-              overflow: "auto",
-              resize: "both",
-              minHeight: 160,
-              minWidth: 280,
-              height: 280,
-              maxHeight: "min(78vh, 880px)",
-              boxSizing: "border-box",
+          <FrameTimelineViewport
+            visibleFrameIndices={visibleFrameIndices}
+            visibleOrdinals={visOrd}
+            cells={frameMap}
+            selectedFrameIndices={selectedFrameIndices}
+            groupOutlines={sequenceGroupOutlines}
+            logicalFps={logicalFps}
+            ticksPerSecond={ticksPerSecond}
+            scale={timelineScale}
+            onScaleChange={setTimelineScale}
+            onFocus={() => setFocusScope("timeline")}
+            onCellClick={(event, frameIndex) => {
+              if (event.shiftKey) {
+                const anchor = timelineAnchorRef.current ?? frameIndex;
+                setSelectedFrameIndices(shiftRangeIndices(anchor, frameIndex));
+              } else {
+                timelineAnchorRef.current = frameIndex;
+                setSelectedFrameIndices(new Set([frameIndex]));
+              }
             }}
-          >
-            <div style={{ width: visibleFrameIndices.length * cellW }}>
-              <div style={{ display: "flex", height: rulerH }}>
-                {visibleFrameIndices.map((i, k) => {
-                  const vo = visOrd[k];
-                  const isSecondStart =
-                    vo != null && (vo - 1) % ticksPerSecond === 0;
-                  return (
-                    <div
-                      key={`s-${i}`}
-                      style={{
-                        width: cellW,
-                        flexShrink: 0,
-                        borderLeft: isSecondStart
-                          ? "2px solid rgba(0,0,0,0.45)"
-                          : "1px solid rgba(0,0,0,0.12)",
-                        fontSize: rulerFont,
-                        paddingLeft: 2,
-                        boxSizing: "border-box",
-                        display: "flex",
-                        alignItems: "center",
-                      }}
-                    >
-                      {isSecondStart
-                        ? String(Math.floor((vo! - 1) / ticksPerSecond))
-                        : ""}
-                    </div>
-                  );
-                })}
-              </div>
-              <div style={{ display: "flex", height: footerH, marginBottom: 4 }}>
-                {visibleFrameIndices.map((i, k) => {
-                  const vo = visOrd[k];
-                  const isSecondStart =
-                    vo != null && (vo - 1) % ticksPerSecond === 0;
-                  return (
-                    <div
-                      key={`f-${i}`}
-                      style={{
-                        width: cellW,
-                        flexShrink: 0,
-                        borderLeft: isSecondStart
-                          ? "2px solid rgba(0,0,0,0.45)"
-                          : "1px solid rgba(0,0,0,0.12)",
-                        fontSize: footerFont,
-                        textAlign: "center",
-                        color: "#444",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxSizing: "border-box",
-                      }}
-                    >
-                      {vo != null ? ((vo - 1) % ticksPerSecond) + 1 : ""}
-                    </div>
-                  );
-                })}
-              </div>
-              <div
-                style={{
-                  border: "1px solid rgba(0,0,0,0.25)",
-                  boxSizing: "border-box",
-                  overflow: "visible",
-                }}
-              >
-                <div style={{ width: visibleFrameIndices.length * cellW }}>
-                  <div style={{ position: "relative", minHeight: cellW + 4 }}>
-                    {sequenceGroupOutlines.map((o) => {
-                      const colStart = visibleFrameIndices.findIndex((ix) => ix >= o.min);
-                      let colEnd = -1;
-                      for (let c = visibleFrameIndices.length - 1; c >= 0; c--) {
-                        if (visibleFrameIndices[c]! <= o.max) {
-                          colEnd = c;
-                          break;
-                        }
-                      }
-                      if (colStart < 0 || colEnd < colStart) return null;
-                      return (
-                        <div
-                          key={`fs-outline-${o.groupId}`}
-                          style={{
-                            position: "absolute",
-                            left: colStart * cellW + 3,
-                            width: (colEnd - colStart + 1) * cellW - 6,
-                            top: 0,
-                            height: cellW,
-                            boxSizing: "border-box",
-                            border: "1px solid rgba(66, 153, 225, 0.75)",
-                            borderRadius: 0,
-                            pointerEvents: "none",
-                            zIndex: 2,
-                            boxShadow: "0 0 0 1px rgba(0,40,80,0.12)",
-                          }}
-                        >
-                          <span
-                            style={{
-                              position: "absolute",
-                              top: -13,
-                              left: 4,
-                              fontSize: 10,
-                              lineHeight: 1,
-                              letterSpacing: "0.02em",
-                              color: "rgba(37, 99, 140, 0.95)",
-                              background: "rgba(255,255,255,0.92)",
-                              padding: "1px 4px",
-                              borderRadius: 0,
-                            }}
-                          >
-                            Frame Sequence
-                          </span>
-                        </div>
-                      );
-                    })}
-                    <div style={{ display: "flex", position: "relative", zIndex: 1 }}>
-                      {visibleFrameIndices.map((i) => {
-                        const cell = frameMap.get(i);
-                        return (
-                          <FrameDropCell
-                            key={`c-${i}`}
-                            cellW={cellW}
-                            frameIndex={i}
-                            relPath={cell?.relPath ?? null}
-                            cellId={cell?.cellId}
-                            crop={cell?.crop}
-                            sequenceGroupId={cell?.sequenceGroupId}
-                            hidden={cell?.hidden}
-                            selected={selectedFrameIndices.has(i)}
-                            setFocusTimeline={() => setFocusScope("timeline")}
-                            onCellClick={(e) => {
-                              if (e.shiftKey) {
-                                const anchor = timelineAnchorRef.current ?? i;
-                                setSelectedFrameIndices(shiftRangeIndices(anchor, i));
-                              } else {
-                                timelineAnchorRef.current = i;
-                                setSelectedFrameIndices(new Set([i]));
-                              }
-                            }}
-                            onCellDoubleClick={(frameIndex) => {
-                              if (!frameMap.get(frameIndex)?.relPath) return;
-                              const colSet = new Set(visibleFrameIndices);
-                              const visible = sortedFrames.filter((f) => !f.hidden);
-                              const sparse = visible.filter((f) => colSet.has(f.index));
-                              const ix = sparse.findIndex((f) => f.index === frameIndex);
-                              if (ix >= 0) setPreview({ scope: "timeline", index: ix });
-                            }}
-                            onFrameContextMenu={onFrameContextMenu}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", height: footerH }}>
-                    {visibleFrameIndices.map((i) => (
-                      <div
-                        key={`fi-${i}`}
-                        style={{
-                          width: cellW,
-                          flexShrink: 0,
-                          borderLeft:
-                            i % logicalFps === 0
-                              ? "2px solid rgba(0,0,0,0.45)"
-                              : "1px solid rgba(0,0,0,0.12)",
-                          fontSize: Math.max(7, footerFont - 1),
-                          textAlign: "center",
-                          color: "#222",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                        title={`Frame ${i}`}
-                      >
-                        {i}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+            onCellDoubleClick={(frameIndex) => {
+              if (!frameMap.get(frameIndex)?.relPath) return;
+              const columnSet = new Set(visibleFrameIndices);
+              const visible = sortedFrames.filter((frame) => !frame.hidden);
+              const sparse = visible.filter((frame) => columnSet.has(frame.index));
+              const index = sparse.findIndex((frame) => frame.index === frameIndex);
+              if (index >= 0) setPreview({ scope: "timeline", index });
+            }}
+            onCellContextMenu={onFrameContextMenu}
+          />
         </div>
         {frameSeqModal != null &&
         manifest.gallery[frameSeqModal.galleryIndex]?.frameSequence ? (
@@ -2546,7 +2078,11 @@ export function SequenceEditor(props: {
             <img
               src={assetUrlFromRelPath(dragPreviewPath)}
               alt=""
-              style={{ width: Math.max(48, cellW), height: Math.max(48, cellW), objectFit: "contain" }}
+              style={{
+                width: Math.max(48, sequenceTimelineCellWidth(timelineScale)),
+                height: Math.max(48, sequenceTimelineCellWidth(timelineScale)),
+                objectFit: "contain",
+              }}
             />
           ) : null}
         </DragOverlay>

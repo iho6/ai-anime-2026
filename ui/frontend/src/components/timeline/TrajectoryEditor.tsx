@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { assetUrlFromRelPath, TimelineClip, TrajectoryMotionId } from "../../lib/api";
 import { TRAJECTORY_MOTION_OPTIONS } from "./trajectoryMotion";
-import { clipImageRect } from "./timelineUtil";
+import { clipImageRect, pointInTrajectoryWaypointHit, PREVIEW_EDIT_TOOLBAR_Z, PREVIEW_EDIT_Z, PREVIEW_FRAME_EXTENSION_NONE, PREVIEW_HANDLE_Z, trajectoryWaypointHitRectAt, type ClipRect, type PreviewFrameExtension } from "./timelineUtil";
+import { TrajectoryWaypointFlyout, type TrajectoryWaypointFlyoutBridgeSide, type TrajectoryWaypointPatchValues } from "./TrajectoryWaypointFlyout";
+import { normalizeBlendEase, effectiveHoldSec, maxHoldSecForSegment, normalizeHoldSec } from "./trajectoryWaypoint";
 
 export type TrajectoryWaypoint = NonNullable<TimelineClip["trajectory"]>["waypoints"][number];
 
@@ -11,14 +13,21 @@ type Props = {
   clip: TimelineClip;
   frameW: number;
   frameH: number;
+  /** Outside-frame pad; SVG viewBox spans the white frame plus this margin. */
+  extend?: PreviewFrameExtension;
+  /** Clip image bounds at the current playhead (for click-outside exit). */
+  clipBoundsAtPlayhead: ClipRect | null;
   playing: boolean;
   /** Called on every waypoint change (real-time, no undo checkpoint). */
   onWaypointsChange: (waypoints: TrajectoryWaypoint[]) => void;
   /** Called when dragging a waypoint — syncs playhead to that t value. */
   onPlayheadSync: (clipTime: number) => void;
+  /** Save checkpoint and leave trajectory edit (Esc / Enter / click outside clip). */
+  onExit?: () => void;
   /** Called when the user requests to delete the entire trajectory. */
   onDeleteTrajectory?: () => void;
   onMotionChange?: (motion: TrajectoryMotionId, motionAmount: number) => void;
+  onWaypointPatchCommit?: () => void;
 };
 
 // ── Coordinate helpers ────────────────────────────────────────────────────────
@@ -123,6 +132,16 @@ function projectOntoChord(px: number, py: number, ax: number, ay: number, bx: nu
 function buildPathD(wps: TrajectoryWaypoint[], fw: number, fh: number): string {
   if (wps.length < 2) return "";
   const pts = wps.map((w) => fracToSvg(w.x, w.y, fw, fh));
+  // Coincident start/end produce an invisible zero-length path — stub a short
+  // segment so Add Trajectory / stacked waypoints still show a gold dash.
+  if (wps.length === 2) {
+    const dx = pts[1].sx - pts[0].sx;
+    const dy = pts[1].sy - pts[0].sy;
+    if (Math.hypot(dx, dy) < 1) {
+      const stub = MIN_PATH_STUB_PX;
+      return `M ${pts[0].sx - stub} ${pts[0].sy} L ${pts[0].sx + stub} ${pts[0].sy}`;
+    }
+  }
   let d = `M ${pts[0].sx} ${pts[0].sy}`;
   for (let i = 0; i < wps.length - 1; i++) {
     const a = wps[i], b = wps[i + 1];
@@ -139,26 +158,37 @@ function buildPathD(wps: TrajectoryWaypoint[], fw: number, fh: number): string {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const DIAMOND_SIZE = 9;
-const HIT_RADIUS = 20;    // fallback pointer hit around diamonds when bbox is tiny
+const DIAMOND_SIZE = 12;
+const HIT_RADIUS = 20;    // legacy fallback radius (px)
 const SEG_HIT_DIST = 8;   // max px from path line to trigger segment drag
+/** Minimum visible path length (frame px) when start/end coincide. */
+const MIN_PATH_STUB_PX = 28;
+const FLYOUT_VIEWPORT_MARGIN = 8;
+const FLYOUT_GAP_PX = 4;
 
-function pointInWaypointBBox(
+function pointInClipBounds(
+  sx: number,
+  sy: number,
+  bounds: ClipRect | null
+): boolean {
+  if (!bounds) return false;
+  return (
+    sx >= bounds.left &&
+    sx <= bounds.left + bounds.width &&
+    sy >= bounds.top &&
+    sy <= bounds.top + bounds.height
+  );
+}
+
+function pointInWaypointHit(
   sx: number,
   sy: number,
   wp: TrajectoryWaypoint,
-  clip: TimelineClip,
   frameW: number,
-  frameH: number,
-  scaleOverride?: number
+  frameH: number
 ): boolean {
-  const r = clipImageRect(
-    clip,
-    { x: wp.x, y: wp.y, scale: scaleOverride ?? wp.scale },
-    frameW,
-    frameH
-  );
-  return sx >= r.left && sx <= r.left + r.width && sy >= r.top && sy <= r.top + r.height;
+  const { sx: cx, sy: cy } = fracToSvg(wp.x, wp.y, frameW, frameH);
+  return pointInTrajectoryWaypointHit(sx, sy, cx, cy, wp.scale ?? 1);
 }
 
 export function TrajectoryEditor(props: Props) {
@@ -166,18 +196,50 @@ export function TrajectoryEditor(props: Props) {
     clip,
     frameW,
     frameH,
+    extend = PREVIEW_FRAME_EXTENSION_NONE,
+    clipBoundsAtPlayhead,
     playing,
     onWaypointsChange,
     onPlayheadSync,
+    onExit,
     onDeleteTrajectory,
     onMotionChange,
+    onWaypointPatchCommit,
   } = props;
   const wps = clip.trajectory?.waypoints ?? [];
   const motion = clip.trajectory?.motion ?? "none";
   const motionAmount = clip.trajectory?.motionAmount ?? 50;
+  const viewW = frameW + extend.left + extend.right;
+  const viewH = frameH + extend.top + extend.bottom;
+  const viewBox = `${-extend.left} ${-extend.top} ${Math.max(1, viewW)} ${Math.max(1, viewH)}`;
 
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [ghostScale, setGhostScale] = useState<number | null>(null);
+  const [hoverFlyout, setHoverFlyout] = useState<{ idx: number } | null>(null);
+  const [flyoutLayout, setFlyoutLayout] = useState<{
+    left: number;
+    top: number;
+    bridgeSide: TrajectoryWaypointFlyoutBridgeSide;
+  } | null>(null);
+  const flyoutRef = useRef<HTMLDivElement>(null);
+  const flyoutCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelFlyoutClose = useCallback(() => {
+    if (flyoutCloseTimerRef.current) {
+      clearTimeout(flyoutCloseTimerRef.current);
+      flyoutCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleFlyoutClose = useCallback(() => {
+    cancelFlyoutClose();
+    flyoutCloseTimerRef.current = setTimeout(() => {
+      setHoverFlyout(null);
+      setFlyoutLayout(null);
+    }, 300);
+  }, [cancelFlyoutClose]);
+
+  useEffect(() => () => cancelFlyoutClose(), [cancelFlyoutClose]);
 
   // Active drag state (ref, no re-render per frame)
   const dragRef = useRef<{
@@ -194,16 +256,19 @@ export function TrajectoryEditor(props: Props) {
 
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  /** Convert client coordinates to SVG viewBox coordinates. */
+  /** Convert client coordinates to SVG viewBox coordinates (frame space). */
   function getSvgPos(e: { clientX: number; clientY: number }): { sx: number; sy: number } {
     const svg = svgRef.current;
     if (!svg) return { sx: 0, sy: 0 };
     const ctm = svg.getScreenCTM();
     if (!ctm) {
       const rect = svg.getBoundingClientRect();
-      const scaleX = (frameW || 1) / (rect.width || 1);
-      const scaleY = (frameH || 1) / (rect.height || 1);
-      return { sx: (e.clientX - rect.left) * scaleX, sy: (e.clientY - rect.top) * scaleY };
+      const scaleX = viewW / (rect.width || 1);
+      const scaleY = viewH / (rect.height || 1);
+      return {
+        sx: (e.clientX - rect.left) * scaleX - extend.left,
+        sy: (e.clientY - rect.top) * scaleY - extend.top,
+      };
     }
     const inv = ctm.inverse();
     const pt = svg.createSVGPoint();
@@ -212,6 +277,136 @@ export function TrajectoryEditor(props: Props) {
     const svgPt = pt.matrixTransform(inv);
     return { sx: svgPt.x, sy: svgPt.y };
   }
+
+  function waypointClientCenter(idx: number): { x: number; y: number } | null {
+    const wp = wps[idx];
+    const svg = svgRef.current;
+    if (!wp || !svg) return null;
+    const { sx, sy } = fracToSvg(wp.x, wp.y, frameW, frameH);
+    const ctm = svg.getScreenCTM();
+    if (!ctm) {
+      const rect = svg.getBoundingClientRect();
+      const scaleX = rect.width / (viewW || 1);
+      const scaleY = rect.height / (viewH || 1);
+      return {
+        x: rect.left + (sx + extend.left) * scaleX,
+        y: rect.top + (sy + extend.top) * scaleY,
+      };
+    }
+    const pt = svg.createSVGPoint();
+    pt.x = sx;
+    pt.y = sy;
+    const screen = pt.matrixTransform(ctm);
+    return { x: screen.x, y: screen.y };
+  }
+
+  function computeFlyoutLayout(
+    dotX: number,
+    dotY: number,
+    flyoutW: number,
+    flyoutH: number
+  ): { left: number; top: number; bridgeSide: TrajectoryWaypointFlyoutBridgeSide } {
+    let bridgeSide: TrajectoryWaypointFlyoutBridgeSide = "left";
+    let left = dotX + FLYOUT_GAP_PX;
+    let top = dotY - flyoutH / 2;
+
+    if (left + flyoutW > window.innerWidth - FLYOUT_VIEWPORT_MARGIN) {
+      left = dotX - flyoutW - FLYOUT_GAP_PX;
+      bridgeSide = "right";
+    }
+
+    left = clamp(
+      left,
+      FLYOUT_VIEWPORT_MARGIN,
+      Math.max(FLYOUT_VIEWPORT_MARGIN, window.innerWidth - flyoutW - FLYOUT_VIEWPORT_MARGIN)
+    );
+    top = clamp(
+      top,
+      FLYOUT_VIEWPORT_MARGIN,
+      Math.max(FLYOUT_VIEWPORT_MARGIN, window.innerHeight - flyoutH - FLYOUT_VIEWPORT_MARGIN)
+    );
+
+    return { left, top, bridgeSide };
+  }
+
+  useLayoutEffect(() => {
+    if (hoverFlyout == null) {
+      setFlyoutLayout(null);
+      return;
+    }
+    const center = waypointClientCenter(hoverFlyout.idx);
+    if (!center) return;
+    const el = flyoutRef.current;
+    const measured = el?.getBoundingClientRect();
+    const flyoutW = measured && measured.width > 0 ? measured.width : 280;
+    const flyoutH = measured && measured.height > 0 ? measured.height : 160;
+    const next = computeFlyoutLayout(center.x, center.y, flyoutW, flyoutH);
+    setFlyoutLayout((prev) =>
+      prev &&
+      prev.left === next.left &&
+      prev.top === next.top &&
+      prev.bridgeSide === next.bridgeSide
+        ? prev
+        : next
+    );
+  }, [hoverFlyout, wps, frameW, frameH]);
+
+  useEffect(() => {
+    if (!hoverFlyout) return;
+    const el = flyoutRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      const center = waypointClientCenter(hoverFlyout.idx);
+      if (!center) return;
+      const measured = el.getBoundingClientRect();
+      const flyoutW = measured.width > 0 ? measured.width : 280;
+      const flyoutH = measured.height > 0 ? measured.height : 160;
+      const next = computeFlyoutLayout(center.x, center.y, flyoutW, flyoutH);
+      setFlyoutLayout((prev) =>
+        prev &&
+        prev.left === next.left &&
+        prev.top === next.top &&
+        prev.bridgeSide === next.bridgeSide
+          ? prev
+          : next
+      );
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hoverFlyout, wps, frameW, frameH]);
+
+  function openWaypointFlyout(idx: number) {
+    if (playing || dragRef.current) return;
+    if (idx < 0 || idx >= wps.length) return;
+    cancelFlyoutClose();
+    setHoverFlyout((prev) => (prev?.idx === idx ? prev : { idx }));
+  }
+
+  function patchWaypoint(idx: number, patch: TrajectoryWaypointPatchValues) {
+    const isLast = idx === wps.length - 1;
+    const aT = isLast ? wps[idx - 1]!.t : wps[idx]!.t;
+    const bT = isLast ? wps[idx]!.t : wps[idx + 1]!.t;
+    // Final waypoint has no outgoing segment — Pause stays 0; Glide ease still applies.
+    const maxSec = isLast ? 0 : maxHoldSecForSegment(aT, bT, clip.duration);
+    const next = wps.map((w, i) =>
+      i !== idx
+        ? w
+        : {
+            ...w,
+            holdSec: normalizeHoldSec(patch.holdSec, maxSec),
+            blendEase: normalizeBlendEase(patch.blendEase),
+            holdPct: undefined,
+          }
+    );
+    onWaypointsChange(next);
+  }
+
+  useEffect(() => {
+    if (playing) {
+      setHoverFlyout(null);
+      setFlyoutLayout(null);
+    }
+  }, [playing]);
 
   // ── Context menu (right-click waypoint to delete / delete trajectory) ───────
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; idx: number | null } | null>(null);
@@ -227,6 +422,7 @@ export function TrajectoryEditor(props: Props) {
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     setCtxMenu(null);
+    setHoverFlyout(null);
     setSelectedIdx(i);
     setGhostScale(wps[i].scale);
     dragRef.current = {
@@ -246,27 +442,19 @@ export function TrajectoryEditor(props: Props) {
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     setCtxMenu(null);
+    setHoverFlyout(null);
 
     const { sx, sy } = getSvgPos(e);
 
-    // 1. Bbox hit (end → start so top-most wins)
+    // 1. Waypoint hit (small target around diamond, end → start)
     for (let i = wps.length - 1; i >= 0; i--) {
-      if (pointInWaypointBBox(sx, sy, wps[i], clip, frameW, frameH)) {
+      if (pointInWaypointHit(sx, sy, wps[i], frameW, frameH)) {
         beginWaypointDrag(i, sx, sy, e);
         return;
       }
     }
 
-    // 2. Fallback: small circle around diamond center
-    for (let i = wps.length - 1; i >= 0; i--) {
-      const p = fracToSvg(wps[i].x, wps[i].y, frameW, frameH);
-      if (Math.hypot(sx - p.sx, sy - p.sy) <= HIT_RADIUS) {
-        beginWaypointDrag(i, sx, sy, e);
-        return;
-      }
-    }
-
-    // 3. Path segment hit
+    // 2. Path segment hit
     for (let i = 0; i < wps.length - 1; i++) {
       const d = distToPathSeg(sx, sy, wps[i], wps[i + 1], frameW, frameH);
       if (d <= SEG_HIT_DIST) {
@@ -286,6 +474,21 @@ export function TrajectoryEditor(props: Props) {
         return;
       }
     }
+
+    setSelectedIdx(null);
+    setGhostScale(null);
+  }
+
+  function onBackgroundPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (playing) return;
+    e.stopPropagation();
+    const { sx, sy } = getSvgPos(e);
+    if (pointInClipBounds(sx, sy, clipBoundsAtPlayhead)) {
+      setSelectedIdx(null);
+      setGhostScale(null);
+    } else {
+      onExit?.();
+    }
   }
 
   function onTrajPointerMove(e: React.PointerEvent<Element>) {
@@ -300,8 +503,9 @@ export function TrajectoryEditor(props: Props) {
       const { x, y } = svgToFrac(sx, sy, frameW, frameH);
       next[d.idx] = {
         ...next[d.idx],
-        x: clamp(x, -1.5, 1.5),
-        y: clamp(y, -1.5, 1.5),
+        // Unbounded — canvas extension grows with waypoints (no ±1.5 hard stop).
+        x: Number.isFinite(x) ? x : next[d.idx].x,
+        y: Number.isFinite(y) ? y : next[d.idx].y,
       };
       // Recompute t for middle waypoints based on projection
       if (d.idx > 0 && d.idx < next.length - 1) {
@@ -373,7 +577,7 @@ export function TrajectoryEditor(props: Props) {
     const { sx, sy } = getSvgPos(e);
     for (let i = wps.length - 1; i >= 0; i--) {
       if (
-        pointInWaypointBBox(sx, sy, wps[i], clip, frameW, frameH) ||
+        pointInWaypointHit(sx, sy, wps[i], frameW, frameH) ||
         Math.hypot(
           sx - fracToSvg(wps[i].x, wps[i].y, frameW, frameH).sx,
           sy - fracToSvg(wps[i].x, wps[i].y, frameW, frameH).sy
@@ -398,13 +602,7 @@ export function TrajectoryEditor(props: Props) {
     if (selectedIdx === idx) { setSelectedIdx(null); setGhostScale(null); }
   }
 
-  // ── Ghost move + scale drag ────────────────────────────────────────────────
-  function onGhostMovePointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (selectedIdx === null || playing) return;
-    const { sx, sy } = getSvgPos(e);
-    beginWaypointDrag(selectedIdx, sx, sy, e);
-  }
-
+  // ── Ghost scale drag ───────────────────────────────────────────────────────
   function onGhostScalePointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (selectedIdx === null) return;
     e.preventDefault();
@@ -446,7 +644,7 @@ export function TrajectoryEditor(props: Props) {
   const ghostWp = selectedIdx !== null ? wps[selectedIdx] : null;
   const ghostSrc = clip.srcRelPath ? assetUrlFromRelPath(clip.srcRelPath) : null;
 
-  // Compute ghost rect as percentages of the container so it matches the SVG overlay.
+  // Ghost rect in extended-layer pixels so it tracks frame-space waypoints.
   function ghostRect(wp: TrajectoryWaypoint) {
     const nW = clip.naturalW ?? frameW;
     const nH = clip.naturalH ?? frameH;
@@ -457,16 +655,12 @@ export function TrajectoryEditor(props: Props) {
     else { baseH = frameH; baseW = frameH * imgA; }
     const w = baseW * (ghostScale ?? wp.scale);
     const h = baseH * (ghostScale ?? wp.scale);
-    // wp.x / wp.y are fractions relative to frame center; convert to % of container
-    const cx = 0.5 + wp.x;      // fraction [0,1] of frameW
-    const cy = 0.5 + wp.y;      // fraction [0,1] of frameH
-    const wPct = (w / frameW) * 100;
-    const hPct = (h / frameH) * 100;
+    const { sx: cx, sy: cy } = fracToSvg(wp.x, wp.y, frameW, frameH);
     return {
-      left: `${cx * 100 - wPct / 2}%`,
-      top: `${cy * 100 - hPct / 2}%`,
-      width: `${wPct}%`,
-      height: `${hPct}%`,
+      left: extend.left + cx - w / 2,
+      top: extend.top + cy - h / 2,
+      width: w,
+      height: h,
     };
   }
 
@@ -476,57 +670,33 @@ export function TrajectoryEditor(props: Props) {
       style={{
         position: "absolute",
         inset: 0,
-        zIndex: 60,
+        zIndex: PREVIEW_EDIT_Z,
         pointerEvents: "none",
       }}
     >
-      {/* Bbox hit targets for unselected waypoints */}
-      {!playing &&
-        wps.map((wp, i) => {
-          if (i === selectedIdx) return null;
-          const rect = clipImageRect(
-            clip,
-            { x: wp.x, y: wp.y, scale: wp.scale },
-            frameW,
-            frameH
-          );
-          return (
-            <div
-              key={`wp-hit-${i}`}
-              style={{
-                position: "absolute",
-                left: rect.left,
-                top: rect.top,
-                width: rect.width,
-                height: rect.height,
-                pointerEvents: "auto",
-                cursor: "move",
-                zIndex: 0,
-              }}
-              onPointerDown={onTrajPointerDown}
-              onPointerMove={onTrajPointerMove}
-              onPointerUp={onTrajPointerUp}
-            />
-          );
-        })}
-
-      {/* Ghost image when waypoint selected — full bbox is move handle */}
+      {/* Click-through catcher: empty preview exits; inside clip deselects waypoint */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "auto",
+          zIndex: 0,
+        }}
+        onPointerDown={onBackgroundPointerDown}
+      />
+      {/* Ghost image when waypoint selected — visual only; SVG handles interaction */}
       {ghostWp && ghostSrc && (() => {
         const r = ghostRect(ghostWp);
         return (
           <div
-            onPointerDown={onGhostMovePointerDown}
-            onPointerMove={onTrajPointerMove}
-            onPointerUp={onTrajPointerUp}
             style={{
               position: "absolute",
               left: r.left,
               top: r.top,
               width: r.width,
               height: r.height,
-              pointerEvents: "auto",
+              pointerEvents: "none",
               userSelect: "none",
-              cursor: "move",
               zIndex: 1,
             }}
           >
@@ -559,7 +729,7 @@ export function TrajectoryEditor(props: Props) {
                 border: "1px solid #000",
                 cursor: "nwse-resize",
                 pointerEvents: "auto",
-                zIndex: 3,
+                zIndex: PREVIEW_HANDLE_Z,
               }}
             />
           </div>
@@ -569,7 +739,7 @@ export function TrajectoryEditor(props: Props) {
       {/* SVG overlay — pass-through except path and waypoints */}
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${frameW || 1} ${frameH || 1}`}
+        viewBox={viewBox}
         preserveAspectRatio="none"
         style={{
           position: "absolute",
@@ -626,7 +796,14 @@ export function TrajectoryEditor(props: Props) {
           const { sx, sy } = fracToSvg(wp.x, wp.y, frameW, frameH);
           const isSelected = i === selectedIdx;
           const isStart = i === 0, isEnd = i === wps.length - 1;
-          const fill = isSelected ? "#ffd166" : isStart || isEnd ? "#fff" : "rgba(255,255,255,0.75)";
+          // High-contrast fills so diamonds stay readable on light figures / plates.
+          const fill = isSelected
+            ? "#ffd166"
+            : isStart
+              ? "#ffe8a3"
+              : isEnd
+                ? "#ff9f43"
+                : "#ffd166";
 
           // Check if another waypoint is nearby (for stagger)
           const nearbyOffset = wps.some((w2, j) => j !== i && Math.hypot(
@@ -636,38 +813,37 @@ export function TrajectoryEditor(props: Props) {
 
           return (
             <g key={i} pointerEvents="visiblePainted">
-              {/* Hit target — bbox-sized when possible */}
+              {/* Hit target — capped square around diamond center */}
               {(() => {
-                const hitRect = clipImageRect(
-                  clip,
-                  { x: wp.x, y: wp.y, scale: wp.scale },
-                  frameW,
-                  frameH
-                );
-                const hitW = Math.max(hitRect.width, HIT_RADIUS * 2);
-                const hitH = Math.max(hitRect.height, HIT_RADIUS * 2);
+                const hitRect = trajectoryWaypointHitRectAt(sx, sy, wp.scale ?? 1);
                 return (
                   <rect
-                    x={hitRect.left + hitRect.width / 2 - hitW / 2}
-                    y={hitRect.top + hitRect.height / 2 - hitH / 2}
-                    width={hitW}
-                    height={hitH}
+                    x={hitRect.left}
+                    y={hitRect.top}
+                    width={hitRect.width}
+                    height={hitRect.height}
                     fill="transparent"
                     pointerEvents="all"
                     style={{ cursor: playing ? "default" : "move" }}
                     onPointerDown={onTrajPointerDown}
                     onPointerMove={onTrajPointerMove}
                     onPointerUp={onTrajPointerUp}
+                    onMouseEnter={() => {
+                      if (!playing && !dragRef.current) {
+                        openWaypointFlyout(i);
+                      }
+                    }}
+                    onMouseLeave={scheduleFlyoutClose}
                   />
                 );
               })()}
               {/* Scale ring */}
               <circle
                 cx={sx} cy={sy}
-                r={Math.max(8, DIAMOND_SIZE * (wp.scale ?? 1) * 0.8)}
+                r={Math.max(10, DIAMOND_SIZE * (wp.scale ?? 1) * 0.8)}
                 fill="none"
-                stroke="rgba(255,209,102,0.25)"
-                strokeWidth={1}
+                stroke="rgba(255,209,102,0.55)"
+                strokeWidth={1.5}
                 pointerEvents="none"
               />
               {/* Diamond */}
@@ -677,8 +853,8 @@ export function TrajectoryEditor(props: Props) {
                 width={DIAMOND_SIZE}
                 height={DIAMOND_SIZE}
                 fill={fill}
-                stroke={isSelected ? "#fff" : "rgba(0,0,0,0.5)"}
-                strokeWidth={isSelected ? 1.5 : 1}
+                stroke="#0b0b0b"
+                strokeWidth={isSelected ? 2 : 1.5}
                 transform={`rotate(45, ${sx}, ${sy})`}
                 pointerEvents="none"
               />
@@ -687,8 +863,12 @@ export function TrajectoryEditor(props: Props) {
                 x={sx + nearbyOffset}
                 y={sy - DIAMOND_SIZE - 3}
                 textAnchor="middle"
-                fill="#fff"
-                fontSize={9}
+                fill="#ffd166"
+                stroke="#0b0b0b"
+                strokeWidth={0.6}
+                paintOrder="stroke"
+                fontSize={10}
+                fontWeight={700}
                 style={{ userSelect: "none", pointerEvents: "none" }}
               >
                 {i + 1}
@@ -703,8 +883,8 @@ export function TrajectoryEditor(props: Props) {
         data-trajectory-toolbar
         style={{
           position: "absolute",
-          top: 8,
-          left: 8,
+          top: extend.top + 8,
+          left: extend.left + 8,
           display: "flex",
           alignItems: "center",
           gap: 8,
@@ -715,7 +895,7 @@ export function TrajectoryEditor(props: Props) {
           fontSize: 11,
           color: "#eee",
           pointerEvents: "auto",
-          zIndex: 2,
+          zIndex: PREVIEW_EDIT_TOOLBAR_Z,
         }}
         onPointerDown={(e) => e.stopPropagation()}
       >
@@ -776,6 +956,7 @@ export function TrajectoryEditor(props: Props) {
           />
           <span style={{ minWidth: 24, opacity: 0.7, fontSize: 11 }}>{motionAmount}</span>
         </label>
+        <span style={{ opacity: 0.55, fontSize: 10, marginLeft: 4 }}>Esc / Enter — done</span>
       </div>
 
       {/* Right-click context menu */}
@@ -812,6 +993,30 @@ export function TrajectoryEditor(props: Props) {
           )}
         </div>
       )}
+
+      {hoverFlyout && !playing && hoverFlyout.idx < wps.length ? (() => {
+        const idx = hoverFlyout.idx;
+        const isLast = idx === wps.length - 1;
+        const aT = isLast ? wps[idx - 1]!.t : wps[idx]!.t;
+        const bT = isLast ? wps[idx]!.t : wps[idx + 1]!.t;
+        const maxHold = isLast ? 0 : maxHoldSecForSegment(aT, bT, clip.duration);
+        return (
+          <TrajectoryWaypointFlyout
+            ref={flyoutRef}
+            x={flyoutLayout?.left ?? 0}
+            y={flyoutLayout?.top ?? 0}
+            bridgeSide={flyoutLayout?.bridgeSide ?? "left"}
+            holdSec={isLast ? 0 : effectiveHoldSec(wps[idx], aT, bT, clip.duration)}
+            maxHoldSec={maxHold}
+            showPause={!isLast}
+            blendEase={normalizeBlendEase(wps[idx].blendEase)}
+            onPatchChange={(patch) => patchWaypoint(idx, patch)}
+            onPatchCommit={() => onWaypointPatchCommit?.()}
+            onMouseEnter={cancelFlyoutClose}
+            onMouseLeave={scheduleFlyoutClose}
+          />
+        );
+      })() : null}
     </div>
   );
 }
