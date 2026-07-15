@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import type { AnimeSegBgOptions, RmbgBgOptions, RvmBgOptions } from "../lib/api";
 import {
   AnimeSegFields,
@@ -16,20 +16,11 @@ type Tab = "rvm" | "rmbg" | "anime_seg";
 
 function FpsOptions(props: {
   busy?: boolean;
-  outputFps24: boolean;
-  recycleMask: boolean;
-  onOutputFps24Change: (v: boolean) => void;
-  onRecycleMaskChange: (v: boolean) => void;
+  processEveryFrame: boolean;
+  onProcessEveryFrameChange: (v: boolean) => void;
   hint: string;
 }) {
-  const {
-    busy,
-    outputFps24,
-    recycleMask,
-    onOutputFps24Change,
-    onRecycleMaskChange,
-    hint,
-  } = props;
+  const { busy, processEveryFrame, onProcessEveryFrameChange, hint } = props;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <label
@@ -42,12 +33,12 @@ function FpsOptions(props: {
         }}
       >
         <input
-          type="checkbox"
-          checked={outputFps24}
+          type="radio"
+          checked={!processEveryFrame}
           disabled={busy}
-          onChange={(e) => onOutputFps24Change(e.target.checked)}
+          onChange={() => onProcessEveryFrameChange(false)}
         />
-        24 fps output (process every frame)
+        12 FPS (sampled frames only)
       </label>
       <label
         style={{
@@ -55,40 +46,44 @@ function FpsOptions(props: {
           alignItems: "center",
           gap: 8,
           fontSize: 13,
-          opacity: outputFps24 ? 1 : 0.45,
-          cursor: busy || !outputFps24 ? "not-allowed" : "pointer",
+          cursor: busy ? "not-allowed" : "pointer",
         }}
       >
         <input
-          type="checkbox"
-          checked={recycleMask}
-          disabled={busy || !outputFps24}
-          onChange={(e) => onRecycleMaskChange(e.target.checked)}
+          type="radio"
+          checked={processEveryFrame}
+          disabled={busy}
+          onChange={() => onProcessEveryFrameChange(true)}
         />
-        Recycle mask (keyframes at 12 fps, hold alpha between)
+        Every source frame
       </label>
       <p style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", margin: 0 }}>{hint}</p>
     </div>
   );
 }
 
-export function RemoveBgVideoModal(props: {
+type RemoveBgVideoModalProps = {
   open: boolean;
   busy?: boolean;
   onCancel: () => void;
   onRunRvm: (options: RvmBgOptions) => void | Promise<void>;
   onRunRmbg: (options: {
-    outputFps24: boolean;
-    recycleMask: boolean;
+    processEveryFrame: boolean;
     rmbg: RmbgBgOptions;
   }) => void | Promise<void>;
   onRunAnimeSeg: (options: {
-    outputFps24: boolean;
-    recycleMask: boolean;
+    processEveryFrame: boolean;
     animeSeg: AnimeSegBgOptions;
   }) => void | Promise<void>;
-}) {
-  const { open, busy = false, onCancel, onRunRvm, onRunRmbg, onRunAnimeSeg } = props;
+};
+
+export function RemoveBgVideoModal(props: RemoveBgVideoModalProps) {
+  if (!props.open) return null;
+  return <RemoveBgVideoModalOpen {...props} />;
+}
+
+function RemoveBgVideoModalOpen(props: RemoveBgVideoModalProps) {
+  const { busy = false, onCancel, onRunRvm, onRunRmbg, onRunAnimeSeg } = props;
 
   const [tab, setTab] = useState<Tab>("rvm");
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -101,41 +96,15 @@ export function RemoveBgVideoModal(props: {
   const [rvmAlphaGrow, setRvmAlphaGrow] = useState(0);
   const [rvmUseSourceRgb, setRvmUseSourceRgb] = useState(true);
 
-  const [outputFps24, setOutputFps24] = useState(false);
-  const [recycleMask, setRecycleMask] = useState(false);
+  const [processEveryFrame, setProcessEveryFrame] = useState(false);
   const [rmbg, setRmbg] = useState<RmbgBgOptions>(DEFAULT_RMBG_OPTIONS);
   const [animeSeg, setAnimeSeg] = useState<AnimeSegBgOptions>(DEFAULT_ANIME_SEG_OPTIONS);
 
-  useEffect(() => {
-    if (!open) return;
-    setTab("rvm");
-    setAdvancedOpen(false);
-    setRvmPreset("fast");
-    setRvmDownsample(0.25);
-    setRvmBackbone("mobilenetv3");
-    setRvmAlphaGrow(0);
-    setRvmUseSourceRgb(true);
-    setOutputFps24(false);
-    setRecycleMask(false);
-    setRmbg({ ...DEFAULT_RMBG_OPTIONS });
-    setAnimeSeg({ ...DEFAULT_ANIME_SEG_OPTIONS });
-  }, [open]);
-
-  useEffect(() => {
-    if (rvmPreset === "quality") {
-      setRvmBackbone("resnet50");
-      setRvmDownsample(0.375);
-    } else {
-      setRvmBackbone("mobilenetv3");
-      setRvmDownsample(0.25);
-    }
-  }, [rvmPreset]);
-
-  useEffect(() => {
-    if (!outputFps24) setRecycleMask(false);
-  }, [outputFps24]);
-
-  if (!open) return null;
+  const changeRvmPreset = (preset: "fast" | "quality") => {
+    setRvmPreset(preset);
+    setRvmBackbone(preset === "quality" ? "resnet50" : "mobilenetv3");
+    setRvmDownsample(preset === "quality" ? 0.375 : 0.25);
+  };
 
   const run = () => {
     if (tab === "rvm") {
@@ -148,14 +117,12 @@ export function RemoveBgVideoModal(props: {
       });
     } else if (tab === "rmbg") {
       void onRunRmbg({
-        outputFps24,
-        recycleMask,
+        processEveryFrame,
         rmbg,
       });
     } else {
       void onRunAnimeSeg({
-        outputFps24,
-        recycleMask,
+        processEveryFrame,
         animeSeg,
       });
     }
@@ -245,9 +212,7 @@ export function RemoveBgVideoModal(props: {
                   value={rvmPreset}
                   disabled={busy}
                   style={removeBgInputStyle}
-                  onChange={(e) =>
-                    setRvmPreset(e.target.value as "fast" | "quality")
-                  }
+                  onChange={(e) => changeRvmPreset(e.target.value as "fast" | "quality")}
                 >
                   <option value="fast">Fast (mobilenetv3)</option>
                   <option value="quality">Quality (resnet50)</option>
@@ -261,20 +226,16 @@ export function RemoveBgVideoModal(props: {
           ) : tab === "rmbg" ? (
             <FpsOptions
               busy={busy}
-              outputFps24={outputFps24}
-              recycleMask={recycleMask}
-              onOutputFps24Change={setOutputFps24}
-              onRecycleMaskChange={setRecycleMask}
-              hint="Default: RMBG at ~12 fps keyframes, recycle alpha between frames, output at source fps (preserves duration)."
+              processEveryFrame={processEveryFrame}
+              onProcessEveryFrameChange={setProcessEveryFrame}
+              hint="Default: run background removal on 12 sampled frames per second. Skipped source frames are not processed; output preserves the source rate and duration."
             />
           ) : (
             <FpsOptions
               busy={busy}
-              outputFps24={outputFps24}
-              recycleMask={recycleMask}
-              onOutputFps24Change={setOutputFps24}
-              onRecycleMaskChange={setRecycleMask}
-              hint="Default: segment at ~12 fps keyframes, recycle alpha between frames, output at source fps (preserves duration). Best for illustrated characters."
+              processEveryFrame={processEveryFrame}
+              onProcessEveryFrameChange={setProcessEveryFrame}
+              hint="Default: run segmentation on 12 sampled frames per second. Skipped source frames are not processed; output preserves the source rate and duration."
             />
           )}
 

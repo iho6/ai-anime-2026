@@ -10,11 +10,19 @@ import pytest
 from PIL import Image
 
 from services.logic import (
+    _decoded_rgba_frame_holds,
     _keyframed_rgba_sequence,
     probe_video_fps_and_frame_count,
+    remove_video_background_anime_seg,
     remove_video_background_rmbg,
 )
-from services.utils import av_output_framerate, av_stream_time_base, video_subsample_stride
+from services.utils import (
+    VideoFrameSampler,
+    av_output_framerate,
+    av_stream_time_base,
+    video_sample_indices,
+)
+from ui.api.timeline_router import _process_every_frame_from_message
 
 
 def test_keyframed_rgba_sequence_preserves_frame_count() -> None:
@@ -38,7 +46,9 @@ def test_keyframed_rgba_sequence_preserves_frame_count() -> None:
     )
     assert len(out) == n
     assert calls == [0, 2, 4, 6, 8]
-    assert out[1][0, 0, 0] == 20
+    # A skipped source slot holds the complete processed frame, not current RGB
+    # combined with stale alpha.
+    assert out[1][0, 0, 0] == 0
     assert out[1][0, 0, 3] == 100
 
 
@@ -59,6 +69,73 @@ def test_keyframed_rgba_sequence_every_frame() -> None:
     )
     assert len(out) == n
     assert calls == list(range(n))
+
+
+@pytest.mark.parametrize(
+    ("source_fps", "frame_count", "expected"),
+    [
+        (10.0, 10, list(range(10))),
+        (12.0, 12, list(range(12))),
+        (24.0, 24, list(range(0, 24, 2))),
+        (30.0, 30, [0, 3, 5, 8, 10, 13, 15, 18, 20, 23, 25, 28]),
+    ],
+)
+def test_video_sample_indices_are_time_based(
+    source_fps: float, frame_count: int, expected: list[int]
+) -> None:
+    assert video_sample_indices(frame_count, source_fps) == expected
+
+
+def test_video_sampler_prefers_valid_pts() -> None:
+    sampler = VideoFrameSampler(30.0)
+    # Deliberately irregular timestamps: selection follows media time, not index.
+    times = [0.0, 0.02, 0.09, 0.10, 0.17]
+    selected = [
+        i
+        for i, pts_time in enumerate(times)
+        if sampler.should_sample(i, pts=int(pts_time * 1000), time_base=1 / 1000)
+    ]
+    assert selected == [0, 2, 4]
+
+
+def test_process_every_frame_api_option_and_legacy_fallback() -> None:
+    assert _process_every_frame_from_message({"processEveryFrame": True})
+    assert not _process_every_frame_from_message(
+        {"processEveryFrame": False, "outputFps24": True, "recycleMask": True}
+    )
+    assert _process_every_frame_from_message({"outputFps24": True})
+    assert not _process_every_frame_from_message({"recycleMask": True})
+
+
+def test_streaming_holds_full_rgba_and_skips_rgb_conversion() -> None:
+    class FakeFrame:
+        def __init__(self, index: int) -> None:
+            self.index = index
+            self.pts = index
+            self.time_base = 1 / 24
+            self.converted = False
+
+        def to_ndarray(self, *, format: str) -> np.ndarray:
+            assert format == "rgb24"
+            self.converted = True
+            return np.full((2, 2, 3), self.index * 10, dtype=np.uint8)
+
+    frames = [FakeFrame(i) for i in range(5)]
+
+    def process(rgb: np.ndarray, i: int) -> np.ndarray:
+        return np.dstack([rgb, np.full((2, 2), 100 + i, dtype=np.uint8)])
+
+    out = list(
+        _decoded_rgba_frame_holds(
+            frames,
+            source_fps=24.0,
+            process_every_frame=False,
+            process_frame=process,
+        )
+    )
+    assert [f.converted for f in frames] == [True, False, True, False, True]
+    assert out[1][0, 0].tolist() == out[0][0, 0].tolist()
+    assert out[3][0, 0].tolist() == out[2][0, 0].tolist()
 
 
 def _write_test_mp4(path: Path, *, n_frames: int, fps: float) -> None:
@@ -92,7 +169,9 @@ def _fake_rmbg(src_path: str, **kwargs: object) -> str:
     return str(out)
 
 
-@pytest.mark.parametrize("source_fps,n_frames", [(24.0, 24), (12.0, 12)])
+@pytest.mark.parametrize(
+    "source_fps,n_frames", [(30.0, 30), (24.0, 24), (12.0, 12)]
+)
 def test_remove_video_background_rmbg_default_preserves_duration(
     tmp_path: Path, source_fps: float, n_frames: int
 ) -> None:
@@ -108,8 +187,7 @@ def test_remove_video_background_rmbg_default_preserves_duration(
     ) as mock_rmbg:
         meta = remove_video_background_rmbg(src, out)
 
-    stride = video_subsample_stride(source_fps, 12.0)
-    expected_rmbg = sum(1 for i in range(n_frames) if i % stride == 0)
+    expected_rmbg = len(video_sample_indices(n_frames, source_fps))
     assert mock_rmbg.call_count == expected_rmbg
 
     assert meta["frames"] == n_frames
@@ -119,3 +197,31 @@ def test_remove_video_background_rmbg_default_preserves_duration(
     out_fps, out_count = probe_video_fps_and_frame_count(out)
     assert out_count == n_frames
     assert out_fps == pytest.approx(source_fps, rel=0.05)
+    alpha = out.with_name(f"{out.stem}.alpha.mkv")
+    alpha_fps, alpha_count = probe_video_fps_and_frame_count(alpha)
+    assert alpha_count == out_count
+    assert alpha_fps == pytest.approx(out_fps, rel=0.05)
+
+
+def test_remove_video_background_anime_seg_uses_same_full_frame_holds(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("av")
+    src = tmp_path / "anime_in.mp4"
+    out = tmp_path / "anime_out.webm"
+    _write_test_mp4(src, n_frames=10, fps=30.0)
+
+    with patch(
+        "services.logic.remove_anime_seg_to_temp_file",
+        side_effect=_fake_rmbg,
+    ) as mock_seg:
+        meta = remove_video_background_anime_seg(src, out)
+
+    assert mock_seg.call_count == len(video_sample_indices(10, 30.0))
+    assert meta["frames"] == 10
+    out_fps, out_count = probe_video_fps_and_frame_count(out)
+    assert out_count == 10
+    assert out_fps == pytest.approx(30.0, rel=0.05)
+    alpha = out.with_name(f"{out.stem}.alpha.mkv")
+    _alpha_fps, alpha_count = probe_video_fps_and_frame_count(alpha)
+    assert alpha_count == out_count

@@ -9,8 +9,8 @@ import {
 
 export type RemoveBgRmbgFlyoutRunOptions = {
   rmbg: RmbgBgOptions;
-  /** Video only: true = every source frame; false = ~12 fps keyframe recycle. */
-  everyFrame?: boolean;
+  /** Video only: true = process every source frame; false = sample processing at 12 FPS. */
+  processEveryFrame?: boolean;
 };
 
 export function RemoveBgRmbgFlyout(props: {
@@ -21,8 +21,7 @@ export function RemoveBgRmbgFlyout(props: {
   const { mediaKind, busy = false, onRun } = props;
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [rmbg, setRmbg] = useState<RmbgBgOptions>(() => ({ ...DEFAULT_RMBG_OPTIONS }));
-  /** false = 12 fps keyframe path (default); true = process every frame. */
-  const [everyFrame, setEveryFrame] = useState(false);
+  const [processEveryFrame, setProcessEveryFrame] = useState(false);
 
   return (
     <div
@@ -49,13 +48,13 @@ export function RemoveBgRmbgFlyout(props: {
             <input
               type="radio"
               name="rmbg-fps"
-              checked={!everyFrame}
+              checked={!processEveryFrame}
               disabled={busy}
-              onChange={() => setEveryFrame(false)}
+              onChange={() => setProcessEveryFrame(false)}
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
             />
-            12 fps
+            12 FPS (sampled frames only)
           </label>
           <label
             style={{
@@ -70,13 +69,13 @@ export function RemoveBgRmbgFlyout(props: {
             <input
               type="radio"
               name="rmbg-fps"
-              checked={everyFrame}
+              checked={processEveryFrame}
               disabled={busy}
-              onChange={() => setEveryFrame(true)}
+              onChange={() => setProcessEveryFrame(true)}
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
             />
-            Every frame
+            Every source frame
           </label>
         </div>
       ) : null}
@@ -145,7 +144,7 @@ export function RemoveBgRmbgFlyout(props: {
           e.stopPropagation();
           onRun({
             rmbg,
-            ...(mediaKind === "video" ? { everyFrame } : {}),
+            ...(mediaKind === "video" ? { processEveryFrame } : {}),
           });
         }}
         onMouseDown={(e) => e.stopPropagation()}

@@ -243,7 +243,7 @@ def paste_patch_on_canvas(
 
         alpha = alpha.filter(ImageFilter.GaussianBlur(radius=max(1, feather_px // 2)))
         patch_rgba.putalpha(alpha)
-    canvas.paste(patch_rgba, (x, y), patch_rgba)
+    canvas.alpha_composite(patch_rgba, dest=(x, y))
     return canvas
 
 
@@ -310,7 +310,10 @@ def composite_rgba_on_transparent_canvas(
     patch_rgba = rgba_crop.convert("RGBA")
     if patch_rgba.size != (w, h):
         patch_rgba = patch_rgba.resize((w, h), Image.Resampling.LANCZOS)
-    canvas.paste(patch_rgba, (x, y), patch_rgba)
+    # ``paste(..., mask=patch)`` multiplies the source alpha into the output
+    # alpha a second time on a transparent destination. Straight-alpha
+    # compositing preserves the matte (e.g. alpha 128 remains alpha 128).
+    canvas.alpha_composite(patch_rgba, dest=(x, y))
     return canvas
 
 

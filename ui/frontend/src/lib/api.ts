@@ -1310,7 +1310,10 @@ export function runTimelineVideoRemoveBgWsJob(params: {
 export function runTimelineVideoRemoveBgRmbgWsJob(params: {
   timelineKey: string;
   videoRelPath: string;
+  processEveryFrame?: boolean;
+  /** Legacy alias retained for older callers. */
   outputFps24?: boolean;
+  /** Legacy no-op retained for older callers. */
   recycleMask?: boolean;
   rmbg?: RmbgBgOptions;
   onLogLine: (line: string) => void;
@@ -1327,7 +1330,10 @@ export function runTimelineVideoRemoveBgRmbgWsJob(params: {
 export function runTimelineVideoRemoveBgAnimeSegWsJob(params: {
   timelineKey: string;
   videoRelPath: string;
+  processEveryFrame?: boolean;
+  /** Legacy alias retained for older callers. */
   outputFps24?: boolean;
+  /** Legacy no-op retained for older callers. */
   recycleMask?: boolean;
   animeSeg?: AnimeSegBgOptions;
   onLogLine: (line: string) => void;

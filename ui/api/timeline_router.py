@@ -95,6 +95,15 @@ def _timeline_video_clip_result(out_abs: str, **fields: Any) -> dict[str, Any]:
     return result
 
 
+def _process_every_frame_from_message(msg: dict[str, Any]) -> bool:
+    """Read the explicit option, falling back to legacy backend aliases."""
+    if "processEveryFrame" in msg:
+        return bool(msg.get("processEveryFrame"))
+    if "process_every_frame" in msg:
+        return bool(msg.get("process_every_frame"))
+    return bool(msg.get("outputFps24") or msg.get("output_fps_24"))
+
+
 def _timeline_dir(timeline_key: str) -> Path:
     return (TIMELINES_STORAGE_ROOT / sanitize_for_folder(timeline_key)).resolve()
 
@@ -667,10 +676,7 @@ async def timeline_remove_video_bg_rmbg_ws(ws: WebSocket, timeline_key: str) -> 
             raise ValueError("videoRelPath is required.")
         from .storage_paths import resolve_storage_rel_file
         abs_src = str(resolve_storage_rel_file(rel))
-        output_fps_24 = bool(msg.get("outputFps24") or msg.get("output_fps_24"))
-        recycle_mask = bool(msg.get("recycleMask") or msg.get("recycle_mask"))
-        if recycle_mask and not output_fps_24:
-            recycle_mask = False
+        process_every_frame = _process_every_frame_from_message(msg)
         raw_rmbg = msg.get("rmbg")
         rmbg_overrides = raw_rmbg if isinstance(raw_rmbg, dict) else None
 
@@ -681,8 +687,7 @@ async def timeline_remove_video_bg_rmbg_ws(ws: WebSocket, timeline_key: str) -> 
             result = logic.remove_video_background_rmbg(
                 abs_src,
                 out_path,
-                output_fps_24=output_fps_24,
-                recycle_mask=recycle_mask,
+                process_every_frame=process_every_frame,
                 rmbg_overrides=rmbg_overrides,
                 log_cb=log_cb,
             )
@@ -726,10 +731,7 @@ async def timeline_remove_video_bg_anime_seg_ws(ws: WebSocket, timeline_key: str
         from .storage_paths import resolve_storage_rel_file
 
         abs_src = str(resolve_storage_rel_file(rel))
-        output_fps_24 = bool(msg.get("outputFps24") or msg.get("output_fps_24"))
-        recycle_mask = bool(msg.get("recycleMask") or msg.get("recycle_mask"))
-        if recycle_mask and not output_fps_24:
-            recycle_mask = False
+        process_every_frame = _process_every_frame_from_message(msg)
         raw_anime = msg.get("animeSeg") or msg.get("anime_seg")
         anime_seg_options = raw_anime if isinstance(raw_anime, dict) else None
 
@@ -740,8 +742,7 @@ async def timeline_remove_video_bg_anime_seg_ws(ws: WebSocket, timeline_key: str
             result = logic.remove_video_background_anime_seg(
                 abs_src,
                 out_path,
-                output_fps_24=output_fps_24,
-                recycle_mask=recycle_mask,
+                process_every_frame=process_every_frame,
                 anime_seg_options=anime_seg_options,
                 log_cb=log_cb,
             )

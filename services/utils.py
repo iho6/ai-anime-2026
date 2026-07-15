@@ -1161,8 +1161,10 @@ def av_stream_time_base(rate: Any) -> Any:
     """
     from fractions import Fraction
 
-    fps = float(av_output_framerate(rate))
-    return Fraction(1, max(1, int(round(fps))))
+    fps = av_output_framerate(rate)
+    if fps <= 0:
+        return Fraction(1, 24)
+    return Fraction(1, 1) / fps
 
 
 def video_stream_fps(video_path: str) -> float:
@@ -1178,10 +1180,98 @@ def video_stream_fps(video_path: str) -> float:
 
 
 def video_subsample_stride(source_fps: float, target_fps: float = 12.0) -> int:
-    """Frame stride to approximate *target_fps* from *source_fps*."""
+    """Legacy integer frame stride.
+
+    New video processing should use :class:`VideoFrameSampler`; a fixed stride
+    cannot represent fractional ratios such as 30 -> 12 fps accurately.
+    """
     if source_fps <= 0 or target_fps <= 0:
         return 1
     return max(1, int(round(source_fps / target_fps)))
+
+
+class VideoFrameSampler:
+    """Select frames at a real-time cadence, preferring decoded frame PTS.
+
+    Frame zero is always selected. Sources at or below the target rate select
+    every frame. When timestamps are absent or invalid, ``index / source_fps``
+    provides a fractional-CFR fallback (so 30 -> 12 fps is not rounded to a
+    fixed every-two/every-three-frame stride).
+    """
+
+    def __init__(self, source_fps: float, target_fps: float = 12.0) -> None:
+        self.source_fps = float(source_fps)
+        self.target_fps = float(target_fps)
+        self._interval = 1.0 / self.target_fps if self.target_fps > 0 else 0.0
+        self._next_sample_time = self._interval
+        self._pts_origin: float | None = None
+        self._last_pts_time: float | None = None
+
+    def should_sample(
+        self,
+        frame_index: int,
+        *,
+        pts: Any = None,
+        time_base: Any = None,
+    ) -> bool:
+        import math
+
+        index = max(0, int(frame_index))
+        pts_time: float | None = None
+        try:
+            if pts is not None and time_base is not None:
+                candidate = float(pts * time_base)
+                if math.isfinite(candidate) and candidate >= 0:
+                    pts_time = candidate
+                    if index == 0:
+                        self._pts_origin = candidate
+                        self._last_pts_time = candidate
+        except (TypeError, ValueError, OverflowError, ZeroDivisionError):
+            pts_time = None
+
+        if (
+            index == 0
+            or self.target_fps <= 0
+            or self.source_fps <= 0
+            or self.source_fps <= self.target_fps
+        ):
+            return True
+
+        elapsed: float | None = None
+        if pts_time is not None and (
+            self._last_pts_time is None or pts_time > self._last_pts_time
+        ):
+            if self._pts_origin is None:
+                # Preserve the expected elapsed time when the first usable
+                # timestamp occurs after frame zero.
+                self._pts_origin = pts_time - (index / self.source_fps)
+            elapsed = max(0.0, pts_time - self._pts_origin)
+            self._last_pts_time = pts_time
+
+        if elapsed is None:
+            elapsed = index / self.source_fps
+
+        # Small tolerance prevents rational timestamp conversion noise from
+        # moving a frame that lies exactly on a sampling boundary.
+        if elapsed + 1e-9 < self._next_sample_time:
+            return False
+        while self._next_sample_time <= elapsed + 1e-9:
+            self._next_sample_time += self._interval
+        return True
+
+
+def video_sample_indices(
+    frame_count: int,
+    source_fps: float,
+    target_fps: float = 12.0,
+) -> list[int]:
+    """Return fractional-CFR sample indices (primarily useful for tests/tools)."""
+    sampler = VideoFrameSampler(source_fps, target_fps)
+    return [
+        i
+        for i in range(max(0, int(frame_count)))
+        if sampler.should_sample(i)
+    ]
 
 
 def extract_video_frames_to_pngs(video_path: str, dest_dir: str) -> list[str]:

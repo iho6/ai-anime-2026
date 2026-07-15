@@ -141,6 +141,37 @@ def test_remove_bg_to_temp_with_hd_source_composites_canvas(tmp_path: Path, monk
         Path(out).unlink(missing_ok=True)
 
 
+def test_remove_bg_full_plate_is_not_placed_twice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plate = tmp_path / "frame.png"
+    Image.new("RGB", (80, 60), (255, 255, 255)).save(plate)
+    placed = {
+        "canvas": {"width": 80, "height": 60},
+        "placement": {"x": 10, "y": 5, "width": 20, "height": 30},
+    }
+    matte = tmp_path / "full_matte.png"
+    full = Image.new("RGBA", (80, 60), (0, 0, 0, 0))
+    full.putpixel((50, 40), (20, 30, 40, 180))
+    full.save(matte)
+
+    monkeypatch.setattr(
+        logic,
+        "resolve_rmbg_input",
+        lambda _rel, _pf=None: (plate, placed, "RMBG source: plate fallback"),
+    )
+    monkeypatch.setattr(
+        logic, "remove_bg_to_temp_file", lambda *_a, **_k: str(matte)
+    )
+
+    out = logic.remove_bg_to_temp_with_hd_source("frame.png")
+    assert out == str(matte)
+    with Image.open(out) as im:
+        assert im.size == (80, 60)
+        assert im.getpixel((50, 40))[3] == 180
+        assert im.getpixel((15, 15))[3] == 0
+
+
 def test_composite_rgba_on_transparent_canvas() -> None:
     matte = Image.new("RGBA", (20, 20), (255, 0, 0, 255))
     out = composite_rgba_on_transparent_canvas(
@@ -152,3 +183,14 @@ def test_composite_rgba_on_transparent_canvas() -> None:
     assert out.size == (60, 40)
     assert out.getpixel((0, 0))[3] == 0
     assert out.getpixel((10, 10))[0] == 255
+
+
+def test_composite_rgba_preserves_partial_alpha_edge() -> None:
+    matte = Image.new("RGBA", (2, 2), (255, 0, 0, 128))
+    out = composite_rgba_on_transparent_canvas(
+        matte,
+        4,
+        4,
+        {"x": 1, "y": 1, "width": 2, "height": 2},
+    )
+    assert out.getpixel((1, 1)) == (255, 0, 0, 128)

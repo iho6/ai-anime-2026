@@ -307,6 +307,11 @@ export default function TimelineEditorPage() {
     clipId: string;
     srcRelPath: string;
     start: number;
+    inPoint: number;
+    outPoint: number;
+    speed: number;
+    reversed?: boolean;
+    srcDuration?: number;
     naturalW?: number;
     naturalH?: number;
     duration?: number;
@@ -1521,10 +1526,24 @@ export default function TimelineEditorPage() {
   function insertVideoBgClip(
     r: { srcRelPath: string; alphaRelPath?: string; width: number; height: number; durationSec?: number },
     start: number,
-    fallback: { naturalW?: number; naturalH?: number; duration?: number; source?: TimelineClip["source"] },
+    fallback: {
+      inPoint?: number;
+      outPoint?: number;
+      speed?: number;
+      reversed?: boolean;
+      srcDuration?: number;
+      naturalW?: number;
+      naturalH?: number;
+      duration?: number;
+      source?: TimelineClip["source"];
+    },
     label: string
   ) {
-    const dur = r.durationSec || fallback.duration || 5;
+    const sourceDur = r.durationSec || fallback.srcDuration || fallback.duration || 5;
+    const inPoint = fallback.inPoint ?? 0;
+    const outPoint = fallback.outPoint ?? sourceDur;
+    const speed = fallback.speed ?? 1;
+    const dur = fallback.duration ?? Math.max(0.05, (outPoint - inPoint) / speed);
     insertClipOnNewTrack(
       {
         id: genId("clip"),
@@ -1532,11 +1551,12 @@ export default function TimelineEditorPage() {
         srcRelPath: r.srcRelPath,
         ...(r.alphaRelPath ? { alphaRelPath: r.alphaRelPath } : {}),
         start: 0,
-        inPoint: 0,
-        outPoint: dur,
-        speed: 1,
+        inPoint,
+        outPoint,
+        speed,
+        ...(fallback.reversed ? { reversed: true } : {}),
         duration: dur,
-        srcDuration: dur,
+        srcDuration: sourceDur,
         naturalW: r.width || fallback.naturalW,
         naturalH: r.height || fallback.naturalH,
         source: fallback.source,
@@ -1576,8 +1596,7 @@ export default function TimelineEditorPage() {
   }
 
   async function runRemoveBgRmbg(options: {
-    outputFps24: boolean;
-    recycleMask: boolean;
+    processEveryFrame: boolean;
     rmbg: RmbgBgOptions;
   }) {
     const tgt = removeBgVideoTargetRef.current;
@@ -1591,8 +1610,7 @@ export default function TimelineEditorPage() {
       const done = await runTimelineVideoRemoveBgRmbgWsJob({
         timelineKey,
         videoRelPath: tgt.srcRelPath,
-        outputFps24: options.outputFps24,
-        recycleMask: options.recycleMask,
+        processEveryFrame: options.processEveryFrame,
         rmbg: options.rmbg,
         onLogLine: (line) => pushLog(line),
       });
@@ -1607,8 +1625,7 @@ export default function TimelineEditorPage() {
   }
 
   async function runRemoveBgAnimeSeg(options: {
-    outputFps24: boolean;
-    recycleMask: boolean;
+    processEveryFrame: boolean;
     animeSeg: AnimeSegBgOptions;
   }) {
     const tgt = removeBgVideoTargetRef.current;
@@ -1622,8 +1639,7 @@ export default function TimelineEditorPage() {
       const done = await runTimelineVideoRemoveBgAnimeSegWsJob({
         timelineKey,
         videoRelPath: tgt.srcRelPath,
-        outputFps24: options.outputFps24,
-        recycleMask: options.recycleMask,
+        processEveryFrame: options.processEveryFrame,
         animeSeg: options.animeSeg,
         onLogLine: (line) => pushLog(line),
       });
@@ -3166,6 +3182,11 @@ export default function TimelineEditorPage() {
                 clipId: c.id,
                 srcRelPath: c.srcRelPath,
                 start: c.start,
+                inPoint: c.inPoint,
+                outPoint: c.outPoint,
+                speed: c.speed,
+                reversed: c.reversed,
+                srcDuration: c.srcDuration,
                 naturalW: c.naturalW,
                 naturalH: c.naturalH,
                 duration: c.duration,
@@ -3173,8 +3194,7 @@ export default function TimelineEditorPage() {
               };
               setClipMenu((s) => ({ ...s, open: false }));
               void runRemoveBgRmbg({
-                outputFps24: Boolean(opts.everyFrame),
-                recycleMask: false,
+                processEveryFrame: Boolean(opts.processEveryFrame),
                 rmbg: opts.rmbg,
               });
             }}

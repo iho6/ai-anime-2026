@@ -8791,7 +8791,7 @@ def _process_mask_alpha_array(
 
 
 def encode_rgba_frames_to_webm(
-    rgba_frames: list[Any],
+    rgba_frames: Any,
     *,
     fps: float,
     width: int,
@@ -8799,8 +8799,9 @@ def encode_rgba_frames_to_webm(
     output_path: str | Path,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
-    """Encode RGBA uint8 frames (H×W×4) to WebM VP9+alpha."""
+    """Encode an iterable of RGBA uint8 frames (H×W×4) to WebM VP9+alpha."""
     import av
+    import itertools
     import numpy as np
 
     from services.utils import av_output_framerate, av_stream_time_base
@@ -8810,8 +8811,17 @@ def encode_rgba_frames_to_webm(
         if log_cb:
             log_cb(msg)
 
-    if not rgba_frames:
-        raise ValueError("rgba_frames is empty.")
+    total_frames: int | None
+    try:
+        total_frames = len(rgba_frames)
+    except (TypeError, AttributeError):
+        total_frames = None
+    frame_iter = iter(rgba_frames)
+    try:
+        first_frame = next(frame_iter)
+    except StopIteration:
+        raise ValueError("rgba_frames is empty.") from None
+    frame_iter = itertools.chain((first_frame,), frame_iter)
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out_rate = av_output_framerate(fps)
@@ -8844,7 +8854,7 @@ def encode_rgba_frames_to_webm(
 
     frame_idx = 0
     with out_container, alpha_container:
-        for rgba in rgba_frames:
+        for rgba in frame_iter:
             arr = np.asarray(rgba, dtype=np.uint8)
             if arr.shape[0] != height or arr.shape[1] != width:
                 from PIL import Image
@@ -8866,7 +8876,8 @@ def encode_rgba_frames_to_webm(
                 alpha_container.mux(pkt)
             frame_idx += 1
             if frame_idx % 12 == 0:
-                _log(f"  Encoded frame {frame_idx}/{len(rgba_frames)}")
+                suffix = f"/{total_frames}" if total_frames is not None else ""
+                _log(f"  Encoded frame {frame_idx}{suffix}")
         for pkt in out_stream.encode():
             out_container.mux(pkt)
         for pkt in alpha_stream.encode():
@@ -8903,25 +8914,51 @@ def _keyframed_rgba_sequence(
     Build a full-length RGBA sequence from decoded RGB frames.
 
     When ``process_every_frame`` is False, *process_frame* runs every ``stride``
-    indices and the last keyframe alpha is recycled on skipped frames (current RGB).
+    indices and its complete RGBA result is held for skipped output slots.
     """
-    import numpy as np
-
     rgba_out: list[Any] = []
-    last_alpha: Any | None = None
+    last_rgba: Any | None = None
     for i, rgb in enumerate(all_rgb):
         need = process_every_frame or (i % stride == 0)
         if need:
-            rgba = process_frame(rgb, i)
-            last_alpha = rgba[:, :, 3]
+            last_rgba = process_frame(rgb, i)
         else:
-            if last_alpha is None:
+            if last_rgba is None:
                 raise RuntimeError(
                     "Keyframe processing requires at least one processed frame."
                 )
-            rgba = np.dstack([rgb, last_alpha])
-        rgba_out.append(rgba)
+        rgba_out.append(last_rgba)
     return rgba_out
+
+
+def _decoded_rgba_frame_holds(
+    decoded_frames: Any,
+    *,
+    source_fps: float,
+    process_every_frame: bool,
+    process_frame: Callable[[Any, int], Any],
+) -> Any:
+    """Yield one output RGBA slot per decoded frame without retaining source RGB.
+
+    Unsampled frames are neither converted to RGB nor retained. Their slots hold
+    the complete most recently processed RGBA frame.
+    """
+    from services.utils import VideoFrameSampler
+
+    sampler = VideoFrameSampler(source_fps, 12.0)
+    last_rgba: Any | None = None
+    for i, av_frame in enumerate(decoded_frames):
+        need = process_every_frame or sampler.should_sample(
+            i,
+            pts=getattr(av_frame, "pts", None),
+            time_base=getattr(av_frame, "time_base", None),
+        )
+        if need:
+            rgb = av_frame.to_ndarray(format="rgb24")
+            last_rgba = process_frame(rgb, i)
+        if last_rgba is None:
+            raise RuntimeError("Frame sampling must process frame zero.")
+        yield last_rgba
 
 
 def remove_video_background_rmbg(
@@ -8930,24 +8967,26 @@ def remove_video_background_rmbg(
     *,
     output_fps_24: bool = False,
     recycle_mask: bool = False,
+    process_every_frame: bool | None = None,
     rmbg_overrides: dict[str, Any] | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """
     Per-frame RMBG video background removal.
 
-    Default (``output_fps_24=False``): decode all frames, RMBG at ~12 fps
-    keyframes, recycle alpha between, output WebM at source fps (preserves duration).
+    By default RMBG runs at a true time-based 12 fps and each processed RGBA
+    result is held until the next sample while output remains at source rate.
+    ``process_every_frame=True`` processes every decoded frame.
 
-    ``output_fps_24=True``: output at source fps; RMBG every frame unless
-    ``recycle_mask=True`` (same keyframe + recycle-alpha behaviour as default).
+    ``output_fps_24`` is retained as a legacy alias for ``process_every_frame``.
+    ``recycle_mask`` is accepted for call compatibility but has no active effect.
     """
     import av
     import numpy as np
     import shutil
     from PIL import Image
 
-    from services.utils import video_stream_fps, video_subsample_stride
+    from services.utils import video_stream_fps
 
     def _log(msg: str) -> None:
         logger.info(msg)
@@ -8960,7 +8999,9 @@ def remove_video_background_rmbg(
         raise ValueError(f"Video not found: {src}")
 
     source_fps = video_stream_fps(str(src))
-    stride = video_subsample_stride(source_fps, 12.0)
+    if process_every_frame is None:
+        process_every_frame = bool(output_fps_24)
+    _ = recycle_mask
     tmp_dir = Path(tempfile.gettempdir()) / f"rmbg_vid_{unique_suffix()}"
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -8975,27 +9016,10 @@ def remove_video_background_rmbg(
             return np.asarray(im.convert("RGBA"), dtype=np.uint8)
 
     try:
-        in_container = av.open(str(src))
-        in_stream = in_container.streams.video[0]
-        src_w = int(in_stream.width)
-        src_h = int(in_stream.height)
-
-        all_rgb: list[Any] = []
-        for packet in in_container.demux(in_stream):
-            for av_frame in packet.decode():
-                all_rgb.append(av_frame.to_ndarray(format="rgb24"))
-        in_container.close()
-        if not all_rgb:
-            raise RuntimeError("Video decode produced zero frames.")
-
-        process_every_frame = output_fps_24 and not recycle_mask
         if process_every_frame:
             _log(f"RMBG mode: {source_fps:.2f} fps output, every frame")
         else:
-            _log(
-                f"RMBG mode: {source_fps:.2f} fps output, keyframes every "
-                f"{stride} frames (12 fps processing)"
-            )
+            _log(f"RMBG mode: {source_fps:.2f} fps output, 12 fps time sampling")
 
         rmbg_count = 0
 
@@ -9003,27 +9027,27 @@ def remove_video_background_rmbg(
             nonlocal rmbg_count
             fp = tmp_dir / f"in_{i:06d}.png"
             rmbg_count += 1
-            if process_every_frame:
-                _log(f"RMBG frame {rmbg_count}/{len(all_rgb)}…")
-            else:
-                _log(f"RMBG frame {rmbg_count} (source index {i})…")
+            _log(f"RMBG frame {rmbg_count} (source index {i})…")
             return _rmbg_rgba_from_rgb(rgb, fp)
 
-        rgba_out = _keyframed_rgba_sequence(
-            all_rgb,
-            stride=stride,
-            process_every_frame=process_every_frame,
-            process_frame=_process_frame,
-        )
-
-        meta = encode_rgba_frames_to_webm(
-            rgba_out,
-            fps=source_fps,
-            width=src_w,
-            height=src_h,
-            output_path=out,
-            log_cb=log_cb,
-        )
+        with av.open(str(src)) as in_container:
+            in_stream = in_container.streams.video[0]
+            src_w = int(in_stream.width)
+            src_h = int(in_stream.height)
+            rgba_out = _decoded_rgba_frame_holds(
+                in_container.decode(in_stream),
+                source_fps=source_fps,
+                process_every_frame=process_every_frame,
+                process_frame=_process_frame,
+            )
+            meta = encode_rgba_frames_to_webm(
+                rgba_out,
+                fps=source_fps,
+                width=src_w,
+                height=src_h,
+                output_path=out,
+                log_cb=log_cb,
+            )
         meta["url"] = meta["absPath"]
         return meta
     finally:
@@ -9036,21 +9060,22 @@ def remove_video_background_anime_seg(
     *,
     output_fps_24: bool = False,
     recycle_mask: bool = False,
+    process_every_frame: bool | None = None,
     anime_seg_options: dict[str, Any] | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """
     Per-frame anime-segmentation video background removal.
 
-    Same fps modes as :func:`remove_video_background_rmbg` (default preserves duration
-    via keyframed segmentation + recycled alpha at source fps).
+    Same fps modes and compatibility aliases as
+    :func:`remove_video_background_rmbg`.
     """
     import av
     import numpy as np
     import shutil
     from PIL import Image
 
-    from services.utils import video_stream_fps, video_subsample_stride
+    from services.utils import video_stream_fps
 
     def _log(msg: str) -> None:
         logger.info(msg)
@@ -9063,7 +9088,9 @@ def remove_video_background_anime_seg(
         raise ValueError(f"Video not found: {src}")
 
     source_fps = video_stream_fps(str(src))
-    stride = video_subsample_stride(source_fps, 12.0)
+    if process_every_frame is None:
+        process_every_frame = bool(output_fps_24)
+    _ = recycle_mask
     tmp_dir = Path(tempfile.gettempdir()) / f"anime_seg_vid_{unique_suffix()}"
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -9078,27 +9105,10 @@ def remove_video_background_anime_seg(
             return np.asarray(im.convert("RGBA"), dtype=np.uint8)
 
     try:
-        in_container = av.open(str(src))
-        in_stream = in_container.streams.video[0]
-        src_w = int(in_stream.width)
-        src_h = int(in_stream.height)
-
-        all_rgb: list[Any] = []
-        for packet in in_container.demux(in_stream):
-            for av_frame in packet.decode():
-                all_rgb.append(av_frame.to_ndarray(format="rgb24"))
-        in_container.close()
-        if not all_rgb:
-            raise RuntimeError("Video decode produced zero frames.")
-
-        process_every_frame = output_fps_24 and not recycle_mask
         if process_every_frame:
             _log(f"Anime Seg mode: {source_fps:.2f} fps output, every frame")
         else:
-            _log(
-                f"Anime Seg mode: {source_fps:.2f} fps output, keyframes every "
-                f"{stride} frames (12 fps processing)"
-            )
+            _log(f"Anime Seg mode: {source_fps:.2f} fps output, 12 fps time sampling")
 
         seg_count = 0
 
@@ -9106,27 +9116,27 @@ def remove_video_background_anime_seg(
             nonlocal seg_count
             fp = tmp_dir / f"in_{i:06d}.png"
             seg_count += 1
-            if process_every_frame:
-                _log(f"Anime Seg frame {seg_count}/{len(all_rgb)}…")
-            else:
-                _log(f"Anime Seg frame {seg_count} (source index {i})…")
+            _log(f"Anime Seg frame {seg_count} (source index {i})…")
             return _anime_rgba_from_rgb(rgb, fp)
 
-        rgba_out = _keyframed_rgba_sequence(
-            all_rgb,
-            stride=stride,
-            process_every_frame=process_every_frame,
-            process_frame=_process_frame,
-        )
-
-        meta = encode_rgba_frames_to_webm(
-            rgba_out,
-            fps=source_fps,
-            width=src_w,
-            height=src_h,
-            output_path=out,
-            log_cb=log_cb,
-        )
+        with av.open(str(src)) as in_container:
+            in_stream = in_container.streams.video[0]
+            src_w = int(in_stream.width)
+            src_h = int(in_stream.height)
+            rgba_out = _decoded_rgba_frame_holds(
+                in_container.decode(in_stream),
+                source_fps=source_fps,
+                process_every_frame=process_every_frame,
+                process_frame=_process_frame,
+            )
+            meta = encode_rgba_frames_to_webm(
+                rgba_out,
+                fps=source_fps,
+                width=src_w,
+                height=src_h,
+                output_path=out,
+                log_cb=log_cb,
+            )
         meta["url"] = meta["absPath"]
         return meta
     finally:
@@ -11927,7 +11937,7 @@ def resolve_rmbg_input(
     image_rel: str,
     placed_figure: dict[str, Any] | None = None,
 ) -> tuple[Path, dict[str, Any] | None, str]:
-    """Pick HD Qwen sidecar when available; otherwise fall back to the plate image."""
+    """Pick an HD Qwen source and label whether it is a crop or full plate."""
     from PIL import Image
 
     from services.figure_crop import qwen_sidecar_path
@@ -11941,6 +11951,15 @@ def resolve_rmbg_input(
     if pf is None:
         pf = find_placed_figure_for_image_rel(rel_norm)
 
+    def _native_kind(width: int, height: int) -> str:
+        canvas = (pf or {}).get("canvas") if isinstance(pf, dict) else None
+        if isinstance(canvas, dict):
+            c_w = int(canvas.get("width") or 0)
+            c_h = int(canvas.get("height") or 0)
+            if c_w > 0 and c_h > 0:
+                return "full plate" if (width, height) == (c_w, c_h) else "crop"
+        return "native source"
+
     qwen_rel = str((pf or {}).get("qwenOutputRelPath") or "").strip()
     if qwen_rel:
         try:
@@ -11951,7 +11970,8 @@ def resolve_rmbg_input(
                 return (
                     qwen_abs,
                     pf,
-                    f"RMBG source: native Qwen ({w}×{h}) from metadata",
+                    f"RMBG source: native Qwen {_native_kind(w, h)} "
+                    f"({w}×{h}) from metadata",
                 )
         except (ValueError, OSError):
             pass
@@ -11960,14 +11980,18 @@ def resolve_rmbg_input(
     if sidecar.is_file():
         with Image.open(sidecar) as im:
             w, h = im.size
-        return sidecar, pf, f"RMBG source: native Qwen ({w}×{h}) sidecar"
+        return (
+            sidecar,
+            pf,
+            f"RMBG source: native Qwen {_native_kind(w, h)} ({w}×{h}) sidecar",
+        )
 
     with Image.open(plate_abs) as im:
         w, h = im.size
     return (
         plate_abs,
         pf,
-        f"RMBG source: plate fallback ({w}×{h}, no Qwen sidecar)",
+        f"RMBG source: full plate fallback ({w}×{h}, no Qwen sidecar)",
     )
 
 
@@ -11980,7 +12004,7 @@ def remove_bg_to_temp_with_hd_source(
     anime_seg_options: dict[str, Any] | None = None,
     placed_figure: dict[str, Any] | None = None,
 ) -> str:
-    """Run RMBG on native Qwen when available; re-composite matte onto transparent canvas."""
+    """Run RMBG on the best source; recompose only a native Qwen crop."""
     from PIL import Image
 
     from services.figure_crop import composite_rgba_on_transparent_canvas
@@ -12004,9 +12028,27 @@ def remove_bg_to_temp_with_hd_source(
             c_h = int(canvas.get("height") or 0)
             if c_w > 0 and c_h > 0:
                 with Image.open(rgba_tmp) as im:
-                    out_im = composite_rgba_on_transparent_canvas(
-                        im, c_w, c_h, placement
-                    )
+                    matte_size = im.size
+                    label_lower = label.lower()
+                    if "native qwen crop" in label_lower:
+                        is_crop = True
+                    elif "full plate" in label_lower:
+                        is_crop = False
+                    else:
+                        # Compatibility for custom/older resolvers that only
+                        # identified a generic native-Qwen source.
+                        is_crop = (
+                            "native qwen" in label_lower
+                            and matte_size != (c_w, c_h)
+                        )
+                    if not is_crop:
+                        if log_cb:
+                            log_cb(
+                                f"RMBG source is already a full {c_w}×{c_h} plate; "
+                                "skipping placement recomposition."
+                            )
+                        return rgba_tmp
+                    out_im = composite_rgba_on_transparent_canvas(im, c_w, c_h, placement)
                 dest_tmp = Path(tempfile.gettempdir()) / f"rembg_{unique_suffix()}.png"
                 out_im.save(dest_tmp)
                 if log_cb:
