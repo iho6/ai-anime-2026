@@ -1,5 +1,3599 @@
 [
   {
+    "id": "f3dce1b537c7",
+    "referenceRelPath": "references/keypoints/ref_f3dce1b537c7.png",
+    "keypointRelPath": "references/keypoints/kp_f3dce1b537c7.png",
+    "createdAt": 1784086611.192999,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -190,
+        "y": -80,
+        "width": 619,
+        "height": 619
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_f3dce1b537c7_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_f3dce1b537c7_kp_square.png"
+    }
+  },
+  {
+    "id": "09744d9067ef",
+    "referenceRelPath": "references/keypoints/ref_09744d9067ef.png",
+    "keypointRelPath": "references/keypoints/kp_09744d9067ef.png",
+    "createdAt": 1784086603.5413866,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -173,
+        "y": -72,
+        "width": 603,
+        "height": 603
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_09744d9067ef_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_09744d9067ef_kp_square.png"
+    }
+  },
+  {
+    "id": "6ec0242fc433",
+    "referenceRelPath": "references/keypoints/ref_6ec0242fc433.png",
+    "keypointRelPath": "references/keypoints/kp_6ec0242fc433.png",
+    "createdAt": 1784086596.0492241,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -153,
+        "y": -62,
+        "width": 584,
+        "height": 584
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_6ec0242fc433_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_6ec0242fc433_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_6ec0242fc433_square.png",
+      "figurePlateRelPath": "references/placed/pf_6ec0242fc433_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_6ec0242fc433_qwen.png"
+    }
+  },
+  {
+    "id": "73e3dfaef672",
+    "referenceRelPath": "references/keypoints/ref_73e3dfaef672.png",
+    "keypointRelPath": "references/keypoints/kp_73e3dfaef672.png",
+    "createdAt": 1784086588.263918,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -137,
+        "y": -54,
+        "width": 569,
+        "height": 569
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_73e3dfaef672_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_73e3dfaef672_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_73e3dfaef672_square.png",
+      "figurePlateRelPath": "references/placed/pf_73e3dfaef672_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_73e3dfaef672_qwen.png"
+    }
+  },
+  {
+    "id": "cecc54e017ef",
+    "referenceRelPath": "references/keypoints/ref_cecc54e017ef.png",
+    "keypointRelPath": "references/keypoints/kp_cecc54e017ef.png",
+    "createdAt": 1784086580.4647925,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -123,
+        "y": -48,
+        "width": 561,
+        "height": 561
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_cecc54e017ef_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_cecc54e017ef_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_cecc54e017ef_square.png",
+      "figurePlateRelPath": "references/placed/pf_cecc54e017ef_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_cecc54e017ef_qwen.png"
+    }
+  },
+  {
+    "id": "593cd5f0908b",
+    "referenceRelPath": "references/keypoints/ref_593cd5f0908b.png",
+    "keypointRelPath": "references/keypoints/kp_593cd5f0908b.png",
+    "createdAt": 1784086572.7345648,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -114,
+        "y": -48,
+        "width": 561,
+        "height": 561
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_593cd5f0908b_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_593cd5f0908b_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_593cd5f0908b_square.png",
+      "figurePlateRelPath": "references/placed/pf_593cd5f0908b_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_593cd5f0908b_qwen.png"
+    }
+  },
+  {
+    "id": "699a41cff4ce",
+    "referenceRelPath": "references/keypoints/ref_699a41cff4ce.png",
+    "keypointRelPath": "references/keypoints/kp_699a41cff4ce.png",
+    "createdAt": 1784086565.2344534,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -104,
+        "y": -47,
+        "width": 561,
+        "height": 561
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_699a41cff4ce_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_699a41cff4ce_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_699a41cff4ce_square.png",
+      "figurePlateRelPath": "references/placed/pf_699a41cff4ce_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_699a41cff4ce_qwen.png"
+    }
+  },
+  {
+    "id": "3e07f44e7b5a",
+    "referenceRelPath": "references/keypoints/ref_3e07f44e7b5a.png",
+    "keypointRelPath": "references/keypoints/kp_3e07f44e7b5a.png",
+    "createdAt": 1784086557.5869071,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -94,
+        "y": -45,
+        "width": 559,
+        "height": 559
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_3e07f44e7b5a_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_3e07f44e7b5a_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_3e07f44e7b5a_square.png",
+      "figurePlateRelPath": "references/placed/pf_3e07f44e7b5a_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_3e07f44e7b5a_qwen.png"
+    }
+  },
+  {
+    "id": "98db983593fc",
+    "referenceRelPath": "references/keypoints/ref_98db983593fc.png",
+    "keypointRelPath": "references/keypoints/kp_98db983593fc.png",
+    "createdAt": 1784086549.7487977,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -84,
+        "y": -44,
+        "width": 557,
+        "height": 557
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_98db983593fc_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_98db983593fc_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_98db983593fc_square.png",
+      "figurePlateRelPath": "references/placed/pf_98db983593fc_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_98db983593fc_qwen.png"
+    }
+  },
+  {
+    "id": "4c4b66c3ae5c",
+    "referenceRelPath": "references/keypoints/ref_4c4b66c3ae5c.png",
+    "keypointRelPath": "references/keypoints/kp_4c4b66c3ae5c.png",
+    "createdAt": 1784086542.3952112,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -74,
+        "y": -44,
+        "width": 557,
+        "height": 557
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_4c4b66c3ae5c_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_4c4b66c3ae5c_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_4c4b66c3ae5c_square.png",
+      "figurePlateRelPath": "references/placed/pf_4c4b66c3ae5c_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_4c4b66c3ae5c_qwen.png"
+    }
+  },
+  {
+    "id": "3007c20fc4e9",
+    "referenceRelPath": "references/keypoints/ref_3007c20fc4e9.png",
+    "keypointRelPath": "references/keypoints/kp_3007c20fc4e9.png",
+    "createdAt": 1784086534.342997,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -65,
+        "y": -45,
+        "width": 558,
+        "height": 558
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_3007c20fc4e9_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_3007c20fc4e9_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_3007c20fc4e9_square.png",
+      "figurePlateRelPath": "references/placed/pf_3007c20fc4e9_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_3007c20fc4e9_qwen.png"
+    }
+  },
+  {
+    "id": "87e41ca377fe",
+    "referenceRelPath": "references/keypoints/ref_87e41ca377fe.png",
+    "keypointRelPath": "references/keypoints/kp_87e41ca377fe.png",
+    "createdAt": 1784086526.6986923,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -58,
+        "y": -48,
+        "width": 562,
+        "height": 562
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_87e41ca377fe_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_87e41ca377fe_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_87e41ca377fe_square.png",
+      "figurePlateRelPath": "references/placed/pf_87e41ca377fe_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_87e41ca377fe_qwen.png"
+    }
+  },
+  {
+    "id": "73324a2cde38",
+    "referenceRelPath": "references/keypoints/ref_73324a2cde38.png",
+    "keypointRelPath": "references/keypoints/kp_73324a2cde38.png",
+    "createdAt": 1784086518.845637,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -50,
+        "y": -50,
+        "width": 564,
+        "height": 564
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_73324a2cde38_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_73324a2cde38_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_73324a2cde38_square.png",
+      "figurePlateRelPath": "references/placed/pf_73324a2cde38_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_73324a2cde38_qwen.png"
+    }
+  },
+  {
+    "id": "af233fab2e3e",
+    "referenceRelPath": "references/keypoints/ref_af233fab2e3e.png",
+    "keypointRelPath": "references/keypoints/kp_af233fab2e3e.png",
+    "createdAt": 1784086511.0309315,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -41,
+        "y": -53,
+        "width": 567,
+        "height": 567
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_af233fab2e3e_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_af233fab2e3e_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_af233fab2e3e_square.png",
+      "figurePlateRelPath": "references/placed/pf_af233fab2e3e_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_af233fab2e3e_qwen.png"
+    }
+  },
+  {
+    "id": "ab02c8cc3c5c",
+    "referenceRelPath": "references/keypoints/ref_ab02c8cc3c5c.png",
+    "keypointRelPath": "references/keypoints/kp_ab02c8cc3c5c.png",
+    "createdAt": 1784086503.2293365,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -33,
+        "y": -56,
+        "width": 569,
+        "height": 569
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_ab02c8cc3c5c_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_ab02c8cc3c5c_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_ab02c8cc3c5c_square.png",
+      "figurePlateRelPath": "references/placed/pf_ab02c8cc3c5c_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_ab02c8cc3c5c_qwen.png"
+    }
+  },
+  {
+    "id": "6d35cae70bea",
+    "referenceRelPath": "references/keypoints/ref_6d35cae70bea.png",
+    "keypointRelPath": "references/keypoints/kp_6d35cae70bea.png",
+    "createdAt": 1784086495.3759322,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -26,
+        "y": -58,
+        "width": 572,
+        "height": 572
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_6d35cae70bea_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_6d35cae70bea_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_6d35cae70bea_square.png",
+      "figurePlateRelPath": "references/placed/pf_6d35cae70bea_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_6d35cae70bea_qwen.png"
+    }
+  },
+  {
+    "id": "15d112c14ecb",
+    "referenceRelPath": "references/keypoints/ref_15d112c14ecb.png",
+    "keypointRelPath": "references/keypoints/kp_15d112c14ecb.png",
+    "createdAt": 1784086487.3726408,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -18,
+        "y": -60,
+        "width": 574,
+        "height": 574
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_15d112c14ecb_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_15d112c14ecb_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_15d112c14ecb_square.png",
+      "figurePlateRelPath": "references/placed/pf_15d112c14ecb_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_15d112c14ecb_qwen.png"
+    }
+  },
+  {
+    "id": "33c172d783b7",
+    "referenceRelPath": "references/keypoints/ref_33c172d783b7.png",
+    "keypointRelPath": "references/keypoints/kp_33c172d783b7.png",
+    "createdAt": 1784086479.3444276,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -9,
+        "y": -61,
+        "width": 575,
+        "height": 575
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_33c172d783b7_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_33c172d783b7_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_33c172d783b7_square.png",
+      "figurePlateRelPath": "references/placed/pf_33c172d783b7_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_33c172d783b7_qwen.png"
+    }
+  },
+  {
+    "id": "6b94a0defe39",
+    "referenceRelPath": "references/keypoints/ref_6b94a0defe39.png",
+    "keypointRelPath": "references/keypoints/kp_6b94a0defe39.png",
+    "createdAt": 1784086471.8808198,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 1,
+        "y": -61,
+        "width": 574,
+        "height": 574
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_6b94a0defe39_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_6b94a0defe39_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_6b94a0defe39_square.png",
+      "figurePlateRelPath": "references/placed/pf_6b94a0defe39_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_6b94a0defe39_qwen.png"
+    }
+  },
+  {
+    "id": "fe47c7411c02",
+    "referenceRelPath": "references/keypoints/ref_fe47c7411c02.png",
+    "keypointRelPath": "references/keypoints/kp_fe47c7411c02.png",
+    "createdAt": 1784086464.190155,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 11,
+        "y": -59,
+        "width": 572,
+        "height": 572
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_fe47c7411c02_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_fe47c7411c02_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_fe47c7411c02_square.png",
+      "figurePlateRelPath": "references/placed/pf_fe47c7411c02_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_fe47c7411c02_qwen.png"
+    }
+  },
+  {
+    "id": "1d02ec2e5572",
+    "referenceRelPath": "references/keypoints/ref_1d02ec2e5572.png",
+    "keypointRelPath": "references/keypoints/kp_1d02ec2e5572.png",
+    "createdAt": 1784086456.2621324,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 23,
+        "y": -56,
+        "width": 569,
+        "height": 569
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_1d02ec2e5572_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_1d02ec2e5572_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_1d02ec2e5572_square.png",
+      "figurePlateRelPath": "references/placed/pf_1d02ec2e5572_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_1d02ec2e5572_qwen.png"
+    }
+  },
+  {
+    "id": "350dd432bd54",
+    "referenceRelPath": "references/keypoints/ref_350dd432bd54.png",
+    "keypointRelPath": "references/keypoints/kp_350dd432bd54.png",
+    "createdAt": 1784086447.9765415,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 34,
+        "y": -53,
+        "width": 566,
+        "height": 566
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_350dd432bd54_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_350dd432bd54_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_350dd432bd54_square.png",
+      "figurePlateRelPath": "references/placed/pf_350dd432bd54_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_350dd432bd54_qwen.png"
+    }
+  },
+  {
+    "id": "7fb8451a5cca",
+    "referenceRelPath": "references/keypoints/ref_7fb8451a5cca.png",
+    "keypointRelPath": "references/keypoints/kp_7fb8451a5cca.png",
+    "createdAt": 1784086440.3665397,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 46,
+        "y": -49,
+        "width": 562,
+        "height": 562
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_7fb8451a5cca_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_7fb8451a5cca_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_7fb8451a5cca_square.png",
+      "figurePlateRelPath": "references/placed/pf_7fb8451a5cca_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_7fb8451a5cca_qwen.png"
+    }
+  },
+  {
+    "id": "68cd36e58a64",
+    "referenceRelPath": "references/keypoints/ref_68cd36e58a64.png",
+    "keypointRelPath": "references/keypoints/kp_68cd36e58a64.png",
+    "createdAt": 1784086432.8729239,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 57,
+        "y": -47,
+        "width": 559,
+        "height": 559
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_68cd36e58a64_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_68cd36e58a64_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_68cd36e58a64_square.png",
+      "figurePlateRelPath": "references/placed/pf_68cd36e58a64_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_68cd36e58a64_qwen.png"
+    }
+  },
+  {
+    "id": "050312777284",
+    "referenceRelPath": "references/keypoints/ref_050312777284.png",
+    "keypointRelPath": "references/keypoints/kp_050312777284.png",
+    "createdAt": 1784086425.0487015,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 69,
+        "y": -44,
+        "width": 556,
+        "height": 556
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_050312777284_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_050312777284_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_050312777284_square.png",
+      "figurePlateRelPath": "references/placed/pf_050312777284_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_050312777284_qwen.png"
+    }
+  },
+  {
+    "id": "e88337d7c6e2",
+    "referenceRelPath": "references/keypoints/ref_e88337d7c6e2.png",
+    "keypointRelPath": "references/keypoints/kp_e88337d7c6e2.png",
+    "createdAt": 1784086416.8789434,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 78,
+        "y": -42,
+        "width": 554,
+        "height": 554
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_e88337d7c6e2_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_e88337d7c6e2_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_e88337d7c6e2_square.png",
+      "figurePlateRelPath": "references/placed/pf_e88337d7c6e2_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_e88337d7c6e2_qwen.png"
+    }
+  },
+  {
+    "id": "56011b500747",
+    "referenceRelPath": "references/keypoints/ref_56011b500747.png",
+    "keypointRelPath": "references/keypoints/kp_56011b500747.png",
+    "createdAt": 1784086409.172285,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 90,
+        "y": -40,
+        "width": 549,
+        "height": 549
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_56011b500747_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_56011b500747_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_56011b500747_square.png",
+      "figurePlateRelPath": "references/placed/pf_56011b500747_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_56011b500747_qwen.png"
+    }
+  },
+  {
+    "id": "8c3b394bbd75",
+    "referenceRelPath": "references/keypoints/ref_8c3b394bbd75.png",
+    "keypointRelPath": "references/keypoints/kp_8c3b394bbd75.png",
+    "createdAt": 1784086401.2147934,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 103,
+        "y": -35,
+        "width": 542,
+        "height": 542
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_8c3b394bbd75_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_8c3b394bbd75_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_8c3b394bbd75_square.png",
+      "figurePlateRelPath": "references/placed/pf_8c3b394bbd75_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_8c3b394bbd75_qwen.png"
+    }
+  },
+  {
+    "id": "894b15366e07",
+    "referenceRelPath": "references/keypoints/ref_894b15366e07.png",
+    "keypointRelPath": "references/keypoints/kp_894b15366e07.png",
+    "createdAt": 1784086393.613698,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 116,
+        "y": -32,
+        "width": 534,
+        "height": 534
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_894b15366e07_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_894b15366e07_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_894b15366e07_square.png",
+      "figurePlateRelPath": "references/placed/pf_894b15366e07_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_894b15366e07_qwen.png"
+    }
+  },
+  {
+    "id": "67f15bd06e4a",
+    "referenceRelPath": "references/keypoints/ref_67f15bd06e4a.png",
+    "keypointRelPath": "references/keypoints/kp_67f15bd06e4a.png",
+    "createdAt": 1784086386.0095506,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 130,
+        "y": -29,
+        "width": 526,
+        "height": 526
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_67f15bd06e4a_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_67f15bd06e4a_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_67f15bd06e4a_square.png",
+      "figurePlateRelPath": "references/placed/pf_67f15bd06e4a_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_67f15bd06e4a_qwen.png"
+    }
+  },
+  {
+    "id": "ac5751f95cac",
+    "referenceRelPath": "references/keypoints/ref_ac5751f95cac.png",
+    "keypointRelPath": "references/keypoints/kp_ac5751f95cac.png",
+    "createdAt": 1784086378.2776597,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 139,
+        "y": -31,
+        "width": 526,
+        "height": 526
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_ac5751f95cac_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_ac5751f95cac_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_ac5751f95cac_square.png",
+      "figurePlateRelPath": "references/placed/pf_ac5751f95cac_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_ac5751f95cac_qwen.png"
+    }
+  },
+  {
+    "id": "d8ab0ce1dfdb",
+    "referenceRelPath": "references/keypoints/ref_d8ab0ce1dfdb.png",
+    "keypointRelPath": "references/keypoints/kp_d8ab0ce1dfdb.png",
+    "createdAt": 1784086370.606646,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 143,
+        "y": -38,
+        "width": 537,
+        "height": 537
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_d8ab0ce1dfdb_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_d8ab0ce1dfdb_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_d8ab0ce1dfdb_square.png",
+      "figurePlateRelPath": "references/placed/pf_d8ab0ce1dfdb_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_d8ab0ce1dfdb_qwen.png"
+    }
+  },
+  {
+    "id": "2e7c7e53e1b3",
+    "referenceRelPath": "references/keypoints/ref_2e7c7e53e1b3.png",
+    "keypointRelPath": "references/keypoints/kp_2e7c7e53e1b3.png",
+    "createdAt": 1784086362.2733862,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 143,
+        "y": -49,
+        "width": 555,
+        "height": 555
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_2e7c7e53e1b3_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_2e7c7e53e1b3_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_2e7c7e53e1b3_square.png",
+      "figurePlateRelPath": "references/placed/pf_2e7c7e53e1b3_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_2e7c7e53e1b3_qwen.png"
+    }
+  },
+  {
+    "id": "cb4493a29c19",
+    "referenceRelPath": "references/keypoints/ref_cb4493a29c19.png",
+    "keypointRelPath": "references/keypoints/kp_cb4493a29c19.png",
+    "createdAt": 1784086354.635995,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 146,
+        "y": -56,
+        "width": 567,
+        "height": 567
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_cb4493a29c19_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_cb4493a29c19_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_cb4493a29c19_square.png",
+      "figurePlateRelPath": "references/placed/pf_cb4493a29c19_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_cb4493a29c19_qwen.png"
+    }
+  },
+  {
+    "id": "cc8debdb1793",
+    "referenceRelPath": "references/keypoints/ref_cc8debdb1793.png",
+    "keypointRelPath": "references/keypoints/kp_cc8debdb1793.png",
+    "createdAt": 1784086346.7659538,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 153,
+        "y": -60,
+        "width": 571,
+        "height": 571
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_cc8debdb1793_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_cc8debdb1793_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_cc8debdb1793_square.png",
+      "figurePlateRelPath": "references/placed/pf_cc8debdb1793_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_cc8debdb1793_qwen.png"
+    }
+  },
+  {
+    "id": "4a56e6ed948a",
+    "referenceRelPath": "references/keypoints/ref_4a56e6ed948a.png",
+    "keypointRelPath": "references/keypoints/kp_4a56e6ed948a.png",
+    "createdAt": 1784086339.171452,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 163,
+        "y": -59,
+        "width": 569,
+        "height": 569
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_4a56e6ed948a_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_4a56e6ed948a_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_4a56e6ed948a_square.png",
+      "figurePlateRelPath": "references/placed/pf_4a56e6ed948a_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_4a56e6ed948a_qwen.png"
+    }
+  },
+  {
+    "id": "0491918296d5",
+    "referenceRelPath": "references/keypoints/ref_0491918296d5.png",
+    "keypointRelPath": "references/keypoints/kp_0491918296d5.png",
+    "createdAt": 1784086331.6308553,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 176,
+        "y": -56,
+        "width": 562,
+        "height": 562
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_0491918296d5_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_0491918296d5_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_0491918296d5_square.png",
+      "figurePlateRelPath": "references/placed/pf_0491918296d5_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_0491918296d5_qwen.png"
+    }
+  },
+  {
+    "id": "cfe14aa6ac6d",
+    "referenceRelPath": "references/keypoints/ref_cfe14aa6ac6d.png",
+    "keypointRelPath": "references/keypoints/kp_cfe14aa6ac6d.png",
+    "createdAt": 1784086323.9847856,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 190,
+        "y": -50,
+        "width": 551,
+        "height": 551
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_cfe14aa6ac6d_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_cfe14aa6ac6d_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_cfe14aa6ac6d_square.png",
+      "figurePlateRelPath": "references/placed/pf_cfe14aa6ac6d_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_cfe14aa6ac6d_qwen.png"
+    }
+  },
+  {
+    "id": "8595ddf5afbc",
+    "referenceRelPath": "references/keypoints/ref_8595ddf5afbc.png",
+    "keypointRelPath": "references/keypoints/kp_8595ddf5afbc.png",
+    "createdAt": 1784086315.7644455,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 206,
+        "y": -42,
+        "width": 537,
+        "height": 537
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_8595ddf5afbc_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_8595ddf5afbc_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_8595ddf5afbc_square.png",
+      "figurePlateRelPath": "references/placed/pf_8595ddf5afbc_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_8595ddf5afbc_qwen.png"
+    }
+  },
+  {
+    "id": "bdfa742aecf4",
+    "referenceRelPath": "references/keypoints/ref_bdfa742aecf4.png",
+    "keypointRelPath": "references/keypoints/kp_bdfa742aecf4.png",
+    "createdAt": 1784086307.9614277,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 221,
+        "y": -35,
+        "width": 525,
+        "height": 525
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_bdfa742aecf4_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_bdfa742aecf4_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_bdfa742aecf4_square.png",
+      "figurePlateRelPath": "references/placed/pf_bdfa742aecf4_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_bdfa742aecf4_qwen.png"
+    }
+  },
+  {
+    "id": "dd21e855ea8c",
+    "referenceRelPath": "references/keypoints/ref_dd21e855ea8c.png",
+    "keypointRelPath": "references/keypoints/kp_dd21e855ea8c.png",
+    "createdAt": 1784086300.507742,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 234,
+        "y": -30,
+        "width": 517,
+        "height": 517
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_dd21e855ea8c_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_dd21e855ea8c_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_dd21e855ea8c_square.png",
+      "figurePlateRelPath": "references/placed/pf_dd21e855ea8c_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_dd21e855ea8c_qwen.png"
+    }
+  },
+  {
+    "id": "7c7f87600bb1",
+    "referenceRelPath": "references/keypoints/ref_7c7f87600bb1.png",
+    "keypointRelPath": "references/keypoints/kp_7c7f87600bb1.png",
+    "createdAt": 1784086292.9828234,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 243,
+        "y": -28,
+        "width": 516,
+        "height": 516
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_7c7f87600bb1_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_7c7f87600bb1_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_7c7f87600bb1_square.png",
+      "figurePlateRelPath": "references/placed/pf_7c7f87600bb1_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_7c7f87600bb1_qwen.png"
+    }
+  },
+  {
+    "id": "a31ffd1c0958",
+    "referenceRelPath": "references/keypoints/ref_a31ffd1c0958.png",
+    "keypointRelPath": "references/keypoints/kp_a31ffd1c0958.png",
+    "createdAt": 1784086284.9997315,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 253,
+        "y": -26,
+        "width": 514,
+        "height": 514
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_a31ffd1c0958_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_a31ffd1c0958_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_a31ffd1c0958_square.png",
+      "figurePlateRelPath": "references/placed/pf_a31ffd1c0958_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_a31ffd1c0958_qwen.png"
+    }
+  },
+  {
+    "id": "82ce58659872",
+    "referenceRelPath": "references/keypoints/ref_82ce58659872.png",
+    "keypointRelPath": "references/keypoints/kp_82ce58659872.png",
+    "createdAt": 1784086277.585402,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 264,
+        "y": -24,
+        "width": 510,
+        "height": 510
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_82ce58659872_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_82ce58659872_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_82ce58659872_square.png",
+      "figurePlateRelPath": "references/placed/pf_82ce58659872_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_82ce58659872_qwen.png"
+    }
+  },
+  {
+    "id": "3c2245c322d2",
+    "referenceRelPath": "references/keypoints/ref_3c2245c322d2.png",
+    "keypointRelPath": "references/keypoints/kp_3c2245c322d2.png",
+    "createdAt": 1784086269.7525046,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 275,
+        "y": -21,
+        "width": 507,
+        "height": 507
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_3c2245c322d2_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_3c2245c322d2_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_3c2245c322d2_square.png",
+      "figurePlateRelPath": "references/placed/pf_3c2245c322d2_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_3c2245c322d2_qwen.png"
+    }
+  },
+  {
+    "id": "d946a0ae01d2",
+    "referenceRelPath": "references/keypoints/ref_d946a0ae01d2.png",
+    "keypointRelPath": "references/keypoints/kp_d946a0ae01d2.png",
+    "createdAt": 1784086262.277382,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 285,
+        "y": -21,
+        "width": 506,
+        "height": 506
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_d946a0ae01d2_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_d946a0ae01d2_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_d946a0ae01d2_square.png",
+      "figurePlateRelPath": "references/placed/pf_d946a0ae01d2_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_d946a0ae01d2_qwen.png"
+    }
+  },
+  {
+    "id": "2e6ce99e0595",
+    "referenceRelPath": "references/keypoints/ref_2e6ce99e0595.png",
+    "keypointRelPath": "references/keypoints/kp_2e6ce99e0595.png",
+    "createdAt": 1784086254.4060044,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 293,
+        "y": -22,
+        "width": 508,
+        "height": 508
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_2e6ce99e0595_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_2e6ce99e0595_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_2e6ce99e0595_square.png",
+      "figurePlateRelPath": "references/placed/pf_2e6ce99e0595_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_2e6ce99e0595_qwen.png"
+    }
+  },
+  {
+    "id": "e52b8c410e13",
+    "referenceRelPath": "references/keypoints/ref_e52b8c410e13.png",
+    "keypointRelPath": "references/keypoints/kp_e52b8c410e13.png",
+    "createdAt": 1784086246.7761323,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 300,
+        "y": -25,
+        "width": 510,
+        "height": 510
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_e52b8c410e13_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_e52b8c410e13_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_e52b8c410e13_square.png",
+      "figurePlateRelPath": "references/placed/pf_e52b8c410e13_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_e52b8c410e13_qwen.png"
+    }
+  },
+  {
+    "id": "29f6f4fdc855",
+    "referenceRelPath": "references/keypoints/ref_29f6f4fdc855.png",
+    "keypointRelPath": "references/keypoints/kp_29f6f4fdc855.png",
+    "createdAt": 1784086238.9522138,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 306,
+        "y": -28,
+        "width": 514,
+        "height": 514
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_29f6f4fdc855_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_29f6f4fdc855_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_29f6f4fdc855_square.png",
+      "figurePlateRelPath": "references/placed/pf_29f6f4fdc855_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_29f6f4fdc855_qwen.png"
+    }
+  },
+  {
+    "id": "0a42aaa39e48",
+    "referenceRelPath": "references/keypoints/ref_0a42aaa39e48.png",
+    "keypointRelPath": "references/keypoints/kp_0a42aaa39e48.png",
+    "createdAt": 1784086231.2426038,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 313,
+        "y": -31,
+        "width": 517,
+        "height": 517
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_0a42aaa39e48_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_0a42aaa39e48_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_0a42aaa39e48_square.png",
+      "figurePlateRelPath": "references/placed/pf_0a42aaa39e48_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_0a42aaa39e48_qwen.png"
+    }
+  },
+  {
+    "id": "bf18fa4f74ef",
+    "referenceRelPath": "references/keypoints/ref_bf18fa4f74ef.png",
+    "keypointRelPath": "references/keypoints/kp_bf18fa4f74ef.png",
+    "createdAt": 1784086223.6991537,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 320,
+        "y": -33,
+        "width": 519,
+        "height": 519
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_bf18fa4f74ef_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_bf18fa4f74ef_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_bf18fa4f74ef_square.png",
+      "figurePlateRelPath": "references/placed/pf_bf18fa4f74ef_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_bf18fa4f74ef_qwen.png"
+    }
+  },
+  {
+    "id": "c6a3f526341c",
+    "referenceRelPath": "references/keypoints/ref_c6a3f526341c.png",
+    "keypointRelPath": "references/keypoints/kp_c6a3f526341c.png",
+    "createdAt": 1784086215.6666155,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 327,
+        "y": -35,
+        "width": 521,
+        "height": 521
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_c6a3f526341c_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_c6a3f526341c_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_c6a3f526341c_square.png",
+      "figurePlateRelPath": "references/placed/pf_c6a3f526341c_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_c6a3f526341c_qwen.png"
+    }
+  },
+  {
+    "id": "d56d934070eb",
+    "referenceRelPath": "references/keypoints/ref_d56d934070eb.png",
+    "keypointRelPath": "references/keypoints/kp_d56d934070eb.png",
+    "createdAt": 1784086208.051005,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 335,
+        "y": -37,
+        "width": 523,
+        "height": 523
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_d56d934070eb_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_d56d934070eb_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_d56d934070eb_square.png",
+      "figurePlateRelPath": "references/placed/pf_d56d934070eb_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_d56d934070eb_qwen.png"
+    }
+  },
+  {
+    "id": "8b6caa84afab",
+    "referenceRelPath": "references/keypoints/ref_8b6caa84afab.png",
+    "keypointRelPath": "references/keypoints/kp_8b6caa84afab.png",
+    "createdAt": 1784086199.972947,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 342,
+        "y": -38,
+        "width": 524,
+        "height": 524
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_8b6caa84afab_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_8b6caa84afab_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_8b6caa84afab_square.png",
+      "figurePlateRelPath": "references/placed/pf_8b6caa84afab_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_8b6caa84afab_qwen.png"
+    }
+  },
+  {
+    "id": "f6d57c702432",
+    "referenceRelPath": "references/keypoints/ref_f6d57c702432.png",
+    "keypointRelPath": "references/keypoints/kp_f6d57c702432.png",
+    "createdAt": 1784086192.3686187,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 351,
+        "y": -37,
+        "width": 523,
+        "height": 523
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_f6d57c702432_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_f6d57c702432_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_f6d57c702432_square.png",
+      "figurePlateRelPath": "references/placed/pf_f6d57c702432_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_f6d57c702432_qwen.png"
+    }
+  },
+  {
+    "id": "ed1943cfb601",
+    "referenceRelPath": "references/keypoints/ref_ed1943cfb601.png",
+    "keypointRelPath": "references/keypoints/kp_ed1943cfb601.png",
+    "createdAt": 1784086183.9914153,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 361,
+        "y": -35,
+        "width": 521,
+        "height": 521
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_ed1943cfb601_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_ed1943cfb601_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_ed1943cfb601_square.png",
+      "figurePlateRelPath": "references/placed/pf_ed1943cfb601_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_ed1943cfb601_qwen.png"
+    }
+  },
+  {
+    "id": "674ca9484235",
+    "referenceRelPath": "references/keypoints/ref_674ca9484235.png",
+    "keypointRelPath": "references/keypoints/kp_674ca9484235.png",
+    "createdAt": 1784086176.552594,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 369,
+        "y": -33,
+        "width": 518,
+        "height": 518
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_674ca9484235_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_674ca9484235_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_674ca9484235_square.png",
+      "figurePlateRelPath": "references/placed/pf_674ca9484235_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_674ca9484235_qwen.png"
+    }
+  },
+  {
+    "id": "55ffbaa43f1e",
+    "referenceRelPath": "references/keypoints/ref_55ffbaa43f1e.png",
+    "keypointRelPath": "references/keypoints/kp_55ffbaa43f1e.png",
+    "createdAt": 1784086169.0330575,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 379,
+        "y": -30,
+        "width": 515,
+        "height": 515
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_55ffbaa43f1e_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_55ffbaa43f1e_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_55ffbaa43f1e_square.png",
+      "figurePlateRelPath": "references/placed/pf_55ffbaa43f1e_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_55ffbaa43f1e_qwen.png"
+    }
+  },
+  {
+    "id": "0bfed6b82b8b",
+    "referenceRelPath": "references/keypoints/ref_0bfed6b82b8b.png",
+    "keypointRelPath": "references/keypoints/kp_0bfed6b82b8b.png",
+    "createdAt": 1784086161.440929,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 389,
+        "y": -26,
+        "width": 511,
+        "height": 511
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_0bfed6b82b8b_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_0bfed6b82b8b_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_0bfed6b82b8b_square.png",
+      "figurePlateRelPath": "references/placed/pf_0bfed6b82b8b_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_0bfed6b82b8b_qwen.png"
+    }
+  },
+  {
+    "id": "0913613d6f6f",
+    "referenceRelPath": "references/keypoints/ref_0913613d6f6f.png",
+    "keypointRelPath": "references/keypoints/kp_0913613d6f6f.png",
+    "createdAt": 1784086153.4020472,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 399,
+        "y": -23,
+        "width": 508,
+        "height": 508
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_0913613d6f6f_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_0913613d6f6f_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_0913613d6f6f_square.png",
+      "figurePlateRelPath": "references/placed/pf_0913613d6f6f_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_0913613d6f6f_qwen.png"
+    }
+  },
+  {
+    "id": "ef38700abfeb",
+    "referenceRelPath": "references/keypoints/ref_ef38700abfeb.png",
+    "keypointRelPath": "references/keypoints/kp_ef38700abfeb.png",
+    "createdAt": 1784086145.6668444,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 408,
+        "y": -21,
+        "width": 505,
+        "height": 505
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_ef38700abfeb_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_ef38700abfeb_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_ef38700abfeb_square.png",
+      "figurePlateRelPath": "references/placed/pf_ef38700abfeb_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_ef38700abfeb_qwen.png"
+    }
+  },
+  {
+    "id": "70fa141e1d7c",
+    "referenceRelPath": "references/keypoints/ref_70fa141e1d7c.png",
+    "keypointRelPath": "references/keypoints/kp_70fa141e1d7c.png",
+    "createdAt": 1784086137.6062224,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 419,
+        "y": -18,
+        "width": 501,
+        "height": 501
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_70fa141e1d7c_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_70fa141e1d7c_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_70fa141e1d7c_square.png",
+      "figurePlateRelPath": "references/placed/pf_70fa141e1d7c_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_70fa141e1d7c_qwen.png"
+    }
+  },
+  {
+    "id": "506007fe1eee",
+    "referenceRelPath": "references/keypoints/ref_506007fe1eee.png",
+    "keypointRelPath": "references/keypoints/kp_506007fe1eee.png",
+    "createdAt": 1784086129.8298645,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 428,
+        "y": -16,
+        "width": 496,
+        "height": 496
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_506007fe1eee_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_506007fe1eee_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_506007fe1eee_square.png",
+      "figurePlateRelPath": "references/placed/pf_506007fe1eee_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_506007fe1eee_qwen.png"
+    }
+  },
+  {
+    "id": "db305b503f13",
+    "referenceRelPath": "references/keypoints/ref_db305b503f13.png",
+    "keypointRelPath": "references/keypoints/kp_db305b503f13.png",
+    "createdAt": 1784086121.9611313,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 441,
+        "y": -11,
+        "width": 487,
+        "height": 487
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_db305b503f13_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_db305b503f13_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_db305b503f13_square.png",
+      "figurePlateRelPath": "references/placed/pf_db305b503f13_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_db305b503f13_qwen.png"
+    }
+  },
+  {
+    "id": "3d14032c40c1",
+    "referenceRelPath": "references/keypoints/ref_3d14032c40c1.png",
+    "keypointRelPath": "references/keypoints/kp_3d14032c40c1.png",
+    "createdAt": 1784086113.835774,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 452,
+        "y": -10,
+        "width": 481,
+        "height": 481
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_3d14032c40c1_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_3d14032c40c1_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_3d14032c40c1_square.png",
+      "figurePlateRelPath": "references/placed/pf_3d14032c40c1_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_3d14032c40c1_qwen.png"
+    }
+  },
+  {
+    "id": "7b64ef7f9b9e",
+    "referenceRelPath": "references/keypoints/ref_7b64ef7f9b9e.png",
+    "keypointRelPath": "references/keypoints/kp_7b64ef7f9b9e.png",
+    "createdAt": 1784086105.833582,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 462,
+        "y": -10,
+        "width": 478,
+        "height": 478
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_7b64ef7f9b9e_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_7b64ef7f9b9e_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_7b64ef7f9b9e_square.png",
+      "figurePlateRelPath": "references/placed/pf_7b64ef7f9b9e_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_7b64ef7f9b9e_qwen.png"
+    }
+  },
+  {
+    "id": "6224e0fb11e5",
+    "referenceRelPath": "references/keypoints/ref_6224e0fb11e5.png",
+    "keypointRelPath": "references/keypoints/kp_6224e0fb11e5.png",
+    "createdAt": 1784086097.8474555,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 470,
+        "y": -12,
+        "width": 480,
+        "height": 480
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_6224e0fb11e5_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_6224e0fb11e5_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_6224e0fb11e5_square.png",
+      "figurePlateRelPath": "references/placed/pf_6224e0fb11e5_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_6224e0fb11e5_qwen.png"
+    }
+  },
+  {
+    "id": "fbc3263f1a69",
+    "referenceRelPath": "references/keypoints/ref_fbc3263f1a69.png",
+    "keypointRelPath": "references/keypoints/kp_fbc3263f1a69.png",
+    "createdAt": 1784086088.0845435,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 472,
+        "y": -20,
+        "width": 491,
+        "height": 491
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_fbc3263f1a69_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_fbc3263f1a69_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_fbc3263f1a69_square.png",
+      "figurePlateRelPath": "references/placed/pf_fbc3263f1a69_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_fbc3263f1a69_qwen.png"
+    }
+  },
+  {
+    "id": "dc7dae2b33cf",
+    "referenceRelPath": "references/keypoints/ref_dc7dae2b33cf.png",
+    "keypointRelPath": "references/keypoints/kp_dc7dae2b33cf.png",
+    "createdAt": 1784086080.3241498,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 473,
+        "y": -28,
+        "width": 504,
+        "height": 504
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_dc7dae2b33cf_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_dc7dae2b33cf_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_dc7dae2b33cf_square.png",
+      "figurePlateRelPath": "references/placed/pf_dc7dae2b33cf_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_dc7dae2b33cf_qwen.png"
+    }
+  },
+  {
+    "id": "cf1987d879c4",
+    "referenceRelPath": "references/keypoints/ref_cf1987d879c4.png",
+    "keypointRelPath": "references/keypoints/kp_cf1987d879c4.png",
+    "createdAt": 1784086072.4495094,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 477,
+        "y": -34,
+        "width": 513,
+        "height": 513
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_cf1987d879c4_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_cf1987d879c4_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_cf1987d879c4_square.png",
+      "figurePlateRelPath": "references/placed/pf_cf1987d879c4_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_cf1987d879c4_qwen.png"
+    }
+  },
+  {
+    "id": "27880f80eb21",
+    "referenceRelPath": "references/keypoints/ref_27880f80eb21.png",
+    "keypointRelPath": "references/keypoints/kp_27880f80eb21.png",
+    "createdAt": 1784086065.0462923,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 486,
+        "y": -35,
+        "width": 514,
+        "height": 514
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_27880f80eb21_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_27880f80eb21_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_27880f80eb21_square.png",
+      "figurePlateRelPath": "references/placed/pf_27880f80eb21_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_27880f80eb21_qwen.png"
+    }
+  },
+  {
+    "id": "8f6a909f90bb",
+    "referenceRelPath": "references/keypoints/ref_8f6a909f90bb.png",
+    "keypointRelPath": "references/keypoints/kp_8f6a909f90bb.png",
+    "createdAt": 1784086057.3236816,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 495,
+        "y": -34,
+        "width": 510,
+        "height": 510
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_8f6a909f90bb_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_8f6a909f90bb_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_8f6a909f90bb_square.png",
+      "figurePlateRelPath": "references/placed/pf_8f6a909f90bb_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_8f6a909f90bb_qwen.png"
+    }
+  },
+  {
+    "id": "73d4f0ccf23f",
+    "referenceRelPath": "references/keypoints/ref_73d4f0ccf23f.png",
+    "keypointRelPath": "references/keypoints/kp_73d4f0ccf23f.png",
+    "createdAt": 1784086049.6983528,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 508,
+        "y": -30,
+        "width": 502,
+        "height": 502
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_73d4f0ccf23f_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_73d4f0ccf23f_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_73d4f0ccf23f_square.png",
+      "figurePlateRelPath": "references/placed/pf_73d4f0ccf23f_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_73d4f0ccf23f_qwen.png"
+    }
+  },
+  {
+    "id": "8c55558025e0",
+    "referenceRelPath": "references/keypoints/ref_8c55558025e0.png",
+    "keypointRelPath": "references/keypoints/kp_8c55558025e0.png",
+    "createdAt": 1784086041.55643,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 522,
+        "y": -24,
+        "width": 491,
+        "height": 491
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_8c55558025e0_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_8c55558025e0_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_8c55558025e0_square.png",
+      "figurePlateRelPath": "references/placed/pf_8c55558025e0_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_8c55558025e0_qwen.png"
+    }
+  },
+  {
+    "id": "c78c1a76da5f",
+    "referenceRelPath": "references/keypoints/ref_c78c1a76da5f.png",
+    "keypointRelPath": "references/keypoints/kp_c78c1a76da5f.png",
+    "createdAt": 1784086033.9753044,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 535,
+        "y": -18,
+        "width": 480,
+        "height": 480
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_c78c1a76da5f_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_c78c1a76da5f_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_c78c1a76da5f_square.png",
+      "figurePlateRelPath": "references/placed/pf_c78c1a76da5f_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_c78c1a76da5f_qwen.png"
+    }
+  },
+  {
+    "id": "a0597993edd9",
+    "referenceRelPath": "references/keypoints/ref_a0597993edd9.png",
+    "keypointRelPath": "references/keypoints/kp_a0597993edd9.png",
+    "createdAt": 1784086026.1714528,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 547,
+        "y": -12,
+        "width": 473,
+        "height": 473
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_a0597993edd9_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_a0597993edd9_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_a0597993edd9_square.png",
+      "figurePlateRelPath": "references/placed/pf_a0597993edd9_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_a0597993edd9_qwen.png"
+    }
+  },
+  {
+    "id": "4e4841e3b907",
+    "referenceRelPath": "references/keypoints/ref_4e4841e3b907.png",
+    "keypointRelPath": "references/keypoints/kp_4e4841e3b907.png",
+    "createdAt": 1784086018.4837956,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 554,
+        "y": -11,
+        "width": 473,
+        "height": 473
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_4e4841e3b907_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_4e4841e3b907_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_4e4841e3b907_square.png",
+      "figurePlateRelPath": "references/placed/pf_4e4841e3b907_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_4e4841e3b907_qwen.png"
+    }
+  },
+  {
+    "id": "078cd005fdd8",
+    "referenceRelPath": "references/keypoints/ref_078cd005fdd8.png",
+    "keypointRelPath": "references/keypoints/kp_078cd005fdd8.png",
+    "createdAt": 1784086010.3516848,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 563,
+        "y": -11,
+        "width": 473,
+        "height": 473
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_078cd005fdd8_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_078cd005fdd8_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_078cd005fdd8_square.png",
+      "figurePlateRelPath": "references/placed/pf_078cd005fdd8_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_078cd005fdd8_qwen.png"
+    }
+  },
+  {
+    "id": "148dd9b8ecb2",
+    "referenceRelPath": "references/keypoints/ref_148dd9b8ecb2.png",
+    "keypointRelPath": "references/keypoints/kp_148dd9b8ecb2.png",
+    "createdAt": 1784086002.449201,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 573,
+        "y": -9,
+        "width": 472,
+        "height": 472
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_148dd9b8ecb2_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_148dd9b8ecb2_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_148dd9b8ecb2_square.png",
+      "figurePlateRelPath": "references/placed/pf_148dd9b8ecb2_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_148dd9b8ecb2_qwen.png"
+    }
+  },
+  {
+    "id": "5aa739015747",
+    "referenceRelPath": "references/keypoints/ref_5aa739015747.png",
+    "keypointRelPath": "references/keypoints/kp_5aa739015747.png",
+    "createdAt": 1784085995.0226624,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 584,
+        "y": -5,
+        "width": 468,
+        "height": 468
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_5aa739015747_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_5aa739015747_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_5aa739015747_square.png",
+      "figurePlateRelPath": "references/placed/pf_5aa739015747_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_5aa739015747_qwen.png"
+    }
+  },
+  {
+    "id": "408ca2f448c0",
+    "referenceRelPath": "references/keypoints/ref_408ca2f448c0.png",
+    "keypointRelPath": "references/keypoints/kp_408ca2f448c0.png",
+    "createdAt": 1784085987.5532503,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 592,
+        "y": -4,
+        "width": 466,
+        "height": 466
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_408ca2f448c0_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_408ca2f448c0_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_408ca2f448c0_square.png",
+      "figurePlateRelPath": "references/placed/pf_408ca2f448c0_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_408ca2f448c0_qwen.png"
+    }
+  },
+  {
+    "id": "38f33553d845",
+    "referenceRelPath": "references/keypoints/ref_38f33553d845.png",
+    "keypointRelPath": "references/keypoints/kp_38f33553d845.png",
+    "createdAt": 1784085979.7881773,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 601,
+        "y": -4,
+        "width": 466,
+        "height": 466
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_38f33553d845_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_38f33553d845_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_38f33553d845_square.png",
+      "figurePlateRelPath": "references/placed/pf_38f33553d845_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_38f33553d845_qwen.png"
+    }
+  },
+  {
+    "id": "4bf45f751592",
+    "referenceRelPath": "references/keypoints/ref_4bf45f751592.png",
+    "keypointRelPath": "references/keypoints/kp_4bf45f751592.png",
+    "createdAt": 1784085971.7578845,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 607,
+        "y": -6,
+        "width": 469,
+        "height": 469
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_4bf45f751592_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_4bf45f751592_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_4bf45f751592_square.png",
+      "figurePlateRelPath": "references/placed/pf_4bf45f751592_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_4bf45f751592_qwen.png"
+    }
+  },
+  {
+    "id": "767c66c2a351",
+    "referenceRelPath": "references/keypoints/ref_767c66c2a351.png",
+    "keypointRelPath": "references/keypoints/kp_767c66c2a351.png",
+    "createdAt": 1784085964.1209047,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 614,
+        "y": -9,
+        "width": 472,
+        "height": 472
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_767c66c2a351_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_767c66c2a351_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_767c66c2a351_square.png",
+      "figurePlateRelPath": "references/placed/pf_767c66c2a351_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_767c66c2a351_qwen.png"
+    }
+  },
+  {
+    "id": "496f7c332d52",
+    "referenceRelPath": "references/keypoints/ref_496f7c332d52.png",
+    "keypointRelPath": "references/keypoints/kp_496f7c332d52.png",
+    "createdAt": 1784085955.9403043,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 621,
+        "y": -11,
+        "width": 474,
+        "height": 474
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_496f7c332d52_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_496f7c332d52_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_496f7c332d52_square.png",
+      "figurePlateRelPath": "references/placed/pf_496f7c332d52_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_496f7c332d52_qwen.png"
+    }
+  },
+  {
+    "id": "fa2b4bc71b00",
+    "referenceRelPath": "references/keypoints/ref_fa2b4bc71b00.png",
+    "keypointRelPath": "references/keypoints/kp_fa2b4bc71b00.png",
+    "createdAt": 1784085948.2247653,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 628,
+        "y": -15,
+        "width": 477,
+        "height": 477
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_fa2b4bc71b00_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_fa2b4bc71b00_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_fa2b4bc71b00_square.png",
+      "figurePlateRelPath": "references/placed/pf_fa2b4bc71b00_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_fa2b4bc71b00_qwen.png"
+    }
+  },
+  {
+    "id": "b58197166b6c",
+    "referenceRelPath": "references/keypoints/ref_b58197166b6c.png",
+    "keypointRelPath": "references/keypoints/kp_b58197166b6c.png",
+    "createdAt": 1784085940.0619795,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 635,
+        "y": -17,
+        "width": 480,
+        "height": 480
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_b58197166b6c_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_b58197166b6c_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_b58197166b6c_square.png",
+      "figurePlateRelPath": "references/placed/pf_b58197166b6c_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_b58197166b6c_qwen.png"
+    }
+  },
+  {
+    "id": "630450d15183",
+    "referenceRelPath": "references/keypoints/ref_630450d15183.png",
+    "keypointRelPath": "references/keypoints/kp_630450d15183.png",
+    "createdAt": 1784085932.3220613,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 642,
+        "y": -19,
+        "width": 481,
+        "height": 481
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_630450d15183_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_630450d15183_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_630450d15183_square.png",
+      "figurePlateRelPath": "references/placed/pf_630450d15183_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_630450d15183_qwen.png"
+    }
+  },
+  {
+    "id": "b98ad591e67a",
+    "referenceRelPath": "references/keypoints/ref_b98ad591e67a.png",
+    "keypointRelPath": "references/keypoints/kp_b98ad591e67a.png",
+    "createdAt": 1784085924.519365,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 650,
+        "y": -19,
+        "width": 482,
+        "height": 482
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_b98ad591e67a_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_b98ad591e67a_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_b98ad591e67a_square.png",
+      "figurePlateRelPath": "references/placed/pf_b98ad591e67a_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_b98ad591e67a_qwen.png"
+    }
+  },
+  {
+    "id": "0f875c64191c",
+    "referenceRelPath": "references/keypoints/ref_0f875c64191c.png",
+    "keypointRelPath": "references/keypoints/kp_0f875c64191c.png",
+    "createdAt": 1784085916.9027114,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 657,
+        "y": -19,
+        "width": 482,
+        "height": 482
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_0f875c64191c_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_0f875c64191c_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_0f875c64191c_square.png",
+      "figurePlateRelPath": "references/placed/pf_0f875c64191c_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_0f875c64191c_qwen.png"
+    }
+  },
+  {
+    "id": "8776fdee61e0",
+    "referenceRelPath": "references/keypoints/ref_8776fdee61e0.png",
+    "keypointRelPath": "references/keypoints/kp_8776fdee61e0.png",
+    "createdAt": 1784085463.4996343,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 609,
+        "y": -11,
+        "width": 473,
+        "height": 473
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_8776fdee61e0_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_8776fdee61e0_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_8776fdee61e0_square.png",
+      "figurePlateRelPath": "references/placed/pf_8776fdee61e0_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_8776fdee61e0_qwen.png"
+    }
+  },
+  {
+    "id": "1e839295fef1",
+    "referenceRelPath": "references/keypoints/ref_1e839295fef1.png",
+    "keypointRelPath": "references/keypoints/kp_1e839295fef1.png",
+    "createdAt": 1784085455.4282851,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 594,
+        "y": -5,
+        "width": 459,
+        "height": 459
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_1e839295fef1_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_1e839295fef1_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_1e839295fef1_square.png",
+      "figurePlateRelPath": "references/placed/pf_1e839295fef1_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_1e839295fef1_qwen.png"
+    }
+  },
+  {
+    "id": "2c5351f0c2be",
+    "referenceRelPath": "references/keypoints/ref_2c5351f0c2be.png",
+    "keypointRelPath": "references/keypoints/kp_2c5351f0c2be.png",
+    "createdAt": 1784085447.523852,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 577,
+        "y": 2,
+        "width": 450,
+        "height": 450
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_2c5351f0c2be_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_2c5351f0c2be_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_2c5351f0c2be_square.png",
+      "figurePlateRelPath": "references/placed/pf_2c5351f0c2be_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_2c5351f0c2be_qwen.png"
+    }
+  },
+  {
+    "id": "0f7352805ef0",
+    "referenceRelPath": "references/keypoints/ref_0f7352805ef0.png",
+    "keypointRelPath": "references/keypoints/kp_0f7352805ef0.png",
+    "createdAt": 1784085439.9762099,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 548,
+        "y": 0,
+        "width": 460,
+        "height": 460
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_0f7352805ef0_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_0f7352805ef0_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_0f7352805ef0_square.png",
+      "figurePlateRelPath": "references/placed/pf_0f7352805ef0_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_0f7352805ef0_qwen.png"
+    }
+  },
+  {
+    "id": "6a6307488fc4",
+    "referenceRelPath": "references/keypoints/ref_6a6307488fc4.png",
+    "keypointRelPath": "references/keypoints/kp_6a6307488fc4.png",
+    "createdAt": 1784085432.3790653,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 528,
+        "y": 3,
+        "width": 458,
+        "height": 458
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_6a6307488fc4_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_6a6307488fc4_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_6a6307488fc4_square.png",
+      "figurePlateRelPath": "references/placed/pf_6a6307488fc4_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_6a6307488fc4_qwen.png"
+    }
+  },
+  {
+    "id": "2d66431e921a",
+    "referenceRelPath": "references/keypoints/ref_2d66431e921a.png",
+    "keypointRelPath": "references/keypoints/kp_2d66431e921a.png",
+    "createdAt": 1784085424.355952,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 505,
+        "y": -2,
+        "width": 463,
+        "height": 463
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_2d66431e921a_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_2d66431e921a_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_2d66431e921a_square.png",
+      "figurePlateRelPath": "references/placed/pf_2d66431e921a_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_2d66431e921a_qwen.png"
+    }
+  },
+  {
+    "id": "920123ed22e4",
+    "referenceRelPath": "references/keypoints/ref_920123ed22e4.png",
+    "keypointRelPath": "references/keypoints/kp_920123ed22e4.png",
+    "createdAt": 1784085416.5951686,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 481,
+        "y": -8,
+        "width": 468,
+        "height": 468
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_920123ed22e4_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_920123ed22e4_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_920123ed22e4_square.png",
+      "figurePlateRelPath": "references/placed/pf_920123ed22e4_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_920123ed22e4_qwen.png"
+    }
+  },
+  {
+    "id": "13b0ca3d0bf3",
+    "referenceRelPath": "references/keypoints/ref_13b0ca3d0bf3.png",
+    "keypointRelPath": "references/keypoints/kp_13b0ca3d0bf3.png",
+    "createdAt": 1784085408.612958,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 457,
+        "y": -11,
+        "width": 471,
+        "height": 471
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_13b0ca3d0bf3_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_13b0ca3d0bf3_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_13b0ca3d0bf3_square.png",
+      "figurePlateRelPath": "references/placed/pf_13b0ca3d0bf3_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_13b0ca3d0bf3_qwen.png"
+    }
+  },
+  {
+    "id": "ef0d3c38fa6c",
+    "referenceRelPath": "references/keypoints/ref_ef0d3c38fa6c.png",
+    "keypointRelPath": "references/keypoints/kp_ef0d3c38fa6c.png",
+    "createdAt": 1784085401.209823,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 435,
+        "y": -8,
+        "width": 468,
+        "height": 468
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_ef0d3c38fa6c_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_ef0d3c38fa6c_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_ef0d3c38fa6c_square.png",
+      "figurePlateRelPath": "references/placed/pf_ef0d3c38fa6c_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_ef0d3c38fa6c_qwen.png"
+    }
+  },
+  {
+    "id": "7e28d6b36127",
+    "referenceRelPath": "references/keypoints/ref_7e28d6b36127.png",
+    "keypointRelPath": "references/keypoints/kp_7e28d6b36127.png",
+    "createdAt": 1784085393.264915,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 414,
+        "y": -1,
+        "width": 460,
+        "height": 460
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_7e28d6b36127_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_7e28d6b36127_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_7e28d6b36127_square.png",
+      "figurePlateRelPath": "references/placed/pf_7e28d6b36127_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_7e28d6b36127_qwen.png"
+    }
+  },
+  {
+    "id": "cc3f010515b1",
+    "referenceRelPath": "references/keypoints/ref_cc3f010515b1.png",
+    "keypointRelPath": "references/keypoints/kp_cc3f010515b1.png",
+    "createdAt": 1784085385.687731,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 398,
+        "y": 11,
+        "width": 441,
+        "height": 441
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_cc3f010515b1_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_cc3f010515b1_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_cc3f010515b1_square.png",
+      "figurePlateRelPath": "references/placed/pf_cc3f010515b1_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_cc3f010515b1_qwen.png"
+    }
+  },
+  {
+    "id": "d8324abb313f",
+    "referenceRelPath": "references/keypoints/ref_d8324abb313f.png",
+    "keypointRelPath": "references/keypoints/kp_d8324abb313f.png",
+    "createdAt": 1784085378.0388632,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 377,
+        "y": 13,
+        "width": 433,
+        "height": 433
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_d8324abb313f_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_d8324abb313f_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_d8324abb313f_square.png",
+      "figurePlateRelPath": "references/placed/pf_d8324abb313f_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_d8324abb313f_qwen.png"
+    }
+  },
+  {
+    "id": "7f11395be9f0",
+    "referenceRelPath": "references/keypoints/ref_7f11395be9f0.png",
+    "keypointRelPath": "references/keypoints/kp_7f11395be9f0.png",
+    "createdAt": 1784085370.58304,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 339,
+        "y": -5,
+        "width": 461,
+        "height": 461
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_7f11395be9f0_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_7f11395be9f0_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_7f11395be9f0_square.png",
+      "figurePlateRelPath": "references/placed/pf_7f11395be9f0_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_7f11395be9f0_qwen.png"
+    }
+  },
+  {
+    "id": "55f63bb81607",
+    "referenceRelPath": "references/keypoints/ref_55f63bb81607.png",
+    "keypointRelPath": "references/keypoints/kp_55f63bb81607.png",
+    "createdAt": 1784085362.8200855,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 317,
+        "y": -5,
+        "width": 458,
+        "height": 458
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_55f63bb81607_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_55f63bb81607_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_55f63bb81607_square.png",
+      "figurePlateRelPath": "references/placed/pf_55f63bb81607_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_55f63bb81607_qwen.png"
+    }
+  },
+  {
+    "id": "17e8f0f9cedc",
+    "referenceRelPath": "references/keypoints/ref_17e8f0f9cedc.png",
+    "keypointRelPath": "references/keypoints/kp_17e8f0f9cedc.png",
+    "createdAt": 1784085355.0294433,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 301,
+        "y": 3,
+        "width": 443,
+        "height": 443
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_17e8f0f9cedc_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_17e8f0f9cedc_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_17e8f0f9cedc_square.png",
+      "figurePlateRelPath": "references/placed/pf_17e8f0f9cedc_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_17e8f0f9cedc_qwen.png"
+    }
+  },
+  {
+    "id": "6499e0b19f49",
+    "referenceRelPath": "references/keypoints/ref_6499e0b19f49.png",
+    "keypointRelPath": "references/keypoints/kp_6499e0b19f49.png",
+    "createdAt": 1784085347.3429255,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 274,
+        "y": 1,
+        "width": 454,
+        "height": 454
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_6499e0b19f49_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_6499e0b19f49_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_6499e0b19f49_square.png",
+      "figurePlateRelPath": "references/placed/pf_6499e0b19f49_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_6499e0b19f49_qwen.png"
+    }
+  },
+  {
+    "id": "56b40e4f0fb8",
+    "referenceRelPath": "references/keypoints/ref_56b40e4f0fb8.png",
+    "keypointRelPath": "references/keypoints/kp_56b40e4f0fb8.png",
+    "createdAt": 1784085339.9224877,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 249,
+        "y": 4,
+        "width": 456,
+        "height": 456
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_56b40e4f0fb8_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_56b40e4f0fb8_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_56b40e4f0fb8_square.png",
+      "figurePlateRelPath": "references/placed/pf_56b40e4f0fb8_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_56b40e4f0fb8_qwen.png"
+    }
+  },
+  {
+    "id": "bed2864ae5db",
+    "referenceRelPath": "references/keypoints/ref_bed2864ae5db.png",
+    "keypointRelPath": "references/keypoints/kp_bed2864ae5db.png",
+    "createdAt": 1784085331.6088169,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 225,
+        "y": 1,
+        "width": 458,
+        "height": 458
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_bed2864ae5db_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_bed2864ae5db_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_bed2864ae5db_square.png",
+      "figurePlateRelPath": "references/placed/pf_bed2864ae5db_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_bed2864ae5db_qwen.png"
+    }
+  },
+  {
+    "id": "02e048f24e1f",
+    "referenceRelPath": "references/keypoints/ref_02e048f24e1f.png",
+    "keypointRelPath": "references/keypoints/kp_02e048f24e1f.png",
+    "createdAt": 1784085323.9560332,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 197,
+        "y": -5,
+        "width": 465,
+        "height": 465
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_02e048f24e1f_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_02e048f24e1f_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_02e048f24e1f_square.png",
+      "figurePlateRelPath": "references/placed/pf_02e048f24e1f_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_02e048f24e1f_qwen.png"
+    }
+  },
+  {
+    "id": "ecc5fa83f5ce",
+    "referenceRelPath": "references/keypoints/ref_ecc5fa83f5ce.png",
+    "keypointRelPath": "references/keypoints/kp_ecc5fa83f5ce.png",
+    "createdAt": 1784085316.124729,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 172,
+        "y": -9,
+        "width": 468,
+        "height": 468
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_ecc5fa83f5ce_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_ecc5fa83f5ce_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_ecc5fa83f5ce_square.png",
+      "figurePlateRelPath": "references/placed/pf_ecc5fa83f5ce_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_ecc5fa83f5ce_qwen.png"
+    }
+  },
+  {
+    "id": "26f30f0b802d",
+    "referenceRelPath": "references/keypoints/ref_26f30f0b802d.png",
+    "keypointRelPath": "references/keypoints/kp_26f30f0b802d.png",
+    "createdAt": 1784085308.4903424,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 148,
+        "y": -10,
+        "width": 468,
+        "height": 468
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_26f30f0b802d_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_26f30f0b802d_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_26f30f0b802d_square.png",
+      "figurePlateRelPath": "references/placed/pf_26f30f0b802d_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_26f30f0b802d_qwen.png"
+    }
+  },
+  {
+    "id": "f65242adbf9e",
+    "referenceRelPath": "references/keypoints/ref_f65242adbf9e.png",
+    "keypointRelPath": "references/keypoints/kp_f65242adbf9e.png",
+    "createdAt": 1784085300.0205786,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 130,
+        "y": -3,
+        "width": 461,
+        "height": 461
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_f65242adbf9e_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_f65242adbf9e_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_f65242adbf9e_square.png",
+      "figurePlateRelPath": "references/placed/pf_f65242adbf9e_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_f65242adbf9e_qwen.png"
+    }
+  },
+  {
+    "id": "0e6ddf37df5f",
+    "referenceRelPath": "references/keypoints/ref_0e6ddf37df5f.png",
+    "keypointRelPath": "references/keypoints/kp_0e6ddf37df5f.png",
+    "createdAt": 1784085291.727016,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 114,
+        "y": 6,
+        "width": 449,
+        "height": 449
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_0e6ddf37df5f_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_0e6ddf37df5f_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_0e6ddf37df5f_square.png",
+      "figurePlateRelPath": "references/placed/pf_0e6ddf37df5f_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_0e6ddf37df5f_qwen.png"
+    }
+  },
+  {
+    "id": "1b77d1248136",
+    "referenceRelPath": "references/keypoints/ref_1b77d1248136.png",
+    "keypointRelPath": "references/keypoints/kp_1b77d1248136.png",
+    "createdAt": 1784085283.8930721,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 101,
+        "y": 13,
+        "width": 432,
+        "height": 432
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_1b77d1248136_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_1b77d1248136_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_1b77d1248136_square.png",
+      "figurePlateRelPath": "references/placed/pf_1b77d1248136_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_1b77d1248136_qwen.png"
+    }
+  },
+  {
+    "id": "b134146d9ffb",
+    "referenceRelPath": "references/keypoints/ref_b134146d9ffb.png",
+    "keypointRelPath": "references/keypoints/kp_b134146d9ffb.png",
+    "createdAt": 1784085276.337828,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 68,
+        "y": -3,
+        "width": 457,
+        "height": 457
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_b134146d9ffb_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_b134146d9ffb_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_b134146d9ffb_square.png",
+      "figurePlateRelPath": "references/placed/pf_b134146d9ffb_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_b134146d9ffb_qwen.png"
+    }
+  },
+  {
+    "id": "940461333333",
+    "referenceRelPath": "references/keypoints/ref_940461333333.png",
+    "keypointRelPath": "references/keypoints/kp_940461333333.png",
+    "createdAt": 1784085268.7162695,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 39,
+        "y": -14,
+        "width": 474,
+        "height": 474
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_940461333333_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_940461333333_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_940461333333_square.png",
+      "figurePlateRelPath": "references/placed/pf_940461333333_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_940461333333_qwen.png"
+    }
+  },
+  {
+    "id": "2a5a62a06f0f",
+    "referenceRelPath": "references/keypoints/ref_2a5a62a06f0f.png",
+    "keypointRelPath": "references/keypoints/kp_2a5a62a06f0f.png",
+    "createdAt": 1784085260.8677921,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 20,
+        "y": -11,
+        "width": 467,
+        "height": 467
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_2a5a62a06f0f_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_2a5a62a06f0f_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_2a5a62a06f0f_square.png",
+      "figurePlateRelPath": "references/placed/pf_2a5a62a06f0f_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_2a5a62a06f0f_qwen.png"
+    }
+  },
+  {
+    "id": "f62af6f3ba32",
+    "referenceRelPath": "references/keypoints/ref_f62af6f3ba32.png",
+    "keypointRelPath": "references/keypoints/kp_f62af6f3ba32.png",
+    "createdAt": 1784085253.2420068,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 0,
+        "y": -4,
+        "width": 463,
+        "height": 463
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_f62af6f3ba32_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_f62af6f3ba32_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_f62af6f3ba32_square.png",
+      "figurePlateRelPath": "references/placed/pf_f62af6f3ba32_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_f62af6f3ba32_qwen.png"
+    }
+  },
+  {
+    "id": "5e0625a702c4",
+    "referenceRelPath": "references/keypoints/ref_5e0625a702c4.png",
+    "keypointRelPath": "references/keypoints/kp_5e0625a702c4.png",
+    "createdAt": 1784085245.5672457,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -26,
+        "y": -2,
+        "width": 469,
+        "height": 469
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_5e0625a702c4_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_5e0625a702c4_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_5e0625a702c4_square.png",
+      "figurePlateRelPath": "references/placed/pf_5e0625a702c4_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_5e0625a702c4_qwen.png"
+    }
+  },
+  {
+    "id": "9822b17aa57c",
+    "referenceRelPath": "references/keypoints/ref_9822b17aa57c.png",
+    "keypointRelPath": "references/keypoints/kp_9822b17aa57c.png",
+    "createdAt": 1784085237.4452572,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -48,
+        "y": 4,
+        "width": 463,
+        "height": 463
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_9822b17aa57c_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_9822b17aa57c_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_9822b17aa57c_square.png",
+      "figurePlateRelPath": "references/placed/pf_9822b17aa57c_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_9822b17aa57c_qwen.png"
+    }
+  },
+  {
+    "id": "1532a544e068",
+    "referenceRelPath": "references/keypoints/ref_1532a544e068.png",
+    "keypointRelPath": "references/keypoints/kp_1532a544e068.png",
+    "createdAt": 1784080153.7410629,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 540,
+        "y": 56,
+        "width": 439,
+        "height": 439
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_1532a544e068_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_1532a544e068_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_1532a544e068_square.png",
+      "figurePlateRelPath": "references/placed/pf_1532a544e068_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_1532a544e068_qwen.png"
+    }
+  },
+  {
+    "id": "59c17cc591da",
+    "referenceRelPath": "references/keypoints/ref_59c17cc591da.png",
+    "keypointRelPath": "references/keypoints/kp_59c17cc591da.png",
+    "createdAt": 1784080145.9571385,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 522,
+        "y": 54,
+        "width": 440,
+        "height": 440
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_59c17cc591da_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_59c17cc591da_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_59c17cc591da_square.png",
+      "figurePlateRelPath": "references/placed/pf_59c17cc591da_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_59c17cc591da_qwen.png"
+    }
+  },
+  {
+    "id": "f99409e91b9b",
+    "referenceRelPath": "references/keypoints/ref_f99409e91b9b.png",
+    "keypointRelPath": "references/keypoints/kp_f99409e91b9b.png",
+    "createdAt": 1784080137.6412735,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 503,
+        "y": 51,
+        "width": 443,
+        "height": 443
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_f99409e91b9b_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_f99409e91b9b_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_f99409e91b9b_square.png",
+      "figurePlateRelPath": "references/placed/pf_f99409e91b9b_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_f99409e91b9b_qwen.png"
+    }
+  },
+  {
+    "id": "3010217b147b",
+    "referenceRelPath": "references/keypoints/ref_3010217b147b.png",
+    "keypointRelPath": "references/keypoints/kp_3010217b147b.png",
+    "createdAt": 1784080129.4098523,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 484,
+        "y": 52,
+        "width": 442,
+        "height": 442
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_3010217b147b_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_3010217b147b_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_3010217b147b_square.png",
+      "figurePlateRelPath": "references/placed/pf_3010217b147b_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_3010217b147b_qwen.png"
+    }
+  },
+  {
+    "id": "e9aa2eee1a1c",
+    "referenceRelPath": "references/keypoints/ref_e9aa2eee1a1c.png",
+    "keypointRelPath": "references/keypoints/kp_e9aa2eee1a1c.png",
+    "createdAt": 1784080121.2638958,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 465,
+        "y": 56,
+        "width": 437,
+        "height": 437
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_e9aa2eee1a1c_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_e9aa2eee1a1c_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_e9aa2eee1a1c_square.png",
+      "figurePlateRelPath": "references/placed/pf_e9aa2eee1a1c_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_e9aa2eee1a1c_qwen.png"
+    }
+  },
+  {
+    "id": "469325763f21",
+    "referenceRelPath": "references/keypoints/ref_469325763f21.png",
+    "keypointRelPath": "references/keypoints/kp_469325763f21.png",
+    "createdAt": 1784080113.2139084,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 447,
+        "y": 60,
+        "width": 433,
+        "height": 433
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_469325763f21_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_469325763f21_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_469325763f21_square.png",
+      "figurePlateRelPath": "references/placed/pf_469325763f21_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_469325763f21_qwen.png"
+    }
+  },
+  {
+    "id": "731d0602c222",
+    "referenceRelPath": "references/keypoints/ref_731d0602c222.png",
+    "keypointRelPath": "references/keypoints/kp_731d0602c222.png",
+    "createdAt": 1784080105.8080838,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 431,
+        "y": 66,
+        "width": 423,
+        "height": 423
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_731d0602c222_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_731d0602c222_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_731d0602c222_square.png",
+      "figurePlateRelPath": "references/placed/pf_731d0602c222_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_731d0602c222_qwen.png"
+    }
+  },
+  {
+    "id": "409ba1141319",
+    "referenceRelPath": "references/keypoints/ref_409ba1141319.png",
+    "keypointRelPath": "references/keypoints/kp_409ba1141319.png",
+    "createdAt": 1784080098.1121025,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 411,
+        "y": 63,
+        "width": 425,
+        "height": 425
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_409ba1141319_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_409ba1141319_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_409ba1141319_square.png",
+      "figurePlateRelPath": "references/placed/pf_409ba1141319_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_409ba1141319_qwen.png"
+    }
+  },
+  {
+    "id": "ee34e79905d0",
+    "referenceRelPath": "references/keypoints/ref_ee34e79905d0.png",
+    "keypointRelPath": "references/keypoints/kp_ee34e79905d0.png",
+    "createdAt": 1784080089.9618773,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 377,
+        "y": 48,
+        "width": 450,
+        "height": 450
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_ee34e79905d0_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_ee34e79905d0_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_ee34e79905d0_square.png",
+      "figurePlateRelPath": "references/placed/pf_ee34e79905d0_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_ee34e79905d0_qwen.png"
+    }
+  },
+  {
+    "id": "2a6a8408a9c7",
+    "referenceRelPath": "references/keypoints/ref_2a6a8408a9c7.png",
+    "keypointRelPath": "references/keypoints/kp_2a6a8408a9c7.png",
+    "createdAt": 1784080082.36268,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 355,
+        "y": 46,
+        "width": 453,
+        "height": 453
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_2a6a8408a9c7_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_2a6a8408a9c7_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_2a6a8408a9c7_square.png",
+      "figurePlateRelPath": "references/placed/pf_2a6a8408a9c7_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_2a6a8408a9c7_qwen.png"
+    }
+  },
+  {
+    "id": "79023c3e0ee9",
+    "referenceRelPath": "references/keypoints/ref_79023c3e0ee9.png",
+    "keypointRelPath": "references/keypoints/kp_79023c3e0ee9.png",
+    "createdAt": 1784080074.37511,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 337,
+        "y": 49,
+        "width": 449,
+        "height": 449
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_79023c3e0ee9_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_79023c3e0ee9_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_79023c3e0ee9_square.png",
+      "figurePlateRelPath": "references/placed/pf_79023c3e0ee9_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_79023c3e0ee9_qwen.png"
+    }
+  },
+  {
+    "id": "fd14fb66f29f",
+    "referenceRelPath": "references/keypoints/ref_fd14fb66f29f.png",
+    "keypointRelPath": "references/keypoints/kp_fd14fb66f29f.png",
+    "createdAt": 1784080065.7016075,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 313,
+        "y": 48,
+        "width": 454,
+        "height": 454
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_fd14fb66f29f_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_fd14fb66f29f_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_fd14fb66f29f_square.png",
+      "figurePlateRelPath": "references/placed/pf_fd14fb66f29f_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_fd14fb66f29f_qwen.png"
+    }
+  },
+  {
+    "id": "b9f908c3011d",
+    "referenceRelPath": "references/keypoints/ref_b9f908c3011d.png",
+    "keypointRelPath": "references/keypoints/kp_b9f908c3011d.png",
+    "createdAt": 1784080058.1664238,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 298,
+        "y": 55,
+        "width": 443,
+        "height": 443
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_b9f908c3011d_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_b9f908c3011d_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_b9f908c3011d_square.png",
+      "figurePlateRelPath": "references/placed/pf_b9f908c3011d_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_b9f908c3011d_qwen.png"
+    }
+  },
+  {
+    "id": "69a0c133fd74",
+    "referenceRelPath": "references/keypoints/ref_69a0c133fd74.png",
+    "keypointRelPath": "references/keypoints/kp_69a0c133fd74.png",
+    "createdAt": 1784080050.2449872,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 276,
+        "y": 51,
+        "width": 446,
+        "height": 446
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_69a0c133fd74_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_69a0c133fd74_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_69a0c133fd74_square.png",
+      "figurePlateRelPath": "references/placed/pf_69a0c133fd74_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_69a0c133fd74_qwen.png"
+    }
+  },
+  {
+    "id": "eb4ba110e6e8",
+    "referenceRelPath": "references/keypoints/ref_eb4ba110e6e8.png",
+    "keypointRelPath": "references/keypoints/kp_eb4ba110e6e8.png",
+    "createdAt": 1784080041.7128735,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 251,
+        "y": 47,
+        "width": 451,
+        "height": 451
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_eb4ba110e6e8_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_eb4ba110e6e8_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_eb4ba110e6e8_square.png",
+      "figurePlateRelPath": "references/placed/pf_eb4ba110e6e8_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_eb4ba110e6e8_qwen.png"
+    }
+  },
+  {
+    "id": "f42590a43544",
+    "referenceRelPath": "references/keypoints/ref_f42590a43544.png",
+    "keypointRelPath": "references/keypoints/kp_f42590a43544.png",
+    "createdAt": 1784080033.5174894,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 231,
+        "y": 48,
+        "width": 450,
+        "height": 450
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_f42590a43544_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_f42590a43544_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_f42590a43544_square.png",
+      "figurePlateRelPath": "references/placed/pf_f42590a43544_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_f42590a43544_qwen.png"
+    }
+  },
+  {
+    "id": "3d53b86017b8",
+    "referenceRelPath": "references/keypoints/ref_3d53b86017b8.png",
+    "keypointRelPath": "references/keypoints/kp_3d53b86017b8.png",
+    "createdAt": 1784080025.4651449,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 212,
+        "y": 54,
+        "width": 443,
+        "height": 443
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_3d53b86017b8_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_3d53b86017b8_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_3d53b86017b8_square.png",
+      "figurePlateRelPath": "references/placed/pf_3d53b86017b8_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_3d53b86017b8_qwen.png"
+    }
+  },
+  {
+    "id": "925b7d6d799f",
+    "referenceRelPath": "references/keypoints/ref_925b7d6d799f.png",
+    "keypointRelPath": "references/keypoints/kp_925b7d6d799f.png",
+    "createdAt": 1784080017.2638805,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 192,
+        "y": 58,
+        "width": 439,
+        "height": 439
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_925b7d6d799f_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_925b7d6d799f_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_925b7d6d799f_square.png",
+      "figurePlateRelPath": "references/placed/pf_925b7d6d799f_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_925b7d6d799f_qwen.png"
+    }
+  },
+  {
+    "id": "a6a18e886680",
+    "referenceRelPath": "references/keypoints/ref_a6a18e886680.png",
+    "keypointRelPath": "references/keypoints/kp_a6a18e886680.png",
+    "createdAt": 1784080008.4986126,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 173,
+        "y": 61,
+        "width": 434,
+        "height": 434
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_a6a18e886680_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_a6a18e886680_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_a6a18e886680_square.png",
+      "figurePlateRelPath": "references/placed/pf_a6a18e886680_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_a6a18e886680_qwen.png"
+    }
+  },
+  {
+    "id": "a741e3dd1f6b",
+    "referenceRelPath": "references/keypoints/ref_a741e3dd1f6b.png",
+    "keypointRelPath": "references/keypoints/kp_a741e3dd1f6b.png",
+    "createdAt": 1784080000.3828647,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 149,
+        "y": 56,
+        "width": 439,
+        "height": 439
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_a741e3dd1f6b_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_a741e3dd1f6b_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_a741e3dd1f6b_square.png",
+      "figurePlateRelPath": "references/placed/pf_a741e3dd1f6b_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_a741e3dd1f6b_qwen.png"
+    }
+  },
+  {
+    "id": "a3188fde563a",
+    "referenceRelPath": "references/keypoints/ref_a3188fde563a.png",
+    "keypointRelPath": "references/keypoints/kp_a3188fde563a.png",
+    "createdAt": 1784079992.0001664,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 119,
+        "y": 43,
+        "width": 457,
+        "height": 457
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_a3188fde563a_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_a3188fde563a_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_a3188fde563a_square.png",
+      "figurePlateRelPath": "references/placed/pf_a3188fde563a_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_a3188fde563a_qwen.png"
+    }
+  },
+  {
+    "id": "7c3015e38e27",
+    "referenceRelPath": "references/keypoints/ref_7c3015e38e27.png",
+    "keypointRelPath": "references/keypoints/kp_7c3015e38e27.png",
+    "createdAt": 1784079983.6902723,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 99,
+        "y": 44,
+        "width": 454,
+        "height": 454
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_7c3015e38e27_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_7c3015e38e27_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_7c3015e38e27_square.png",
+      "figurePlateRelPath": "references/placed/pf_7c3015e38e27_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_7c3015e38e27_qwen.png"
+    }
+  },
+  {
+    "id": "616addcdeabc",
+    "referenceRelPath": "references/keypoints/ref_616addcdeabc.png",
+    "keypointRelPath": "references/keypoints/kp_616addcdeabc.png",
+    "createdAt": 1784079974.323753,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 75,
+        "y": 44,
+        "width": 458,
+        "height": 458
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_616addcdeabc_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_616addcdeabc_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_616addcdeabc_square.png",
+      "figurePlateRelPath": "references/placed/pf_616addcdeabc_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_616addcdeabc_qwen.png"
+    }
+  },
+  {
+    "id": "fbb532dbc051",
+    "referenceRelPath": "references/keypoints/ref_fbb532dbc051.png",
+    "keypointRelPath": "references/keypoints/kp_fbb532dbc051.png",
+    "createdAt": 1784079965.6481256,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 52,
+        "y": 42,
+        "width": 464,
+        "height": 464
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_fbb532dbc051_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_fbb532dbc051_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_fbb532dbc051_square.png",
+      "figurePlateRelPath": "references/placed/pf_fbb532dbc051_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_fbb532dbc051_qwen.png"
+    }
+  },
+  {
+    "id": "ba3f643e0fe2",
+    "referenceRelPath": "references/keypoints/ref_ba3f643e0fe2.png",
+    "keypointRelPath": "references/keypoints/kp_ba3f643e0fe2.png",
+    "createdAt": 1784079956.785041,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 33,
+        "y": 46,
+        "width": 460,
+        "height": 460
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_ba3f643e0fe2_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_ba3f643e0fe2_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_ba3f643e0fe2_square.png",
+      "figurePlateRelPath": "references/placed/pf_ba3f643e0fe2_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_ba3f643e0fe2_qwen.png"
+    }
+  },
+  {
+    "id": "0bc165262bb4",
+    "referenceRelPath": "references/keypoints/ref_0bc165262bb4.png",
+    "keypointRelPath": "references/keypoints/kp_0bc165262bb4.png",
+    "createdAt": 1784079947.1228113,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": 11,
+        "y": 41,
+        "width": 465,
+        "height": 465
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_0bc165262bb4_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_0bc165262bb4_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_0bc165262bb4_square.png",
+      "figurePlateRelPath": "references/placed/pf_0bc165262bb4_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_0bc165262bb4_qwen.png"
+    }
+  },
+  {
+    "id": "2483c05352b7",
+    "referenceRelPath": "references/keypoints/ref_2483c05352b7.png",
+    "keypointRelPath": "references/keypoints/kp_2483c05352b7.png",
+    "createdAt": 1784079937.706357,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -11,
+        "y": 35,
+        "width": 471,
+        "height": 471
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_2483c05352b7_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_2483c05352b7_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_2483c05352b7_square.png",
+      "figurePlateRelPath": "references/placed/pf_2483c05352b7_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_2483c05352b7_qwen.png"
+    }
+  },
+  {
+    "id": "ede53020cde9",
+    "referenceRelPath": "references/keypoints/ref_ede53020cde9.png",
+    "keypointRelPath": "references/keypoints/kp_ede53020cde9.png",
+    "createdAt": 1784079928.9196332,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -30,
+        "y": 33,
+        "width": 473,
+        "height": 473
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_ede53020cde9_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_ede53020cde9_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_ede53020cde9_square.png",
+      "figurePlateRelPath": "references/placed/pf_ede53020cde9_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_ede53020cde9_qwen.png"
+    }
+  },
+  {
+    "id": "5e5ec7609c76",
+    "referenceRelPath": "references/keypoints/ref_5e5ec7609c76.png",
+    "keypointRelPath": "references/keypoints/kp_5e5ec7609c76.png",
+    "createdAt": 1784079919.6171832,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -47,
+        "y": 36,
+        "width": 470,
+        "height": 470
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_5e5ec7609c76_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_5e5ec7609c76_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_5e5ec7609c76_square.png",
+      "figurePlateRelPath": "references/placed/pf_5e5ec7609c76_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_5e5ec7609c76_qwen.png"
+    }
+  },
+  {
+    "id": "9109c4a7e0de",
+    "referenceRelPath": "references/keypoints/ref_9109c4a7e0de.png",
+    "keypointRelPath": "references/keypoints/kp_9109c4a7e0de.png",
+    "createdAt": 1784079910.1825032,
+    "placedFigure": {
+      "canvas": {
+        "width": 1024,
+        "height": 576
+      },
+      "placement": {
+        "x": -66,
+        "y": 35,
+        "width": 474,
+        "height": 474
+      },
+      "workingSquareSize": 1024,
+      "squareRefCropRelPath": "references/placed/pf_9109c4a7e0de_ref_square.png",
+      "squareKeypointCropRelPath": "references/placed/pf_9109c4a7e0de_kp_square.png",
+      "figureSquareCropRelPath": "references/placed/pf_9109c4a7e0de_square.png",
+      "figurePlateRelPath": "references/placed/pf_9109c4a7e0de_plate.png",
+      "qwenOutputRelPath": "references/placed/pf_9109c4a7e0de_qwen.png"
+    }
+  },
+  {
     "id": "fbbd2b914297",
     "referenceRelPath": "references/keypoints/ref_fbbd2b914297.png",
     "keypointRelPath": "references/keypoints/kp_fbbd2b914297.png",

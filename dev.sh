@@ -143,10 +143,11 @@ ensure_bootstrap_python_deps() {
   meta_log "Ensuring minimal Python deps (FastAPI/uvicorn) in venv..."
   "${VENV_PYTHON}" -m pip install --upgrade pip "setuptools<82" wheel
   # Keep this list small; it must cover imports performed at API startup.
-  # `services.character_storage` imports `requests`, and API imports `services.logic`.
+  # `services.character_storage` imports `requests`; timeline preview imports NumPy
+  # and reaches `utils.image_utils`, which imports Pillow, during API startup.
   # FastAPI requires python-multipart for File/Form endpoints during app import.
   # NOTE: `/startup/ws` requires WebSocket support; install uvicorn with standard extras.
-  "${VENV_PYTHON}" -m pip install fastapi "uvicorn[standard]" pydantic starlette requests python-multipart
+  "${VENV_PYTHON}" -m pip install fastapi "uvicorn[standard]" pydantic starlette requests python-multipart "numpy>=1.25.0" Pillow
 
   meta_log "Verifying WebSocket support in minimal venv..."
   "${VENV_PYTHON}" - <<'PY'

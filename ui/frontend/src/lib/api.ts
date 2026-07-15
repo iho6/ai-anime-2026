@@ -716,6 +716,33 @@ export async function apiTimelineImportImage(params: {
   return readJson<{ type: "image"; srcRelPath: string; width: number; height: number }>(res);
 }
 
+export type TimelineImportedFileResult = {
+  originalName: string;
+  type: "image" | "video" | "audio";
+  srcRelPath: string;
+  durationSec?: number;
+  width?: number;
+  height?: number;
+  fps?: number;
+};
+
+export async function apiTimelineImportFiles(params: {
+  timelineKey: string;
+  files: File[];
+}): Promise<{ items: TimelineImportedFileResult[] }> {
+  const form = new FormData();
+  for (const file of params.files) form.append("files", file, file.name);
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(params.timelineKey)}/import_files`,
+    {
+      method: "POST",
+      body: form,
+      credentials: "omit",
+    }
+  );
+  return readJson<{ items: TimelineImportedFileResult[] }>(res);
+}
+
 /** Copy a frame image into a timeline clip's frames folder (strip paste). */
 export async function apiTimelineDuplicateFrameAsset(params: {
   timelineKey: string;
@@ -1399,9 +1426,18 @@ export type CameraKeyframe = {
   blendEase?: number;
 };
 
+export type MotionRefPreviewCamera = {
+  azimuth: number;
+  elevation: number;
+  distance: number;
+  slideX: number;
+  slideY: number;
+};
+
 export type CameraTrajectory = {
   keyframes: CameraKeyframe[];
   playbackRange?: { startFrame: number; endFrame: number };
+  previewCamera?: MotionRefPreviewCamera;
 };
 
 export type V2PoseSeqSampleFps = "source" | 12 | 24;
@@ -1702,6 +1738,22 @@ export async function apiMotionRefCameraTrajectoryReplace(
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ keyframes }),
+      credentials: "omit",
+    }
+  );
+  return readJson<CameraTrajectory>(res);
+}
+
+export async function apiMotionRefPreviewCameraSave(
+  motionKey: string,
+  camera: MotionRefPreviewCamera
+): Promise<CameraTrajectory> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/preview_camera`,
+    {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(camera),
       credentials: "omit",
     }
   );
@@ -3806,13 +3858,25 @@ export function runReferenceMakeKeypointVideoWsJob(params: {
   });
 }
 
-/** Generate a Flux2 t2i reference preview. Resolves with the preview rel path. */
+export type ReferenceMediaKind = "image" | "video";
+
+export type GeneratedReferencePreview =
+  | { kind: "image"; previewRelPath: string }
+  | {
+      kind: "video";
+      previewRelPath: string;
+      fps: number;
+      durationSec?: number;
+    };
+
+/** Generate an image or native text-to-video reference preview. */
 export function runReferenceGenerateWsJob(params: {
+  kind?: ReferenceMediaKind;
   promptText: string;
   width?: number;
   height?: number;
   onLogLine: (line: string) => void;
-}): Promise<WsDoneMessage<{ previewRelPath: string }>> {
+}): Promise<WsDoneMessage<GeneratedReferencePreview>> {
   const url = wsUrlForPath("/reference/generate/ws");
   const { onLogLine, ...payload } = params;
   return new Promise((resolve, reject) => {
@@ -3837,7 +3901,7 @@ export function runReferenceGenerateWsJob(params: {
         line?: string;
         ok?: boolean;
         error?: string;
-        result?: { previewRelPath: string };
+        result?: GeneratedReferencePreview;
       };
       try {
         data = JSON.parse(String(ev.data));
@@ -3850,7 +3914,7 @@ export function runReferenceGenerateWsJob(params: {
       if (data.type === "done") {
         settled = true;
         ws.close();
-        resolve(data as WsDoneMessage<{ previewRelPath: string }>);
+        resolve(data as WsDoneMessage<GeneratedReferencePreview>);
       }
     };
   });

@@ -1,0 +1,597 @@
+{
+  "version": 1,
+  "fps": 24,
+  "gallery": [
+    {
+      "id": "4776fe6f75de",
+      "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000001.png",
+      "frameSequence": {
+        "sequenceGroupId": "329e3b3a6ead",
+        "strip": [
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000001.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_9822b17aa57c.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": -48,
+                "y": 4,
+                "width": 463,
+                "height": 463
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000001_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000001_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000002.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_5e0625a702c4.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": -26,
+                "y": -2,
+                "width": 469,
+                "height": 469
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000002_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000002_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000003.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_f62af6f3ba32.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 0,
+                "y": -4,
+                "width": 463,
+                "height": 463
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000003_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000003_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000004.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_2a5a62a06f0f.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 20,
+                "y": -11,
+                "width": 467,
+                "height": 467
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000004_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000004_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000005.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_940461333333.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 39,
+                "y": -14,
+                "width": 474,
+                "height": 474
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000005_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000005_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000006.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_b134146d9ffb.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 68,
+                "y": -3,
+                "width": 457,
+                "height": 457
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000006_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000006_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000007.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_1b77d1248136.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 101,
+                "y": 13,
+                "width": 432,
+                "height": 432
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000007_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000007_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000008.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_0e6ddf37df5f.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 114,
+                "y": 6,
+                "width": 449,
+                "height": 449
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000008_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000008_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000009.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_f65242adbf9e.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 130,
+                "y": -3,
+                "width": 461,
+                "height": 461
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000009_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000009_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000010.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_26f30f0b802d.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 148,
+                "y": -10,
+                "width": 468,
+                "height": 468
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000010_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000010_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000011.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_ecc5fa83f5ce.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 172,
+                "y": -9,
+                "width": 468,
+                "height": 468
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000011_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000011_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000012.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_02e048f24e1f.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 197,
+                "y": -5,
+                "width": 465,
+                "height": 465
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000012_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000012_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000013.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_bed2864ae5db.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 225,
+                "y": 1,
+                "width": 458,
+                "height": 458
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000013_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000013_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000014.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_56b40e4f0fb8.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 249,
+                "y": 4,
+                "width": 456,
+                "height": 456
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000014_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000014_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000015.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_6499e0b19f49.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 274,
+                "y": 1,
+                "width": 454,
+                "height": 454
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000015_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000015_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000016.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_17e8f0f9cedc.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 301,
+                "y": 3,
+                "width": 443,
+                "height": 443
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000016_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000016_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000017.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_55f63bb81607.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 317,
+                "y": -5,
+                "width": 458,
+                "height": 458
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000017_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000017_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000018.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_7f11395be9f0.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 339,
+                "y": -5,
+                "width": 461,
+                "height": 461
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000018_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000018_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000019.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_d8324abb313f.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 377,
+                "y": 13,
+                "width": 433,
+                "height": 433
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000019_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000019_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000020.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_cc3f010515b1.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 398,
+                "y": 11,
+                "width": 441,
+                "height": 441
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000020_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000020_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000021.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_7e28d6b36127.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 414,
+                "y": -1,
+                "width": 460,
+                "height": 460
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000021_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000021_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000022.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_ef0d3c38fa6c.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 435,
+                "y": -8,
+                "width": 468,
+                "height": 468
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000022_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000022_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000023.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_13b0ca3d0bf3.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 457,
+                "y": -11,
+                "width": 471,
+                "height": 471
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000023_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000023_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000024.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_920123ed22e4.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 481,
+                "y": -8,
+                "width": 468,
+                "height": 468
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000024_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000024_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000025.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_2d66431e921a.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 505,
+                "y": -2,
+                "width": 463,
+                "height": 463
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000025_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000025_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000026.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_6a6307488fc4.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 528,
+                "y": 3,
+                "width": 458,
+                "height": 458
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000026_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000026_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000027.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_0f7352805ef0.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 548,
+                "y": 0,
+                "width": 460,
+                "height": 460
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000027_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000027_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000028.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_2c5351f0c2be.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 577,
+                "y": 2,
+                "width": 450,
+                "height": 450
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000028_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000028_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000029.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_1e839295fef1.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 594,
+                "y": -5,
+                "width": 459,
+                "height": 459
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000029_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000029_sq.png"
+            }
+          },
+          {
+            "kind": "image",
+            "relPath": "sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000030.png",
+            "sourceKeypointRelPath": "references/keypoints/kp_8776fdee61e0.png",
+            "placedFigure": {
+              "canvas": {
+                "width": 1024,
+                "height": 576
+              },
+              "placement": {
+                "x": 609,
+                "y": -11,
+                "width": 473,
+                "height": 473
+              },
+              "qwenOutputRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000030_qwen.png",
+              "figureSquareCropRelPath": "Nazeda/sequence/0338_0715_2026/gallery/posefolder_f935441a8af9/frame_000030_sq.png"
+            }
+          }
+        ],
+        "hidden": []
+      },
+      "poseConfig": {
+        "baseImageRelPath": "Nazeda/poses/pose_000.png",
+        "promptText": "",
+        "skipCloseup": false,
+        "extraPadFrac": 0.0,
+        "cfgScale": 1.0,
+        "folderId": "9c542cacff83"
+      }
+    }
+  ],
+  "frames": [],
+  "previewAspect": "16:9",
+  "timelineViewStep": 1
+}

@@ -9588,6 +9588,58 @@ def _reference_ref_to_local(ref: str, log_cb: Callable[[str], None] | None = Non
     raise RuntimeError(f"Could not resolve reference image: {ref!r}")
 
 
+def _run_t2v_service(
+    *,
+    prompt_text: str,
+    negative_prompt: str | None = None,
+    width: int = 640,
+    height: int = 640,
+    length: int = 49,
+    fps: int = 16,
+    log_cb: Callable[[str], None] | None = None,
+) -> list[str]:
+    """Run native Wan T2V and return ordered individual-frame references."""
+    effective = (prompt_text or "").strip()
+    if not effective:
+        raise ValueError("prompt_text is required.")
+    args = [
+        "--test-mode",
+        "--enable-default",
+        "--default-port",
+        str(COMFY_PORT),
+        "--prompt",
+        effective,
+        "--width",
+        str(int(width)),
+        "--height",
+        str(int(height)),
+        "--length",
+        str(int(length)),
+        "--fps",
+        str(int(fps)),
+        "--individual-frames",
+    ]
+    if negative_prompt is not None:
+        args += ["--negative-prompt", str(negative_prompt)]
+    body = _run_service_testmode(
+        "services.t2v_ai_service.serverless",
+        args,
+        log_cb=log_cb,
+    )
+    if body.get("error"):
+        raise RuntimeError(str(body["error"]))
+    results = body.get("results") or []
+    first = results[0] if results and isinstance(results[0], dict) else {}
+    frame_urls = first.get("frame_urls")
+    if not isinstance(frame_urls, list) or not frame_urls:
+        raise RuntimeError("Wan T2V returned no individual frames.")
+    return [
+        str(ref).strip()
+        for ref in frame_urls
+        if isinstance(ref, str) and str(ref).strip()
+    ]
+
+
 def generate_reference_preview(
     *,
     prompt_text: str,
@@ -9613,7 +9665,45 @@ def generate_reference_preview(
     )
     local = _reference_ref_to_local(ref, log_cb=log_cb)
     preview_rel = reference_storage.add_preview(local)
-    return {"previewRelPath": preview_rel}
+    return {"kind": "image", "previewRelPath": preview_rel}
+
+
+def generate_reference_video_preview(
+    *,
+    prompt_text: str,
+    negative_prompt: str | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Generate a 640px Wan T2V preview and store an H.264 MP4 scratch asset."""
+    from services import reference_storage
+
+    width, height, length, fps = 640, 640, 49, 16
+    frame_refs = _run_t2v_service(
+        prompt_text=prompt_text,
+        negative_prompt=negative_prompt,
+        width=width,
+        height=height,
+        length=length,
+        fps=fps,
+        log_cb=log_cb,
+    )
+    if len(frame_refs) != length:
+        raise RuntimeError(
+            f"Wan T2V returned {len(frame_refs)} frames; expected {length}."
+        )
+
+    with tempfile.TemporaryDirectory(prefix="reference_t2v_") as temp_root:
+        temp_dir = Path(temp_root)
+        frames = _download_frame_urls_to_dir(frame_refs, temp_dir / "frames")
+        video_path = temp_dir / "preview.mp4"
+        encode_frames_to_mp4(frames, video_path, fps=fps)
+        preview_rel = reference_storage.add_preview(str(video_path))
+    return {
+        "kind": "video",
+        "previewRelPath": preview_rel,
+        "fps": fps,
+        "durationSec": length / float(fps),
+    }
 
 
 def commit_reference_image(preview_rel: str) -> dict[str, Any]:
@@ -10847,14 +10937,46 @@ def import_image_to_timeline_clip(
     out_path = dest / f"clip_{uuid.uuid4().hex}{ext}"
     shutil.copy2(src, out_path)
 
-    width = 0
-    height = 0
     try:
         with Image.open(out_path) as im:
             width, height = int(im.width), int(im.height)
-    except Exception:
-        pass
+            im.verify()
+        if width <= 0 or height <= 0:
+            raise ValueError("Image has invalid dimensions.")
+    except Exception as exc:
+        out_path.unlink(missing_ok=True)
+        raise ValueError("Image could not be decoded.") from exc
     return {"absPath": str(out_path), "width": width, "height": height}
+
+
+def import_video_to_timeline_clip(
+    source_abs_path: Path | str,
+    dest_dir: Path | str,
+) -> dict[str, Any]:
+    """Copy a video into ``dest_dir`` and return probed timeline metadata."""
+    import shutil
+    import uuid
+
+    src = Path(source_abs_path)
+    if not src.is_file():
+        raise ValueError(f"Video not found: {source_abs_path}")
+    dest = Path(dest_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    ext = src.suffix.lower() or ".mp4"
+    out_path = dest / f"clip_{uuid.uuid4().hex}{ext}"
+    shutil.copy2(src, out_path)
+    try:
+        meta = probe_video_meta(out_path)
+        if (
+            float(meta.get("durationSec") or 0) <= 0
+            or int(meta.get("width") or 0) <= 0
+            or int(meta.get("height") or 0) <= 0
+        ):
+            raise ValueError("Video has no decodable video stream.")
+    except Exception:
+        out_path.unlink(missing_ok=True)
+        raise
+    return {"absPath": str(out_path.resolve()), **meta}
 
 
 def save_png_base64_to_timeline_clip(
@@ -13010,7 +13132,13 @@ def import_audio_to_timeline_clip(
     ext = src.suffix.lower() or ".mp3"
     out_path = dest / f"clip_{uuid.uuid4().hex}{ext}"
     shutil.copy2(src, out_path)
-    meta = probe_audio_meta(out_path)
+    try:
+        meta = probe_audio_meta(out_path)
+        if float(meta.get("durationSec") or 0) <= 0:
+            raise ValueError("Audio has no decodable stream.")
+    except Exception:
+        out_path.unlink(missing_ok=True)
+        raise
     return {
         "absPath": str(out_path.resolve()),
         "durationSec": meta.get("durationSec") or 0.0,

@@ -548,12 +548,14 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         e.preventDefault();
         const direction = Math.sign(e.deltaY);
         if (direction === 0) return;
+        onUserCameraInteractRef.current?.(true);
         orbitRef.current.distance = Math.max(
           0.05,
           orbitRef.current.distance * (1 + direction * ZOOM_STEP)
         );
         _applyCameraToThree();
         onCameraChangeRef.current?.({ ...orbitRef.current });
+        onUserCameraInteractRef.current?.(false);
       };
       container.addEventListener("wheel", onWheelNative, { passive: false });
 
@@ -1026,6 +1028,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
       }
       pointerRef.current.down = false;
       pointerRef.current.orbiting = false;
+      onUserCameraInteractRef.current?.(false);
     }
     function onContextMenu(e: React.MouseEvent) {
       const id = _pickGizmo(e.clientX, e.clientY);

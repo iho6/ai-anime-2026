@@ -9,11 +9,20 @@ videos, location/shot images, and music placeholders. Timelines live under
 from __future__ import annotations
 
 import shutil
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import Response
 
 from services import logic, timeline_asset_storage, timeline_saved_shapes, timeline_storage
@@ -33,6 +42,46 @@ from .ws_streaming import run_with_log_stream, safe_send_json
 router = APIRouter(tags=["timeline"])
 
 _IMG_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+_VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v"}
+_AUDIO_EXTS = {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".opus"}
+_MAX_UPLOAD_FILES = 32
+_MAX_UPLOAD_FILE_BYTES = 2 * 1024 * 1024 * 1024
+_MAX_UPLOAD_TOTAL_BYTES = 4 * 1024 * 1024 * 1024
+
+
+def _classify_uploaded_media(
+    filename: str, content_type: str | None
+) -> tuple[str, str]:
+    ext = Path(filename).suffix.lower()
+    if ext in _IMG_EXTS:
+        return "image", ext
+    if ext in _VIDEO_EXTS:
+        return "video", ext
+    if ext in _AUDIO_EXTS:
+        return "audio", ext
+
+    mime = (content_type or "").lower()
+    if mime.startswith("image/"):
+        return "image", {
+            "image/jpeg": ".jpg",
+            "image/webp": ".webp",
+            "image/bmp": ".bmp",
+        }.get(mime, ".png")
+    if mime.startswith("video/"):
+        return "video", {
+            "video/webm": ".webm",
+            "video/quicktime": ".mov",
+        }.get(mime, ".mp4")
+    if mime.startswith("audio/"):
+        return "audio", {
+            "audio/wav": ".wav",
+            "audio/x-wav": ".wav",
+            "audio/flac": ".flac",
+            "audio/ogg": ".ogg",
+            "audio/mp4": ".m4a",
+            "audio/opus": ".opus",
+        }.get(mime, ".mp3")
+    raise ValueError(f"Unsupported media type for {filename!r}.")
 
 
 def _timeline_video_clip_result(out_abs: str, **fields: Any) -> dict[str, Any]:
@@ -283,6 +332,86 @@ def timeline_ensure_proxies(timeline_key: str) -> dict[str, Any]:
     if updated:
         timeline_storage.write_manifest(timeline_key, manifest)
     return {"ok": True, "updated": updated, "manifest": manifest if updated else None}
+
+
+@router.post("/timeline/{timeline_key}/import_files")
+async def timeline_import_files(
+    timeline_key: str,
+    files: list[UploadFile] = File(...),
+) -> dict[str, Any]:
+    """Import an ordered batch of local image/video/audio files atomically."""
+    if not _timeline_dir(timeline_key).is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    if not files:
+        raise HTTPException(400, "At least one file is required.")
+    if len(files) > _MAX_UPLOAD_FILES:
+        raise HTTPException(400, f"At most {_MAX_UPLOAD_FILES} files may be imported.")
+
+    clips_dir = timeline_storage.timeline_clips_dir(timeline_key)
+    imported_paths: list[Path] = []
+    temp_paths: list[Path] = []
+    items: list[dict[str, Any]] = []
+    total_bytes = 0
+    try:
+        for upload in files:
+            original_name = Path(upload.filename or "").name
+            if not original_name or original_name in {".", ".."}:
+                raise ValueError("Every upload must have a valid filename.")
+            media_type, suffix = _classify_uploaded_media(
+                original_name, upload.content_type
+            )
+
+            with tempfile.NamedTemporaryFile(
+                prefix="timeline_upload_", suffix=suffix, delete=False
+            ) as tmp:
+                temp_path = Path(tmp.name)
+                temp_paths.append(temp_path)
+                file_bytes = 0
+                while chunk := await upload.read(1024 * 1024):
+                    file_bytes += len(chunk)
+                    total_bytes += len(chunk)
+                    if file_bytes > _MAX_UPLOAD_FILE_BYTES:
+                        raise ValueError(f"{original_name!r} exceeds the 2 GiB limit.")
+                    if total_bytes > _MAX_UPLOAD_TOTAL_BYTES:
+                        raise ValueError("The upload batch exceeds the 4 GiB limit.")
+                    tmp.write(chunk)
+            await upload.close()
+            if file_bytes <= 0:
+                raise ValueError(f"{original_name!r} is empty.")
+
+            if media_type == "image":
+                info = logic.import_image_to_timeline_clip(temp_path, clips_dir)
+            elif media_type == "video":
+                info = logic.import_video_to_timeline_clip(temp_path, clips_dir)
+            else:
+                info = logic.import_audio_to_timeline_clip(temp_path, clips_dir)
+
+            imported = Path(str(info["absPath"])).resolve()
+            imported_paths.append(imported)
+            item: dict[str, Any] = {
+                "originalName": original_name,
+                "type": media_type,
+                "srcRelPath": storage_rel_from_abs(str(imported)),
+            }
+            if media_type in {"video", "audio"}:
+                item["durationSec"] = float(info.get("durationSec") or 0)
+            if media_type in {"image", "video"}:
+                item["width"] = int(info.get("width") or 0)
+                item["height"] = int(info.get("height") or 0)
+            if media_type == "video":
+                item["fps"] = float(info.get("fps") or 0)
+            items.append(item)
+    except Exception as exc:
+        for path in imported_paths:
+            path.unlink(missing_ok=True)
+        raise HTTPException(400, f"Media import failed: {exc}") from exc
+    finally:
+        for upload in files:
+            await upload.close()
+        for path in temp_paths:
+            path.unlink(missing_ok=True)
+
+    return {"items": items}
 
 
 @router.post("/timeline/{timeline_key}/import_audio")

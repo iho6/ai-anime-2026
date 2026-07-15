@@ -10,6 +10,7 @@ Usage:
     python utils/download_models.py --background-removal
     python utils/download_models.py --pose-keypoint
     python utils/download_models.py --flf-lightning [--hf-token YOUR_TOKEN]
+    python utils/download_models.py --wan-t2v-lightning
     python utils/download_models.py --flux-fill --hf-token YOUR_TOKEN  # mask edit + outpaint
     python utils/download_models.py --qwen-t2i  # reference t2i gen (Qwen-Image 2512)
     python utils/download_models.py --sound-gen  # Stable Audio Open 1.0 (sound_gen_ai_service)
@@ -170,6 +171,40 @@ FLF_LIGHTNING_MODELS = [
     },
 ]
 
+# Native Wan 2.2 14B text-to-video, matching the ComfyUI Wan 2.2 T2V blueprint.
+WAN_T2V_LIGHTNING_MODELS = [
+    {
+        "name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors (Wan UMT5)",
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+        "path": "comfyui/models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+    },
+    {
+        "name": "wan_2.1_vae.safetensors (Wan VAE)",
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+        "path": "comfyui/models/vae/wan_2.1_vae.safetensors",
+    },
+    {
+        "name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+        "path": "comfyui/models/diffusion_models/wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+    },
+    {
+        "name": "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+        "path": "comfyui/models/diffusion_models/wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+    },
+    {
+        "name": "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
+        "path": "comfyui/models/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
+    },
+    {
+        "name": "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors",
+        "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors",
+        "path": "comfyui/models/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors",
+    },
+]
+
 # Flux.1 Fill dev (inpaint) — shared by mask_guided_edit_ai_service
 # (flux_fill_inpaint_example) AND the location outpaint workflow
 # (flux_fill_outpaint); identical weights, deduplicated by destination path.
@@ -281,6 +316,7 @@ SERVICE_MODEL_MAP = {
     "anime_gen": ANIME_GEN_MODELS,
     "pose_keypoint": POSE_KEYPOINT_MODELS,
     "flf_lightning": FLF_LIGHTNING_MODELS,
+    "wan_t2v_lightning": WAN_T2V_LIGHTNING_MODELS,
     "flux_fill": FLUX_FILL_MODELS,
     "qwen_t2i": QWEN_T2I_MODELS,
     "sound_gen": SOUND_GEN_MODELS,
@@ -493,6 +529,8 @@ def _collect_selected_models(args) -> list[dict]:
             selected_keys.append("pose_keypoint")
         if args.flf_lightning:
             selected_keys.append("flf_lightning")
+        if args.wan_t2v_lightning:
+            selected_keys.append("wan_t2v_lightning")
         if args.flux_fill:
             selected_keys.append("flux_fill")
         if args.qwen_t2i:
@@ -582,6 +620,7 @@ def main():
             "  python utils/download_models.py --background-removal\n"
             "  python utils/download_models.py --pose-keypoint\n"
             "  python utils/download_models.py --flf-lightning\n"
+            "  python utils/download_models.py --wan-t2v-lightning\n"
             "  python utils/download_models.py --flux-fill --hf-token hf_xxx\n"
             "  python utils/download_models.py --qwen-t2i\n"
             "  python utils/download_models.py --sound-gen\n"
@@ -626,6 +665,15 @@ def main():
         help=(
             "Download Wan 2.2 FLF lightning weights for flf2video_ai_service "
             "(video_wan2_2_14B_flf2v_lightning_api; large download, tens of GB)"
+        ),
+    )
+    parser.add_argument(
+        "--wan-t2v-lightning",
+        action="store_true",
+        dest="wan_t2v_lightning",
+        help=(
+            "Download native Wan 2.2 14B T2V FP8 models and matching "
+            "LightX2V 4-step LoRAs"
         ),
     )
     parser.add_argument(
@@ -708,6 +756,7 @@ def main():
         and not args.background_removal
         and not args.pose_keypoint
         and not args.flf_lightning
+        and not args.wan_t2v_lightning
         and not args.flux_fill
         and not args.qwen_t2i
         and not args.sound_gen

@@ -740,6 +740,30 @@ export function buildAudioClip(params: {
   };
 }
 
+export function buildVideoClip(params: {
+  srcRelPath: string;
+  durationSec: number;
+  width: number;
+  height: number;
+  start?: number;
+}): TimelineClip {
+  const dur = Math.max(0.05, params.durationSec);
+  return {
+    id: genId("clip"),
+    type: "video",
+    srcRelPath: params.srcRelPath,
+    start: params.start ?? 0,
+    inPoint: 0,
+    outPoint: dur,
+    speed: 1,
+    duration: dur,
+    srcDuration: dur,
+    ...(params.width > 0 ? { naturalW: params.width } : {}),
+    ...(params.height > 0 ? { naturalH: params.height } : {}),
+    transform: defaultImageClipTransform(),
+  };
+}
+
 export function buildImageClip(params: {
   srcRelPath: string;
   width: number;
@@ -1196,6 +1220,88 @@ export function appendClipToTrack(track: TimelineTrack, clip: TimelineClip): Tim
   let start = 0;
   for (const c of track.clips) start = Math.max(start, clipEnd(c));
   return { ...track, clips: [...track.clips, { ...clip, start }] };
+}
+
+export function placeExternalMediaBatch(params: {
+  manifest: TimelineManifest;
+  targetTrackId: string | null;
+  startSec: number;
+  clips: TimelineClip[];
+}): { manifest: TimelineManifest; clipIds: string[] } {
+  const startSec = Math.max(0, params.startSec);
+  let tracks = [...params.manifest.tracks];
+  const usedTrackIds = new Set<string>();
+  const groups = new Map<"video" | "audio", TimelineClip[]>();
+  const groupOrder: Array<"video" | "audio"> = [];
+  for (const clip of params.clips) {
+    const kind = trackKindForClip(clip);
+    if (!groups.has(kind)) {
+      groups.set(kind, []);
+      groupOrder.push(kind);
+    }
+    groups.get(kind)!.push(clip);
+  }
+
+  const rangeIsFree = (track: TimelineTrack, endSec: number) =>
+    track.clips.every((clip) => clipEnd(clip) <= startSec || clip.start >= endSec);
+
+  for (const kind of groupOrder) {
+    const clips = groups.get(kind)!;
+    const groupDuration = clips.reduce((sum, clip) => sum + clip.duration, 0);
+    const endSec = startSec + groupDuration;
+    let trackIndex = -1;
+
+    if (params.targetTrackId && !usedTrackIds.has(params.targetTrackId)) {
+      const i = tracks.findIndex((track) => track.id === params.targetTrackId);
+      const candidate = tracks[i];
+      if (
+        candidate &&
+        (candidate.kind === kind ||
+          (candidate.kind === "neutral" && candidate.clips.length === 0)) &&
+        rangeIsFree(candidate, endSec)
+      ) {
+        trackIndex = i;
+      }
+    }
+
+    if (trackIndex < 0) {
+      for (let i = tracks.length - 1; i >= 0; i--) {
+        const candidate = tracks[i];
+        if (
+          !usedTrackIds.has(candidate.id) &&
+          candidate.kind === kind &&
+          rangeIsFree(candidate, endSec)
+        ) {
+          trackIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (trackIndex < 0) {
+      const name = defaultTrackNameForKind(kind, tracks);
+      tracks.push(kind === "audio" ? newAudioTrack(name) : newVideoTrack(name));
+      trackIndex = tracks.length - 1;
+    }
+
+    let target = tracks[trackIndex];
+    if (target.kind === "neutral") {
+      target = promoteTrackKind(target, kind, tracks);
+    }
+    let cursor = startSec;
+    const placed = clips.map((clip) => {
+      const next = { ...clip, start: cursor };
+      cursor += clip.duration;
+      return next;
+    });
+    tracks[trackIndex] = { ...target, clips: [...target.clips, ...placed] };
+    usedTrackIds.add(target.id);
+  }
+
+  return {
+    manifest: { ...params.manifest, tracks },
+    clipIds: params.clips.map((clip) => clip.id),
+  };
 }
 
 /**

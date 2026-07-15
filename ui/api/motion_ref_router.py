@@ -183,6 +183,14 @@ class CameraTrajectoryReplaceBody(BaseModel):
     keyframes: list[CameraKeyframeBody]
 
 
+class PreviewCameraBody(BaseModel):
+    azimuth: float
+    elevation: float
+    distance: float
+    slideX: float = 0
+    slideY: float = 0
+
+
 def _keyframe_entry_from_body(body: CameraKeyframeBody) -> dict[str, Any]:
     import uuid
 
@@ -245,6 +253,15 @@ def _serialize_camera_trajectory(data: dict) -> dict[str, Any]:
         result["playbackRange"] = {
             "startFrame": int(pr.get("startFrame", 0)),
             "endFrame": int(pr.get("endFrame", 0)),
+        }
+    camera = data.get("previewCamera")
+    if isinstance(camera, dict):
+        result["previewCamera"] = {
+            "azimuth": float(camera.get("azimuth", 20)),
+            "elevation": float(camera.get("elevation", 15)),
+            "distance": max(0.05, float(camera.get("distance", 3))),
+            "slideX": float(camera.get("slideX", 0)),
+            "slideY": float(camera.get("slideY", 0)),
         }
     return result
 
@@ -384,6 +401,22 @@ def motion_ref_camera_trajectory_replace(
         data = motion_ref_storage.write_camera_trajectory(motion_key, entries)
     except FileNotFoundError as e:
         raise HTTPException(404, str(e)) from e
+    return _serialize_camera_trajectory(data)
+
+
+@router.patch("/motion_ref/{motion_key}/preview_camera")
+def motion_ref_preview_camera_update(
+    motion_key: str, body: PreviewCameraBody
+) -> dict[str, Any]:
+    try:
+        data = motion_ref_storage.update_preview_camera(
+            motion_key,
+            body.model_dump(),
+        )
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
     return _serialize_camera_trajectory(data)
 
 

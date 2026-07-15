@@ -3,6 +3,9 @@ import type { TimelineClip, TimelineManifest, TimelineTrack } from "../../lib/ap
 import {
   activeLayersAt,
   applyPreviewDragToTrajectory,
+  buildAudioClip,
+  buildImageClip,
+  buildVideoClip,
   buildTimelineClipClipboard,
   clampClipRectToFrame,
   clipImageRect,
@@ -22,6 +25,7 @@ import {
   moveClipBetweenTracks,
   pasteTimelineClipClipboard,
   playbackEndPlayhead,
+  placeExternalMediaBatch,
   previewClipHitZIndex,
   pointerClientDeltaInFrameSpace,
   previewMoveTransformFromPointerDelta,
@@ -55,6 +59,76 @@ function videoClip(id: string, start = 0): TimelineClip {
     srcDuration: 2,
   };
 }
+
+describe("placeExternalMediaBatch", () => {
+  const emptyManifest = (): TimelineManifest => ({
+    version: 1,
+    fps: 24,
+    previewAspect: "16:9",
+    tracks: [],
+  });
+
+  it("places mixed media sequentially per kind from the same timestamp", () => {
+    const image = buildImageClip({ srcRelPath: "a.png", width: 100, height: 100 });
+    const audioA = buildAudioClip({ srcRelPath: "a.mp3", durationSec: 2 });
+    const video = buildVideoClip({
+      srcRelPath: "v.mp4",
+      durationSec: 3,
+      width: 1920,
+      height: 1080,
+    });
+    const audioB = buildAudioClip({ srcRelPath: "b.mp3", durationSec: 4 });
+    const result = placeExternalMediaBatch({
+      manifest: emptyManifest(),
+      targetTrackId: null,
+      startSec: 5,
+      clips: [image, audioA, video, audioB],
+    });
+    const visual = result.manifest.tracks.find((track) => track.kind === "video")!;
+    const audio = result.manifest.tracks.find((track) => track.kind === "audio")!;
+    expect(visual.clips.map((clip) => [clip.srcRelPath, clip.start])).toEqual([
+      ["a.png", 5],
+      ["v.mp4", 8],
+    ]);
+    expect(audio.clips.map((clip) => [clip.srcRelPath, clip.start])).toEqual([
+      ["a.mp3", 5],
+      ["b.mp3", 7],
+    ]);
+  });
+
+  it("promotes an empty neutral target and creates a lane for an incompatible group", () => {
+    const neutral: TimelineTrack = { id: "neutral", name: "Track", kind: "neutral", clips: [] };
+    const result = placeExternalMediaBatch({
+      manifest: { ...emptyManifest(), tracks: [neutral] },
+      targetTrackId: neutral.id,
+      startSec: 2,
+      clips: [
+        buildAudioClip({ srcRelPath: "sound.wav", durationSec: 1 }),
+        buildImageClip({ srcRelPath: "still.png", width: 10, height: 10 }),
+      ],
+    });
+    expect(result.manifest.tracks.find((track) => track.id === neutral.id)?.kind).toBe("audio");
+    expect(result.manifest.tracks.some((track) => track.kind === "video")).toBe(true);
+  });
+
+  it("does not ripple or overlap an occupied target lane", () => {
+    const target: TimelineTrack = {
+      id: "video",
+      name: "Video 1",
+      kind: "video",
+      clips: [videoClip("existing", 4)],
+    };
+    const result = placeExternalMediaBatch({
+      manifest: { ...emptyManifest(), tracks: [target] },
+      targetTrackId: target.id,
+      startSec: 5,
+      clips: [buildImageClip({ srcRelPath: "new.png", width: 10, height: 10 })],
+    });
+    expect(result.manifest.tracks[0].clips).toEqual(target.clips);
+    expect(result.manifest.tracks).toHaveLength(2);
+    expect(result.manifest.tracks[1].clips[0].start).toBe(5);
+  });
+});
 
 function manifest(tracks: TimelineTrack[]): TimelineManifest {
   return { version: 2, fps: 24, previewAspect: "16:9", tracks };

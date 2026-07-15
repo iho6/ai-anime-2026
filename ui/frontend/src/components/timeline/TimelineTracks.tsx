@@ -88,10 +88,20 @@ function TrackLaneDropZone(props: {
   dropActive: boolean;
   style?: React.CSSProperties;
   children: React.ReactNode;
+  onExternalFilesDrop?: (trackId: string, clientX: number, files: File[]) => void;
   onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
   onContextMenu?: (e: React.MouseEvent<HTMLDivElement>) => void;
 }) {
-  const { trackId, dropActive, style, children, onPointerDown, onContextMenu } = props;
+  const {
+    trackId,
+    dropActive,
+    style,
+    children,
+    onExternalFilesDrop,
+    onPointerDown,
+    onContextMenu,
+  } = props;
+  const [nativeFileOver, setNativeFileOver] = useState(false);
   const { setNodeRef, isOver } = useDroppable({
     id: `${TIMELINE_STRIP_FRAME_DROP_PREFIX}${trackId}`,
     data: { trackId },
@@ -102,8 +112,35 @@ function TrackLaneDropZone(props: {
       ref={setNodeRef}
       style={{
         ...style,
-        outline: dropActive && isOver ? "2px solid rgba(110,181,255,0.85)" : undefined,
+        outline:
+          nativeFileOver || (dropActive && isOver)
+            ? "2px solid rgba(110,181,255,0.85)"
+            : undefined,
         outlineOffset: -2,
+      }}
+      onDragEnter={(e) => {
+        if (!onExternalFilesDrop || !e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setNativeFileOver(true);
+      }}
+      onDragOver={(e) => {
+        if (!onExternalFilesDrop || !e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        setNativeFileOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setNativeFileOver(false);
+      }}
+      onDrop={(e) => {
+        if (!onExternalFilesDrop) return;
+        const files = Array.from(e.dataTransfer.files ?? []);
+        setNativeFileOver(false);
+        if (!files.length) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onExternalFilesDrop(trackId, e.clientX, files);
       }}
       onPointerDown={onPointerDown}
       onContextMenu={onContextMenu}
@@ -283,6 +320,7 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
   onCommit: () => void;
   setPxPerSec: (updater: (prev: number) => number) => void;
   externalStripDropActive?: boolean;
+  onExternalFilesDrop?: (trackId: string, clientX: number, files: File[]) => void;
   onClipContextMenu: (
     trackId: string,
     clipId: string,
@@ -350,6 +388,7 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
     onVolumeSeek,
     onVolumeClear,
     externalStripDropActive = false,
+    onExternalFilesDrop,
   } = props;
 
   const dragRef = useRef<DragState | null>(null);
@@ -1024,6 +1063,7 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
             <TrackLaneDropZone
               trackId={track.id}
               dropActive={externalStripDropActive && track.kind !== "audio"}
+              onExternalFilesDrop={onExternalFilesDrop}
               style={{
                 position: "relative",
                 width: laneWidth,

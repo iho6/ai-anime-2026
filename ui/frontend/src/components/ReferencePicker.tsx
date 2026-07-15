@@ -57,8 +57,9 @@ export function ReferencePicker(props: {
   onCancel: () => void;
   onUseSelected: (sel: ReferencePickerSelection) => void;
   onPickNew: (file: File) => void;
-  onGenerateBase: (promptText: string) => void;
+  onOpenGenerateBase?: () => void;
   onOpenMotionRef?: () => void;
+  refreshToken?: number;
   jobModal?: VideoExportJob;
 }) {
   if (!props.open) return null;
@@ -69,8 +70,9 @@ export function ReferencePicker(props: {
       onCancel={props.onCancel}
       onUseSelected={props.onUseSelected}
       onPickNew={props.onPickNew}
-      onGenerateBase={props.onGenerateBase}
+      onOpenGenerateBase={props.onOpenGenerateBase}
       onOpenMotionRef={props.onOpenMotionRef}
+      refreshToken={props.refreshToken}
       jobModal={props.jobModal}
     />
   );
@@ -82,11 +84,21 @@ function ReferencePickerOpen(props: {
   onCancel: () => void;
   onUseSelected: (sel: ReferencePickerSelection) => void;
   onPickNew: (file: File) => void;
-  onGenerateBase: (promptText: string) => void;
+  onOpenGenerateBase?: () => void;
   onOpenMotionRef?: () => void;
+  refreshToken?: number;
   jobModal?: VideoExportJob;
 }) {
-  const { busy, onCancel, onUseSelected, onPickNew, onGenerateBase, onOpenMotionRef, jobModal } = props;
+  const {
+    busy,
+    onCancel,
+    onUseSelected,
+    onPickNew,
+    onOpenGenerateBase,
+    onOpenMotionRef,
+    refreshToken,
+    jobModal,
+  } = props;
   const { confirmAction, askText, showError } = useAppError();
 
   const [layout, setLayout] = useState<KeypointsLayout>({
@@ -102,7 +114,6 @@ function ReferencePickerOpen(props: {
   const [anchorId, setAnchorId] = useState<string | null>(null);
   const [viewFolderId, setViewFolderId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [genPrompt, setGenPrompt] = useState("");
   const [menu, setMenu] = useState<{
     open: boolean;
     x: number;
@@ -121,7 +132,6 @@ function ReferencePickerOpen(props: {
     filenameBase: string;
   } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const canGenerate = !busy && genPrompt.trim().length > 0;
 
   const loadLayout = useCallback(async () => {
     setLoadingLayout(true);
@@ -136,7 +146,7 @@ function ReferencePickerOpen(props: {
 
   useEffect(() => {
     void loadLayout();
-  }, [loadLayout]);
+  }, [loadLayout, refreshToken]);
 
   const itemById = new Map(layout.items.map((x) => [x.id, x]));
   const videoById = new Map((layout.videoItems ?? []).map((x) => [x.id, x]));
@@ -712,6 +722,23 @@ function ReferencePickerOpen(props: {
             style={{ display: "none" }}
             onChange={handleFileInput}
           />
+          {onOpenGenerateBase && (
+            <SquareButton
+              disabled={busy}
+              onClick={onOpenGenerateBase}
+              variant="import"
+              tone="light"
+              size={120}
+              style={{ color: "inherit" }}
+              title="Generate and preview a base reference image with AI"
+            >
+              AI Generate
+              <br />
+              Base
+              <br />
+              Reference
+            </SquareButton>
+          )}
           {onOpenMotionRef && (
             <SquareButton
               disabled={busy}
@@ -727,49 +754,6 @@ function ReferencePickerOpen(props: {
               Ref Gen
             </SquareButton>
           )}
-        </div>
-
-        <div style={{ marginBottom: 12 }}>
-          <textarea
-            value={genPrompt}
-            disabled={busy}
-            onChange={(e) => setGenPrompt(e.target.value)}
-            placeholder="Describe a base reference image to generate"
-            rows={2}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              resize: "vertical",
-              border: "1px solid rgba(255,255,255,0.2)",
-              background: "transparent",
-              color: "#eee",
-              caretColor: "#eee",
-              fontSize: 13,
-              padding: 8,
-              marginBottom: 8,
-            }}
-          />
-          <button
-            type="button"
-            disabled={!canGenerate}
-            onClick={() => {
-              const p = genPrompt.trim();
-              if (p) onGenerateBase(p);
-            }}
-            style={{
-              width: "100%",
-              borderRadius: 0,
-              border: "1px solid rgba(255,255,255,0.3)",
-              background: "transparent",
-              color: "#eee",
-              padding: "8px 12px",
-              cursor: canGenerate ? "pointer" : "not-allowed",
-              opacity: canGenerate ? 1 : 0.5,
-            }}
-            title="Generate a base reference image with AI, then convert it to a keypoint pose"
-          >
-            AI Generate Base Reference
-          </button>
         </div>
 
         <div

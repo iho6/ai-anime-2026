@@ -1,0 +1,136 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {"title": "Wan T2V High Noise"}
+  },
+  "2": {
+    "inputs": {
+      "lora_name": "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
+      "strength_model": 1.0,
+      "model": ["1", 0]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {"title": "Wan T2V High Noise LightX2V"}
+  },
+  "3": {
+    "inputs": {"shift": 5.0, "model": ["2", 0]},
+    "class_type": "ModelSamplingSD3",
+    "_meta": {"title": "High Noise Sampling"}
+  },
+  "4": {
+    "inputs": {
+      "unet_name": "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {"title": "Wan T2V Low Noise"}
+  },
+  "5": {
+    "inputs": {
+      "lora_name": "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors",
+      "strength_model": 1.0,
+      "model": ["4", 0]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {"title": "Wan T2V Low Noise LightX2V"}
+  },
+  "6": {
+    "inputs": {"shift": 5.0, "model": ["5", 0]},
+    "class_type": "ModelSamplingSD3",
+    "_meta": {"title": "Low Noise Sampling"}
+  },
+  "7": {
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {"title": "Wan UMT5"}
+  },
+  "8": {
+    "inputs": {"text": "", "clip": ["7", 0]},
+    "class_type": "CLIPTextEncode",
+    "_meta": {"title": "CLIP Text Encode (Positive Prompt)"}
+  },
+  "9": {
+    "inputs": {
+      "text": "色调艳丽，过曝，静态，细节模糊不清，字幕，最差质量，低质量，JPEG压缩残留，畸形，毁容，多余的肢体，静止不动的画面",
+      "clip": ["7", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {"title": "CLIP Text Encode (Negative Prompt)"}
+  },
+  "10": {
+    "inputs": {"width": 640, "height": 640, "length": 49, "batch_size": 1},
+    "class_type": "EmptyHunyuanLatentVideo",
+    "_meta": {"title": "Wan T2V Latent"}
+  },
+  "11": {
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": 0,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 0,
+      "end_at_step": 2,
+      "return_with_leftover_noise": "enable",
+      "model": ["3", 0],
+      "positive": ["8", 0],
+      "negative": ["9", 0],
+      "latent_image": ["10", 0]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {"title": "High Noise 4-Step Sampler"}
+  },
+  "12": {
+    "inputs": {
+      "add_noise": "disable",
+      "noise_seed": 0,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 2,
+      "end_at_step": 4,
+      "return_with_leftover_noise": "disable",
+      "model": ["6", 0],
+      "positive": ["8", 0],
+      "negative": ["9", 0],
+      "latent_image": ["11", 0]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {"title": "Low Noise 4-Step Sampler"}
+  },
+  "13": {
+    "inputs": {"vae_name": "wan_2.1_vae.safetensors"},
+    "class_type": "VAELoader",
+    "_meta": {"title": "Wan VAE"}
+  },
+  "14": {
+    "inputs": {"samples": ["12", 0], "vae": ["13", 0]},
+    "class_type": "VAEDecode",
+    "_meta": {"title": "Decode Wan Video"}
+  },
+  "15": {
+    "inputs": {"fps": 16.0, "images": ["14", 0]},
+    "class_type": "CreateVideo",
+    "_meta": {"title": "Create Video"}
+  },
+  "16": {
+    "inputs": {
+      "filename_prefix": "video/Wan2.2_t2v_lightning",
+      "format": "auto",
+      "codec": "auto",
+      "video": ["15", 0]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {"title": "Save Video"}
+  }
+}

@@ -4,6 +4,106 @@
   "previewAspect": "16:9",
   "tracks": [
     {
+      "id": "trk_mrlnbmzk_8",
+      "name": "Remove Background (RMBG)",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mrlnbmzj_6",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784092414.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784092414.alpha.mkv",
+          "start": 62.61845309734345,
+          "inPoint": 0,
+          "outPoint": 1.75,
+          "speed": 1,
+          "duration": 1.75,
+          "srcDuration": 1.75,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "office1",
+            "sequenceName": "0410_0715_2026",
+            "galleryItemId": "c33c49c268f3"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784092414.proxy.webm",
+          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784092414.proxy.alpha.mkv"
+        }
+      ]
+    },
+    {
+      "id": "trk_mrlmf5dh_5",
+      "name": "Remove Background (RMBG)",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mrlmf5dg_3",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784091282.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784091282.alpha.mkv",
+          "start": 66.66872470378875,
+          "inPoint": 0,
+          "outPoint": 1.25,
+          "speed": 1,
+          "duration": 1.25,
+          "srcDuration": 1.25,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Nazeda",
+            "sequenceName": "0338_0715_2026",
+            "galleryItemId": "4776fe6f75de"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784091282.proxy.webm",
+          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784091282.proxy.alpha.mkv"
+        }
+      ]
+    },
+    {
+      "id": "trk_mrlbz4r0_4",
+      "name": "AI Edit",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mrlbz4qz_2",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_488f29a1149d4064ab7b51bca15808ab.png",
+          "start": 53.86431872844695,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        },
+        {
+          "id": "clip_mrlbxw7c_1",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_cc592317c79e454f8530b2a8c82aac37.png",
+          "start": 57.55577991008758,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "room1"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        }
+      ]
+    },
+    {
       "id": "trk_mrg41jnw_7",
       "name": "Remove Background (RMBG)",
       "kind": "video",
@@ -13,7 +113,7 @@
           "type": "video",
           "srcRelPath": "timelines/Timeline_4/clips/clip_9eaf7843828a40079085bc9115c34d5e_rmbg_1783758072.webm",
           "alphaRelPath": "timelines/Timeline_4/clips/clip_9eaf7843828a40079085bc9115c34d5e_rmbg_1783758072.alpha.mkv",
-          "start": 49.115175628662115,
+          "start": 42.415451049804695,
           "inPoint": 0.16115722656249976,
           "outPoint": 7.562499999999999,
           "speed": 1,
@@ -1035,20 +1135,23 @@
           }
         },
         {
-          "id": "clip_mrklj2jx_3",
+          "id": "clip_mrleqzm0_1",
           "type": "image",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_b431f803130f450298c4b68994ea4333.png",
-          "start": 33.080687704178416,
+          "srcRelPath": "timelines/Timeline_4/clips/clip_b4a5e29d44484dcea5028b1cffc8f770.png",
+          "start": 63.2637663602829,
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
           "duration": 3,
-          "naturalW": 1080,
-          "naturalH": 1080,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "room1"
+          },
           "transform": {
-            "x": 0.004326923076923077,
-            "y": 0.490308182573631,
-            "scale": 1.980616365147262
+            "x": 0,
+            "y": 0,
+            "scale": 1
           }
         }
       ]
@@ -1104,7 +1207,7 @@
           "id": "clip_mrg3gdoi_2",
           "type": "video",
           "srcRelPath": "timelines/Timeline_4/clips/clip_9eaf7843828a40079085bc9115c34d5e.mp4",
-          "start": 49.115175628662115,
+          "start": 42.415451049804695,
           "inPoint": 0,
           "outPoint": 7.5625,
           "speed": 1,
@@ -2332,7 +2435,7 @@
           "id": "clip_mrfu1def_10",
           "type": "video",
           "srcRelPath": "timelines/Timeline_4/clips/clip_427b27a874e344a4b57cb0292048534c.mp4",
-          "start": 68.09710845947265,
+          "start": 50.32300491333007,
           "inPoint": 0,
           "outPoint": 5.375,
           "speed": 0.3,
@@ -2353,6 +2456,44 @@
             "y": 0.33779627371042575,
             "scale": 1.6755925474208515
           }
+        },
+        {
+          "id": "clip_mrlluiej_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3.mp4",
+          "start": 62.61845309734345,
+          "inPoint": 0,
+          "outPoint": 1.75,
+          "speed": 1,
+          "duration": 1.75,
+          "srcDuration": 1.75,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "office1",
+            "sequenceName": "0410_0715_2026",
+            "galleryItemId": "c33c49c268f3"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3.proxy.mp4"
+        },
+        {
+          "id": "clip_mrlk3jb4_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470.mp4",
+          "start": 66.8119726896286,
+          "inPoint": 0,
+          "outPoint": 1.25,
+          "speed": 1,
+          "duration": 1.25,
+          "srcDuration": 1.25,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Nazeda",
+            "sequenceName": "0338_0715_2026",
+            "galleryItemId": "4776fe6f75de"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470.proxy.mp4"
         }
       ],
       "hidden": true
@@ -2406,7 +2547,7 @@
           "id": "clip_mrg0cgrp_7",
           "type": "image",
           "srcRelPath": "timelines/Timeline_4/clips/clip_afe56859e05f4897a8b66007663bcb1c.png",
-          "start": 49.115175628662115,
+          "start": 42.415451049804695,
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
@@ -2517,7 +2658,7 @@
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
-          "duration": 16.317664923094213,
+          "duration": 5.8162889617905025,
           "naturalW": 1024,
           "naturalH": 1024,
           "source": {
@@ -2568,13 +2709,74 @@
       "id": "trk_mrft880z_3",
       "name": "Video 1",
       "kind": "video",
-      "clips": []
+      "clips": [
+        {
+          "id": "clip_mrlluxfq_2",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981.mp4",
+          "start": 60.508948397636416,
+          "inPoint": 0,
+          "outPoint": 1.25,
+          "speed": 1,
+          "duration": 1.25,
+          "srcDuration": 1.25,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Buan",
+            "sequenceName": "0151_0715_2026",
+            "galleryItemId": "6556b3fc7743"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981.proxy.mp4"
+        }
+      ]
     },
     {
       "id": "trk_mrghydc8_6",
       "name": "Track 6",
       "kind": "neutral",
       "clips": []
+    },
+    {
+      "id": "trk_mrldkuqq_3",
+      "name": "Music 1",
+      "kind": "audio",
+      "clips": [
+        {
+          "id": "clip_mrldkuqo_1",
+          "type": "audio",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_46b39ddfe23d413a9c0a7daf8508ff1c.mp3",
+          "start": 0,
+          "inPoint": 0,
+          "outPoint": 11.948973736561832,
+          "speed": 1,
+          "duration": 11.948973736561832,
+          "srcDuration": 30.0002,
+          "volumeAutomation": {
+            "points": [
+              {
+                "t": 0,
+                "level": 50
+              },
+              {
+                "t": 1,
+                "level": 50
+              }
+            ]
+          }
+        },
+        {
+          "id": "clip_mrleohy8_1",
+          "type": "audio",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_22c97947ddb24d9bb6052957cdad7461.mp3",
+          "start": 11.948973736561832,
+          "inPoint": 0,
+          "outPoint": 30.0002,
+          "speed": 1,
+          "duration": 30.0002,
+          "srcDuration": 30.0002
+        }
+      ]
     }
   ]
 }

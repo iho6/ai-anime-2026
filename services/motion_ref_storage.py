@@ -100,12 +100,28 @@ def _camera_trajectory_path(motion_key: str) -> Path:
 
 
 _SENTINEL_PLAYBACK = object()
+_SENTINEL_PREVIEW_CAMERA = object()
+
+
+def _normalize_preview_camera(camera: Any) -> dict[str, float] | None:
+    if not isinstance(camera, dict):
+        return None
+    try:
+        return {
+            "azimuth": float(camera.get("azimuth", 20)),
+            "elevation": float(camera.get("elevation", 15)),
+            "distance": max(0.05, float(camera.get("distance", 3))),
+            "slideX": float(camera.get("slideX", 0)),
+            "slideY": float(camera.get("slideY", 0)),
+        }
+    except (TypeError, ValueError):
+        return None
 
 
 def read_camera_trajectory(motion_key: str) -> dict:
     path = _camera_trajectory_path(motion_key)
     if not path.is_file():
-        return {"keyframes": [], "playbackRange": None}
+        return {"keyframes": [], "playbackRange": None, "previewCamera": None}
     with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
     keyframes = data.get("keyframes") if isinstance(data, dict) else []
@@ -114,7 +130,14 @@ def read_camera_trajectory(motion_key: str) -> dict:
     playback_range = data.get("playbackRange") if isinstance(data, dict) else None
     if not isinstance(playback_range, dict):
         playback_range = None
-    return {"keyframes": keyframes, "playbackRange": playback_range}
+    preview_camera = _normalize_preview_camera(
+        data.get("previewCamera") if isinstance(data, dict) else None
+    )
+    return {
+        "keyframes": keyframes,
+        "playbackRange": playback_range,
+        "previewCamera": preview_camera,
+    }
 
 
 def write_camera_trajectory(
@@ -122,6 +145,7 @@ def write_camera_trajectory(
     keyframes: list[dict],
     *,
     playback_range: dict | None = _SENTINEL_PLAYBACK,  # type: ignore
+    preview_camera: dict | None = _SENTINEL_PREVIEW_CAMERA,  # type: ignore
 ) -> dict:
     d = motion_ref_dir(motion_key)
     d.mkdir(parents=True, exist_ok=True)
@@ -137,11 +161,32 @@ def write_camera_trajectory(
             "startFrame": int(pr.get("startFrame", 0)),
             "endFrame": int(pr.get("endFrame", 0)),
         }
+    if preview_camera is _SENTINEL_PREVIEW_CAMERA:
+        camera = existing.get("previewCamera")
+    else:
+        camera = preview_camera
+    normalized_camera = _normalize_preview_camera(camera)
+    if normalized_camera is not None:
+        payload["previewCamera"] = normalized_camera
     tmp = d / "camera_trajectory.json.tmp"
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
     tmp.replace(_camera_trajectory_path(motion_key))
     return payload
+
+
+def update_preview_camera(motion_key: str, camera: dict) -> dict:
+    if not motion_ref_dir(motion_key).is_dir():
+        raise FileNotFoundError(f"Motion not found: {motion_key}")
+    normalized = _normalize_preview_camera(camera)
+    if normalized is None:
+        raise ValueError("Invalid preview camera.")
+    data = read_camera_trajectory(motion_key)
+    return write_camera_trajectory(
+        motion_key,
+        list(data.get("keyframes") or []),
+        preview_camera=normalized,
+    )
 
 
 def update_playback_range(motion_key: str, start_frame: int, end_frame: int) -> dict:

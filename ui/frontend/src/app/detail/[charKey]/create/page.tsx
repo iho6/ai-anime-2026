@@ -42,6 +42,8 @@ import {
   apiSequenceFolderRename,
   type SequenceManifest,
   API_BASE_URL,
+  type GeneratedReferencePreview,
+  type ReferenceMediaKind,
 } from "../../../../lib/api";
 import {
   keypointRefToGenRef,
@@ -87,6 +89,7 @@ import {
   ReferencePicker,
   type ReferencePickerSelection,
 } from "../../../../components/ReferencePicker";
+import { ReferenceGenerateModal } from "../../../../components/ReferenceGenerateModal";
 import { MotionRefGenModal } from "../../../../components/MotionRefGenModal";
 import { StartingImagePreview } from "../../../../components/StartingImagePreview";
 import { buildKeypointRefQueueFromSelection } from "../../../../lib/referencePickerSelection";
@@ -268,6 +271,8 @@ export default function CreatePage() {
   const [activeReference, setActiveReference] = useState<ActiveReference | null>(null);
   const [batchRefQueue, setBatchRefQueue] = useState<BatchRefEntry[]>([]);
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
+  const [referenceGenerateOpen, setReferenceGenerateOpen] = useState(false);
+  const [referencePickerRefreshToken, setReferencePickerRefreshToken] = useState(0);
   const [motionRefOpen, setMotionRefOpen] = useState(false);
   // Single shared file-import input (routes into genType gallery).
   const sharedImportInputRef = useRef<HTMLInputElement | null>(null);
@@ -562,9 +567,13 @@ export default function CreatePage() {
     clearPosePromptUiForKeypointReference();
   }
 
-  const onReferenceGenerateBase = useCallback(
-    async (promptText: string) => {
-      setReferencePickerOpen(false);
+  const onReferenceGeneratePreview = useCallback(
+    async (args: {
+      kind: ReferenceMediaKind;
+      promptText: string;
+      width: number;
+      height: number;
+    }) => {
       try {
         beginSession({
           title: "Generating base reference…",
@@ -572,7 +581,7 @@ export default function CreatePage() {
           runningStatus: "Generating base reference…",
         });
         const gen = await runReferenceGenerateWsJob({
-          promptText,
+          ...args,
           onLogLine: (line) => {
             logRef.current?.pushLine(line);
             setRunningStatus(truncateJobModalStatusLine(line));
@@ -581,18 +590,46 @@ export default function CreatePage() {
         if (!gen.ok || !gen.result) {
           throw new Error(gen.error ?? "Reference generation failed");
         }
-        setTitle("Converting image to pose keypoints");
-        setRunningStatus("Starting keypoint conversion…");
-        pushLog("Base reference generated. Starting keypoint job…");
-        const done = await runReferenceMakeKeypointWsJob({
-          imageRelPath: gen.result.previewRelPath,
-          onLogLine: (line) => {
-            logRef.current?.pushLine(line);
-            setRunningStatus(truncateJobModalStatusLine(line));
-          },
+        endSession();
+        return gen.result;
+      } catch (err) {
+        failSession(err, "Failed to generate base reference.");
+        return null;
+      }
+    },
+    [beginSession, endSession, failSession, setRunningStatus]
+  );
+
+  const onReferenceSaveGeneratedKeypoint = useCallback(
+    async (preview: GeneratedReferencePreview) => {
+      try {
+        beginSession({
+          title: "Saving reference as keypoint…",
+          clearLog: true,
+          runningStatus: "Starting keypoint conversion…",
         });
-        if (!done.ok) throw new Error(done.error ?? "Keypoint generation failed");
-        if (done.result) {
+        const onLogLine = (line: string) => {
+          logRef.current?.pushLine(line);
+          setRunningStatus(truncateJobModalStatusLine(line));
+        };
+        if (preview.kind === "video") {
+          const done = await runReferenceMakeKeypointVideoWsJob({
+            videoRelPath: preview.previewRelPath,
+            fps: preview.fps,
+            onLogLine,
+          });
+          if (!done.ok || !done.result) {
+            throw new Error(done.error ?? "Video keypoint generation failed");
+          }
+          setActiveReference({ kind: "video", ref: done.result.item });
+        } else {
+          const done = await runReferenceMakeKeypointWsJob({
+            imageRelPath: preview.previewRelPath,
+            onLogLine,
+          });
+          if (!done.ok || !done.result) {
+            throw new Error(done.error ?? "Keypoint generation failed");
+          }
           setActiveReference({
             kind: "single",
             ref: {
@@ -601,11 +638,13 @@ export default function CreatePage() {
               keypointRelPath: done.result.item.keypointRelPath,
             },
           });
-          clearPosePromptUiForKeypointReference();
         }
+        clearPosePromptUiForKeypointReference();
+        setReferencePickerRefreshToken((value) => value + 1);
+        setReferenceGenerateOpen(false);
         endSession();
       } catch (err) {
-        failSession(err, "Failed to generate base reference.");
+        failSession(err, "Failed to save the generated reference as keypoints.");
       }
     },
     [
@@ -613,9 +652,7 @@ export default function CreatePage() {
       clearPosePromptUiForKeypointReference,
       endSession,
       failSession,
-      pushLog,
       setRunningStatus,
-      setTitle,
     ]
   );
 
@@ -2176,15 +2213,33 @@ export default function CreatePage() {
           open={referencePickerOpen}
           charKey={charKey}
           busy={uiBusy}
-          onCancel={() => setReferencePickerOpen(false)}
+          onCancel={() => {
+            setReferenceGenerateOpen(false);
+            setReferencePickerOpen(false);
+          }}
           onUseSelected={(refs) => void onReferenceUseSelected(refs)}
           onPickNew={onReferencePickNew}
-          onGenerateBase={onReferenceGenerateBase}
+          onOpenGenerateBase={() => setReferenceGenerateOpen(true)}
+          refreshToken={referencePickerRefreshToken}
           onOpenMotionRef={() => {
             setReferencePickerOpen(false);
             setMotionRefOpen(true);
           }}
           jobModal={{ begin: beginSession, end: endSession, fail: failSession, log: pushLog }}
+        />
+      )}
+
+      {isPose && (
+        <ReferenceGenerateModal
+          open={referenceGenerateOpen}
+          busy={jobRunning}
+          saveLabel={(preview) =>
+            preview.kind === "video" ? "Save as Video Keypoint" : "Save as Keypoint"
+          }
+          zIndex={10100}
+          onCancel={() => setReferenceGenerateOpen(false)}
+          onGenerate={onReferenceGeneratePreview}
+          onCommit={onReferenceSaveGeneratedKeypoint}
         />
       )}
 

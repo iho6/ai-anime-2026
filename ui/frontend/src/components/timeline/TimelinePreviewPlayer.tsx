@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   assetUrlFromRelPath,
   previewSrcRelPath,
@@ -10,7 +10,6 @@ import {
   TimelineText,
 } from "../../lib/api";
 import {
-  activeClipAt,
   activeLayersAt,
   type ActiveLayer,
   aspectRatio,
@@ -30,7 +29,6 @@ import {
   type PreviewFrameExtension,
   PREVIEW_FRAME_EXTENSION_NONE,
   PREVIEW_OUTSIDE_FRAME_OPACITY,
-  sourceTimeAt,
   sourceTimeAtWithTransition,
   timelineDuration,
   previewClipHitZIndex,
@@ -44,7 +42,10 @@ import {
 import type { TimelineTrack } from "../../lib/api";
 import { usePlayheadValue, type PlayheadStore } from "./timelinePlayback";
 import { TrajectoryEditor, TrajectoryWaypoint } from "./TrajectoryEditor";
-import { volumeGainAt } from "./volumeAutomation";
+import {
+  previewAudioOutputsAt,
+  type PreviewAudioOutput,
+} from "./timelinePreviewAudio";
 import type { TrajectoryMotionId } from "../../lib/api";
 import { GeometryClipLayer } from "./GeometryClipLayer";
 import { GeometryEditor } from "./GeometryEditor";
@@ -156,7 +157,10 @@ export function TimelinePreviewPlayer(props: {
   const ratio = aspectRatio(manifest.previewAspect);
 
   const frameRef = useRef<HTMLDivElement | null>(null);
-  const mediaRefs = useRef<Map<string, HTMLVideoElement | HTMLAudioElement>>(new Map());
+  const mediaRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const audioOutputRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const audioPlayPendingRef = useRef<Set<string>>(new Set());
+  const audioFailureReportedRef = useRef<Set<string>>(new Set());
   const [frameSize, setFrameSize] = useState({ w: 0, h: 0 });
   const [alignGuides, setAlignGuides] = useState<AlignGuide[]>([]);
   const [draggingClipId, setDraggingClipId] = useState<string | null>(null);
@@ -201,9 +205,9 @@ export function TimelinePreviewPlayer(props: {
     () => manifest.tracks.filter((t) => t.kind === "video" && !t.hidden),
     [manifest.tracks]
   );
-  const audioTracks = useMemo(
-    () => manifest.tracks.filter((t) => t.kind === "audio" && !t.hidden),
-    [manifest.tracks]
+  const audioOutputs = useMemo(
+    () => previewAudioOutputsAt(manifest.tracks, playhead),
+    [manifest.tracks, playhead]
   );
 
   const rafRef = useRef<number | null>(null);
@@ -242,22 +246,69 @@ export function TimelinePreviewPlayer(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, total]);
 
-  useEffect(() => {
-    const seen = new Set<string>();
+  const reportAudioFailure = useCallback((output: PreviewAudioOutput, error: unknown) => {
+    const key = `${output.sourceKind}:${output.clip.id}`;
+    if (audioFailureReportedRef.current.has(key)) return;
+    audioFailureReportedRef.current.add(key);
+    console.warn(
+      `Timeline preview audio failed (${output.sourceKind}, clip ${output.clip.id}, ${output.clip.srcRelPath}).`,
+      error
+    );
+  }, []);
 
-    const syncClip = (clip: TimelineClip, track: TimelineTrack) => {
-      seen.add(clip.id);
+  const attemptAudioPlay = useCallback((
+    el: HTMLAudioElement,
+    output: PreviewAudioOutput
+  ) => {
+    const key = `${output.sourceKind}:${output.clip.id}`;
+    if (audioPlayPendingRef.current.has(key)) return;
+    audioPlayPendingRef.current.add(key);
+    void el.play().then(
+      () => {
+        audioPlayPendingRef.current.delete(key);
+        audioFailureReportedRef.current.delete(key);
+      },
+      (error) => {
+        audioPlayPendingRef.current.delete(key);
+        reportAudioFailure(output, error);
+      }
+    );
+  }, [reportAudioFailure]);
+
+  const syncAudioOutput = useCallback((
+    el: HTMLAudioElement,
+    output: PreviewAudioOutput
+  ) => {
+    const { clip, sourceTime, gain } = output;
+    const reversed = !!clip.reversed;
+    el.playbackRate = clip.speed || 1;
+    el.volume = clamp(gain, 0, 1);
+    const seekThreshold = reversed ? 0.05 : playing ? 0.35 : 0.05;
+    if (Math.abs(el.currentTime - sourceTime) > seekThreshold) {
+      try {
+        el.currentTime = sourceTime;
+      } catch {
+        /* metadata/seek range not ready; canplay will retry */
+      }
+    }
+    if (!playing || reversed) {
+      if (!el.paused) el.pause();
+    } else if (el.paused) {
+      attemptAudioPlay(el, output);
+    }
+  }, [attemptAudioPlay, playing]);
+
+  useEffect(() => {
+    const seenVisual = new Set<string>();
+    const seenAudio = new Set<string>();
+
+    const syncVisualClip = (clip: TimelineClip, track: TimelineTrack) => {
+      seenVisual.add(clip.id);
       const el = mediaRefs.current.get(clip.id);
       if (!el) return;
-      const want =
-        track.kind === "video"
-          ? sourceTimeAtWithTransition(clip, playhead, track)
-          : sourceTimeAt(clip, playhead);
+      const want = sourceTimeAtWithTransition(clip, playhead, track);
       const reversed = !!clip.reversed;
       el.playbackRate = clip.speed || 1;
-      if (track.kind === "audio") {
-        el.volume = clamp(volumeGainAt(clip, playhead), 0, 1);
-      }
       const seekThreshold = reversed ? 0.05 : playing ? 0.35 : 0.05;
       if (!playing || reversed) {
         if (!el.paused) el.pause();
@@ -290,25 +341,29 @@ export function TimelinePreviewPlayer(props: {
       for (const clip of clips) {
         if (activeVideoDecodes < MAX_ACTIVE_VIDEO_DECODES) {
           activeVideoDecodes += 1;
-          syncClip(clip, track);
+          syncVisualClip(clip, track);
         } else {
           // Over budget: keep it paused (still "seen" so it isn't re-paused).
-          seen.add(clip.id);
+          seenVisual.add(clip.id);
           const el = mediaRefs.current.get(clip.id);
           if (el && !el.paused) el.pause();
         }
       }
     }
 
-    for (const track of audioTracks) {
-      const c = activeClipAt(track, playhead);
-      if (c?.type === "audio") syncClip(c, track);
+    for (const output of audioOutputs) {
+      seenAudio.add(output.clip.id);
+      const el = audioOutputRefs.current.get(output.clip.id);
+      if (el) syncAudioOutput(el, output);
     }
 
     for (const [id, el] of mediaRefs.current) {
-      if (!seen.has(id) && !el.paused) el.pause();
+      if (!seenVisual.has(id) && !el.paused) el.pause();
     }
-  }, [playhead, playing, videoTracks, audioTracks]);
+    for (const [id, el] of audioOutputRefs.current) {
+      if (!seenAudio.has(id) && !el.paused) el.pause();
+    }
+  }, [playhead, playing, videoTracks, audioOutputs, syncAudioOutput]);
 
   useEffect(() => {
     setTextStyleModal(null);
@@ -1585,18 +1640,26 @@ export function TimelinePreviewPlayer(props: {
           />
         ) : null}
 
-        {audioTracks.map((track) => {
-          const clip = activeClipAt(track, playhead);
-          if (!clip || clip.type !== "audio" || !clip.srcRelPath) return null;
+        {audioOutputs.map((output) => {
+          const { clip } = output;
           return (
             <audio
-              key={clip.id}
+              key={`audio-output-${clip.id}`}
               preload="auto"
               ref={(el) => {
-                if (el) mediaRefs.current.set(clip.id, el);
-                else mediaRefs.current.delete(clip.id);
+                if (el) audioOutputRefs.current.set(clip.id, el);
+                else audioOutputRefs.current.delete(clip.id);
               }}
               src={assetUrlFromRelPath(clip.srcRelPath)}
+              onLoadedMetadata={(e) => syncAudioOutput(e.currentTarget, output)}
+              onCanPlay={(e) => syncAudioOutput(e.currentTarget, output)}
+              onError={(e) =>
+                reportAudioFailure(
+                  output,
+                  e.currentTarget.error ?? new Error("Unknown media error")
+                )
+              }
+              style={{ display: "none" }}
             />
           );
         })}

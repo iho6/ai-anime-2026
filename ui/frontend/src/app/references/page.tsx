@@ -4,16 +4,21 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   apiReferenceImages,
-  apiReferenceKeypoints,
+  apiReferenceKeypointsLayout,
   apiReferenceImageCommit,
   apiReferenceImagesReorder,
   apiReferenceKeypointsReorder,
   apiReferenceImageDelete,
   apiReferenceKeypointDelete,
+  apiReferenceKeypointVideoDelete,
   assetUrlFromRelPath,
   assetDownloadUrlFromRelPath,
   runReferenceGenerateWsJob,
   runReferenceMakeKeypointWsJob,
+  runReferenceMakeKeypointVideoWsJob,
+  type GeneratedReferencePreview,
+  type KeypointVideoReference,
+  type ReferenceMediaKind,
   runReferenceMakeAngleWsJob,
   type ReferenceImageItem,
   type PoseReference,
@@ -43,6 +48,7 @@ export default function ReferencesPage() {
 
   const [images, setImages] = useState<ReferenceImageItem[]>([]);
   const [keypoints, setKeypoints] = useState<PoseReference[]>([]);
+  const [videoKeypoints, setVideoKeypoints] = useState<KeypointVideoReference[]>([]);
   const [imageOrder, setImageOrder] = useState<string[]>([]);
   const [keypointOrder, setKeypointOrder] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -78,9 +84,10 @@ export default function ReferencesPage() {
 
   const refreshKeypoints = useCallback(async () => {
     try {
-      const items = await apiReferenceKeypoints();
-      setKeypoints(items);
-      setKeypointOrder(items.map((x) => x.id));
+      const layout = await apiReferenceKeypointsLayout();
+      setKeypoints(layout.items);
+      setVideoKeypoints(layout.videoItems ?? []);
+      setKeypointOrder(layout.items.map((x) => x.id));
     } catch (e) {
       showError({ title: "References", message: "Could not load keypoint poses.", error: e });
     }
@@ -100,7 +107,12 @@ export default function ReferencesPage() {
   }
 
   const onGenerate = useCallback(
-    async (args: { promptText: string; width: number; height: number }) => {
+    async (args: {
+      kind: ReferenceMediaKind;
+      promptText: string;
+      width: number;
+      height: number;
+    }) => {
       beginSession({ title: "Generating reference", clearLog: true });
       try {
         const done = await runReferenceGenerateWsJob({
@@ -111,7 +123,7 @@ export default function ReferencesPage() {
           throw new Error(done.error ?? "Generation failed");
         }
         endSession();
-        return done.result.previewRelPath;
+        return done.result;
       } catch (e) {
         failSession(e, "Reference generation failed.");
         return null;
@@ -121,15 +133,34 @@ export default function ReferencesPage() {
   );
 
   const onCommit = useCallback(
-    async (previewRelPath: string) => {
+    async (preview: GeneratedReferencePreview) => {
       try {
-        await apiReferenceImageCommit(previewRelPath);
-        await refreshImages();
+        if (preview.kind === "video") {
+          beginSession({ title: "Making video keypoint reference", clearLog: true });
+          const done = await runReferenceMakeKeypointVideoWsJob({
+            videoRelPath: preview.previewRelPath,
+            fps: preview.fps,
+            onLogLine: (line) => logRef.current?.pushLine(line),
+          });
+          if (!done.ok || !done.result) {
+            throw new Error(done.error ?? "Video keypoint generation failed");
+          }
+          endSession();
+          await refreshKeypoints();
+        } else {
+          await apiReferenceImageCommit(preview.previewRelPath);
+          await refreshImages();
+        }
+        setModalOpen(false);
       } catch (e) {
-        showError({ title: "References", message: "Could not save reference image.", error: e });
+        if (preview.kind === "video") {
+          failSession(e, "Could not save video keypoint reference.");
+        } else {
+          showError({ title: "References", message: "Could not save reference image.", error: e });
+        }
       }
     },
-    [refreshImages, showError]
+    [beginSession, endSession, failSession, refreshImages, refreshKeypoints, showError]
   );
 
   const makeKeypoint = useCallback(
@@ -249,6 +280,37 @@ export default function ReferencesPage() {
     });
   }
 
+  function openVideoKeypointMenu(e: React.MouseEvent, item: KeypointVideoReference) {
+    e.preventDefault();
+    setMenu({
+      open: true,
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        {
+          key: "download",
+          label: "Download",
+          onSelect: () => downloadRelPath(item.videoRelPath),
+        },
+        {
+          key: "delete",
+          label: "Delete",
+          onSelect: () =>
+            void (async () => {
+              const ok = await confirmAction({
+                title: "Delete video keypoint reference",
+                message: "Delete this video and its generated keypoint frames?",
+                confirmText: "Delete",
+              });
+              if (!ok) return;
+              await apiReferenceKeypointVideoDelete(item.id);
+              await refreshKeypoints();
+            })(),
+        },
+      ],
+    });
+  }
+
   const imageById = new Map(images.map((x) => [x.itemId, x]));
   const keypointById = new Map(keypoints.map((x) => [x.id, x]));
 
@@ -339,6 +401,34 @@ export default function ReferencesPage() {
           }}
         />
 
+        {videoKeypoints.length > 0 && (
+          <>
+            <div style={{ marginTop: 8, marginBottom: 8, fontWeight: 400 }}>
+              Video Keypoint
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+              {videoKeypoints.map((item) => (
+                <video
+                  key={item.id}
+                  src={assetUrlFromRelPath(item.videoRelPath)}
+                  controls
+                  muted
+                  loop
+                  playsInline
+                  onContextMenu={(e) => openVideoKeypointMenu(e, item)}
+                  style={{
+                    width: TILE,
+                    height: TILE,
+                    objectFit: "cover",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    background: "#000",
+                  }}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
         {/* Keypoint Pose section */}
         <div style={{ marginTop: 8, marginBottom: 8, fontWeight: 400 }}>Keypoint Pose</div>
         <SortableGrid
@@ -393,6 +483,9 @@ export default function ReferencesPage() {
       <ReferenceGenerateModal
         open={modalOpen}
         busy={jobRunning}
+        saveLabel={(preview) =>
+          preview.kind === "video" ? "Save as Video Keypoint" : "Save"
+        }
         onCancel={() => setModalOpen(false)}
         onGenerate={onGenerate}
         onCommit={onCommit}

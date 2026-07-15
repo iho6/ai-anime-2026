@@ -60,10 +60,22 @@ async def reference_generate_ws(ws: WebSocket) -> None:
         prompt_text = (msg.get("promptText") or "").strip()
         if not prompt_text:
             raise ValueError("promptText is required.")
+        kind = str(msg.get("kind") or "image").strip().lower()
+        if kind not in {"image", "video"}:
+            raise ValueError("kind must be 'image' or 'video'.")
         width = int(msg.get("width") or 1024)
         height = int(msg.get("height") or 1024)
+        negative_prompt = msg.get("negativePrompt")
 
-        def work(log_cb: Any) -> dict[str, str]:
+        def work(log_cb: Any) -> dict[str, Any]:
+            if kind == "video":
+                return logic.generate_reference_video_preview(
+                    prompt_text=prompt_text,
+                    negative_prompt=(
+                        str(negative_prompt) if negative_prompt is not None else None
+                    ),
+                    log_cb=log_cb,
+                )
             return logic.generate_reference_preview(
                 prompt_text=prompt_text,
                 width=width,

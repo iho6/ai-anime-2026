@@ -25,6 +25,7 @@ import {
   apiMotionRefCameraTrajectoryReplace,
   apiMotionRefCameraTrajectoryDelete,
   apiMotionRefCameraKeyframePatch,
+  apiMotionRefPreviewCameraSave,
   apiMotionRefPlaybackRangeSave,
   apiMotionRefV2PoseSeqStart,
   apiMotionRefV2PoseSeqFrame,
@@ -36,6 +37,7 @@ import {
   MotionRefSegment,
   MotionRefShot,
   CameraKeyframe,
+  type MotionRefPreviewCamera,
   MotionShotsLayout,
   V2PoseSeqSampleFps,
   V2PoseSeqFrameCapture,
@@ -236,6 +238,59 @@ export function MotionRefGenModal(props: {
     slideX: 0,
     slideY: 0,
   });
+  const cameraStateRef = useRef(cameraState);
+  cameraStateRef.current = cameraState;
+  const persistedPreviewCameraRef = useRef<MotionRefPreviewCamera | null>(null);
+  const previewCameraSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPreviewCameraRef = useRef<{
+    motionKey: string;
+    camera: MotionRefPreviewCamera;
+  } | null>(null);
+
+  function cancelPreviewCameraSave(flush = false) {
+    if (previewCameraSaveTimerRef.current != null) {
+      clearTimeout(previewCameraSaveTimerRef.current);
+      previewCameraSaveTimerRef.current = null;
+    }
+    const pending = pendingPreviewCameraRef.current;
+    pendingPreviewCameraRef.current = null;
+    if (flush && pending) {
+      void apiMotionRefPreviewCameraSave(pending.motionKey, pending.camera).catch(() => {
+        // Motion switching should not be blocked by preference persistence.
+      });
+    }
+  }
+
+  function schedulePreviewCameraSave(opts?: {
+    motionKey?: string;
+    camera?: CameraState;
+  }) {
+    const motionKey = opts?.motionKey ?? manifest?.motionKey;
+    if (!motionKey) return;
+    const camera =
+      opts?.camera ??
+      skeletonRef.current?.getCameraState() ??
+      cameraStateRef.current;
+    const snapshot: MotionRefPreviewCamera = {
+      azimuth: camera.azimuth,
+      elevation: camera.elevation,
+      distance: camera.distance,
+      slideX: camera.slideX,
+      slideY: camera.slideY,
+    };
+    persistedPreviewCameraRef.current = snapshot;
+    cancelPreviewCameraSave();
+    pendingPreviewCameraRef.current = { motionKey, camera: snapshot };
+    previewCameraSaveTimerRef.current = setTimeout(() => {
+      previewCameraSaveTimerRef.current = null;
+      pendingPreviewCameraRef.current = null;
+      void apiMotionRefPreviewCameraSave(motionKey, snapshot).catch(() => {
+        // Background preference persistence should not interrupt camera interaction.
+      });
+    }, 300);
+  }
+
+  useEffect(() => () => cancelPreviewCameraSave(), []);
 
   const totalFrames =
     meshData?.frameCount ?? jointsData?.frameCount ?? manifest?.frameCount ?? 0;
@@ -348,6 +403,7 @@ export function MotionRefGenModal(props: {
     skeletonRef.current?.resetCamera();
     const cam = skeletonRef.current?.getCameraState();
     if (cam) setCameraState(cam);
+    schedulePreviewCameraSave();
     repushCurrentFrame();
   }
 
@@ -792,9 +848,12 @@ export function MotionRefGenModal(props: {
     playbackEnd: number;
     fps: number;
     keyframes: CameraKeyframe[];
+    previewCamera: MotionRefPreviewCamera | null;
   } | void> {
     if (busy && !opts?.quiet) return;
     setPlaying(false);
+    cancelPreviewCameraSave(true);
+    persistedPreviewCameraRef.current = null;
     rootXZRef.current = null;
     setTrajectoryEnabled(true);
     setCameraKeyframes([]);
@@ -835,9 +894,13 @@ export function MotionRefGenModal(props: {
       const clamped = Math.min(Math.max(0, fi), Math.max(0, frameCount - 1));
       setFrameIndex(clamped);
       const trim = await loadCameraTrajectory(item.motionKey, frameCount);
+      persistedPreviewCameraRef.current = trim.previewCamera;
       if (opts?.camera) {
         skeletonRef.current?.setCameraState(opts.camera);
         setCameraState((prev) => ({ ...prev, ...opts.camera }));
+      } else if (trim.previewCamera) {
+        skeletonRef.current?.setCameraState(trim.previewCamera);
+        setCameraState(trim.previewCamera);
       }
       if (!opts?.quiet) {
         pushLog(
@@ -853,6 +916,7 @@ export function MotionRefGenModal(props: {
         playbackEnd: trim.end,
         fps: item.fps,
         keyframes: trim.keyframes,
+        previewCamera: trim.previewCamera,
       };
     } catch (e) {
       if (opts?.quiet) throw e;
@@ -867,6 +931,8 @@ export function MotionRefGenModal(props: {
       await apiMotionRefDelete(motionKey);
       setMotions((prev) => prev.filter((m) => m.motionKey !== motionKey));
       if (manifest?.motionKey === motionKey) {
+        cancelPreviewCameraSave();
+        persistedPreviewCameraRef.current = null;
         setManifest(null);
         setMeshData(null);
         setJointsData(null);
@@ -895,12 +961,17 @@ export function MotionRefGenModal(props: {
       }
       setPlaybackStart(start);
       setPlaybackEnd(end);
-      return { start, end, keyframes };
+      return { start, end, keyframes, previewCamera: data.previewCamera ?? null };
     } catch {
       setCameraKeyframes([]);
       setPlaybackStart(0);
       setPlaybackEnd(max);
-      return { start: 0, end: max, keyframes: [] as CameraKeyframe[] };
+      return {
+        start: 0,
+        end: max,
+        keyframes: [] as CameraKeyframe[],
+        previewCamera: null as MotionRefPreviewCamera | null,
+      };
     }
   }
 
@@ -1070,9 +1141,17 @@ export function MotionRefGenModal(props: {
       setFrameIndex(Math.min(shot.frameIndex, maxFrame));
       skeletonRef.current?.setCameraState(camera);
       setCameraState((prev) => ({ ...prev, ...camera }));
+      schedulePreviewCameraSave();
       return;
     }
     await loadMotion(motion, { initialFrame: shot.frameIndex, camera });
+    const restoredCamera = skeletonRef.current?.getCameraState();
+    if (restoredCamera) {
+      schedulePreviewCameraSave({
+        motionKey: shot.motionKey,
+        camera: restoredCamera,
+      });
+    }
   }
 
   async function addShotsToPose(shots: MotionRefShot[]) {
@@ -1219,6 +1298,10 @@ export function MotionRefGenModal(props: {
     let fps = manifest?.fps ?? item.fps ?? 30;
     let motionFrameCount = totalFrames;
     let captureKeyframes = cameraKeyframes;
+    let fixedCamera: MotionRefPreviewCamera | null =
+      manifest?.motionKey === motionKey
+        ? (skeletonRef.current?.getCameraState() ?? persistedPreviewCameraRef.current)
+        : null;
 
     if (manifest?.motionKey !== motionKey) {
       opts.pushLog(`Loading ${motionKey}…`);
@@ -1229,6 +1312,10 @@ export function MotionRefGenModal(props: {
       fps = loaded.fps;
       motionFrameCount = loaded.frameCount;
       captureKeyframes = loaded.keyframes;
+      fixedCamera =
+        loaded.previewCamera ??
+        skeletonRef.current?.getCameraState() ??
+        null;
     }
 
     end = Math.min(end, Math.max(0, motionFrameCount - 1));
@@ -1243,6 +1330,10 @@ export function MotionRefGenModal(props: {
         `${trajectoryCapture ? ", trajectory camera" : ", fixed camera"})…`
     );
     setPlaying(false);
+    if (!trajectoryCapture && fixedCamera) {
+      skeletonRef.current?.setCameraState(fixedCamera);
+      setCameraState(fixedCamera);
+    }
     await waitViewerFrame();
 
     if (opts.mode === "video") {
@@ -1252,7 +1343,11 @@ export function MotionRefGenModal(props: {
         opts.setRunningStatus(`Capturing frame ${i + 1}/${frames.length}…`);
         setFrameIndex(f);
         await waitViewerFrame();
-        applyTrajectoryAtFrame(f, captureKeyframes, { forCapture: true });
+        if (trajectoryCapture) {
+          applyTrajectoryAtFrame(f, captureKeyframes, { forCapture: true });
+        } else if (fixedCamera) {
+          skeletonRef.current?.setCameraState(fixedCamera);
+        }
         await waitViewerFrame();
         const dataUrl = skeletonRef.current?.captureFrame();
         if (!dataUrl) throw new Error(`Capture failed at frame ${f}.`);
@@ -1273,7 +1368,11 @@ export function MotionRefGenModal(props: {
       // captureFrameAutoFit runs, independent of React 18 effect scheduling.
       if (displayMode === "mesh" && meshData) pushMeshFrame(meshData, f);
       await waitViewerFrame();
-      applyTrajectoryAtFrame(f, captureKeyframes, { forCapture: true });
+      if (trajectoryCapture) {
+        applyTrajectoryAtFrame(f, captureKeyframes, { forCapture: true });
+      } else if (fixedCamera) {
+        skeletonRef.current?.setCameraState(fixedCamera);
+      }
       await waitViewerFrame();
       const autoFit = skeletonRef.current?.captureFrameAutoFit();
       if (!autoFit) {
@@ -1648,7 +1747,11 @@ export function MotionRefGenModal(props: {
             onCameraChange={(s) => setCameraState(s)}
             onUserOrbitChange={(orbiting) => { userOrbitingRef.current = orbiting; }}
             onUserCameraInteract={(active) => {
-              if (active) userCameraOverrideRef.current = true;
+              if (active) {
+                userCameraOverrideRef.current = true;
+              } else {
+                schedulePreviewCameraSave();
+              }
             }}
             onGizmoContextMenu={(id, x, y) => setCameraCtxMenu({ id, x, y })}
           />

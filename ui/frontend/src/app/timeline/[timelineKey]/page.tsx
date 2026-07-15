@@ -15,6 +15,7 @@ import {
   apiTimelineEnsureProxies,
   apiTimelineGet,
   apiTimelineImportAudio,
+  apiTimelineImportFiles,
   apiTimelineImportImage,
   apiTimelineDuplicateFrameAsset,
   apiTimelinePut,
@@ -107,6 +108,7 @@ import {
   buildAudioClip,
   buildGeometryClip,
   buildImageClip,
+  buildVideoClip,
   buildTextClip,
   buildTimelineClipClipboard,
   buildTimelineCompositePngBase64,
@@ -130,6 +132,7 @@ import {
   newNeutralTrack,
   newVideoTrack,
   pasteTimelineClipClipboard,
+  placeExternalMediaBatch,
   PREVIEW_NUDGE_PX,
   PREVIEW_NUDGE_SHIFT_PX,
   promoteTrackKind,
@@ -213,6 +216,8 @@ export default function TimelineEditorPage() {
 
   const [manifest, setManifest] = useState<TimelineManifest | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [externalImporting, setExternalImporting] = useState(false);
+  const [emptyFileDropOver, setEmptyFileDropOver] = useState(false);
   const [playhead, setPlayhead] = useState(0);
   // Live playhead store (smooth 60fps for preview/ruler/time) + a ref that is
   // always current for event handlers. React `playhead` state is a throttled
@@ -542,6 +547,58 @@ export default function TimelineEditorPage() {
       setManifest((prev) => (prev ? fn(prev) : prev));
     },
     [commit]
+  );
+
+  const importExternalFiles = useCallback(
+    async (targetTrackId: string | null, clientX: number | null, files: File[]) => {
+      if (!files.length || externalImporting || busy) return;
+      const dropTime =
+        targetTrackId && clientX != null
+          ? Math.max(0, tracksRef.current?.timeAtClientX(clientX) ?? playheadRef.current)
+          : 0;
+      setPlaying(false);
+      setExternalImporting(true);
+      try {
+        const result = await apiTimelineImportFiles({ timelineKey, files });
+        const clips = result.items.map((item) => {
+          if (item.type === "audio") {
+            return buildAudioClip({
+              srcRelPath: item.srcRelPath,
+              durationSec: item.durationSec ?? 0,
+            });
+          }
+          if (item.type === "video") {
+            return buildVideoClip({
+              srcRelPath: item.srcRelPath,
+              durationSec: item.durationSec ?? 0,
+              width: item.width ?? 0,
+              height: item.height ?? 0,
+            });
+          }
+          return buildImageClip({
+            srcRelPath: item.srcRelPath,
+            width: item.width ?? 0,
+            height: item.height ?? 0,
+          });
+        });
+        historyUpdate((current) => {
+          const next = placeExternalMediaBatch({
+            manifest: current,
+            targetTrackId,
+            startSec: dropTime,
+            clips,
+          });
+          return next.manifest;
+        });
+        if (clips[0]) setSelectedClipIds([clips[0].id]);
+        seekPlayhead(dropTime);
+      } catch (error) {
+        showError({ message: "Could not import dropped media.", error });
+      } finally {
+        setExternalImporting(false);
+      }
+    },
+    [busy, externalImporting, historyUpdate, seekPlayhead, showError, timelineKey]
   );
 
   /** Ensure a target track of the given kind exists; return {manifest, trackId}. */
@@ -3730,15 +3787,47 @@ export default function TimelineEditorPage() {
 
       {/* Tracks */}
       <div style={{ padding: "0 20px 24px" }}>
+        {externalImporting && (
+          <div style={{ color: "#9cc9ff", fontSize: 12, marginBottom: 6 }}>
+            Importing dropped media…
+          </div>
+        )}
         {manifest.tracks.length === 0 ? (
           <div
-            style={{ border: "1px dashed rgba(255,255,255,0.2)", overflow: "hidden" }}
+            style={{
+              border: emptyFileDropOver
+                ? "2px solid rgba(110,181,255,0.85)"
+                : "1px dashed rgba(255,255,255,0.2)",
+              overflow: "hidden",
+            }}
+            onDragEnter={(e) => {
+              if (!e.dataTransfer.types.includes("Files")) return;
+              e.preventDefault();
+              setEmptyFileDropOver(true);
+            }}
+            onDragOver={(e) => {
+              if (!e.dataTransfer.types.includes("Files")) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+              setEmptyFileDropOver(true);
+            }}
+            onDragLeave={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+              setEmptyFileDropOver(false);
+            }}
+            onDrop={(e) => {
+              const files = Array.from(e.dataTransfer.files ?? []);
+              setEmptyFileDropOver(false);
+              if (!files.length) return;
+              e.preventDefault();
+              void importExternalFiles(null, null, files);
+            }}
             onContextMenu={(e) => {
               e.preventDefault();
               openSurfaceContextMenu(null, e.clientX, e.clientY);
             }}
           >
-            <AddTrackStrip onClick={addNeutralTrack} disabled={busy} />
+            <AddTrackStrip onClick={addNeutralTrack} disabled={busy || externalImporting} />
           </div>
         ) : (
           <TimelineTracks
@@ -3749,6 +3838,9 @@ export default function TimelineEditorPage() {
             playheadStore={playheadStore}
             selectedClipIds={selectedClipIds}
             externalStripDropActive={Boolean(videoFrameEditor)}
+            onExternalFilesDrop={(trackId, clientX, files) =>
+              void importExternalFiles(trackId, clientX, files)
+            }
             onSeek={(t) => {
               setPlaying(false);
               seekPlayhead(t);
