@@ -4,6 +4,32 @@
   "previewAspect": "16:9",
   "tracks": [
     {
+      "id": "trk_mrlqkg71_3",
+      "name": "Remove Background (RMBG)",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mrlqkg71_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981_rmbg_1784098985.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981_rmbg_1784098985.alpha.mkv",
+          "start": 60.508948397636416,
+          "inPoint": 0,
+          "outPoint": 1.25,
+          "speed": 1,
+          "duration": 1.25,
+          "srcDuration": 1.25,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Buan",
+            "sequenceName": "0151_0715_2026",
+            "galleryItemId": "6556b3fc7743"
+          }
+        }
+      ]
+    },
+    {
       "id": "trk_mrlnbmzk_8",
       "name": "Remove Background (RMBG)",
       "kind": "video",
@@ -2703,18 +2729,12 @@
       "id": "trk_mrftp69z_6",
       "name": "Video 2",
       "kind": "video",
-      "clips": []
-    },
-    {
-      "id": "trk_mrft880z_3",
-      "name": "Video 1",
-      "kind": "video",
       "clips": [
         {
           "id": "clip_mrlluxfq_2",
           "type": "video",
           "srcRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981.mp4",
-          "start": 60.508948397636416,
+          "start": 63.508948397636416,
           "inPoint": 0,
           "outPoint": 1.25,
           "speed": 1,
@@ -2730,6 +2750,12 @@
           "proxyRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981.proxy.mp4"
         }
       ]
+    },
+    {
+      "id": "trk_mrft880z_3",
+      "name": "Video 1",
+      "kind": "video",
+      "clips": []
     },
     {
       "id": "trk_mrghydc8_6",
