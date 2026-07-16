@@ -76,6 +76,37 @@ def _write_manifest(entries: list[dict[str, Any]]) -> None:
     path.write_text(json.dumps(entries, indent=2), encoding="utf-8")
 
 
+def rewrite_motion_key_references(old_key: str, new_key: str) -> int:
+    """Update ``shots.json`` entries after a motion-ref folder rename.
+
+    Rewrites matching ``motionKey`` values and ``relPath`` prefixes
+    ``motion_refs/<old_key>/`` → ``motion_refs/<new_key>/``.
+    Returns the number of entries updated.
+    """
+    old = sanitize_for_folder(old_key)
+    new = sanitize_for_folder(new_key)
+    if not old or not new or old == new:
+        return 0
+    old_prefix = f"motion_refs/{old}/"
+    new_prefix = f"motion_refs/{new}/"
+    entries = _read_manifest()
+    changed = 0
+    for e in entries:
+        updated = False
+        if str(e.get("motionKey") or "") == old:
+            e["motionKey"] = new
+            updated = True
+        rel = str(e.get("relPath") or "").replace("\\", "/")
+        if rel.startswith(old_prefix):
+            e["relPath"] = new_prefix + rel[len(old_prefix) :]
+            updated = True
+        if updated:
+            changed += 1
+    if changed:
+        _write_manifest(entries)
+    return changed
+
+
 def _empty_ui_layout() -> dict[str, Any]:
     return {"rootOrder": [], "folders": [], "folderOrder": {}}
 

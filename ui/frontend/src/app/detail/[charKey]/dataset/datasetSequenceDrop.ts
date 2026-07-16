@@ -7,6 +7,11 @@ import {
 import { defaultSequenceCrop } from "../../../../lib/sequenceCrop";
 import { newGalleryId, SEQUENCE_BUILDER_DRAG_MIME } from "./sequenceGalleryUtils";
 
+export function setSequenceBuilderDragData(e: React.DragEvent, relPath: string): void {
+  e.dataTransfer.setData(SEQUENCE_BUILDER_DRAG_MIME, JSON.stringify({ relPath }));
+  e.dataTransfer.effectAllowed = "copy";
+}
+
 export function parseSequenceBuilderDrop(e: React.DragEvent): string | null {
   try {
     const raw = e.dataTransfer.getData(SEQUENCE_BUILDER_DRAG_MIME);

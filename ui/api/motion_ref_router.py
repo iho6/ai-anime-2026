@@ -78,6 +78,21 @@ def motion_ref_delete(motion_key: str) -> dict[str, bool]:
     return {"ok": True}
 
 
+class MotionRefRenameBody(BaseModel):
+    newName: str = ""
+
+
+@router.post("/motion_ref/{motion_key}/rename")
+def motion_ref_rename(motion_key: str, body: MotionRefRenameBody) -> dict[str, str]:
+    try:
+        new_key = motion_ref_storage.rename_motion_ref(motion_key, body.newName)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"newMotionKey": new_key}
+
+
 # ── Joints file (gzipped JSON for browser streaming) ─────────────────────────
 
 @router.get("/motion_ref/{motion_key}/joints")

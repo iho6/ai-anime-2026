@@ -40,16 +40,17 @@ def motion_ref_shots_dir(motion_key: str) -> Path:
 
 
 def list_motion_ref_keys() -> list[str]:
+    """Return motion keys newest-first (directory mtime descending)."""
     root = MOTION_REFS_STORAGE_ROOT
     if not root.exists():
         return []
-    return sorted(
-        [
-            p.name for p in root.iterdir()
-            if p.is_dir() and not p.name.startswith("_") and (p / "manifest.json").is_file()
-        ],
-        key=lambda s: s.lower(),
-    )
+    dirs = [
+        p
+        for p in root.iterdir()
+        if p.is_dir() and not p.name.startswith("_") and (p / "manifest.json").is_file()
+    ]
+    dirs.sort(key=lambda p: (-p.stat().st_mtime_ns, p.name.lower()))
+    return [p.name for p in dirs]
 
 
 def unique_motion_ref_key(base_name: str) -> str:
@@ -93,6 +94,32 @@ def delete_motion_ref(motion_key: str) -> None:
     d = motion_ref_dir(motion_key)
     if d.is_dir():
         shutil.rmtree(d)
+
+
+def rename_motion_ref(old_key: str, new_name: str) -> str:
+    """Rename a motion-ref folder and rewrite shot bookmarks that reference it.
+
+    Returns the sanitized new key. Raises ``FileNotFoundError`` if missing,
+    ``ValueError`` if the new name is empty or already taken.
+    """
+    old = sanitize_for_folder(old_key)
+    new = sanitize_for_folder(new_name)
+    if not new:
+        raise ValueError("Name cannot be empty.")
+    old_dir = motion_ref_dir(old)
+    if not old_dir.is_dir() or not (old_dir / "manifest.json").is_file():
+        raise FileNotFoundError(f"Motion not found: {old}")
+    if new == old:
+        return old
+    new_dir = motion_ref_dir(new)
+    if new_dir.exists():
+        raise ValueError("Motion already exists.")
+    old_dir.rename(new_dir)
+    # Late import: motion_shot_storage imports this module.
+    from services import motion_shot_storage
+
+    motion_shot_storage.rewrite_motion_key_references(old, new)
+    return new
 
 
 def _camera_trajectory_path(motion_key: str) -> Path:

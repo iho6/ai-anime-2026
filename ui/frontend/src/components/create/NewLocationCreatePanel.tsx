@@ -92,11 +92,12 @@ export const NewLocationCreatePanel = forwardRef<
   const previewRelPath =
     draftRelPaths.length > 0 ? draftRelPaths[Math.min(draftIndex, draftRelPaths.length - 1)] : "";
 
-  const refreshDrafts = useCallback(async (selectLast: boolean) => {
+  const refreshDrafts = useCallback(async (selectNewest: boolean) => {
     const { relPaths } = await apiNewLocationDraftBases();
     setDraftRelPaths(relPaths);
-    if (selectLast) {
-      setDraftIndex(Math.max(0, relPaths.length - 1));
+    if (selectNewest) {
+      // Backend returns newest-first; show as 1/N.
+      setDraftIndex(0);
     } else {
       setDraftIndex((i) => Math.min(i, Math.max(0, relPaths.length - 1)));
     }
@@ -350,15 +351,21 @@ export const NewLocationCreatePanel = forwardRef<
   return (
     <>
       <div
+        title="Drag corner to resize preview"
         style={{
+          resize: "both",
+          overflow: "hidden",
           width: "100%",
           height: previewH,
+          minWidth: 160,
+          minHeight: 120,
+          maxWidth: "100%",
+          maxHeight: "min(70vh, 720px)",
           border: embedded ? `1px dashed ${borderColor}` : `1px dashed rgba(0,0,0,0.35)`,
           display: "flex",
           alignItems: "stretch",
           justifyContent: "center",
-          marginBottom: draftRelPaths.length >= 1 ? 0 : embedded ? 12 : 16,
-          overflow: "hidden",
+          marginBottom: 0,
           boxSizing: "border-box",
         }}
         onContextMenu={(e) => {
@@ -369,16 +376,37 @@ export const NewLocationCreatePanel = forwardRef<
         }}
       >
         {previewUrl ? (
-          <ZoomableImage
-            src={previewUrl}
-            fitMaxWidth="100%"
-            fitMaxHeight={`${previewH}px`}
-          />
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              minHeight: 0,
+              display: "flex",
+              alignItems: "stretch",
+              justifyContent: "center",
+            }}
+          >
+            <ZoomableImage
+              src={previewUrl}
+              fitMaxWidth="100%"
+              fitMaxHeight="100%"
+            />
+          </div>
         ) : (
           <div style={{ opacity: 0.75, fontSize: 14, alignSelf: "center" }}>
             No preview
           </div>
         )}
+      </div>
+      <div
+        style={{
+          fontSize: 10,
+          color: embedded ? "#555" : "rgba(0,0,0,0.45)",
+          marginBottom: draftRelPaths.length >= 1 ? 0 : embedded ? 12 : 16,
+          userSelect: "none",
+        }}
+      >
+        Drag corner to resize preview
       </div>
 
       {draftRelPaths.length >= 1 ? (

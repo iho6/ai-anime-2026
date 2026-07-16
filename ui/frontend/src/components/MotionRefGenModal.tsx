@@ -14,6 +14,7 @@ import {
   apiMotionRefJoints,
   apiMotionRefList,
   apiMotionRefDelete,
+  apiMotionRefRename,
   apiMotionRefShotsLayout,
   apiMotionRefShotSave,
   apiMotionRefShotDelete,
@@ -72,6 +73,10 @@ import {
   MOTION_REF_ACCENT_BG,
   MOTION_REF_ACCENT_BTN_BG,
 } from "./motionRef/theme";
+import {
+  motionRefAutoNameFromSegment,
+  motionRefDisplayLabel,
+} from "./motionRef/motionRefLabel";
 import { interpolateWorldPoseAtFrame, DEFAULT_BLEND_EASE } from "./motionRef/cameraTrajectory";
 import { ExportFpsDialog } from "./ExportFpsDialog";
 import {
@@ -791,7 +796,7 @@ export function MotionRefGenModal(props: {
 
     try {
       const done = await runMotionRefGenerateWsJob({
-        motionName: segments[0].text.trim().slice(0, 40) || "motion",
+        motionName: motionRefAutoNameFromSegment(segments[0].text),
         segments: activeSegments,
         promptAdherence,
         onLogLine: (line) => pushLog(line),
@@ -943,6 +948,42 @@ export function MotionRefGenModal(props: {
       }
     } catch {
       showError({ message: "Could not delete motion." });
+    }
+  }
+
+  async function renameMotion(motionKey: string) {
+    setMotionCtxMenu(null);
+    const item = motions.find((m) => m.motionKey === motionKey);
+    const defaultName = motionRefDisplayLabel(
+      item?.segments?.[0]?.text,
+      motionKey,
+      80
+    );
+    const name = await askText({
+      title: "Rename motion",
+      message: "New name for this animation:",
+      defaultValue: defaultName,
+      confirmText: "Rename",
+    });
+    if (!name?.trim()) return;
+    try {
+      const { newMotionKey } = await apiMotionRefRename(motionKey, name.trim());
+      try {
+        const next = await apiMotionRefList();
+        setMotions(next);
+      } catch {
+        setMotions((prev) =>
+          prev.map((m) =>
+            m.motionKey === motionKey ? { ...m, motionKey: newMotionKey } : m
+          )
+        );
+      }
+      if (manifest?.motionKey === motionKey) {
+        setManifest((mf) => (mf ? { ...mf, motionKey: newMotionKey } : mf));
+      }
+      await loadShotsLayout();
+    } catch (e) {
+      showError({ message: "Could not rename motion.", error: e });
     }
   }
 
@@ -1967,7 +2008,7 @@ export function MotionRefGenModal(props: {
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {motions.map((m) => {
                 const isActive = manifest?.motionKey === m.motionKey;
-                const label = m.segments?.[0]?.text?.slice(0, 28) || m.motionKey.slice(0, 20);
+                const label = motionRefDisplayLabel(m.segments?.[0]?.text, m.motionKey);
                 return (
                   <div
                     key={m.motionKey}
@@ -2062,7 +2103,7 @@ export function MotionRefGenModal(props: {
               const item = motions.find((m) => m.motionKey === motionCtxMenu.motionKey);
               if (!item) return;
               const label =
-                item.segments?.[0]?.text?.slice(0, 24) || item.motionKey.slice(0, 20);
+                motionRefDisplayLabel(item.segments?.[0]?.text, item.motionKey, 24);
               setMotionCtxMenu(null);
               setFpsExportPending({
                 motionKey: item.motionKey,
@@ -2080,7 +2121,7 @@ export function MotionRefGenModal(props: {
             onClick={() => {
               const item = motions.find((m) => m.motionKey === motionCtxMenu.motionKey);
               if (!item) return;
-              const label = item.segments?.[0]?.text?.slice(0, 24) || item.motionKey.slice(0, 20);
+              const label = motionRefDisplayLabel(item.segments?.[0]?.text, item.motionKey, 24);
               setMotionCtxMenu(null);
               setV2poseDialog({
                 motionKey: item.motionKey,
@@ -2094,6 +2135,14 @@ export function MotionRefGenModal(props: {
             style={ctxMenuBtn}
           >
             V2Pose Seq
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void renameMotion(motionCtxMenu.motionKey)}
+            style={ctxMenuBtn}
+          >
+            Rename
           </button>
           <button
             type="button"

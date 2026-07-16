@@ -93,9 +93,23 @@ def compose_new_character_positive_prompt(user_description: str) -> str:
 # ============================================================================
 
 
+# Photorealistic studio lead for the global reference library (Qwen T2I).
+# Intentionally omits pose / camera / stance constraints — the user prompt carries
+# pose, angle, and action for variation references.
+REFERENCE_IMAGE_POSITIVE_LEAD = (
+    "professional studio photograph, photorealistic, ultra high quality, sharp focus, "
+    "natural skin texture, realistic lighting, soft studio lighting, plain neutral background, "
+    "single real person, solo, one subject only, "
+    "no anime, no illustration, no cartoon, no 3d render"
+)
+
+
 def compose_reference_base_t2i_prompt(user_description: str) -> str:
     """Full Qwen T2I prompt for ReferencePicker / global reference library."""
-    return compose_new_character_positive_prompt(user_description)
+    u = (user_description or "").strip()
+    if not u:
+        return REFERENCE_IMAGE_POSITIVE_LEAD
+    return f"{REFERENCE_IMAGE_POSITIVE_LEAD}, {u}"
 
 
 # ============================================================================

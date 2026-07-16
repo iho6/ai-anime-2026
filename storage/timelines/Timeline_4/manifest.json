@@ -4,84 +4,122 @@
   "previewAspect": "16:9",
   "tracks": [
     {
-      "id": "trk_mrlqkg71_3",
+      "id": "trk_mrnemelk_7",
       "name": "Remove Background (RMBG)",
       "kind": "video",
       "clips": [
         {
-          "id": "clip_mrlqkg71_1",
+          "id": "clip_mrnemelj_5",
           "type": "video",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981_rmbg_1784098985.webm",
-          "alphaRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981_rmbg_1784098985.alpha.mkv",
-          "start": 60.508948397636416,
+          "srcRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff_rmbg_1784199292.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff_rmbg_1784199292.alpha.mkv",
+          "start": 99.52616271972656,
           "inPoint": 0,
-          "outPoint": 1.25,
+          "outPoint": 7.5,
           "speed": 1,
-          "duration": 1.25,
-          "srcDuration": 1.25,
-          "naturalW": 1920,
+          "duration": 7.5,
+          "srcDuration": 7.5,
+          "naturalW": 1080,
           "naturalH": 1080,
           "source": {
             "charKey": "Buan",
-            "sequenceName": "0151_0715_2026",
-            "galleryItemId": "6556b3fc7743"
+            "sequenceName": "head_turn"
           }
         }
       ]
     },
     {
-      "id": "trk_mrlnbmzk_8",
+      "id": "trk_mrndrq9m_4",
       "name": "Remove Background (RMBG)",
       "kind": "video",
       "clips": [
         {
-          "id": "clip_mrlnbmzj_6",
+          "id": "clip_mrndrq9h_2",
           "type": "video",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784092414.webm",
-          "alphaRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784092414.alpha.mkv",
-          "start": 61.758948397636416,
+          "srcRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff_rmbg_1784197115.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff_rmbg_1784197115.alpha.mkv",
+          "start": 90.73277511596679,
           "inPoint": 0,
-          "outPoint": 1.75,
+          "outPoint": 7.5,
           "speed": 1,
-          "duration": 1.75,
-          "srcDuration": 1.75,
-          "naturalW": 1920,
+          "duration": 7.5,
+          "srcDuration": 7.5,
+          "naturalW": 1080,
           "naturalH": 1080,
           "source": {
-            "charKey": "office1",
-            "sequenceName": "0410_0715_2026",
-            "galleryItemId": "c33c49c268f3"
-          },
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784092414.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784092414.proxy.alpha.mkv"
+            "charKey": "Buan",
+            "sequenceName": "head_turn"
+          }
         }
       ]
     },
     {
-      "id": "trk_mrlmf5dh_5",
+      "id": "trk_mrn7fjn6_8",
       "name": "Remove Background (RMBG)",
       "kind": "video",
       "clips": [
         {
-          "id": "clip_mrlmf5dg_3",
+          "id": "clip_mrn7fjn5_6",
           "type": "video",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784091282.webm",
-          "alphaRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784091282.alpha.mkv",
-          "start": 66.66872470378875,
+          "srcRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45_rmbg_1784187076.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45_rmbg_1784187076.alpha.mkv",
+          "start": 75.37606189250945,
           "inPoint": 0,
-          "outPoint": 1.25,
+          "outPoint": 8.3333,
           "speed": 1,
-          "duration": 1.25,
-          "srcDuration": 1.25,
-          "naturalW": 1920,
+          "duration": 8.3333,
+          "srcDuration": 8.3333,
+          "naturalW": 1918,
           "naturalH": 1080,
-          "source": {
-            "charKey": "Nazeda",
-            "sequenceName": "0338_0715_2026",
-            "galleryItemId": "4776fe6f75de"
-          },
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784091282.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784091282.proxy.alpha.mkv"
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45_rmbg_1784187076.proxy.webm",
+          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45_rmbg_1784187076.proxy.alpha.mkv"
+        }
+      ]
+    },
+    {
+      "id": "trk_mrn6q0fk_5",
+      "name": "Remove Background (RMBG)",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mrn6q0fj_3",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb_rmbg_1784185796.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb_rmbg_1784185796.alpha.mkv",
+          "start": 79.68236072063446,
+          "inPoint": 0,
+          "outPoint": 8.3333,
+          "speed": 1,
+          "duration": 8.3333,
+          "srcDuration": 8.3333,
+          "naturalW": 1918,
+          "naturalH": 1080,
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb_rmbg_1784185796.proxy.webm",
+          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb_rmbg_1784185796.proxy.alpha.mkv"
+        }
+      ]
+    },
+    {
+      "id": "trk_mrn5hc10_7",
+      "name": "AI Edit",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mrn5hc0x_5",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_b0650ef1998a44d0b800cd2797804253.png",
+          "start": 66.2637663602829,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1.1536458333333333
+          }
         }
       ]
     },
@@ -91,40 +129,71 @@
       "kind": "video",
       "clips": [
         {
-          "id": "clip_mrlbz4qz_2",
-          "type": "image",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_488f29a1149d4064ab7b51bca15808ab.png",
-          "start": 53.86431872844695,
+          "id": "clip_mrn3fjdq_2",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_f3354c3c4d92461cba1e28ae60ac6454_rmbg_1784181003.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_f3354c3c4d92461cba1e28ae60ac6454_rmbg_1784181003.alpha.mkv",
+          "start": 4.077589650534092,
           "inPoint": 0,
-          "outPoint": 3,
-          "speed": 1,
-          "duration": 3,
-          "naturalW": 1024,
-          "naturalH": 1024,
-          "transform": {
-            "x": 0,
-            "y": 0,
-            "scale": 1
-          }
-        },
-        {
-          "id": "clip_mrlbxw7c_1",
-          "type": "image",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_cc592317c79e454f8530b2a8c82aac37.png",
-          "start": 57.55577991008758,
-          "inPoint": 0,
-          "outPoint": 3,
-          "speed": 1,
-          "duration": 3,
-          "naturalW": 1024,
-          "naturalH": 1024,
+          "outPoint": 1.125,
+          "speed": 0.3,
+          "duration": 3.75,
+          "srcDuration": 1.125,
+          "naturalW": 1920,
+          "naturalH": 1080,
           "source": {
-            "locationKey": "room1"
+            "charKey": "Buan",
+            "sequenceName": "0527_0716_2026",
+            "galleryItemId": "f1a0d449c97f"
           },
           "transform": {
             "x": 0,
             "y": 0,
-            "scale": 1
+            "scale": 1.4763018705746187
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_f3354c3c4d92461cba1e28ae60ac6454_rmbg_1784181003.proxy.webm",
+          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_f3354c3c4d92461cba1e28ae60ac6454_rmbg_1784181003.proxy.alpha.mkv"
+        },
+        {
+          "id": "clip_mrn6095z_9",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c_rmbg_1784184712.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c_rmbg_1784184712.alpha.mkv",
+          "start": 74.46146075725555,
+          "inPoint": 0,
+          "outPoint": 8.3333,
+          "speed": 1,
+          "duration": 8.3333,
+          "srcDuration": 8.3333,
+          "naturalW": 1918,
+          "naturalH": 1080,
+          "coloring": {
+            "r": 100,
+            "g": 100,
+            "b": 100,
+            "opacity": 43,
+            "lightness": 100,
+            "borderBlur": 0,
+            "imageBlur": 0
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c_rmbg_1784184712.proxy.webm",
+          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c_rmbg_1784184712.proxy.alpha.mkv"
+        },
+        {
+          "id": "clip_mrncutsn_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff.mp4",
+          "start": 108.80439910888671,
+          "inPoint": 0,
+          "outPoint": 7.5,
+          "speed": 1,
+          "duration": 7.5,
+          "srcDuration": 7.5,
+          "naturalW": 1080,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Buan",
+            "sequenceName": "head_turn"
           }
         }
       ]
@@ -753,7 +822,7 @@
           "id": "clip_mrfvdf06_1",
           "type": "video",
           "srcRelPath": "timelines/Timeline_4/clips/clip_55eef712648d_rmbg_1783743416.webm",
-          "start": 28.266638659656046,
+          "start": 28.26663865965605,
           "inPoint": 0,
           "outPoint": 0.875,
           "speed": 0.55,
@@ -1178,6 +1247,89 @@
             "x": 0,
             "y": 0,
             "scale": 1
+          }
+        },
+        {
+          "id": "clip_mrn07hvn_4",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981_rmbg_1784175679.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981_rmbg_1784175679.alpha.mkv",
+          "start": 66.75687625408173,
+          "inPoint": 0,
+          "outPoint": 1.25,
+          "speed": 1,
+          "duration": 1.25,
+          "srcDuration": 1.25,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Buan",
+            "sequenceName": "0151_0715_2026",
+            "galleryItemId": "6556b3fc7743"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981_rmbg_1784175679.proxy.webm",
+          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981_rmbg_1784175679.proxy.alpha.mkv"
+        },
+        {
+          "id": "clip_mrn03rhx_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784175373.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784175373.alpha.mkv",
+          "start": 68.50687625408173,
+          "inPoint": 0,
+          "outPoint": 1.25,
+          "speed": 1,
+          "duration": 1.25,
+          "srcDuration": 1.25,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Nazeda",
+            "sequenceName": "0338_0715_2026",
+            "galleryItemId": "4776fe6f75de"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784175373.proxy.webm",
+          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784175373.proxy.alpha.mkv"
+        },
+        {
+          "id": "clip_mrn0hwdy_7",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784176111.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784176111.alpha.mkv",
+          "start": 69.86431796550751,
+          "inPoint": 0,
+          "outPoint": 1.75,
+          "speed": 1,
+          "duration": 1.75,
+          "srcDuration": 1.75,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "office1",
+            "sequenceName": "0410_0715_2026",
+            "galleryItemId": "c33c49c268f3"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784176111.proxy.webm",
+          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784176111.proxy.alpha.mkv"
+        },
+        {
+          "id": "clip_mrn59gyb_2",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_2a244ce0b75a49a0868b58e2c8806d51.png",
+          "start": 57.36845386028289,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "Buan"
+          },
+          "transform": {
+            "x": -0.06722005208333333,
+            "y": 0,
+            "scale": 0.3508468328737745
           }
         }
       ]
@@ -2461,7 +2613,7 @@
           "id": "clip_mrfu1def_10",
           "type": "video",
           "srcRelPath": "timelines/Timeline_4/clips/clip_427b27a874e344a4b57cb0292048534c.mp4",
-          "start": 50.32300491333007,
+          "start": 49.977951049804695,
           "inPoint": 0,
           "outPoint": 5.375,
           "speed": 0.3,
@@ -2484,10 +2636,48 @@
           }
         },
         {
+          "id": "clip_mrlk3jb4_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470.mp4",
+          "start": 69.86431796550751,
+          "inPoint": 0,
+          "outPoint": 1.25,
+          "speed": 1,
+          "duration": 1.25,
+          "srcDuration": 1.25,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Nazeda",
+            "sequenceName": "0338_0715_2026",
+            "galleryItemId": "4776fe6f75de"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470.proxy.mp4"
+        },
+        {
+          "id": "clip_mrlluxfq_2",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981.mp4",
+          "start": 62.56955325603485,
+          "inPoint": 0,
+          "outPoint": 1.25,
+          "speed": 1,
+          "duration": 1.25,
+          "srcDuration": 1.25,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Buan",
+            "sequenceName": "0151_0715_2026",
+            "galleryItemId": "6556b3fc7743"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981.proxy.mp4"
+        },
+        {
           "id": "clip_mrlluiej_1",
           "type": "video",
           "srcRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3.mp4",
-          "start": 62.61845309734345,
+          "start": 68.00687625408173,
           "inPoint": 0,
           "outPoint": 1.75,
           "speed": 1,
@@ -2503,23 +2693,101 @@
           "proxyRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3.proxy.mp4"
         },
         {
-          "id": "clip_mrlk3jb4_1",
+          "id": "clip_mrn39y19_1",
           "type": "video",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470.mp4",
-          "start": 66.8119726896286,
+          "srcRelPath": "timelines/Timeline_4/clips/clip_f3354c3c4d92461cba1e28ae60ac6454.mp4",
+          "start": 10.65771243572235,
           "inPoint": 0,
-          "outPoint": 1.25,
-          "speed": 1,
-          "duration": 1.25,
-          "srcDuration": 1.25,
+          "outPoint": 1.125,
+          "speed": 0.8,
+          "duration": 1.40625,
+          "srcDuration": 1.125,
           "naturalW": 1920,
           "naturalH": 1080,
           "source": {
-            "charKey": "Nazeda",
-            "sequenceName": "0338_0715_2026",
-            "galleryItemId": "4776fe6f75de"
+            "charKey": "Buan",
+            "sequenceName": "0527_0716_2026",
+            "galleryItemId": "f1a0d449c97f"
           },
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470.proxy.mp4"
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_f3354c3c4d92461cba1e28ae60ac6454.proxy.mp4"
+        },
+        {
+          "id": "clip_mrn5bdgk_3",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_4f9e54c6493d4ec6b21869df6573ff0a.png",
+          "start": 54.36845386028289,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "shotKey": "timeline_shot_1784184348544",
+            "combined": true
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        },
+        {
+          "id": "clip_mrn654bw_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb.mp4",
+          "start": 90.09558322429656,
+          "inPoint": 0,
+          "outPoint": 8.3333,
+          "speed": 1,
+          "duration": 8.3333,
+          "srcDuration": 8.3333,
+          "naturalW": 1918,
+          "naturalH": 1080,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb.proxy.mp4"
+        },
+        {
+          "id": "clip_mrn5i8tt_8",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c.mp4",
+          "start": 83.38708102703094,
+          "inPoint": 0,
+          "outPoint": 8.3333,
+          "speed": 1,
+          "duration": 8.3333,
+          "srcDuration": 8.3333,
+          "naturalW": 1918,
+          "naturalH": 1080,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c.proxy.mp4"
+        },
+        {
+          "id": "clip_mrn657ua_2",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45.mp4",
+          "start": 82.52071750164035,
+          "inPoint": 0,
+          "outPoint": 8.3333,
+          "speed": 1,
+          "duration": 8.3333,
+          "srcDuration": 8.3333,
+          "naturalW": 1918,
+          "naturalH": 1080,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45.proxy.mp4"
         }
       ],
       "hidden": true
@@ -2722,6 +2990,83 @@
             "opacity": 100,
             "lightness": 15
           }
+        },
+        {
+          "id": "clip_mrlbz4qz_2",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_488f29a1149d4064ab7b51bca15808ab.png",
+          "start": 50.92217090129852,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        },
+        {
+          "id": "clip_mrlbxw7c_1",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_cc592317c79e454f8530b2a8c82aac37.png",
+          "start": 57.36845386028289,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "room1"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        },
+        {
+          "id": "clip_mrn4poxj_1",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_76ef4efa6b5c4c2dbbd290474f18d13b.png",
+          "start": 60.960737109184265,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "aerial city"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        },
+        {
+          "id": "clip_mrn815i5_9",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_79cdefdb8cf145e5b65cc4262f41ffd8.png",
+          "start": 88.01566072063446,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "locationKey": "redscape"
+          },
+          "transform": {
+            "x": 0.003685592791946058,
+            "y": 0.38987622229881536,
+            "scale": 1.7797524445976307
+          }
         }
       ]
     },
@@ -2731,23 +3076,24 @@
       "kind": "video",
       "clips": [
         {
-          "id": "clip_mrlluxfq_2",
-          "type": "video",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981.mp4",
-          "start": 63.508948397636416,
+          "id": "clip_mrn12noe_10",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_f4b32980d4254443976a1450e7faac77.png",
+          "start": 66.2637663602829,
           "inPoint": 0,
-          "outPoint": 1.25,
+          "outPoint": 3,
           "speed": 1,
-          "duration": 1.25,
-          "srcDuration": 1.25,
-          "naturalW": 1920,
-          "naturalH": 1080,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
           "source": {
-            "charKey": "Buan",
-            "sequenceName": "0151_0715_2026",
-            "galleryItemId": "6556b3fc7743"
+            "locationKey": "ckty2"
           },
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981.proxy.mp4"
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 0.9423828125
+          }
         }
       ]
     },
@@ -2755,13 +3101,59 @@
       "id": "trk_mrft880z_3",
       "name": "Video 1",
       "kind": "video",
-      "clips": []
+      "clips": [
+        {
+          "id": "clip_mrn5d039_4",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_ce297fc40d6f4c219bc0b456f9ba9f97.png",
+          "start": 61.42217090129852,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "shotKey": "timeline_shot_1784184423725",
+            "combined": true
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        }
+      ]
     },
     {
       "id": "trk_mrghydc8_6",
-      "name": "Track 6",
-      "kind": "neutral",
-      "clips": []
+      "name": "Music 2",
+      "kind": "audio",
+      "clips": [
+        {
+          "id": "clip_mrn3w4p8_1",
+          "type": "audio",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_7ce71667dc804cc8b89ca9c0ce0ebd62.mp3",
+          "start": 8.057162356376647,
+          "inPoint": 0,
+          "outPoint": 30.0002,
+          "speed": 1,
+          "duration": 30.0002,
+          "srcDuration": 30.0002,
+          "volumeAutomation": {
+            "points": [
+              {
+                "t": 0,
+                "level": 50
+              },
+              {
+                "t": 1,
+                "level": 50
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "id": "trk_mrldkuqq_3",
@@ -2782,11 +3174,11 @@
             "points": [
               {
                 "t": 0,
-                "level": 50
+                "level": 46.10810553537148
               },
               {
                 "t": 1,
-                "level": 50
+                "level": 46.10810553537148
               }
             ]
           }
@@ -2795,12 +3187,24 @@
           "id": "clip_mrleohy8_1",
           "type": "audio",
           "srcRelPath": "timelines/Timeline_4/clips/clip_22c97947ddb24d9bb6052957cdad7461.mp3",
-          "start": 11.948973736561832,
+          "start": 41.94917373656183,
           "inPoint": 0,
           "outPoint": 30.0002,
           "speed": 1,
           "duration": 30.0002,
-          "srcDuration": 30.0002
+          "srcDuration": 30.0002,
+          "volumeAutomation": {
+            "points": [
+              {
+                "t": 0,
+                "level": 50
+              },
+              {
+                "t": 1,
+                "level": 50
+              }
+            ]
+          }
         }
       ]
     }

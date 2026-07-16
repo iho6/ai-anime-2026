@@ -92,6 +92,27 @@ def _timeline_video_clip_result(out_abs: str, **fields: Any) -> dict[str, Any]:
     alpha = out.parent / (out.stem + ".alpha.mkv")
     if alpha.is_file():
         result["alphaRelPath"] = storage_rel_from_abs(str(alpha.resolve()))
+    fps = float(result.get("fps") or 0)
+    frames = int(result.get("frames") or 0)
+    duration = float(result.get("durationSec") or 0)
+    if frames > 0 and fps > 0:
+        from_frames = frames / fps
+        if from_frames > duration + 0.01:
+            result["durationSec"] = round(from_frames, 4)
+    elif duration <= 0:
+        meta = logic.probe_video_meta(out)
+        result["durationSec"] = float(meta.get("durationSec") or 0)
+        if not result.get("fps"):
+            result["fps"] = float(meta.get("fps") or 0)
+        if not frames:
+            probed_fps, probed_frames = logic.probe_video_fps_and_frame_count(out)
+            if probed_frames > 0:
+                result["frames"] = probed_frames
+                if probed_fps > 0:
+                    result["fps"] = probed_fps
+                    from_frames = probed_frames / probed_fps
+                    if from_frames > float(result["durationSec"] or 0) + 0.01:
+                        result["durationSec"] = round(from_frames, 4)
     return result
 
 
@@ -647,6 +668,7 @@ async def timeline_remove_video_bg_ws(ws: WebSocket, timeline_key: str) -> None:
                 height=result.get("height") or meta.get("height") or 0,
                 durationSec=duration,
                 fps=fps,
+                frames=int(result.get("frames") or meta.get("frames") or 0),
             )
 
         result, err = await run_with_log_stream(ws, work)
@@ -701,6 +723,7 @@ async def timeline_remove_video_bg_rmbg_ws(ws: WebSocket, timeline_key: str) -> 
                     result.get("durationSec") or meta.get("durationSec") or 0
                 ),
                 fps=float(result.get("fps") or meta.get("fps") or 0),
+                frames=int(result.get("frames") or meta.get("frames") or 0),
             )
 
         result, err = await run_with_log_stream(ws, work)
@@ -756,6 +779,7 @@ async def timeline_remove_video_bg_anime_seg_ws(ws: WebSocket, timeline_key: str
                     result.get("durationSec") or meta.get("durationSec") or 0
                 ),
                 fps=float(result.get("fps") or meta.get("fps") or 0),
+                frames=int(result.get("frames") or meta.get("frames") or 0),
             )
 
         result, err = await run_with_log_stream(ws, work)

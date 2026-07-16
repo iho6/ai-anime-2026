@@ -3,5 +3,12 @@
   "playbackRange": {
     "startFrame": 49,
     "endFrame": 143
+  },
+  "previewCamera": {
+    "azimuth": 20.0,
+    "elevation": 15.0,
+    "distance": 4.3869789019575425,
+    "slideX": 0.009337213969522196,
+    "slideY": -0.4481612208942159
   }
 }

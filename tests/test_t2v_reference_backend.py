@@ -66,7 +66,13 @@ def test_generate_reference_video_preview_stores_mp4_and_cleans_temp(
         Image.new("RGB", (8, 8), (index, 0, 0)).save(path)
         source_frames.append(str(path))
 
-    monkeypatch.setattr(logic, "_run_t2v_service", lambda **_kwargs: source_frames)
+    captured: dict[str, Any] = {}
+
+    def fake_t2v(**kwargs: Any) -> list[str]:
+        captured.update(kwargs)
+        return source_frames
+
+    monkeypatch.setattr(logic, "_run_t2v_service", fake_t2v)
 
     encoded_path: Path | None = None
 
@@ -89,6 +95,8 @@ def test_generate_reference_video_preview_stores_mp4_and_cleans_temp(
 
     result = logic.generate_reference_video_preview(prompt_text="moving clouds")
 
+    assert captured["length"] == 49
+    assert captured["fps"] == 16
     assert result == {
         "kind": "video",
         "previewRelPath": "references/_preview/prev_video.mp4",
@@ -97,6 +105,44 @@ def test_generate_reference_video_preview_stores_mp4_and_cleans_temp(
     }
     assert encoded_path is not None
     assert not encoded_path.exists()
+
+
+def test_generate_reference_video_preview_normalizes_custom_length(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from PIL import Image
+
+    length = 81
+    source_frames: list[str] = []
+    for index in range(length):
+        path = tmp_path / f"src_{index:03d}.png"
+        Image.new("RGB", (4, 4), (index % 255, 0, 0)).save(path)
+        source_frames.append(str(path))
+
+    captured: dict[str, Any] = {}
+
+    def fake_t2v(**kwargs: Any) -> list[str]:
+        captured.update(kwargs)
+        return source_frames
+
+    monkeypatch.setattr(logic, "_run_t2v_service", fake_t2v)
+    monkeypatch.setattr(
+        logic,
+        "encode_frames_to_mp4",
+        lambda frames, out_path, fps: Path(out_path).write_bytes(b"vid"),
+    )
+    monkeypatch.setattr(
+        "services.reference_storage.add_preview",
+        lambda _path: "references/_preview/custom.mp4",
+    )
+
+    # 80 snaps to nearest 4n+1 in [25, 121] → 81
+    result = logic.generate_reference_video_preview(
+        prompt_text="wind",
+        length=80,
+    )
+    assert captured["length"] == 81
+    assert result["durationSec"] == pytest.approx(81 / 16)
 
 
 class _FakeWebSocket:
@@ -137,6 +183,7 @@ def test_reference_router_dispatches_video_kind(
             "kind": "video",
             "promptText": "a crane takes flight",
             "negativePrompt": "watermark",
+            "length": 65,
         }
     )
 
@@ -144,6 +191,7 @@ def test_reference_router_dispatches_video_kind(
 
     assert calls[0]["prompt_text"] == "a crane takes flight"
     assert calls[0]["negative_prompt"] == "watermark"
+    assert calls[0]["length"] == 65
     assert ws.sent[-1]["ok"] is True
     assert ws.sent[-1]["result"]["kind"] == "video"
 

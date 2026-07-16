@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { setSequenceBuilderDragData } from "../app/detail/[charKey]/dataset/datasetSequenceDrop";
 import { assetUrlFromRelPath } from "../lib/api";
 import { GalleryPickTile } from "./GalleryPickTile";
 import { TriangleIcon } from "./IconPrimitives";
@@ -27,6 +28,8 @@ type SelectProps = BaseProps & {
   onToggleSelect: (relPath: string, e: React.ChangeEvent<HTMLInputElement>) => void;
   onPreview: (relPath: string) => void;
   disabled?: boolean;
+  enableSequenceDragSource?: boolean;
+  onSequenceDragStateChange?: (active: boolean) => void;
 };
 
 /**
@@ -104,6 +107,8 @@ export function CollapsibleGallerySection(props: ImmediateProps | SelectProps) {
               {images.map((img) => {
                 if (mode === "select") {
                   const selectProps = props as SelectProps;
+                  const dragSource =
+                    selectProps.enableSequenceDragSource && !selectProps.disabled;
                   return (
                     <GalleryPickTile
                       key={img.relPath}
@@ -111,6 +116,22 @@ export function CollapsibleGallerySection(props: ImmediateProps | SelectProps) {
                       caption={img.caption}
                       checked={selectProps.selectedRelPaths.has(img.relPath)}
                       disabled={selectProps.disabled}
+                      draggable={dragSource}
+                      onDragStart={
+                        dragSource
+                          ? (e) => {
+                              setSequenceBuilderDragData(e, img.relPath);
+                              selectProps.onSequenceDragStateChange?.(true);
+                            }
+                          : undefined
+                      }
+                      onDragEnd={
+                        dragSource
+                          ? () => {
+                              selectProps.onSequenceDragStateChange?.(false);
+                            }
+                          : undefined
+                      }
                       onToggle={(on, e) => selectProps.onToggleSelect(img.relPath, e)}
                       onPrimaryClick={() => selectProps.onPreview(img.relPath)}
                       onContextMenu={

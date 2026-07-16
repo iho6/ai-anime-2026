@@ -284,15 +284,8 @@ async def new_location_generate_stream(payload: NewLocationGeneratePayload) -> S
 
 @router.get("/new_location/draft_bases")
 def new_location_drafts() -> dict[str, list[str]]:
-    d = (LOCATION_STORAGE_ROOT / "_drafts").resolve()
-    if not d.is_dir():
-        return {"relPaths": []}
-    rels = [
-        storage_rel_from_abs(str(p))
-        for p in sorted(d.iterdir())
-        if p.is_file() and p.suffix.lower() in _IMG_EXTS
-    ]
-    return {"relPaths": rels}
+    paths = logic.list_new_location_draft_paths()
+    return {"relPaths": [storage_rel_from_abs(p) for p in paths]}
 
 
 @router.post("/new_location/append_upload")

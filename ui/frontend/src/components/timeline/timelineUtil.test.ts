@@ -43,6 +43,7 @@ import {
   TRAJECTORY_WAYPOINT_HIT_MAX_PX,
   TRAJECTORY_WAYPOINT_HIT_MIN_PX,
   translateClipRect,
+  resolveVideoBgReplaceTiming,
 } from "./timelineUtil";
 import { createGeometryData } from "./geometryTemplates";
 
@@ -1012,5 +1013,54 @@ describe("activeLayersAt hard-cut preload", () => {
     const tr = track("trk", [out, inn]);
     const layers = activeLayersAt(tr, 1.985);
     expect(layers.map((l) => l.clip.id)).toEqual(["i"]);
+  });
+});
+
+describe("resolveVideoBgReplaceTiming", () => {
+  const fullSource = {
+    inPoint: 0,
+    outPoint: 5.375,
+    speed: 0.55,
+    srcDuration: 5.375,
+    duration: 9.772727272727273,
+  };
+
+  it("keeps full trim when probe under-reports WebM duration", () => {
+    const timing = resolveVideoBgReplaceTiming(
+      { durationSec: 0.875, fps: 24, frames: 21 },
+      fullSource
+    );
+    expect(timing.srcDuration).toBeCloseTo(5.375);
+    expect(timing.outPoint).toBeCloseTo(5.375);
+    expect(timing.duration).toBeCloseTo(fullSource.duration!);
+    expect(timing.speed).toBe(0.55);
+  });
+
+  it("uses frame-derived duration when larger than durationSec", () => {
+    const timing = resolveVideoBgReplaceTiming(
+      { durationSec: 0.875, fps: 24, frames: 129 },
+      { inPoint: 0, outPoint: 5.375, srcDuration: 5.375, speed: 1 }
+    );
+    expect(timing.srcDuration).toBeCloseTo(5.375);
+    expect(timing.outPoint).toBeCloseTo(5.375);
+  });
+
+  it("preserves intentional short trims on long media", () => {
+    const timing = resolveVideoBgReplaceTiming(
+      { durationSec: 5.375, fps: 24, frames: 129 },
+      { inPoint: 0, outPoint: 0.875, srcDuration: 5.375, speed: 0.55, duration: 1.59 }
+    );
+    expect(timing.srcDuration).toBeCloseTo(5.375);
+    expect(timing.outPoint).toBeCloseTo(0.875);
+    expect(timing.duration).toBeCloseTo(1.59);
+  });
+
+  it("does not use timeline duration as source length", () => {
+    const timing = resolveVideoBgReplaceTiming(
+      { durationSec: 0 },
+      { inPoint: 0, duration: 1.59, speed: 0.55 }
+    );
+    expect(timing.srcDuration).toBe(5);
+    expect(timing.outPoint).toBe(5);
   });
 });

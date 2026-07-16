@@ -112,6 +112,7 @@ export default function ReferencesPage() {
       promptText: string;
       width: number;
       height: number;
+      length?: number;
     }) => {
       beginSession({ title: "Generating reference", clearLog: true });
       try {

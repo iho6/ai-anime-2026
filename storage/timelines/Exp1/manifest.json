@@ -34,7 +34,7 @@
           "id": "clip_mq7skp49_3",
           "type": "image",
           "srcRelPath": "timelines/Exp1/clips/clip_daaffc2c75724c64868f65f304b7f600.png",
-          "start": 13.987603759765625,
+          "start": 17.420960163307186,
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
@@ -309,7 +309,28 @@
       "id": "trk_mq7v04oh_5",
       "name": "Video 5",
       "kind": "video",
-      "clips": []
+      "clips": [
+        {
+          "id": "clip_mrn58odj_1",
+          "type": "image",
+          "srcRelPath": "timelines/Exp1/clips/clip_62b881759441422b939835ae308eb42c.png",
+          "start": 13.987603759765625,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 3,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "source": {
+            "charKey": "Buan"
+          },
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1
+          }
+        }
+      ]
     },
     {
       "id": "trk_mq7v0a8h_7",

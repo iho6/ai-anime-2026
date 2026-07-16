@@ -1,0 +1,14 @@
+{
+  "keyframes": [],
+  "playbackRange": {
+    "startFrame": 20,
+    "endFrame": 99
+  },
+  "previewCamera": {
+    "azimuth": 87.8787841796875,
+    "elevation": -4.393969726562499,
+    "distance": 7.4021476485463875,
+    "slideX": 3.22560513730951,
+    "slideY": 0.9930277930337544
+  }
+}

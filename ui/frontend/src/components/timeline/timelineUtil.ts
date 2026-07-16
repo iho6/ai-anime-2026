@@ -740,6 +740,65 @@ export function buildAudioClip(params: {
   };
 }
 
+export type VideoBgReplaceTimingFallback = {
+  inPoint?: number;
+  outPoint?: number;
+  speed?: number;
+  reversed?: boolean;
+  /** Full source media length before trim (seconds). */
+  srcDuration?: number;
+  /** Timeline span on the sequence (seconds); not source trim. */
+  duration?: number;
+};
+
+export type VideoBgReplaceProbe = {
+  durationSec?: number;
+  fps?: number;
+  frames?: number;
+};
+
+/** Preserve trim + timeline span when swapping in a bg-removed video. */
+export function resolveVideoBgReplaceTiming(
+  probe: VideoBgReplaceProbe,
+  fallback: VideoBgReplaceTimingFallback
+): {
+  inPoint: number;
+  outPoint: number;
+  speed: number;
+  srcDuration: number;
+  duration: number;
+} {
+  const probedDur = Math.max(0, probe.durationSec ?? 0);
+  const fromFrames =
+    probe.frames != null && probe.fps != null && probe.fps > 0
+      ? probe.frames / probe.fps
+      : 0;
+  const mediaDur = Math.max(probedDur, fromFrames);
+
+  const inPoint = fallback.inPoint ?? 0;
+  const preservedOut = fallback.outPoint;
+  const preservedSrcDur = fallback.srcDuration ?? preservedOut ?? 0;
+
+  // Never let a short probe or timeline duration shrink below the user's prior trim.
+  const sourceDur =
+    Math.max(mediaDur, preservedSrcDur, preservedOut ?? 0) ||
+    mediaDur ||
+    preservedSrcDur ||
+    5;
+
+  let outPoint = preservedOut ?? sourceDur;
+  outPoint = Math.min(Math.max(outPoint, inPoint + 0.001), sourceDur);
+
+  const speed = fallback.speed ?? 1;
+  const span = Math.max(0.001, outPoint - inPoint);
+  const duration =
+    fallback.duration != null && fallback.duration > 0
+      ? fallback.duration
+      : Math.max(0.05, span / speed);
+
+  return { inPoint, outPoint, speed, srcDuration: sourceDur, duration };
+}
+
 export function buildVideoClip(params: {
   srcRelPath: string;
   durationSec: number;

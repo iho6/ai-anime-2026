@@ -1,0 +1,18 @@
+{
+  "shotName": "timeline_shot_1784184423725",
+  "locationKey": "room1",
+  "locationImageRelPath": "timelines/Timeline_4/clips/clip_cc592317c79e454f8530b2a8c82aac37.png",
+  "characters": [
+    {
+      "charKey": "Buan",
+      "imageRelPath": "timelines/Timeline_4/clips/clip_2a244ce0b75a49a0868b58e2c8806d51.png",
+      "x": 209.99605119825705,
+      "y": 332.36642156862746,
+      "scale": 0.37003376904655905
+    }
+  ],
+  "prompt": "",
+  "prependedPrompt": "Image 1 is the original backdrop image reference for a film shot generation task. Image 2 is the reference for how characters should be integrated into the backdrop, with character poses roughly cropped into the image. Edit the character(s) into the image with seamless blending of lighting and contact point with surrounding environment.",
+  "createdAt": "2026-07-16T06:47:40.629246+00:00",
+  "outputRelPath": "shots/timeline_shot_1784184423725/generated.png"
+}

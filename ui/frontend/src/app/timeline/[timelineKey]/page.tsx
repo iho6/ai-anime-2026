@@ -143,6 +143,7 @@ import {
   pruneBrokenTransitions,
   resolveClipImageRelPath,
   resolveImportDimensions,
+  resolveVideoBgReplaceTiming,
   timelineDuration,
   type ClipTransform,
   type PreviewFrameExtension,
@@ -1524,7 +1525,15 @@ export default function TimelineEditorPage() {
   }
 
   function insertVideoBgClip(
-    r: { srcRelPath: string; alphaRelPath?: string; width: number; height: number; durationSec?: number },
+    r: {
+      srcRelPath: string;
+      alphaRelPath?: string;
+      width: number;
+      height: number;
+      durationSec?: number;
+      fps?: number;
+      frames?: number;
+    },
     start: number,
     fallback: {
       inPoint?: number;
@@ -1539,11 +1548,14 @@ export default function TimelineEditorPage() {
     },
     label: string
   ) {
-    const sourceDur = r.durationSec || fallback.srcDuration || fallback.duration || 5;
-    const inPoint = fallback.inPoint ?? 0;
-    const outPoint = fallback.outPoint ?? sourceDur;
-    const speed = fallback.speed ?? 1;
-    const dur = fallback.duration ?? Math.max(0.05, (outPoint - inPoint) / speed);
+    const timing = resolveVideoBgReplaceTiming(
+      {
+        durationSec: r.durationSec,
+        fps: r.fps,
+        frames: r.frames,
+      },
+      fallback
+    );
     insertClipOnNewTrack(
       {
         id: genId("clip"),
@@ -1551,12 +1563,12 @@ export default function TimelineEditorPage() {
         srcRelPath: r.srcRelPath,
         ...(r.alphaRelPath ? { alphaRelPath: r.alphaRelPath } : {}),
         start: 0,
-        inPoint,
-        outPoint,
-        speed,
+        inPoint: timing.inPoint,
+        outPoint: timing.outPoint,
+        speed: timing.speed,
         ...(fallback.reversed ? { reversed: true } : {}),
-        duration: dur,
-        srcDuration: sourceDur,
+        duration: timing.duration,
+        srcDuration: timing.srcDuration,
         naturalW: r.width || fallback.naturalW,
         naturalH: r.height || fallback.naturalH,
         source: fallback.source,

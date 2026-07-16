@@ -963,6 +963,8 @@ type TimelineVideoClipResult = {
   width: number;
   height: number;
   fps?: number;
+  /** Encoded frame count when available (WebM VP9 metadata can under-report duration). */
+  frames?: number;
 };
 type TimelineImageClipResult = {
   type: "image";
@@ -1667,6 +1669,22 @@ export async function apiMotionRefDelete(motionKey: string): Promise<void> {
     { method: "POST", credentials: "omit" }
   );
   await readJson<{ ok: boolean }>(res);
+}
+
+export async function apiMotionRefRename(
+  motionKey: string,
+  newName: string
+): Promise<{ newMotionKey: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/motion_ref/${encodeURIComponent(motionKey)}/rename`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ newName }),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ newMotionKey: string }>(res);
 }
 
 export async function apiMotionRefShotsLayout(): Promise<MotionShotsLayout> {
@@ -3881,6 +3899,8 @@ export function runReferenceGenerateWsJob(params: {
   promptText: string;
   width?: number;
   height?: number;
+  /** Wan T2V frame count (4n+1). Only sent when kind is video. */
+  length?: number;
   onLogLine: (line: string) => void;
 }): Promise<WsDoneMessage<GeneratedReferencePreview>> {
   const url = wsUrlForPath("/reference/generate/ws");

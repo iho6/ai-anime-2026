@@ -573,6 +573,7 @@ export default function CreatePage() {
       promptText: string;
       width: number;
       height: number;
+      length?: number;
     }) => {
       try {
         beginSession({

@@ -7,6 +7,14 @@ import {
   type ReferenceMediaKind,
 } from "../lib/api";
 import { ZoomableImage } from "./ZoomableImage";
+import {
+  SequenceOutputLengthStepper,
+  WAN_VIDEO_FPS,
+  WAN_VIDEO_OUTPUT_LENGTHS,
+  formatWanVideoLengthHint,
+} from "./sequenceOutputLength";
+
+const REF_VIDEO_DEFAULT_LENGTH = 49;
 
 /**
  * Generate-and-save modal for the global Reference library. Mirrors the AI-Edit
@@ -20,12 +28,13 @@ type ReferenceGenerateModalProps = {
   saveLabel?: string | ((preview: GeneratedReferencePreview) => string);
   zIndex?: number;
   onCancel: () => void;
-  /** Run Flux2 t2i; resolve with the preview rel path (or null on failure). */
+  /** Run Flux2 t2i or Wan T2V; resolve with the preview (or null on failure). */
   onGenerate: (args: {
     kind: ReferenceMediaKind;
     promptText: string;
     width: number;
     height: number;
+    length?: number;
   }) => Promise<GeneratedReferencePreview | null>;
   /** Persist or convert the current generated preview. */
   onCommit: (preview: GeneratedReferencePreview) => Promise<void>;
@@ -49,6 +58,7 @@ function ReferenceGenerateModalOpen(props: ReferenceGenerateModalProps) {
   const [prompt, setPrompt] = useState("");
   const [width, setWidth] = useState(1024);
   const [height, setHeight] = useState(1024);
+  const [videoLength, setVideoLength] = useState(REF_VIDEO_DEFAULT_LENGTH);
   const [mediaKind, setMediaKind] = useState<ReferenceMediaKind>("image");
   const [preview, setPreview] = useState<GeneratedReferencePreview | null>(null);
   const requestIdRef = useRef(0);
@@ -269,7 +279,17 @@ function ReferenceGenerateModalOpen(props: ReferenceGenerateModalProps) {
               </div>
             ) : (
               <div style={{ marginTop: 8, color: "#bbb", fontSize: 13 }}>
-                640×640 · 49 frames · 16 FPS · approximately 3 seconds
+                <div style={{ marginBottom: 4 }}>
+                  640×640 · {WAN_VIDEO_FPS} FPS · {formatWanVideoLengthHint(videoLength)}
+                </div>
+                <div style={{ color: "#aaa", fontSize: 12, marginBottom: 2 }}>
+                  Output length (frames, 4n+1: 25–121)
+                </div>
+                <SequenceOutputLengthStepper
+                  lengths={WAN_VIDEO_OUTPUT_LENGTHS}
+                  value={videoLength}
+                  onChange={setVideoLength}
+                />
               </div>
             )}
 
@@ -299,6 +319,7 @@ function ReferenceGenerateModalOpen(props: ReferenceGenerateModalProps) {
                       promptText: prompt.trim(),
                       width: kind === "video" ? 640 : Math.max(64, Math.round(width)),
                       height: kind === "video" ? 640 : Math.max(64, Math.round(height)),
+                      ...(kind === "video" ? { length: videoLength } : {}),
                     });
                     if (
                       result &&

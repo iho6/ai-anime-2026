@@ -66,6 +66,10 @@ async def reference_generate_ws(ws: WebSocket) -> None:
         width = int(msg.get("width") or 1024)
         height = int(msg.get("height") or 1024)
         negative_prompt = msg.get("negativePrompt")
+        length_raw = msg.get("length")
+        length: int | None = None
+        if length_raw is not None and str(length_raw).strip() != "":
+            length = int(length_raw)
 
         def work(log_cb: Any) -> dict[str, Any]:
             if kind == "video":
@@ -74,6 +78,7 @@ async def reference_generate_ws(ws: WebSocket) -> None:
                     negative_prompt=(
                         str(negative_prompt) if negative_prompt is not None else None
                     ),
+                    length=length,
                     log_cb=log_cb,
                 )
             return logic.generate_reference_preview(

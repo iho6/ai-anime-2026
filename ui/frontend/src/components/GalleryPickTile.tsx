@@ -14,6 +14,13 @@ export type GalleryPickTileProps = {
   onContextMenu?: (e: React.MouseEvent) => void;
   footer?: React.ReactNode;
   topRightBadge?: string;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  dropHighlight?: boolean;
 };
 
 export function GalleryPickTile(props: GalleryPickTileProps) {
@@ -28,7 +35,20 @@ export function GalleryPickTile(props: GalleryPickTileProps) {
     onContextMenu,
     footer,
     topRightBadge,
+    draggable = false,
+    onDragStart,
+    onDragEnd,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+    dropHighlight = false,
   } = props;
+
+  const border = dropHighlight
+    ? "2px solid #4a78c8"
+    : checked
+      ? "2px solid #fff"
+      : "1px solid rgba(255,255,255,0.2)";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: footer ? 2 : 0 }}>
@@ -36,19 +56,26 @@ export function GalleryPickTile(props: GalleryPickTileProps) {
         <button
           type="button"
           disabled={disabled}
+          draggable={draggable && !disabled}
           onClick={onPrimaryClick}
           onContextMenu={onContextMenu}
+          onDragStart={(e) => {
+            e.stopPropagation();
+            onDragStart?.(e);
+          }}
+          onDragEnd={onDragEnd}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
           title={caption}
           style={{
             width: "100%",
             height: "100%",
             padding: 4,
             borderRadius: 0,
-            border: checked
-              ? "2px solid #fff"
-              : "1px solid rgba(255,255,255,0.2)",
+            border,
             background: "transparent",
-            cursor: disabled ? "not-allowed" : "pointer",
+            cursor: disabled ? "not-allowed" : draggable ? "grab" : "pointer",
             overflow: "hidden",
             boxSizing: "border-box",
           }}

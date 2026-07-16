@@ -64,6 +64,7 @@ from services.prompts import (
     compose_reference_base_t2i_prompt,
     load_catalog as _load_catalog,
 )
+from services.sequence_gallery_strip import gallery_item_from_frame_urls
 
 COMFY_PORT = int(os.environ.get("COMFY_PORT", 8188))
 
@@ -2081,6 +2082,20 @@ def list_location_archive_paths() -> list[str]:
             out.append(str(p))
     out.sort(key=lambda s: Path(s).name.lower())
     return out
+
+
+def list_new_location_draft_paths() -> list[str]:
+    """Draft images under ``locations/_drafts``, newest first (mtime desc)."""
+    d = new_location_draft_dir()
+    if not d.is_dir():
+        return []
+    files: list[Path] = [
+        p
+        for p in d.iterdir()
+        if p.is_file() and p.suffix.lower() in _DRAFT_IMAGE_EXTS
+    ]
+    files.sort(key=lambda p: (-p.stat().st_mtime_ns, p.name.lower()))
+    return [str(p) for p in files]
 
 
 def import_location_archive_file_to_drafts(source_path: str | Path) -> str:
@@ -9682,12 +9697,14 @@ def generate_reference_video_preview(
     *,
     prompt_text: str,
     negative_prompt: str | None = None,
+    length: int | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Generate a 640px Wan T2V preview and store an H.264 MP4 scratch asset."""
     from services import reference_storage
 
-    width, height, length, fps = 640, 640, 49, 16
+    width, height, fps = 640, 640, 16
+    length = normalize_wan_video_length(49 if length is None else int(length))
     frame_refs = _run_t2v_service(
         prompt_text=prompt_text,
         negative_prompt=negative_prompt,
@@ -10841,7 +10858,7 @@ def write_gallery_frame_sequence_set_mp4(
 
 
 def probe_video_meta(path: Path | str) -> dict[str, Any]:
-    """Return ``{durationSec, width, height, fps}`` for a video via PyAV."""
+    """Return ``{durationSec, width, height, fps, frames?}`` for a video via PyAV."""
     import av
 
     from services.utils import video_stream_fps
@@ -10869,11 +10886,15 @@ def probe_video_meta(path: Path | str) -> dict[str, Any]:
                 duration_sec = float(vs.frames) / float(vs.average_rate)
     if fps <= 0:
         fps = video_stream_fps(str(p))
+    _, total = probe_video_fps_and_frame_count(p)
+    if total > 0 and fps > 0:
+        duration_sec = max(duration_sec, total / fps)
     return {
         "durationSec": round(duration_sec, 4),
         "width": width,
         "height": height,
         "fps": round(fps, 4),
+        "frames": total,
     }
 
 
@@ -11646,6 +11667,10 @@ def timeline_video_to_frame_sequence(
     for abs_p in png_paths:
         rel = timeline_storage.timeline_abs_to_rel(abs_p)
         strip.append({"kind": "image", "relPath": rel})
+    keep_names = {Path(p).name for p in png_paths}
+    for orphan in frames_dir.glob("frame_*.png"):
+        if orphan.name not in keep_names:
+            orphan.unlink(missing_ok=True)
     frames_dir_rel = timeline_storage.timeline_abs_to_rel(frames_dir)
     return {
         "frameSequence": {
@@ -12371,6 +12396,17 @@ def probe_video_fps_and_frame_count(
                 log_cb("Counting frames by decode (metadata missing)…")
             stream.thread_type = "AUTO"
             total = sum(1 for _ in container.decode(stream))
+        elif str(p).lower().endswith(".webm") and int(stream.frames or 0) == total:
+            # VP9 WebM often under-reports stream.frames vs decodable packets.
+            stream.thread_type = "AUTO"
+            decode_total = sum(1 for _ in container.decode(stream))
+            if decode_total > total:
+                if log_cb:
+                    log_cb(
+                        f"Using decode frame count {decode_total} "
+                        f"(stream.frames reported {total})"
+                    )
+                total = decode_total
 
     return fps, total
 

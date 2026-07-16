@@ -1,5 +1,26 @@
 [
   {
+    "id": "669187ce4bbc",
+    "motionKey": "sitting_down_on_their_bed",
+    "frameIndex": 271,
+    "azimuth": -95.04129028320312,
+    "elevation": -2.6308593750000027,
+    "relPath": "motion_refs/sitting_down_on_their_bed/shots/669187ce4bbc.png",
+    "createdAt": 1784183927.432708,
+    "distance": 2.0670971293671547,
+    "slideX": 0.2329408724319562,
+    "slideY": 0.10843087176379429,
+    "cropBox": {
+      "x": 174,
+      "y": -8,
+      "width": 344,
+      "height": 344
+    },
+    "imageWidth": 645,
+    "imageHeight": 363,
+    "keypointId": "83505ba69320"
+  },
+  {
     "id": "f4d472e836b5",
     "motionKey": "A_person_is_sprinting_at_max_speed_6",
     "frameIndex": 354,

@@ -27,6 +27,10 @@ import {
 } from "../lib/api";
 import { SequenceEditor } from "../app/detail/[charKey]/dataset/SequenceEditor";
 import {
+  addImageToSequenceGallery,
+  parseSequenceBuilderDrop,
+} from "../app/detail/[charKey]/dataset/datasetSequenceDrop";
+import {
   keypointRefHasFrames,
   type KeypointRefEntry,
 } from "../lib/keypointRefGeneration";
@@ -129,6 +133,9 @@ export function TimelineCharacterPicker(props: {
   const [seqOpen, setSeqOpen] = useState(true);
   const [editingSeqName, setEditingSeqName] = useState<string | null>(null);
   const [editingSeqDraft, setEditingSeqDraft] = useState("");
+  const [galleryDragActive, setGalleryDragActive] = useState(false);
+  const [seqDropHover, setSeqDropHover] = useState<string | null>(null);
+  const [seqDropBusy, setSeqDropBusy] = useState(false);
 
   const {
     data: charSectionsRaw,
@@ -756,6 +763,7 @@ export function TimelineCharacterPicker(props: {
       promptText: string;
       width: number;
       height: number;
+      length?: number;
     }) => {
       try {
         beginSession({
@@ -1099,6 +1107,8 @@ export function TimelineCharacterPicker(props: {
                       mode="select"
                       selectedRelPaths={selectedRelPaths}
                       disabled={poseBusy}
+                      enableSequenceDragSource={!poseChangeMode}
+                      onSequenceDragStateChange={setGalleryDragActive}
                       maxGridHeight={200}
                       onToggleSelect={(relPath, e) => {
                         setSelectedRelPaths((prev) =>
@@ -1116,6 +1126,8 @@ export function TimelineCharacterPicker(props: {
                       mode="select"
                       selectedRelPaths={selectedRelPaths}
                       disabled={poseBusy}
+                      enableSequenceDragSource={!poseChangeMode}
+                      onSequenceDragStateChange={setGalleryDragActive}
                       maxGridHeight={200}
                       onToggleSelect={(relPath, e) => {
                         setSelectedRelPaths((prev) =>
@@ -1150,7 +1162,36 @@ export function TimelineCharacterPicker(props: {
                                 src={assetUrlFromRelPath(seq.coverRelPath)}
                                 caption={seq.name}
                                 checked={selectedSequences.has(seq.name)}
-                                disabled={poseBusy}
+                                disabled={poseBusy || seqDropBusy}
+                                dropHighlight={galleryDragActive && seqDropHover === seq.name}
+                                onDragOver={(e) => {
+                                  if (!galleryDragActive || poseBusy) return;
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = "copy";
+                                  setSeqDropHover(seq.name);
+                                }}
+                                onDragLeave={() => {
+                                  setSeqDropHover((h) => (h === seq.name ? null : h));
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  setSeqDropHover(null);
+                                  setGalleryDragActive(false);
+                                  if (!selectedKey || poseBusy) return;
+                                  const relPath = parseSequenceBuilderDrop(e);
+                                  if (!relPath) return;
+                                  setSeqDropBusy(true);
+                                  void (async () => {
+                                    try {
+                                      await addImageToSequenceGallery(selectedKey, seq.name, relPath);
+                                      await refreshSections();
+                                    } catch (err) {
+                                      showError({ message: "Could not add image to sequence.", error: err });
+                                    } finally {
+                                      setSeqDropBusy(false);
+                                    }
+                                  })();
+                                }}
                                 onToggle={(on, e) => {
                                   setSelectedSequences((prev) =>
                                     toggleSetMember(prev, seq.name, on)
