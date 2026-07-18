@@ -568,6 +568,11 @@ export type TimelineClip = {
   transitionOut?: TimelineTransitionOut;
   /** Per-frame strip for video frame editing (persisted across re-opens). */
   frameSequence?: FrameSequencePayload;
+  /**
+   * Staging sequence-set gallery for Edit Video Frames.
+   * Edits here do not affect preview until dragged onto ``frameSequence``.
+   */
+  sequenceGallery?: SequenceGalleryItem[];
   frameEdit?: TimelineFrameEdit;
   /** FFv1 alpha companion for WebM bg-removed clips (``{stem}.alpha.mkv``). */
   alphaRelPath?: string;
@@ -1108,6 +1113,11 @@ export type TimelineFrameEdit = {
   extractFps?: number;
   /** After encode-from-strip, visible slots map to consecutive MP4 frames. */
   mp4Aligned?: boolean;
+  /**
+   * Sequence-set preview density: 1 = every frame, 2 = hold every other frame
+   * (12fps look on a 24fps timeline). Timeline duration unchanged.
+   */
+  timelineViewStep?: 1 | 2;
 };
 
 export type TimelineFrameExtractResult = {

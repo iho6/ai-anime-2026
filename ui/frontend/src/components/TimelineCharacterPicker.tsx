@@ -118,8 +118,21 @@ export function TimelineCharacterPicker(props: {
     picks: { sequenceName: string; galleryItemId?: string }[]
   ) => void;
   onCancel: () => void;
+  /** Timeline host: drop SequenceEditor gallery / frames onto main tracks. */
+  onDropImageToTimeline?: (relPath: string, clientX: number, clientY: number) => void;
+  onTimelineExternalDragActiveChange?: (active: boolean) => void;
+  timelineExternalDragActive?: boolean;
 }) {
-  const { open, poseChangeMode = false, onPickImages, onPickSequences, onCancel } = props;
+  const {
+    open,
+    poseChangeMode = false,
+    onPickImages,
+    onPickSequences,
+    onCancel,
+    onDropImageToTimeline,
+    onTimelineExternalDragActiveChange,
+    timelineExternalDragActive = false,
+  } = props;
   const initialKey = props.initialKey ?? props.charKey ?? null;
 
   const [stage, setStage] = useState<PickerStage>("pick");
@@ -853,6 +866,7 @@ export function TimelineCharacterPicker(props: {
           alignItems: "center",
           justifyContent: "center",
           padding: 16,
+          pointerEvents: timelineExternalDragActive ? "none" : "auto",
         }}
         onMouseDown={(e) => {
           if (e.target !== e.currentTarget) return;
@@ -873,6 +887,7 @@ export function TimelineCharacterPicker(props: {
             background: "#0b0b0b",
             color: "white",
             border: "1px solid rgba(255,255,255,0.25)",
+            pointerEvents: "auto",
           }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); setImgCtxMenu(null); setSeqCtxMenu(null); }}
@@ -1701,6 +1716,7 @@ export function TimelineCharacterPicker(props: {
             alignItems: "center",
             justifyContent: "center",
             padding: 16,
+            pointerEvents: timelineExternalDragActive ? "none" : "auto",
           }}
           onMouseDown={() => setPickerSeqEditor(null)}
         >
@@ -1712,6 +1728,7 @@ export function TimelineCharacterPicker(props: {
               maxWidth: "min(1100px, 96vw)",
               maxHeight: "92vh",
               overflow: "auto",
+              pointerEvents: "auto",
             }}
             onMouseDown={(e) => e.stopPropagation()}
           >
@@ -1737,6 +1754,8 @@ export function TimelineCharacterPicker(props: {
                 })
               }
               jobModal={{ begin: beginSession, end: endSession, fail: failSession, log: pushLog }}
+              onDropImageToTimeline={onDropImageToTimeline}
+              onTimelineExternalDragActiveChange={onTimelineExternalDragActiveChange}
             />
           </div>
         </div>

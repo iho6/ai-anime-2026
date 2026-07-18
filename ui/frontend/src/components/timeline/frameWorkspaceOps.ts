@@ -1,4 +1,8 @@
-import type { FrameSequencePayload, FrameSequenceStripSlot } from "../../lib/api";
+import type {
+  FrameSequencePayload,
+  FrameSequenceStripSlot,
+  SequenceGalleryItem,
+} from "../../lib/api";
 
 export function cloneFrameSequencePayload(payload: FrameSequencePayload): FrameSequencePayload {
   return {
@@ -12,6 +16,76 @@ export function cloneFrameSequencePayload(payload: FrameSequencePayload): FrameS
       crop: item.crop ? { ...item.crop } : undefined,
     })),
   };
+}
+
+export function newTimelineSequenceGroupId(): string {
+  return `sg_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+export function newTimelineGalleryId(): string {
+  return `gal_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+export function firstStripImageRelPath(fs: FrameSequencePayload): string | null {
+  for (const slot of fs.strip) {
+    if (slot.kind === "image" && slot.relPath?.trim() && !slot.hidden) {
+      return slot.relPath.trim();
+    }
+  }
+  for (const slot of fs.strip) {
+    if (slot.kind === "image" && slot.relPath?.trim()) return slot.relPath.trim();
+  }
+  return null;
+}
+
+/** Deep-clone strip into a staging gallery row with duplicated image assets. */
+export async function seedSequenceGalleryFromStrip(
+  strip: FrameSequencePayload,
+  duplicateAsset: (sourceRelPath: string) => Promise<string>
+): Promise<SequenceGalleryItem[]> {
+  const hasImage = strip.strip.some(
+    (slot) => slot.kind === "image" && !!slot.relPath?.trim()
+  );
+  if (!hasImage) return [];
+
+  const gid = newTimelineSequenceGroupId();
+  const nextStrip: FrameSequenceStripSlot[] = [];
+  for (const slot of strip.strip) {
+    if (slot.kind === "image" && slot.relPath?.trim()) {
+      const relPath = await duplicateAsset(slot.relPath.trim());
+      nextStrip.push({
+        ...slot,
+        relPath,
+        crop: slot.crop ? { ...slot.crop } : undefined,
+      });
+    } else {
+      nextStrip.push({ ...slot, crop: slot.crop ? { ...slot.crop } : undefined });
+    }
+  }
+  const hidden = strip.hidden.map((item) => ({
+    ...item,
+    crop: item.crop ? { ...item.crop } : undefined,
+  }));
+  for (let i = 0; i < hidden.length; i += 1) {
+    const item = hidden[i]!;
+    if (item.relPath?.trim()) {
+      hidden[i] = { ...item, relPath: await duplicateAsset(item.relPath.trim()) };
+    }
+  }
+  const frameSequence: FrameSequencePayload = {
+    sequenceGroupId: gid,
+    strip: nextStrip,
+    hidden,
+  };
+  const thumb = firstStripImageRelPath(frameSequence);
+  if (!thumb) return [];
+  return [
+    {
+      id: newTimelineGalleryId(),
+      relPath: thumb,
+      frameSequence,
+    },
+  ];
 }
 
 export function mutateTimelineFrameSlots(
@@ -58,15 +132,10 @@ export function moveTimelineFrames(
     .sort((a, b) => a - b);
   if (selectedOccupied.length > 1 && selectedOccupied.includes(fromIndex)) {
     const delta = toIndex - fromIndex;
-    const sourceIndices = new Set(selectedOccupied);
     const targets = selectedOccupied.map((index) => index + delta);
-    if (
-      targets.some(
-        (index) =>
-          index < 0 ||
-          (payload.strip[index]?.kind === "image" && !sourceIndices.has(index))
-      )
-    ) {
+    // Slide as a rigid block; only reject out-of-bounds left. Occupied
+    // destinations outside the selection are overwritten.
+    if (targets.some((index) => index < 0)) {
       return null;
     }
     const strip = [...payload.strip];
@@ -89,6 +158,11 @@ export function moveTimelineFrames(
   return { payload: { ...payload, strip }, selectedIndices: new Set([toIndex]) };
 }
 
+/**
+ * Place a gallery sequence onto the timeline strip.
+ * Always duplicates image assets when ``duplicateAsset`` is provided.
+ * Uses a new ``sequenceGroupId`` on the returned payload so gallery and strip stay unlinked.
+ */
 export async function placeGallerySequence(
   target: FrameSequencePayload,
   source: FrameSequencePayload,
@@ -96,6 +170,7 @@ export async function placeGallerySequence(
   duplicateAsset?: (sourceRelPath: string) => Promise<string>
 ): Promise<{ payload: FrameSequencePayload; selectedIndices: Set<number> }> {
   const sourceClone = cloneFrameSequencePayload(source);
+  sourceClone.sequenceGroupId = newTimelineSequenceGroupId();
   const inserted = duplicateAsset
     ? await Promise.all(
         sourceClone.strip.map(async (slot) => {
@@ -108,7 +183,11 @@ export async function placeGallerySequence(
   while (strip.length < toIndex) strip.push({ kind: "empty" });
   strip.splice(toIndex, 1, ...inserted);
   return {
-    payload: { ...target, strip },
+    payload: {
+      ...target,
+      sequenceGroupId: sourceClone.sequenceGroupId,
+      strip,
+    },
     selectedIndices: new Set(inserted.map((_, index) => toIndex + index)),
   };
 }

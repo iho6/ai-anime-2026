@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   DndContext,
   DragEndEvent,
+  DragMoveEvent,
   DragOverlay,
   PointerSensor,
   useSensor,
@@ -12,6 +13,7 @@ import {
 import {
   assetUrlFromRelPath,
   type FrameSequencePayload,
+  type SequenceGalleryItem,
   type SequenceManifest,
   type SequencePreviewAspect,
 } from "../../lib/api";
@@ -29,6 +31,7 @@ import {
 import { SequenceWorkspaceShell } from "../sequenceWorkspace/SequenceWorkspaceShell";
 import {
   cloneFrameSequencePayload,
+  firstStripImageRelPath,
   moveTimelineFrames,
   mutateTimelineFrameSlots,
   placeGallerySequence,
@@ -43,6 +46,8 @@ export type TimelineClipFrameWorkspaceItem = {
   label: string;
   thumbRelPath: string;
   frameSequence: FrameSequencePayload;
+  sequenceGallery?: SequenceGalleryItem[];
+  timelineViewStep?: 1 | 2;
 };
 
 type FocusScope = "gallery" | "timeline";
@@ -61,10 +66,18 @@ export function TimelineClipFrameWorkspace(props: {
   busy?: boolean;
   onClose: () => void;
   onFrameSequenceChange: (clipId: string, frameSequence: FrameSequencePayload) => void;
+  onSequenceGalleryChange?: (clipId: string, gallery: SequenceGalleryItem[]) => void;
+  onTimelineViewStepChange?: (clipId: string, step: 1 | 2) => void;
   duplicateFrameAsset: (targetClipId: string, sourceRelPath: string) => Promise<string>;
   onError: (message: string, error?: unknown) => void;
+  /** Edit the frame-by-frame timeline strip (preview source). */
   onEditFrameSequence: (clipId: string) => void;
+  /** Edit a staging gallery sequence set (does not affect preview until dragged). */
+  onEditGallerySequence?: (clipId: string, galleryItemId: string) => void;
   onDownloadVideo?: (clipId: string) => void;
+  /** When set (timeline host), gallery / strip cells can drop onto main tracks. */
+  onDropImageToTimeline?: (relPath: string, clientX: number, clientY: number) => void;
+  onTimelineExternalDragActiveChange?: (active: boolean) => void;
 }) {
   const {
     open,
@@ -75,10 +88,14 @@ export function TimelineClipFrameWorkspace(props: {
     busy = false,
     onClose,
     onFrameSequenceChange,
+    onTimelineViewStepChange,
     duplicateFrameAsset,
     onError,
     onEditFrameSequence,
+    onEditGallerySequence,
     onDownloadVideo,
+    onDropImageToTimeline,
+    onTimelineExternalDragActiveChange,
   } = props;
   const [selectedClipId, setSelectedClipId] = useState(primaryClipId);
   const [focusScope, setFocusScope] = useState<FocusScope>("gallery");
@@ -94,13 +111,20 @@ export function TimelineClipFrameWorkspace(props: {
   const [frameMenu, setFrameMenu] = useState<MenuState>(null);
   const [dragPreviewPath, setDragPreviewPath] = useState<string | null>(null);
   const [duplicatingDrop, setDuplicatingDrop] = useState(false);
+  const [externalDragActive, setExternalDragActive] = useState(false);
   const [localPayload, setLocalPayload] = useState<FrameSequencePayload | null>(null);
+  const [selectedGalleryId, setSelectedGalleryId] = useState<string | null>(null);
   const undoRef = useRef<FrameSequencePayload[]>([]);
   const redoRef = useRef<FrameSequencePayload[]>([]);
   const clipboardRef = useRef<FrameSequencePayload["strip"] | null>(null);
   const pendingFingerprintRef = useRef<string | null>(null);
   const dropInProgressRef = useRef(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const onDropImageToTimelineRef = useRef(onDropImageToTimeline);
+  onDropImageToTimelineRef.current = onDropImageToTimeline;
+  const onTimelineExternalDragActiveChangeRef = useRef(onTimelineExternalDragActiveChange);
+  onTimelineExternalDragActiveChangeRef.current = onTimelineExternalDragActiveChange;
+  const externalDragPointerRef = useRef<{ x: number; y: number } | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const selectedItem = useMemo(
@@ -120,6 +144,7 @@ export function TimelineClipFrameWorkspace(props: {
       return;
     }
     setLocalPayload(cloneFrameSequencePayload(selectedItem.frameSequence));
+    setViewStep(selectedItem.timelineViewStep === 2 ? 2 : 1);
     setSelectedFrames(new Set());
     setSelectionAnchor(null);
     undoRef.current = [];
@@ -129,6 +154,11 @@ export function TimelineClipFrameWorkspace(props: {
     // Parent-controlled payload updates are synchronized separately below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedItem?.clipId]);
+
+  useEffect(() => {
+    if (!selectedItem) return;
+    setViewStep(selectedItem.timelineViewStep === 2 ? 2 : 1);
+  }, [selectedItem?.clipId, selectedItem?.timelineViewStep]);
 
   useEffect(() => {
     if (!selectedItem || !localPayload) return;
@@ -305,14 +335,26 @@ export function TimelineClipFrameWorkspace(props: {
     }];
   }, [localPayload]);
 
+  const selectedGallery = selectedItem?.sequenceGallery ?? [];
+
+  useEffect(() => {
+    if (!selectedGallery.length) {
+      setSelectedGalleryId(null);
+      return;
+    }
+    if (!selectedGallery.some((g) => g.id === selectedGalleryId)) {
+      setSelectedGalleryId(selectedGallery[0]!.id);
+    }
+  }, [selectedGallery, selectedGalleryId]);
+
   const previewManifest = useMemo<SequenceManifest>(() => ({
     version: 1,
     fps: Math.max(1, Math.round(fps)),
     previewAspect,
     timelineViewStep: viewStep,
-    gallery: items.map((item) => ({
-      id: item.clipId,
-      relPath: item.thumbRelPath,
+    gallery: selectedGallery.map((item) => ({
+      id: item.id,
+      relPath: item.relPath,
       frameSequence: item.frameSequence,
     })),
     frames: (localPayload?.strip ?? []).flatMap((slot, index) =>
@@ -328,7 +370,7 @@ export function TimelineClipFrameWorkspace(props: {
           }]
         : []
     ),
-  }), [fps, items, localPayload, previewAspect, selectedItem?.clipId, viewStep]);
+  }), [fps, localPayload, previewAspect, selectedGallery, selectedItem?.clipId, viewStep]);
 
   const openTimelinePreview = useCallback((frameIndex: number) => {
     const visible = previewManifest.frames.filter((frame) => !frame.hidden);
@@ -336,22 +378,83 @@ export function TimelineClipFrameWorkspace(props: {
     if (index >= 0) setPreview({ scope: "timeline", index });
   }, [previewManifest.frames]);
 
+  const resolveExternalDropRelPath = useCallback(
+    (d: {
+      kind?: string;
+      relPath?: string;
+      frameSequence?: FrameSequencePayload;
+    } | null | undefined): string | null => {
+      if (!d) return null;
+      if (d.kind === "timeline") return d.relPath?.trim() || null;
+      if (d.kind === "gallery") {
+        if (d.frameSequence?.strip?.length) {
+          return firstStripImageRelPath(d.frameSequence) ?? d.relPath?.trim() ?? null;
+        }
+        return d.relPath?.trim() || null;
+      }
+      return null;
+    },
+    []
+  );
+
+  const clearExternalTimelineDrag = useCallback(() => {
+    externalDragPointerRef.current = null;
+    setExternalDragActive(false);
+    onTimelineExternalDragActiveChangeRef.current?.(false);
+  }, []);
+
+  const tryDropImageToTimeline = useCallback((relPath: string | null) => {
+    const cb = onDropImageToTimelineRef.current;
+    if (!cb || !relPath?.trim()) return;
+    const ptr = externalDragPointerRef.current;
+    if (!ptr) return;
+    cb(relPath.trim(), ptr.x, ptr.y);
+  }, []);
+
+  const onDragMove = useCallback((event: DragMoveEvent) => {
+    if (!onDropImageToTimelineRef.current) return;
+    const kind = (event.active.data.current as { kind?: string } | undefined)?.kind;
+    if (kind !== "gallery" && kind !== "timeline") return;
+    const start = event.activatorEvent;
+    if (!(start instanceof PointerEvent)) return;
+    externalDragPointerRef.current = {
+      x: start.clientX + event.delta.x,
+      y: start.clientY + event.delta.y,
+    };
+  }, []);
+
   const onDragEnd = useCallback(
     async (event: DragEndEvent) => {
       setDragPreviewPath(null);
-      if (!localPayload || !selectedItem || dropInProgressRef.current) return;
-      const overId = String(event.over?.id ?? "");
-      if (!overId.startsWith("frame:")) return;
-      const toIndex = Number.parseInt(overId.slice("frame:".length), 10);
-      if (!Number.isFinite(toIndex)) return;
       const active = event.active.data.current as
         | {
             kind?: string;
             fromIndex?: number;
             galleryId?: string;
+            relPath?: string;
             frameSequence?: FrameSequencePayload;
           }
         | undefined;
+
+      const finishExternal = () => {
+        tryDropImageToTimeline(resolveExternalDropRelPath(active));
+        clearExternalTimelineDrag();
+      };
+
+      if (!localPayload || !selectedItem || dropInProgressRef.current) {
+        finishExternal();
+        return;
+      }
+
+      const overId = String(event.over?.id ?? "");
+      if (!overId.startsWith("frame:")) {
+        finishExternal();
+        return;
+      }
+      clearExternalTimelineDrag();
+      const toIndex = Number.parseInt(overId.slice("frame:".length), 10);
+      if (!Number.isFinite(toIndex)) return;
+
       if (active?.kind === "timeline" && active.fromIndex != null) {
         const fromIndex = active.fromIndex;
         const moved = moveTimelineFrames(localPayload, fromIndex, toIndex, selectedFrames);
@@ -369,9 +472,7 @@ export function TimelineClipFrameWorkspace(props: {
             localPayload,
             active.frameSequence,
             toIndex,
-            active.galleryId === selectedItem.clipId
-              ? undefined
-              : (relPath) => duplicateFrameAsset(selectedItem.clipId, relPath)
+            (relPath) => duplicateFrameAsset(selectedItem.clipId, relPath)
           );
           commitPayload(placed.payload);
           setSelectedFrames(placed.selectedIndices);
@@ -382,14 +483,26 @@ export function TimelineClipFrameWorkspace(props: {
           dropInProgressRef.current = false;
           setDuplicatingDrop(false);
         }
+        return;
       }
+      // Gallery still onto a strip cell: no place path without a sequence set.
     },
-    [commitPayload, duplicateFrameAsset, localPayload, onError, selectedFrames, selectedItem]
+    [
+      clearExternalTimelineDrag,
+      commitPayload,
+      duplicateFrameAsset,
+      localPayload,
+      onError,
+      resolveExternalDropRelPath,
+      selectedFrames,
+      selectedItem,
+      tryDropImageToTimeline,
+    ]
   );
 
   const galleryMenuItems: ContextMenuItem[] = useMemo(() => {
     if (!galleryMenu) return [];
-    const item = items[galleryMenu.index];
+    const item = selectedGallery[galleryMenu.index];
     if (!item) return [];
     return [
       {
@@ -400,11 +513,24 @@ export function TimelineClipFrameWorkspace(props: {
       {
         key: "edit",
         label: "Edit Frame Sequence",
-        disabled: busy,
-        onSelect: () => onEditFrameSequence(item.clipId),
+        disabled: busy || !item.frameSequence,
+        onSelect: () => {
+          if (item.frameSequence && onEditGallerySequence) {
+            onEditGallerySequence(selectedItem!.clipId, item.id);
+          } else if (item.frameSequence) {
+            onEditFrameSequence(selectedItem!.clipId);
+          }
+        },
       },
     ];
-  }, [busy, galleryMenu, items, onEditFrameSequence]);
+  }, [
+    busy,
+    galleryMenu,
+    onEditFrameSequence,
+    onEditGallerySequence,
+    selectedGallery,
+    selectedItem,
+  ]);
 
   const frameMenuItems: ContextMenuItem[] = useMemo(() => {
     if (!frameMenu || !localPayload || !selectedItem) return [];
@@ -463,7 +589,12 @@ export function TimelineClipFrameWorkspace(props: {
   if (!open || !selectedItem || !localPayload) return null;
 
   return (
-    <SequenceWorkspaceShell open title={title} onClose={onClose}>
+    <SequenceWorkspaceShell
+      open
+      title={title}
+      onClose={onClose}
+      passThroughPointerEvents={externalDragActive}
+    >
       <div ref={rootRef}>
         <DesktopContextMenu
           open={galleryMenu != null}
@@ -481,35 +612,76 @@ export function TimelineClipFrameWorkspace(props: {
         />
         <DndContext
           sensors={sensors}
+          onDragMove={onDragMove}
           onDragEnd={(event) => void onDragEnd(event)}
-          onDragCancel={() => setDragPreviewPath(null)}
+          onDragCancel={() => {
+            setDragPreviewPath(null);
+            clearExternalTimelineDrag();
+          }}
           onDragStart={(event) => {
             const data = event.active.data.current as
-              | { relPath?: string; frameSequence?: FrameSequencePayload; fromIndex?: number }
+              | {
+                  kind?: string;
+                  relPath?: string;
+                  frameSequence?: FrameSequencePayload;
+                  fromIndex?: number;
+                }
               | undefined;
-            const stripPath = data?.frameSequence?.strip.find(
-              (slot) => slot.kind === "image" && slot.relPath && !slot.hidden
-            )?.relPath;
-            setDragPreviewPath(stripPath ?? data?.relPath ?? null);
+            const stripPath = data?.frameSequence
+              ? firstStripImageRelPath(data.frameSequence)
+              : null;
+            const previewPath = stripPath ?? data?.relPath ?? null;
+            setDragPreviewPath(previewPath);
+            const canExternal =
+              Boolean(onDropImageToTimelineRef.current) &&
+              (data?.kind === "gallery" || data?.kind === "timeline") &&
+              Boolean(resolveExternalDropRelPath(data));
+            if (canExternal) {
+              setExternalDragActive(true);
+              onTimelineExternalDragActiveChangeRef.current?.(true);
+              const start = event.activatorEvent;
+              if (start instanceof PointerEvent) {
+                externalDragPointerRef.current = { x: start.clientX, y: start.clientY };
+              }
+            }
           }}
         >
+          {items.length > 1 ? (
+            <div style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 13 }}>Clip</span>
+              <select
+                aria-label="Selected clip"
+                value={selectedItem.clipId}
+                onChange={(event) => setSelectedClipId(event.target.value)}
+                onMouseDown={(event) => event.stopPropagation()}
+                style={{ fontSize: 13, padding: "2px 6px" }}
+              >
+                {items.map((item) => (
+                  <option key={item.clipId} value={item.clipId}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <SequenceGalleryPanel
-            items={items.map((item) => ({
-              id: item.clipId,
-              relPath: item.thumbRelPath,
+            items={selectedGallery.map((item) => ({
+              id: item.id,
+              relPath: item.relPath,
               frameSequence: item.frameSequence,
             }))}
-            selectedId={selectedItem.clipId}
+            selectedId={selectedGalleryId}
             onFocus={() => setFocusScope("gallery")}
-            onSelect={(clipId) => setSelectedClipId(clipId)}
+            onSelect={(galleryId) => setSelectedGalleryId(galleryId)}
             onItemContextMenu={(event, index) => {
               setFrameMenu(null);
               setFocusScope("gallery");
-              setSelectedClipId(items[index]?.clipId ?? selectedItem.clipId);
+              const row = selectedGallery[index];
+              if (row) setSelectedGalleryId(row.id);
               setGalleryMenu({ x: event.clientX, y: event.clientY, index });
             }}
             onItemDoubleClick={(index) => {
-              if (items[index]) setPreview({ scope: "gallery", index });
+              if (selectedGallery[index]) setPreview({ scope: "gallery", index });
             }}
           />
           <div
@@ -527,7 +699,11 @@ export function TimelineClipFrameWorkspace(props: {
             <select
               aria-label="Timeline grid density"
               value={viewStep === 2 ? "12" : "24"}
-              onChange={(event) => setViewStep(event.target.value === "12" ? 2 : 1)}
+              onChange={(event) => {
+                const next: 1 | 2 = event.target.value === "12" ? 2 : 1;
+                setViewStep(next);
+                if (selectedItem) onTimelineViewStepChange?.(selectedItem.clipId, next);
+              }}
               onMouseDown={(event) => event.stopPropagation()}
               style={{ fontSize: 13, padding: "2px 6px" }}
             >

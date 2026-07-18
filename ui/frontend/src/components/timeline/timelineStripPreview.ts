@@ -1,16 +1,23 @@
 import type { FrameSequenceStripSlot, TimelineClip } from "../../lib/api";
 import { stripSlotVisibleForExport } from "../frameSequenceStripUtils";
+import {
+  clipPreviewHoldStep,
+  holdQuantizeFrameIndex,
+  type PreviewHoldStep,
+} from "./previewHoldFrame";
 
 export function stripFrameIndexAtSourceTime(
   clip: Pick<TimelineClip, "inPoint" | "outPoint">,
   sourceTimeSec: number,
   fps: number,
-  stripLength: number
+  stripLength: number,
+  holdStep: PreviewHoldStep = 1
 ): number {
   if (stripLength < 1) return 0;
   let t = Math.max(sourceTimeSec, clip.inPoint);
   if (clip.outPoint > 0) t = Math.min(t, clip.outPoint);
-  const index = Math.round((t - clip.inPoint) * Math.max(1, fps));
+  const raw = Math.round((t - clip.inPoint) * Math.max(1, fps));
+  const index = holdQuantizeFrameIndex(raw, holdStep);
   return Math.max(0, Math.min(index, stripLength - 1));
 }
 
@@ -38,7 +45,8 @@ export function timelineStripPreviewRelPath(
     clip,
     sourceTimeSec,
     fps,
-    strip.length
+    strip.length,
+    clipPreviewHoldStep(clip)
   );
   return resolveStripSlotRelPath(strip, index);
 }

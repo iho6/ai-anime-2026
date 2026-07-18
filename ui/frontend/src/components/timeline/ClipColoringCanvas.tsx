@@ -15,6 +15,7 @@ import {
   sourceTimeFromFrameIdx,
   type AlphaFrameCache,
 } from "./alphaFrameCache";
+import { clipPreviewHoldStep, holdQuantizeFrameIndex } from "./previewHoldFrame";
 import { timelineEffectiveStripPreviewRelPath } from "./timelineStripPreview";
 
 const DEFAULT_PREVIEW_FPS = 24;
@@ -77,6 +78,7 @@ export function ClipColoringCanvas(props: {
   const src = assetUrlFromRelPath(previewSrcRelPath(clip));
   const hasAlphaVideo = Boolean(clip.alphaRelPath?.trim());
   const fps = Math.max(1, previewFps || DEFAULT_PREVIEW_FPS);
+  const holdStep = clipPreviewHoldStep(clip);
   // Opaque RGB strips must not win over alpha.mkv mats (black reads as solid).
   const stripRelPath = timelineEffectiveStripPreviewRelPath(clip, sourceTimeSec, fps);
   const maxFrameIdx = Math.max(0, estimateFrameCount(clip, fps) - 1);
@@ -224,7 +226,10 @@ export function ClipColoringCanvas(props: {
 
   function handleAlphaFrameAtTime(sourceTime: number, epoch: number, prefetch: boolean) {
     const t = clampSourceTime(sourceTime, clip);
-    const frameIdx = Math.min(maxFrameIdx, frameIdxFromSourceTime(t, fps));
+    const frameIdx = Math.min(
+      maxFrameIdx,
+      holdQuantizeFrameIndex(frameIdxFromSourceTime(t, fps), holdStep)
+    );
     if (frameIdx === lastPaintedFrameIdxRef.current && cacheRef.current.has(frameIdx)) {
       return;
     }
@@ -305,7 +310,7 @@ export function ClipColoringCanvas(props: {
         shouldAbort: () => epoch !== requestEpochRef.current,
       });
     }
-  }, [clip.type, hasAlphaVideo, stripRelPath, clip.id, timelineKey, clip.coloring, fps, clip.inPoint, clip.outPoint, clip.srcDuration]);
+  }, [clip.type, hasAlphaVideo, stripRelPath, clip.id, timelineKey, clip.coloring, fps, clip.inPoint, clip.outPoint, clip.srcDuration, holdStep]);
 
   useEffect(() => {
     if (clip.type !== "video" || !hasAlphaVideo || stripRelPath) return;
@@ -321,7 +326,8 @@ export function ClipColoringCanvas(props: {
       }
     };
 
-    if (playing) {
+    // Hold-step preview is playhead-driven (every-other-frame), not free-running decode.
+    if (playing && holdStep < 2) {
       if (scrubTimerRef.current != null) {
         clearTimeout(scrubTimerRef.current);
         scrubTimerRef.current = null;
@@ -352,7 +358,7 @@ export function ClipColoringCanvas(props: {
       };
     }
 
-    const delayMs = hasPaintedRef.current ? SCRUB_DEBOUNCE_MS : 0;
+    const delayMs = hasPaintedRef.current && holdStep < 2 ? SCRUB_DEBOUNCE_MS : 0;
     if (scrubTimerRef.current != null) clearTimeout(scrubTimerRef.current);
     scrubTimerRef.current = setTimeout(() => {
       scrubTimerRef.current = null;
@@ -374,7 +380,9 @@ export function ClipColoringCanvas(props: {
     clip.id,
     fps,
     maxFrameIdx,
+    holdStep,
     playing ? 0 : sourceTimeSec,
+    holdStep > 1 ? sourceTimeSec : 0,
   ]);
 
   useEffect(

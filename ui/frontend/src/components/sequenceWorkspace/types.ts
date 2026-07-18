@@ -52,4 +52,9 @@ export type SequenceWorkspaceShellProps = {
   onClose: () => void;
   zIndex?: number;
   closeLabel?: string;
+  /**
+   * When true, the fullscreen backdrop ignores pointer events so drops can
+   * hit hosts underneath (e.g. main timeline tracks). Inner panel stays interactive.
+   */
+  passThroughPointerEvents?: boolean;
 };

@@ -205,6 +205,11 @@ type DragState = {
 export type TimelineTracksHandle = {
   ensurePlayheadVisible: (t?: number) => void;
   timeAtClientX: (clientX: number) => number;
+  /** Resolve a non-audio track under the pointer for SequenceEditor → timeline drops. */
+  dropTargetAtClientPoint: (
+    clientX: number,
+    clientY: number
+  ) => { trackId: string; startSec: number } | null;
 };
 
 type MarqueeState = {
@@ -436,8 +441,19 @@ export const TimelineTracks = forwardRef<TimelineTracksHandle, {
         if (!el) return 0;
         return clamp(timeFromClientX(clientX, el, pxPerSec), 0, Infinity);
       },
+      dropTargetAtClientPoint: (clientX: number, clientY: number) => {
+        const el = laneAreaRef.current;
+        if (!el) return null;
+        const rect = el.getBoundingClientRect();
+        const idx = Math.floor((clientY - rect.top - RULER_H) / ROW_H);
+        if (idx < 0 || idx >= manifest.tracks.length) return null;
+        const track = manifest.tracks[idx];
+        if (!track || track.kind === "audio") return null;
+        const startSec = clamp(timeFromClientX(clientX, el, pxPerSec), 0, Infinity);
+        return { trackId: track.id, startSec };
+      },
     }),
-    [ensurePlayheadVisible, pxPerSec]
+    [ensurePlayheadVisible, manifest.tracks, pxPerSec]
   );
 
   // Track drag-to-reorder state.

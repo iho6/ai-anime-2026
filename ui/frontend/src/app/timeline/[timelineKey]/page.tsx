@@ -60,6 +60,7 @@ import {
   TimelineText,
   TimelineTransitionOut,
   FrameSequencePayload,
+  SequenceGalleryItem,
   TimelineFrameEdit,
   ShotLayerMeta,
   TrajectoryMotionId,
@@ -190,6 +191,7 @@ import { ClipColoringFlyout } from "../../../components/timeline/ClipColoringFly
 import { ClipSpeedFlyout } from "../../../components/timeline/ClipSpeedFlyout";
 import { RemoveBgRmbgFlyout } from "../../../components/timeline/RemoveBgRmbgFlyout";
 import { TimelineClipFrameWorkspace } from "../../../components/timeline/TimelineClipFrameWorkspace";
+import { seedSequenceGalleryFromStrip } from "../../../components/timeline/frameWorkspaceOps";
 import { rasterizeGeometryToPngBase64 } from "../../../components/timeline/geometryRasterize";
 import { usePlayheadValue } from "../../../components/timeline/timelinePlayback";
 
@@ -402,10 +404,16 @@ export default function TimelineEditorPage() {
     primaryClipId: string;
     primaryTrackId: string;
   } | null>(null);
+  /** Edit a staging gallery sequence set (does not touch frameSequence until drag-place). */
+  const [gallerySequenceEditor, setGallerySequenceEditor] = useState<{
+    clipId: string;
+    galleryItemId: string;
+  } | null>(null);
   const [seqEditorSource, setSeqEditorSource] = useState<{
     charKey: string;
     sequenceName: string;
   } | null>(null);
+  const [seqExternalDrag, setSeqExternalDrag] = useState(false);
   const videoFrameApplyStripRef = useRef<FrameSequencePayload | null>(null);
   const videoFrameApplyGroupRef = useRef<Record<string, FrameSequencePayload> | null>(null);
   const videoFrameApplyEditorRef = useRef<{ clipIds: string[]; primaryClipId: string; primaryTrackId: string } | null>(null);
@@ -1370,7 +1378,7 @@ export default function TimelineEditorPage() {
   }
 
   function updateClipSpeedLive(clipId: string, speed: number) {
-    const sp = Math.max(0.01, speed);
+    const sp = Math.max(0.1, speed);
     updateManifest((m) => ({
       ...m,
       tracks: m.tracks.map((t) => ({
@@ -1855,7 +1863,12 @@ export default function TimelineEditorPage() {
     }
 
     function editorBlocksTimelineShortcuts(): boolean {
-      return Boolean(videoFrameEditor || seqEditorSource || timelineFrameWorkspace);
+      return Boolean(
+        videoFrameEditor ||
+          gallerySequenceEditor ||
+          seqEditorSource ||
+          timelineFrameWorkspace
+      );
     }
 
     function onKey(e: KeyboardEvent) {
@@ -1989,14 +2002,14 @@ export default function TimelineEditorPage() {
       if (!(e.ctrlKey || e.metaKey)) return;
       const k = e.key.toLowerCase();
       if (k === "c") {
-        if (modalBlocksShortcuts() || seqEditorSource || videoFrameEditor || timelineFrameWorkspace) return;
+        if (modalBlocksShortcuts() || seqEditorSource || videoFrameEditor || gallerySequenceEditor || timelineFrameWorkspace) return;
         if (selectedClipIds.length === 0) return;
         e.preventDefault();
         copySelectedClips();
         return;
       }
       if (k === "v") {
-        if (modalBlocksShortcuts() || seqEditorSource || videoFrameEditor || timelineFrameWorkspace) return;
+        if (modalBlocksShortcuts() || seqEditorSource || videoFrameEditor || gallerySequenceEditor || timelineFrameWorkspace) return;
         if (!clipClipboardRef.current) return;
         e.preventDefault();
         pasteClips();
@@ -2031,6 +2044,7 @@ export default function TimelineEditorPage() {
     seqPickerOpen,
     seqEditorSource,
     videoFrameEditor,
+    gallerySequenceEditor,
     timelineFrameWorkspace,
     jobModalProps.open,
     manifest,
@@ -2242,6 +2256,18 @@ export default function TimelineEditorPage() {
 
   const insertFrameFromEditorDropRef = useRef(insertFrameFromEditorDrop);
   insertFrameFromEditorDropRef.current = insertFrameFromEditorDrop;
+
+  function handleSequenceEditorDropToTimeline(
+    relPath: string,
+    clientX: number,
+    clientY: number
+  ) {
+    const hit = tracksRef.current?.dropTargetAtClientPoint(clientX, clientY);
+    if (!hit) return;
+    void insertFrameFromEditorDropRef
+      .current(relPath, hit.trackId, hit.startSec)
+      .catch((e) => showError({ message: "Could not add frame to timeline.", error: e }));
+  }
 
   const onStripFrameDragMove = useCallback((ev: DragMoveEvent) => {
     const activeData = ev.active.data.current as { kind?: string } | undefined;
@@ -2597,7 +2623,11 @@ export default function TimelineEditorPage() {
 
   function updateClipFrameSequence(
     clipId: string,
-    patch: { frameSequence: FrameSequencePayload; frameEdit?: TimelineFrameEdit }
+    patch: {
+      frameSequence?: FrameSequencePayload;
+      sequenceGallery?: SequenceGalleryItem[];
+      frameEdit?: TimelineFrameEdit;
+    }
   ) {
     historyUpdate((m) => ({
       ...m,
@@ -2607,11 +2637,57 @@ export default function TimelineEditorPage() {
           c.id === clipId
             ? {
                 ...c,
-                frameSequence: patch.frameSequence,
+                ...(patch.frameSequence !== undefined
+                  ? { frameSequence: patch.frameSequence }
+                  : {}),
+                ...(patch.sequenceGallery !== undefined
+                  ? { sequenceGallery: patch.sequenceGallery }
+                  : {}),
                 ...(patch.frameEdit ? { frameEdit: patch.frameEdit } : {}),
               }
             : c
         ),
+      })),
+    }));
+  }
+
+  async function duplicateClipFrameAsset(clipId: string, sourceRelPath: string) {
+    const r = await apiTimelineDuplicateFrameAsset({
+      timelineKey,
+      clipId,
+      sourceRelPath,
+    });
+    return r.relPath;
+  }
+
+  /** Seed staging gallery from strip when missing (extract / migrate). */
+  async function ensureSequenceGalleriesSeeded(clipIds: string[]) {
+    const needs: Array<{ clipId: string; strip: FrameSequencePayload }> = [];
+    for (const clipId of clipIds) {
+      const found = findClip(clipId);
+      const strip = found?.clip.frameSequence;
+      if (!strip?.strip?.length) continue;
+      if (found!.clip.sequenceGallery?.length) continue;
+      needs.push({ clipId, strip });
+    }
+    if (!needs.length) return;
+    const seeded = await Promise.all(
+      needs.map(async ({ clipId, strip }) => ({
+        clipId,
+        gallery: await seedSequenceGalleryFromStrip(strip, (sourceRelPath) =>
+          duplicateClipFrameAsset(clipId, sourceRelPath)
+        ),
+      }))
+    );
+    historyUpdate((m) => ({
+      ...m,
+      tracks: m.tracks.map((t) => ({
+        ...t,
+        clips: t.clips.map((c) => {
+          const row = seeded.find((s) => s.clipId === c.id);
+          if (!row?.gallery.length) return c;
+          return { ...c, sequenceGallery: row.gallery };
+        }),
       })),
     }));
   }
@@ -2641,9 +2717,16 @@ export default function TimelineEditorPage() {
       frameEdit,
       fps
     );
+    const gallery = await seedSequenceGalleryFromStrip(synced, (sourceRelPath) =>
+      duplicateClipFrameAsset(clipId, sourceRelPath)
+    );
     updateClipFrameSequence(clipId, {
       frameSequence: synced,
-      frameEdit,
+      ...(gallery.length ? { sequenceGallery: gallery } : {}),
+      frameEdit: {
+        ...frameEdit,
+        ...(clip.frameEdit?.timelineViewStep === 2 ? { timelineViewStep: 2 as const } : {}),
+      },
     });
     if (trackId) {
       setVideoFrameEditor({
@@ -2707,6 +2790,7 @@ export default function TimelineEditorPage() {
     const ok = await ensureVideoFramesExtracted(clipIds);
     if (!ok) return;
     historyUpdate((m) => syncVideoFrameTrimHiddenInManifest(m, clipIds));
+    await ensureSequenceGalleriesSeeded(clipIds);
     setTimelineFrameWorkspace({
       clipIds,
       primaryClipId: clipId,
@@ -2718,10 +2802,37 @@ export default function TimelineEditorPage() {
     const workspace = timelineFrameWorkspace;
     if (!workspace) return;
     const clipIds = workspace.clipIds.includes(clipId) ? workspace.clipIds : [clipId];
+    setGallerySequenceEditor(null);
     setVideoFrameEditor({
       clipIds,
       primaryClipId: clipId,
       primaryTrackId: workspace.primaryTrackId,
+    });
+  }
+
+  function openGallerySequenceFromWorkspace(clipId: string, galleryItemId: string) {
+    setVideoFrameEditor(null);
+    setGallerySequenceEditor({ clipId, galleryItemId });
+  }
+
+  function saveGallerySequenceStrip(next: FrameSequencePayload) {
+    if (!gallerySequenceEditor) return;
+    const { clipId, galleryItemId } = gallerySequenceEditor;
+    const found = findClip(clipId);
+    const gallery = found?.clip.sequenceGallery;
+    if (!gallery?.length) return;
+    const thumb =
+      next.strip.find((s) => s.kind === "image" && s.relPath?.trim())?.relPath?.trim() ?? null;
+    updateClipFrameSequence(clipId, {
+      sequenceGallery: gallery.map((item) =>
+        item.id === galleryItemId
+          ? {
+              ...item,
+              ...(thumb ? { relPath: thumb } : {}),
+              frameSequence: next,
+            }
+          : item
+      ),
     });
   }
 
@@ -2770,7 +2881,12 @@ export default function TimelineEditorPage() {
         ...t,
         clips: t.clips.map((c) =>
           clipIds.includes(c.id)
-            ? { ...c, frameSequence: undefined, frameEdit: undefined }
+            ? {
+                ...c,
+                frameSequence: undefined,
+                frameEdit: undefined,
+                sequenceGallery: undefined,
+              }
             : c
         ),
       })),
@@ -3459,6 +3575,7 @@ export default function TimelineEditorPage() {
     cameraAngleOpen ||
     stripAiEditOpen ||
     Boolean(videoFrameEditor) ||
+    Boolean(gallerySequenceEditor) ||
     Boolean(timelineFrameWorkspace) ||
     Boolean(seqEditorSource) ||
     Boolean(i2vDialog?.open) ||
@@ -3869,7 +3986,13 @@ export default function TimelineEditorPage() {
             playhead={playhead}
             playheadStore={playheadStore}
             selectedClipIds={selectedClipIds}
-            externalStripDropActive={Boolean(videoFrameEditor)}
+            externalStripDropActive={Boolean(
+              videoFrameEditor ||
+                gallerySequenceEditor ||
+                timelineFrameWorkspace ||
+                seqEditorSource ||
+                seqExternalDrag
+            )}
             onExternalFilesDrop={(trackId, clientX, files) =>
               void importExternalFiles(trackId, clientX, files)
             }
@@ -3930,6 +4053,9 @@ export default function TimelineEditorPage() {
         onPickImages={onPickCharImages}
         onPickSequences={onPickCharSequences}
         onCancel={() => { setCharPickerOpen(false); setChangePoseClipId(null); setCharPickerInitialKey(null); }}
+        onDropImageToTimeline={handleSequenceEditorDropToTimeline}
+        onTimelineExternalDragActiveChange={setSeqExternalDrag}
+        timelineExternalDragActive={seqExternalDrag}
       />
       <TimelineLocationPicker
         open={locPickerOpen}
@@ -4118,7 +4244,7 @@ export default function TimelineEditorPage() {
         </div>
       ) : null}
 
-      {timelineFrameWorkspace && !videoFrameEditor && manifest ? (
+      {timelineFrameWorkspace && !videoFrameEditor && !gallerySequenceEditor && manifest ? (
         <TimelineClipFrameWorkspace
           open
           title={
@@ -4145,28 +4271,89 @@ export default function TimelineEditorPage() {
                 label: clipVideoLabel(found.clip),
                 thumbRelPath: stripThumb || previewSrcRelPath(found.clip),
                 frameSequence: found.clip.frameSequence,
+                ...(found.clip.sequenceGallery
+                  ? { sequenceGallery: found.clip.sequenceGallery }
+                  : {}),
+                timelineViewStep: found.clip.frameEdit?.timelineViewStep === 2 ? (2 as const) : (1 as const),
               };
             })
             .filter((x): x is NonNullable<typeof x> => x != null)}
           onClose={() => {
             setTimelineFrameWorkspace(null);
             setVideoFrameEditor(null);
+            setGallerySequenceEditor(null);
           }}
           onFrameSequenceChange={(clipId, frameSequence) =>
             updateClipFrameSequence(clipId, { frameSequence })
           }
+          onSequenceGalleryChange={(clipId, gallery) =>
+            updateClipFrameSequence(clipId, { sequenceGallery: gallery })
+          }
+          onTimelineViewStepChange={(clipId, step) => {
+            historyUpdate((m) => ({
+              ...m,
+              tracks: m.tracks.map((t) => ({
+                ...t,
+                clips: t.clips.map((c) =>
+                  c.id !== clipId
+                    ? c
+                    : {
+                        ...c,
+                        frameEdit: {
+                          framesDirRel: c.frameEdit?.framesDirRel ?? "",
+                          ...(c.frameEdit?.extractInPointSec != null
+                            ? { extractInPointSec: c.frameEdit.extractInPointSec }
+                            : {}),
+                          ...(c.frameEdit?.extractFps != null
+                            ? { extractFps: c.frameEdit.extractFps }
+                            : {}),
+                          ...(c.frameEdit?.mp4Aligned ? { mp4Aligned: true } : {}),
+                          timelineViewStep: step,
+                        },
+                      }
+                ),
+              })),
+            }));
+          }}
           duplicateFrameAsset={(targetClipId, sourceRelPath) =>
-            apiTimelineDuplicateFrameAsset({
-              timelineKey,
-              clipId: targetClipId,
-              sourceRelPath,
-            }).then((r) => r.relPath)
+            duplicateClipFrameAsset(targetClipId, sourceRelPath)
           }
           onError={(message, error) => showError({ message, error })}
           onEditFrameSequence={openTimelineFrameStripFromWorkspace}
+          onEditGallerySequence={openGallerySequenceFromWorkspace}
           onDownloadVideo={(clipId) => void downloadVideoClip(clipId)}
+          onDropImageToTimeline={handleSequenceEditorDropToTimeline}
+          onTimelineExternalDragActiveChange={setSeqExternalDrag}
         />
       ) : null}
+
+      {gallerySequenceEditor && manifest ? (() => {
+        const { clipId, galleryItemId } = gallerySequenceEditor;
+        const found = findClip(clipId);
+        const item = found?.clip.sequenceGallery?.find((g) => g.id === galleryItemId);
+        const fs = item?.frameSequence;
+        if (!found || !fs) return null;
+        return (
+          <FrameSequenceModal
+            key={`gallery-${clipId}-${galleryItemId}`}
+            open
+            editorMode="timeline"
+            title="Edit Frame Sequence (Gallery)"
+            initial={fs}
+            sourceGalleryIndex={0}
+            charKey=""
+            sequenceName=""
+            previewFps={Math.max(1, manifest.fps)}
+            onError={(message, error) => showError({ message, error })}
+            onClose={() => setGallerySequenceEditor(null)}
+            onSave={saveGallerySequenceStrip}
+            onNotify={(message) => pushLog(message)}
+            duplicateStripAsset={(_targetClipId, sourceRelPath) =>
+              duplicateClipFrameAsset(clipId, sourceRelPath)
+            }
+          />
+        );
+      })() : null}
 
       {videoFrameEditor && manifest ? (() => {
         const { clipIds, primaryClipId } = videoFrameEditor;
@@ -4232,8 +4419,12 @@ export default function TimelineEditorPage() {
             alignItems: "center",
             justifyContent: "center",
             padding: 16,
+            pointerEvents: seqExternalDrag ? "none" : "auto",
           }}
-          onMouseDown={() => setSeqEditorSource(null)}
+          onMouseDown={() => {
+            setSeqExternalDrag(false);
+            setSeqEditorSource(null);
+          }}
         >
           <div
             style={{
@@ -4243,6 +4434,7 @@ export default function TimelineEditorPage() {
               maxWidth: "min(1100px, 96vw)",
               maxHeight: "92vh",
               overflow: "auto",
+              pointerEvents: "auto",
             }}
             onMouseDown={(e) => e.stopPropagation()}
           >
@@ -4250,7 +4442,10 @@ export default function TimelineEditorPage() {
               <div>Sequence: {seqEditorSource.sequenceName}</div>
               <button
                 type="button"
-                onClick={() => setSeqEditorSource(null)}
+                onClick={() => {
+                  setSeqExternalDrag(false);
+                  setSeqEditorSource(null);
+                }}
                 style={{ borderRadius: 0, border: "1px solid rgba(0,0,0,0.5)", background: "transparent", padding: "4px 12px", cursor: "pointer" }}
               >
                 Close
@@ -4261,6 +4456,8 @@ export default function TimelineEditorPage() {
               sequenceName={seqEditorSource.sequenceName}
               onError={(msg, err) => showError({ message: msg, error: err })}
               jobModal={{ begin: beginSession, end: endSession, fail: failSession, log: pushLog }}
+              onDropImageToTimeline={handleSequenceEditorDropToTimeline}
+              onTimelineExternalDragActiveChange={setSeqExternalDrag}
             />
           </div>
         </div>

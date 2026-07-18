@@ -87,4 +87,28 @@ describe("applyEncodedFrameSequenceReplacements", () => {
   it("removes a stale alpha path when the replacement has none", () => {
     expect(apply().alphaRelPath).toBeUndefined();
   });
+
+  it("preserves sequenceGallery across encode/apply", () => {
+    const input = manifest();
+    const gallery = [
+      {
+        id: "gal1",
+        relPath: "gallery/a.png",
+        frameSequence: strip("gallery-group", "gallery/a.png"),
+      },
+    ];
+    input.tracks[0]!.clips[0]!.sequenceGallery = gallery;
+    input.tracks[0]!.clips[0]!.frameSequence = strip("old-strip", "old.png");
+    const out = applyEncodedFrameSequenceReplacements(input, [
+      {
+        clipId: "a",
+        strip: strip("new-strip", "new.png"),
+        srcRelPath: "clips/a-new.webm",
+        durationSec: 4,
+      },
+    ]);
+    const updated = out.tracks[0]!.clips[0]!;
+    expect(updated.frameSequence?.sequenceGroupId).toBe("new-strip");
+    expect(updated.sequenceGallery).toEqual(gallery);
+  });
 });

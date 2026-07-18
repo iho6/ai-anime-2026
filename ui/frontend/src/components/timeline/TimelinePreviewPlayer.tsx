@@ -54,6 +54,7 @@ import { TextClipLayer } from "./TextClipLayer";
 import { TextStyleBar, type TextStyleModal } from "./TextStyleBar";
 import { TextPickerModals } from "./TextPickerModals";
 import { ClipColoringCanvas } from "./ClipColoringCanvas";
+import { clipPreviewHoldStep, heldSourceTimeSec } from "./previewHoldFrame";
 import { clipNeedsColoringCanvas } from "../../lib/clipColoring";
 
 /** Cap on simultaneous <video> decoders during preview to bound CPU/GPU load. */
@@ -281,7 +282,7 @@ export function TimelinePreviewPlayer(props: {
   ) => {
     const { clip, sourceTime, gain } = output;
     const reversed = !!clip.reversed;
-    el.playbackRate = clip.speed || 1;
+    el.playbackRate = Math.min(16, Math.max(0.1, clip.speed || 1));
     el.volume = clamp(gain, 0, 1);
     const seekThreshold = reversed ? 0.05 : playing ? 0.35 : 0.05;
     if (Math.abs(el.currentTime - sourceTime) > seekThreshold) {
@@ -306,28 +307,31 @@ export function TimelinePreviewPlayer(props: {
       seenVisual.add(clip.id);
       const el = mediaRefs.current.get(clip.id);
       if (!el) return;
-      const want = sourceTimeAtWithTransition(clip, playhead, track);
+      const wantRaw = sourceTimeAtWithTransition(clip, playhead, track);
+      const holdStep = clipPreviewHoldStep(clip);
+      const want =
+        holdStep > 1
+          ? heldSourceTimeSec(clip, wantRaw, Math.max(1, manifest.fps), holdStep)
+          : wantRaw;
       const reversed = !!clip.reversed;
-      el.playbackRate = clip.speed || 1;
-      const seekThreshold = reversed ? 0.05 : playing ? 0.35 : 0.05;
+      el.playbackRate = Math.min(16, Math.max(0.1, clip.speed || 1));
+      const seekThreshold =
+        holdStep > 1 ? 0.001 : reversed ? 0.05 : playing ? 0.35 : 0.05;
       if (!playing || reversed) {
         if (!el.paused) el.pause();
-        if (Math.abs(el.currentTime - want) > seekThreshold) {
-          try {
-            el.currentTime = want;
-          } catch {
-            /* not seekable yet */
-          }
+      } else if (holdStep > 1) {
+        // Stepped hold: park on the held frame; canvas/playhead drives motion.
+        if (!el.paused) el.pause();
+      }
+      if (Math.abs(el.currentTime - want) > seekThreshold) {
+        try {
+          el.currentTime = want;
+        } catch {
+          /* not seekable yet */
         }
-      } else {
-        if (Math.abs(el.currentTime - want) > seekThreshold) {
-          try {
-            el.currentTime = want;
-          } catch {
-            /* not seekable yet */
-          }
-        }
-        if (el.paused) void el.play().catch(() => {});
+      }
+      if (playing && !reversed && holdStep < 2 && el.paused) {
+        void el.play().catch(() => {});
       }
     };
 

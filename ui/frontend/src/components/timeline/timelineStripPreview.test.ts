@@ -35,6 +35,13 @@ describe("stripFrameIndexAtSourceTime", () => {
     expect(stripFrameIndexAtSourceTime(clip, 2.5, 2, 4)).toBe(3);
     expect(stripFrameIndexAtSourceTime(clip, 10, 2, 4)).toBe(3);
   });
+
+  it("holds every other frame when holdStep is 2", () => {
+    // inPoint=1, fps=2 → t=1.0 → idx 0; t=1.5 → raw 1 → hold 0; t=2.0 → raw 2 → hold 2
+    expect(stripFrameIndexAtSourceTime(clip, 1.0, 2, 4, 2)).toBe(0);
+    expect(stripFrameIndexAtSourceTime(clip, 1.5, 2, 4, 2)).toBe(0);
+    expect(stripFrameIndexAtSourceTime(clip, 2.0, 2, 4, 2)).toBe(2);
+  });
 });
 
 describe("resolveStripSlotRelPath", () => {
@@ -56,6 +63,15 @@ describe("timelineStripPreviewRelPath", () => {
     expect(
       timelineStripPreviewRelPath({ ...clip, frameSequence: undefined }, 1, 24)
     ).toBeNull();
+  });
+
+  it("uses clip timelineViewStep for strip preview hold", () => {
+    const held = {
+      ...clip,
+      frameEdit: { framesDirRel: "frames", timelineViewStep: 2 as const },
+    };
+    // fps=2, inPoint=1: at t=1.5 raw index 1 → held to 0 → frames/0.png
+    expect(timelineStripPreviewRelPath(held, 1.5, 2)).toBe("frames/0.png");
   });
 });
 

@@ -4,6 +4,7 @@ import {
   moveTimelineFrames,
   mutateTimelineFrameSlots,
   placeGallerySequence,
+  seedSequenceGalleryFromStrip,
 } from "./frameWorkspaceOps";
 
 function payload(
@@ -13,8 +14,44 @@ function payload(
   return { sequenceGroupId, strip, hidden: [] };
 }
 
+describe("seedSequenceGalleryFromStrip", () => {
+  it("duplicates strip assets into a new gallery row with a new group id", async () => {
+    const duplicate = vi.fn(async (path: string) => `dup/${path}`);
+    const strip = payload("strip-group", [
+      { kind: "image", relPath: "source/a.png" },
+      { kind: "image", relPath: "source/b.png" },
+    ]);
+    const gallery = await seedSequenceGalleryFromStrip(strip, duplicate);
+
+    expect(gallery).toHaveLength(1);
+    const row = gallery[0]!;
+    expect(row.frameSequence?.sequenceGroupId).not.toBe("strip-group");
+    expect(row.frameSequence?.strip.map((slot) => slot.relPath)).toEqual([
+      "dup/source/a.png",
+      "dup/source/b.png",
+    ]);
+    expect(row.relPath).toBe("dup/source/a.png");
+    expect(duplicate).toHaveBeenCalledTimes(2);
+    // Original strip paths unchanged (gallery isolation).
+    expect(strip.strip.map((slot) => slot.relPath)).toEqual([
+      "source/a.png",
+      "source/b.png",
+    ]);
+  });
+
+  it("returns empty when strip has no images", async () => {
+    const duplicate = vi.fn(async (path: string) => path);
+    const gallery = await seedSequenceGalleryFromStrip(
+      payload("g", [{ kind: "empty" }]),
+      duplicate
+    );
+    expect(gallery).toEqual([]);
+    expect(duplicate).not.toHaveBeenCalled();
+  });
+});
+
 describe("placeGallerySequence", () => {
-  it("duplicates gallery assets while preserving the target sequence group", async () => {
+  it("always assigns a new sequence group id and duplicates assets", async () => {
     const duplicate = vi.fn(async (path: string) => `target/${path.split("/").at(-1)}`);
     const placed = await placeGallerySequence(
       payload("target-group", [{ kind: "empty" }]),
@@ -26,7 +63,8 @@ describe("placeGallerySequence", () => {
       duplicate
     );
 
-    expect(placed.payload.sequenceGroupId).toBe("target-group");
+    expect(placed.payload.sequenceGroupId).not.toBe("target-group");
+    expect(placed.payload.sequenceGroupId).not.toBe("source-group");
     expect(placed.payload.strip.map((slot) => slot.relPath)).toEqual([
       "target/a.png",
       "target/b.png",
@@ -73,14 +111,60 @@ describe("moveTimelineFrames", () => {
     expect([...moved!.selectedIndices]).toEqual([1, 3]);
   });
 
-  it("rejects a multi-frame move that collides with an unselected frame", () => {
-    const original = payload("g", [
-      { kind: "image", relPath: "a.png" },
-      { kind: "empty" },
-      { kind: "image", relPath: "b.png" },
-      { kind: "image", relPath: "blocked.png" },
+  it("slides a multi-selection into occupied cells and overwrites", () => {
+    const moved = moveTimelineFrames(
+      payload("g", [
+        { kind: "image", relPath: "a.png" },
+        { kind: "empty" },
+        { kind: "image", relPath: "b.png" },
+        { kind: "image", relPath: "blocked.png" },
+      ]),
+      0,
+      1,
+      new Set([0, 2])
+    );
+    expect(moved?.payload.strip.map((slot) => slot.relPath ?? null)).toEqual([
+      null,
+      "a.png",
+      null,
+      "b.png",
     ]);
-    expect(moveTimelineFrames(original, 0, 1, new Set([0, 2]))).toBeNull();
+    expect([...moved!.selectedIndices].sort((a, b) => a - b)).toEqual([1, 3]);
+  });
+
+  it("slides a dense contiguous selection right by one, overwriting the displaced frame", () => {
+    const moved = moveTimelineFrames(
+      payload("g", [
+        { kind: "image", relPath: "a.png" },
+        { kind: "image", relPath: "b.png" },
+        { kind: "image", relPath: "c.png" },
+        { kind: "image", relPath: "d.png" },
+      ]),
+      0,
+      1,
+      new Set([0, 1])
+    );
+    expect(moved?.payload.strip.map((slot) => slot.relPath ?? null)).toEqual([
+      null,
+      "a.png",
+      "b.png",
+      "d.png",
+    ]);
+    expect([...moved!.selectedIndices].sort((a, b) => a - b)).toEqual([1, 2]);
+  });
+
+  it("rejects a multi-frame move that would go past the left edge", () => {
+    expect(
+      moveTimelineFrames(
+        payload("g", [
+          { kind: "image", relPath: "a.png" },
+          { kind: "image", relPath: "b.png" },
+        ]),
+        1,
+        0,
+        new Set([0, 1])
+      )
+    ).toBeNull();
   });
 });
 

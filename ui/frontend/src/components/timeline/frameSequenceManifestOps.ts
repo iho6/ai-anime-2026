@@ -60,11 +60,16 @@ export function applyEncodedFrameSequenceReplacements(
           naturalW: replacement.width || clip.naturalW,
           naturalH: replacement.height || clip.naturalH,
           frameSequence: replacement.strip,
+          // Staging gallery is independent of encode/apply; keep it as-is.
+          ...(clip.sequenceGallery ? { sequenceGallery: clip.sequenceGallery } : {}),
           frameEdit: {
             framesDirRel: clip.frameEdit?.framesDirRel ?? "",
             extractInPointSec: 0,
             extractFps: manifest.fps,
             mp4Aligned: true,
+            ...(clip.frameEdit?.timelineViewStep === 2
+              ? { timelineViewStep: 2 as const }
+              : {}),
           },
         };
       }),

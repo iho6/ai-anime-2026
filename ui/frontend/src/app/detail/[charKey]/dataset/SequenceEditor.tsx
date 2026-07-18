@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   DndContext,
   DragEndEvent,
+  DragMoveEvent,
   DragOverlay,
   PointerSensor,
   useSensor,
@@ -387,6 +388,10 @@ export function SequenceEditor(props: {
   jobModal?: SequenceJobModal;
   onAiEditSequenceGallery?: (ctx: { relPath: string; galleryItemId: string }) => void;
   onNewAngleSequenceGallery?: (ctx: { relPath: string; galleryItemId: string }) => void;
+  /** When set (timeline host), gallery / frame-timeline / Edit Frames strip can drop onto main tracks. */
+  onDropImageToTimeline?: (relPath: string, clientX: number, clientY: number) => void;
+  /** True while a drag that may land on the main timeline is active. */
+  onTimelineExternalDragActiveChange?: (active: boolean) => void;
 }) {
   const {
     charKey,
@@ -396,10 +401,17 @@ export function SequenceEditor(props: {
     jobModal,
     onAiEditSequenceGallery,
     onNewAngleSequenceGallery,
+    onDropImageToTimeline,
+    onTimelineExternalDragActiveChange,
   } = props;
   /** Parent often passes an inline onError; keep ref so load/save callbacks stay stable (avoids reload wiping state). */
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+  const onDropImageToTimelineRef = useRef(onDropImageToTimeline);
+  onDropImageToTimelineRef.current = onDropImageToTimeline;
+  const onTimelineExternalDragActiveChangeRef = useRef(onTimelineExternalDragActiveChange);
+  onTimelineExternalDragActiveChangeRef.current = onTimelineExternalDragActiveChange;
+  const externalDragPointerRef = useRef<{ x: number; y: number } | null>(null);
 
   const [manifest, setManifest] = useState<SequenceManifest | null>(null);
   const [focusScope, setFocusScope] = useState<"gallery" | "timeline">("gallery");
@@ -1065,43 +1077,58 @@ export function SequenceEditor(props: {
     return out;
   }, [manifest]);
 
+  const resolveExternalDropRelPath = useCallback(
+    (d: {
+      kind?: string;
+      relPath?: string;
+      frameSequence?: FrameSequencePayload;
+    } | null | undefined): string | null => {
+      if (!d) return null;
+      if (d.kind === "frameSeqStripSlot" || d.kind === "timeline") {
+        return d.relPath?.trim() || null;
+      }
+      if (d.kind === "gallery") {
+        if (d.frameSequence?.strip?.length) {
+          return firstStripImageRelPath(d.frameSequence) ?? d.relPath?.trim() ?? null;
+        }
+        return d.relPath?.trim() || null;
+      }
+      return null;
+    },
+    []
+  );
+
+  const tryDropImageToTimeline = useCallback(
+    (relPath: string | null) => {
+      const cb = onDropImageToTimelineRef.current;
+      if (!cb || !relPath?.trim()) return;
+      const ptr = externalDragPointerRef.current;
+      if (!ptr) return;
+      cb(relPath.trim(), ptr.x, ptr.y);
+    },
+    []
+  );
+
+  const clearExternalTimelineDrag = useCallback(() => {
+    externalDragPointerRef.current = null;
+    onTimelineExternalDragActiveChangeRef.current?.(false);
+  }, []);
+
+  const onDragMove = useCallback((ev: DragMoveEvent) => {
+    if (!onDropImageToTimelineRef.current) return;
+    const kind = (ev.active.data.current as { kind?: string } | undefined)?.kind;
+    if (kind !== "gallery" && kind !== "timeline" && kind !== "frameSeqStripSlot") return;
+    const start = ev.activatorEvent;
+    if (!(start instanceof PointerEvent)) return;
+    externalDragPointerRef.current = {
+      x: start.clientX + ev.delta.x,
+      y: start.clientY + ev.delta.y,
+    };
+  }, []);
+
   const onDragEnd = useCallback(
     async (ev: DragEndEvent) => {
       setDragPreviewPath(null);
-      const overId = ev.over?.id;
-      if (!overId) return;
-      const os = String(overId);
-
-      if (os === FS_MODAL_GALLERY_BACKDROP_DROP_ID) {
-        const d = ev.active.data.current as
-          | { kind?: string; relPath?: string; crop?: SequenceFrameItem["crop"] }
-          | undefined;
-        if (d?.kind !== "frameSeqStripSlot" || !d.relPath?.trim()) return;
-        await appendDuplicateToGallery(d.relPath, d.crop);
-        return;
-      }
-
-      if (!os.startsWith("frame:")) {
-        const prev = manifestRef.current;
-        if (!prev) return;
-        const activeData = ev.active.data.current as { kind?: string } | undefined;
-        if (activeData?.kind === "timeline") return;
-        const activeId = String(ev.active.id);
-        if (activeId === os) return;
-        const galleryIds = new Set(prev.gallery.map((g) => g.id));
-        if (!galleryIds.has(activeId) || !galleryIds.has(os)) return;
-        const oldIndex = prev.gallery.findIndex((g) => g.id === activeId);
-        const newIndex = prev.gallery.findIndex((g) => g.id === os);
-        if (oldIndex < 0 || newIndex < 0) return;
-        const nextGallery = arrayMove(prev.gallery, oldIndex, newIndex);
-        const m: SequenceManifest = { ...prev, gallery: nextGallery };
-        commitManifest(m);
-        return;
-      }
-
-      const toIndex = parseInt(os.slice("frame:".length), 10);
-      if (Number.isNaN(toIndex)) return;
-
       const active = ev.active.data.current as
         | {
             kind?: string;
@@ -1113,6 +1140,59 @@ export function SequenceEditor(props: {
             frameSequence?: FrameSequencePayload;
           }
         | undefined;
+      const finishExternal = () => {
+        tryDropImageToTimeline(resolveExternalDropRelPath(active));
+        clearExternalTimelineDrag();
+      };
+
+      const overId = ev.over?.id;
+      if (!overId) {
+        finishExternal();
+        return;
+      }
+      const os = String(overId);
+
+      if (os === FS_MODAL_GALLERY_BACKDROP_DROP_ID) {
+        clearExternalTimelineDrag();
+        const d = active;
+        if (d?.kind !== "frameSeqStripSlot" || !d.relPath?.trim()) return;
+        await appendDuplicateToGallery(d.relPath, d.crop);
+        return;
+      }
+
+      if (!os.startsWith("frame:")) {
+        const prev = manifestRef.current;
+        if (!prev) {
+          finishExternal();
+          return;
+        }
+        if (active?.kind === "timeline") {
+          finishExternal();
+          return;
+        }
+        const activeId = String(ev.active.id);
+        if (activeId === os) {
+          clearExternalTimelineDrag();
+          return;
+        }
+        const galleryIds = new Set(prev.gallery.map((g) => g.id));
+        if (!galleryIds.has(activeId) || !galleryIds.has(os)) {
+          finishExternal();
+          return;
+        }
+        clearExternalTimelineDrag();
+        const oldIndex = prev.gallery.findIndex((g) => g.id === activeId);
+        const newIndex = prev.gallery.findIndex((g) => g.id === os);
+        if (oldIndex < 0 || newIndex < 0) return;
+        const nextGallery = arrayMove(prev.gallery, oldIndex, newIndex);
+        const m: SequenceManifest = { ...prev, gallery: nextGallery };
+        commitManifest(m);
+        return;
+      }
+
+      clearExternalTimelineDrag();
+      const toIndex = parseInt(os.slice("frame:".length), 10);
+      if (Number.isNaN(toIndex)) return;
 
       if (active?.kind === "frameSeqStripSlot") return;
 
@@ -1170,7 +1250,7 @@ export function SequenceEditor(props: {
           manifest: prev,
           anchor,
           fs,
-          sequenceGroupId: fs.sequenceGroupId,
+          sequenceGroupId: newSequenceGroupId(),
           jobModal,
           onError: (msg, e) => onErrorRef.current(msg, e),
         });
@@ -1209,7 +1289,16 @@ export function SequenceEditor(props: {
         onErrorRef.current("Drop to frame failed.", e);
       }
     },
-    [charKey, sequenceName, commitManifest, appendDuplicateToGallery, jobModal]
+    [
+      charKey,
+      sequenceName,
+      commitManifest,
+      appendDuplicateToGallery,
+      jobModal,
+      clearExternalTimelineDrag,
+      resolveExternalDropRelPath,
+      tryDropImageToTimeline,
+    ]
   );
 
   const onFrameContextMenu = useCallback((e: React.MouseEvent, frameIndex: number) => {
@@ -1901,6 +1990,7 @@ export function SequenceEditor(props: {
       <DndContext
         sensors={sensors}
         onDragEnd={(e) => void onDragEnd(e)}
+        onDragMove={onDragMove}
         onDragStart={(e) => {
           const d = e.active.data.current as
             | {
@@ -1909,6 +1999,18 @@ export function SequenceEditor(props: {
                 frameSequence?: FrameSequencePayload;
               }
             | undefined;
+          const canExternal =
+            Boolean(onDropImageToTimelineRef.current) &&
+            (d?.kind === "gallery" ||
+              d?.kind === "timeline" ||
+              d?.kind === "frameSeqStripSlot");
+          if (canExternal) {
+            onTimelineExternalDragActiveChangeRef.current?.(true);
+            const start = e.activatorEvent;
+            if (start instanceof PointerEvent) {
+              externalDragPointerRef.current = { x: start.clientX, y: start.clientY };
+            }
+          }
           if (d?.kind === "frameSeqStripSlot" && d.relPath) {
             setDragPreviewPath(d.relPath);
             return;
@@ -1919,7 +2021,10 @@ export function SequenceEditor(props: {
           }
           setDragPreviewPath(path);
         }}
-        onDragCancel={() => setDragPreviewPath(null)}
+        onDragCancel={() => {
+          setDragPreviewPath(null);
+          clearExternalTimelineDrag();
+        }}
       >
         <SequenceGalleryPanel
           items={manifest.gallery}

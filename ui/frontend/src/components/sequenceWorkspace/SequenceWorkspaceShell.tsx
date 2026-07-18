@@ -10,6 +10,7 @@ export function SequenceWorkspaceShell({
   onClose,
   zIndex = 10030,
   closeLabel = "Close",
+  passThroughPointerEvents = false,
 }: SequenceWorkspaceShellProps) {
   if (!open) return null;
 
@@ -26,6 +27,7 @@ export function SequenceWorkspaceShell({
         alignItems: "center",
         justifyContent: "center",
         padding: 16,
+        pointerEvents: passThroughPointerEvents ? "none" : "auto",
       }}
       onMouseDown={onClose}
     >
@@ -38,6 +40,7 @@ export function SequenceWorkspaceShell({
           maxWidth: "min(1100px, 96vw)",
           maxHeight: "92vh",
           overflow: "auto",
+          pointerEvents: "auto",
         }}
         onMouseDown={(event) => event.stopPropagation()}
       >

@@ -32,7 +32,7 @@ export function ClipSpeedFlyout(props: {
         <input
           type="range"
           className="ui-square-range"
-          min={0}
+          min={0.1}
           max={4}
           step={0.05}
           value={speed}
@@ -52,7 +52,7 @@ export function ClipSpeedFlyout(props: {
             fontFamily: "monospace",
           }}
         >
-          <span>0</span>
+          <span>0.1</span>
           <span style={{ color: "#bbb" }}>{speed.toFixed(2)}×</span>
           <span>4</span>
         </div>
