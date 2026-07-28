@@ -4,10 +4,121 @@
   "previewAspect": "16:9",
   "tracks": [
     {
-      "id": "trk_mrnemelk_7",
+      "id": "trk_mrn6q0fk_5",
       "name": "Remove Background (RMBG)",
       "kind": "video",
+      "clips": []
+    },
+    {
+      "id": "trk_mrn5hc10_7",
+      "name": "AI Edit",
+      "kind": "video",
       "clips": [
+        {
+          "id": "clip_mrn0hwdy_7",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784176111.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784176111.alpha.mkv",
+          "start": 64.4097723722458,
+          "inPoint": 0,
+          "outPoint": 1.5427065849304142,
+          "speed": 1,
+          "duration": 1.5427065849304142,
+          "srcDuration": 1.75,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "office1",
+            "sequenceName": "0410_0715_2026",
+            "galleryItemId": "c33c49c268f3"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784176111.proxy.webm",
+          "transform": {
+            "x": -0.4800574261209239,
+            "y": 0.6482940555082685,
+            "scale": 2.7075099779211955
+          }
+        },
+        {
+          "id": "clip_mrn6q0fj_3",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb_rmbg_1784185796.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb_rmbg_1784185796.alpha.mkv",
+          "start": 73.35402286052704,
+          "inPoint": 0,
+          "outPoint": 8.3333,
+          "speed": 1,
+          "duration": 8.3333,
+          "srcDuration": 8.3333,
+          "naturalW": 1918,
+          "naturalH": 1080,
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb_rmbg_1784185796.proxy.webm",
+          "coloring": {
+            "r": 100,
+            "g": 100,
+            "b": 100,
+            "opacity": 59,
+            "lightness": 100,
+            "borderBlur": 0,
+            "imageBlur": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "trk_mrlbz4r0_4",
+      "name": "AI Edit",
+      "kind": "video",
+      "clips": [
+        {
+          "id": "clip_mrn03rhx_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784175373.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784175373.alpha.mkv",
+          "start": 65.02203052043916,
+          "inPoint": 0,
+          "outPoint": 0.930448436737052,
+          "speed": 1,
+          "duration": 0.930448436737052,
+          "srcDuration": 1.25,
+          "naturalW": 1920,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Nazeda",
+            "sequenceName": "0338_0715_2026",
+            "galleryItemId": "4776fe6f75de"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784175373.proxy.webm",
+          "transform": {
+            "x": 0,
+            "y": 0.0833634086277174,
+            "scale": 1.1667268172554348
+          }
+        },
+        {
+          "id": "clip_mrn7fjn5_6",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45_rmbg_1784187076.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45_rmbg_1784187076.alpha.mkv",
+          "start": 71.57440936565399,
+          "inPoint": 0,
+          "outPoint": 8.3333,
+          "speed": 1,
+          "duration": 8.3333,
+          "srcDuration": 8.3333,
+          "naturalW": 1918,
+          "naturalH": 1080,
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45_rmbg_1784187076.proxy.webm",
+          "coloring": {
+            "r": 100,
+            "g": 100,
+            "b": 100,
+            "opacity": 77,
+            "lightness": 100,
+            "borderBlur": 0,
+            "imageBlur": 0
+          }
+        },
         {
           "id": "clip_mrnemelj_5",
           "type": "video",
@@ -25,22 +136,14 @@
             "charKey": "Buan",
             "sequenceName": "head_turn"
           },
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff_rmbg_1784199292.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff_rmbg_1784199292.proxy.alpha.mkv"
-        }
-      ]
-    },
-    {
-      "id": "trk_mrndrq9m_4",
-      "name": "Remove Background (RMBG)",
-      "kind": "video",
-      "clips": [
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff_rmbg_1784199292.proxy.webm"
+        },
         {
           "id": "clip_mrndrq9h_2",
           "type": "video",
           "srcRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff_rmbg_1784197115.webm",
           "alphaRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff_rmbg_1784197115.alpha.mkv",
-          "start": 90.73277511596679,
+          "start": 107.84021592693328,
           "inPoint": 0,
           "outPoint": 7.5,
           "speed": 1,
@@ -52,128 +155,7 @@
             "charKey": "Buan",
             "sequenceName": "head_turn"
           },
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff_rmbg_1784197115.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff_rmbg_1784197115.proxy.alpha.mkv"
-        }
-      ]
-    },
-    {
-      "id": "trk_mrn7fjn6_8",
-      "name": "Remove Background (RMBG)",
-      "kind": "video",
-      "clips": [
-        {
-          "id": "clip_mrn7fjn5_6",
-          "type": "video",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45_rmbg_1784187076.webm",
-          "alphaRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45_rmbg_1784187076.alpha.mkv",
-          "start": 75.37606189250945,
-          "inPoint": 0,
-          "outPoint": 8.3333,
-          "speed": 1,
-          "duration": 8.3333,
-          "srcDuration": 8.3333,
-          "naturalW": 1918,
-          "naturalH": 1080,
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45_rmbg_1784187076.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_195bdbde772c4fd8b3b23a158d889b45_rmbg_1784187076.proxy.alpha.mkv"
-        }
-      ]
-    },
-    {
-      "id": "trk_mrn6q0fk_5",
-      "name": "Remove Background (RMBG)",
-      "kind": "video",
-      "clips": [
-        {
-          "id": "clip_mrn6q0fj_3",
-          "type": "video",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb_rmbg_1784185796.webm",
-          "alphaRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb_rmbg_1784185796.alpha.mkv",
-          "start": 79.68236072063446,
-          "inPoint": 0,
-          "outPoint": 8.3333,
-          "speed": 1,
-          "duration": 8.3333,
-          "srcDuration": 8.3333,
-          "naturalW": 1918,
-          "naturalH": 1080,
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb_rmbg_1784185796.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_303d4c7b509c486985676a19f02f5cbb_rmbg_1784185796.proxy.alpha.mkv"
-        }
-      ]
-    },
-    {
-      "id": "trk_mrn5hc10_7",
-      "name": "AI Edit",
-      "kind": "video",
-      "clips": [
-        {
-          "id": "clip_mrn5hc0x_5",
-          "type": "image",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_b0650ef1998a44d0b800cd2797804253.png",
-          "start": 70.14806201457978,
-          "inPoint": 0,
-          "outPoint": 3,
-          "speed": 1,
-          "duration": 3,
-          "naturalW": 1024,
-          "naturalH": 1024,
-          "transform": {
-            "x": 0,
-            "y": 0,
-            "scale": 1.1536458333333333
-          }
-        }
-      ]
-    },
-    {
-      "id": "trk_mrlbz4r0_4",
-      "name": "AI Edit",
-      "kind": "video",
-      "clips": [
-        {
-          "id": "clip_mrn6095z_9",
-          "type": "video",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c_rmbg_1784184712.webm",
-          "alphaRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c_rmbg_1784184712.alpha.mkv",
-          "start": 74.46146075725555,
-          "inPoint": 0,
-          "outPoint": 8.3333,
-          "speed": 1,
-          "duration": 8.3333,
-          "srcDuration": 8.3333,
-          "naturalW": 1918,
-          "naturalH": 1080,
-          "coloring": {
-            "r": 100,
-            "g": 100,
-            "b": 100,
-            "opacity": 43,
-            "lightness": 100,
-            "borderBlur": 0,
-            "imageBlur": 0
-          },
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c_rmbg_1784184712.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c_rmbg_1784184712.proxy.alpha.mkv"
-        },
-        {
-          "id": "clip_mrncutsn_1",
-          "type": "video",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff.mp4",
-          "start": 108.80439910888671,
-          "inPoint": 0,
-          "outPoint": 7.5,
-          "speed": 1,
-          "duration": 7.5,
-          "srcDuration": 7.5,
-          "naturalW": 1080,
-          "naturalH": 1080,
-          "source": {
-            "charKey": "Buan",
-            "sequenceName": "head_turn"
-          },
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff.proxy.mp4"
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff_rmbg_1784197115.proxy.webm"
         }
       ]
     },
@@ -324,7 +306,6 @@
           },
           "reversed": false,
           "proxyRelPath": "timelines/Timeline_4/clips/clip_a5fac5950d5940c6aae0507331cbbd63_rmbg_1783756178.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_a5fac5950d5940c6aae0507331cbbd63_rmbg_1783756178.proxy.alpha.mkv",
           "trajectory": {
             "motion": "bounce",
             "motionAmount": 17,
@@ -349,7 +330,7 @@
           "type": "video",
           "srcRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981_rmbg_1784175679.webm",
           "alphaRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981_rmbg_1784175679.alpha.mkv",
-          "start": 64.21142184734344,
+          "start": 63.97244403362275,
           "inPoint": 0,
           "outPoint": 1.25,
           "speed": 1,
@@ -363,49 +344,11 @@
             "galleryItemId": "6556b3fc7743"
           },
           "proxyRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981_rmbg_1784175679.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_c11e4a9bc3024cf889b1c17692ec4981_rmbg_1784175679.proxy.alpha.mkv"
-        },
-        {
-          "id": "clip_mrn03rhx_1",
-          "type": "video",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784175373.webm",
-          "alphaRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784175373.alpha.mkv",
-          "start": 66.97244403362275,
-          "inPoint": 0,
-          "outPoint": 1.25,
-          "speed": 1,
-          "duration": 1.25,
-          "srcDuration": 1.25,
-          "naturalW": 1920,
-          "naturalH": 1080,
-          "source": {
-            "charKey": "Nazeda",
-            "sequenceName": "0338_0715_2026",
-            "galleryItemId": "4776fe6f75de"
-          },
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784175373.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_be5551223f5d49049cf5446c16a12470_rmbg_1784175373.proxy.alpha.mkv"
-        },
-        {
-          "id": "clip_mrn0hwdy_7",
-          "type": "video",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784176111.webm",
-          "alphaRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784176111.alpha.mkv",
-          "start": 68.78993747234345,
-          "inPoint": 0,
-          "outPoint": 1.75,
-          "speed": 1,
-          "duration": 1.75,
-          "srcDuration": 1.75,
-          "naturalW": 1920,
-          "naturalH": 1080,
-          "source": {
-            "charKey": "office1",
-            "sequenceName": "0410_0715_2026",
-            "galleryItemId": "c33c49c268f3"
-          },
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784176111.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_a655e9bf4bc44ca6a486e64f63be16b3_rmbg_1784176111.proxy.alpha.mkv"
+          "transform": {
+            "x": 0.06374833111601748,
+            "y": 0.275692863122317,
+            "scale": 1.8508799677309784
+          }
         },
         {
           "id": "clip_mrn3fjdq_2",
@@ -431,7 +374,6 @@
             "scale": 1.6337885306032134
           },
           "proxyRelPath": "timelines/Timeline_4/clips/clip_f3354c3c4d92461cba1e28ae60ac6454_rmbg_1784181003.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_f3354c3c4d92461cba1e28ae60ac6454_rmbg_1784181003.proxy.alpha.mkv",
           "coloring": {
             "r": 86,
             "g": 101,
@@ -449,19 +391,18 @@
           "alphaRelPath": "timelines/Timeline_4/clips/clip_9eaf7843828a40079085bc9115c34d5e_rmbg_1783758072.alpha.mkv",
           "start": 37.55019047856331,
           "inPoint": 3.0335769653320312,
-          "outPoint": 7.562499999999998,
+          "outPoint": 7.5625,
           "speed": 1,
-          "duration": 4.528923034667967,
+          "duration": 4.528923034667969,
           "srcDuration": 7.5625,
           "naturalW": 640,
           "naturalH": 640,
           "transform": {
-            "x": 0.4027571365822871,
-            "y": 0.5655436670176315,
+            "x": 0.40275713658228707,
+            "y": 0.5655436670176314,
             "scale": 2.852387299253543
           },
           "proxyRelPath": "timelines/Timeline_4/clips/clip_9eaf7843828a40079085bc9115c34d5e_rmbg_1783758072.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_9eaf7843828a40079085bc9115c34d5e_rmbg_1783758072.proxy.alpha.mkv",
           "coloring": {
             "r": 100,
             "g": 100,
@@ -1060,55 +1001,55 @@
                 "kind": "empty"
               },
               {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
-                "kind": "empty"
-              },
-              {
                 "kind": "image",
-                "relPath": "timelines/Timeline_4/frames/clip_mrg41jnv_5/frame_000118.png",
+                "relPath": "timelines/Timeline_4/frames/clip_mrg41jnv_5/frame_000096.png",
                 "hidden": true,
                 "trimHidden": true
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
+              },
+              {
+                "kind": "empty"
               }
             ],
             "hidden": []
@@ -3510,7 +3451,6 @@
           },
           "alphaRelPath": "timelines/Timeline_4/clips/clip_f0af00a189eb.alpha.mkv",
           "proxyRelPath": "timelines/Timeline_4/clips/clip_f0af00a189eb.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_f0af00a189eb.proxy.alpha.mkv",
           "sequenceGallery": [
             {
               "id": "gal_1784391060787_bd166cbf18fa48",
@@ -4803,6 +4743,30 @@
             "borderBlur": 8,
             "imageBlur": 22
           }
+        },
+        {
+          "id": "clip_mrn6095z_9",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c_rmbg_1784184712.webm",
+          "alphaRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c_rmbg_1784184712.alpha.mkv",
+          "start": 69.37055194377899,
+          "inPoint": 0,
+          "outPoint": 8.3333,
+          "speed": 1,
+          "duration": 8.3333,
+          "srcDuration": 8.3333,
+          "naturalW": 1918,
+          "naturalH": 1080,
+          "coloring": {
+            "r": 100,
+            "g": 100,
+            "b": 100,
+            "opacity": 43,
+            "lightness": 100,
+            "borderBlur": 0,
+            "imageBlur": 0
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_fe9d6c2a5b194955b2ff11e9fd2adb8c_rmbg_1784184712.proxy.webm"
         }
       ]
     },
@@ -5089,8 +5053,7 @@
             "imageBlur": 0
           },
           "reversed": false,
-          "proxyRelPath": "timelines/Timeline_4/clips/clip_a5fac5950d5940c6aae0507331cbbd63_rmbg_1783756178.proxy.webm",
-          "proxyAlphaRelPath": "timelines/Timeline_4/clips/clip_a5fac5950d5940c6aae0507331cbbd63_rmbg_1783756178.proxy.alpha.mkv"
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_a5fac5950d5940c6aae0507331cbbd63_rmbg_1783756178.proxy.webm"
         },
         {
           "id": "clip_mrlluiej_1",
@@ -6364,6 +6327,24 @@
             ]
           },
           "proxyRelPath": "timelines/Timeline_4/clips/clip_55eef712648d.proxy.mp4"
+        },
+        {
+          "id": "clip_mrncutsn_1",
+          "type": "video",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff.mp4",
+          "start": 99.52616271972656,
+          "inPoint": 0,
+          "outPoint": 7.5,
+          "speed": 1,
+          "duration": 7.5,
+          "srcDuration": 7.5,
+          "naturalW": 1080,
+          "naturalH": 1080,
+          "source": {
+            "charKey": "Buan",
+            "sequenceName": "head_turn"
+          },
+          "proxyRelPath": "timelines/Timeline_4/clips/clip_185f04bbf3aa462eae438d89f6ea04ff.proxy.mp4"
         }
       ],
       "hidden": true
@@ -6577,20 +6558,20 @@
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
-          "duration": 3,
+          "duration": 1.6611568450927734,
           "naturalW": 1024,
           "naturalH": 1024,
           "transform": {
-            "x": 0,
-            "y": 0,
-            "scale": 1
+            "x": 0.0037642176242792514,
+            "y": 0.34826704808674774,
+            "scale": 1.7994379446657134
           }
         },
         {
           "id": "clip_mrlbxw7c_1",
           "type": "image",
           "srcRelPath": "timelines/Timeline_4/clips/clip_cc592317c79e454f8530b2a8c82aac37.png",
-          "start": 57.36845386028289,
+          "start": 55.55277863144874,
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
@@ -6601,20 +6582,20 @@
             "locationKey": "room1"
           },
           "transform": {
-            "x": 0,
-            "y": 0,
-            "scale": 1
+            "x": 0.0022328817731716833,
+            "y": -0.15792396247255844,
+            "scale": 1.7818900730298912
           }
         },
         {
           "id": "clip_mrn4poxj_1",
           "type": "image",
           "srcRelPath": "timelines/Timeline_4/clips/clip_76ef4efa6b5c4c2dbbd290474f18d13b.png",
-          "start": 60.960737109184265,
+          "start": 58.72933146953583,
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
-          "duration": 3,
+          "duration": 5.231405639648438,
           "naturalW": 1024,
           "naturalH": 1024,
           "source": {
@@ -6688,40 +6669,45 @@
           "id": "clip_mrn12noe_10",
           "type": "image",
           "srcRelPath": "timelines/Timeline_4/clips/clip_f4b32980d4254443976a1450e7faac77.png",
-          "start": 65.00687625408173,
+          "start": 63.97244403362275,
           "inPoint": 0,
           "outPoint": 3,
           "speed": 1,
-          "duration": 3,
+          "duration": 1.9800349235534611,
           "naturalW": 1024,
           "naturalH": 1024,
           "source": {
             "locationKey": "ckty2"
           },
           "transform": {
+            "x": -0.002268019678011265,
+            "y": -0.27254269425184524,
+            "scale": 1.7817642875339674
+          }
+        },
+        {
+          "id": "clip_mrn5hc0x_5",
+          "type": "image",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_b0650ef1998a44d0b800cd2797804253.png",
+          "start": 66.11776826381684,
+          "inPoint": 0,
+          "outPoint": 3,
+          "speed": 1,
+          "duration": 11.280992126464843,
+          "naturalW": 1024,
+          "naturalH": 1024,
+          "transform": {
             "x": 0,
             "y": 0,
-            "scale": 0.9423828125
+            "scale": 2.033272298177083
           }
         }
       ]
     },
     {
-      "id": "trk_mrftp69z_6",
-      "name": "Video 2",
-      "kind": "video",
-      "clips": []
-    },
-    {
       "id": "trk_mrft880z_3",
       "name": "Video 1",
       "kind": "video",
-      "clips": []
-    },
-    {
-      "id": "trk_mrghydc8_6",
-      "name": "Music 2",
-      "kind": "audio",
       "clips": []
     },
     {
@@ -6734,6 +6720,75 @@
           "type": "audio",
           "srcRelPath": "timelines/Timeline_4/clips/clip_46b39ddfe23d413a9c0a7daf8508ff1c.mp3",
           "start": 0,
+          "inPoint": 0,
+          "outPoint": 13.348063220262526,
+          "speed": 1,
+          "duration": 13.348063220262526,
+          "srcDuration": 30.0002,
+          "volumeAutomation": {
+            "points": [
+              {
+                "t": 0,
+                "level": 85.49356064194694
+              },
+              {
+                "t": 1,
+                "level": 85.49356064194694
+              }
+            ]
+          }
+        },
+        {
+          "id": "clip_mrn3w4p8_1",
+          "type": "audio",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_7ce71667dc804cc8b89ca9c0ce0ebd62.mp3",
+          "start": 13.562940539598465,
+          "inPoint": 0,
+          "outPoint": 23.987249938964844,
+          "speed": 1,
+          "duration": 23.987249938964844,
+          "srcDuration": 30.0002,
+          "volumeAutomation": {
+            "points": [
+              {
+                "t": 0,
+                "level": 8.18282499749573
+              },
+              {
+                "t": 1,
+                "level": 8.18282499749573
+              }
+            ]
+          }
+        },
+        {
+          "id": "clip_mrleohy8_1",
+          "type": "audio",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_22c97947ddb24d9bb6052957cdad7461.mp3",
+          "start": 55.575755190849314,
+          "inPoint": 0,
+          "outPoint": 14.396688842773436,
+          "speed": 1,
+          "duration": 14.396688842773436,
+          "srcDuration": 30.0002,
+          "volumeAutomation": {
+            "points": [
+              {
+                "t": 0,
+                "level": 100
+              },
+              {
+                "t": 1,
+                "level": 100
+              }
+            ]
+          }
+        },
+        {
+          "id": "clip_mrr1p962_3",
+          "type": "audio",
+          "srcRelPath": "timelines/Timeline_4/clips/clip_46b39ddfe23d413a9c0a7daf8508ff1c.mp3",
+          "start": 37.55019047856331,
           "inPoint": 0,
           "outPoint": 13.579468859910964,
           "speed": 1,
@@ -6748,52 +6803,6 @@
               {
                 "t": 1,
                 "level": 85.49356064194694
-              }
-            ]
-          }
-        },
-        {
-          "id": "clip_mrleohy8_1",
-          "type": "audio",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_22c97947ddb24d9bb6052957cdad7461.mp3",
-          "start": 37.55019047856331,
-          "inPoint": 0,
-          "outPoint": 30.0002,
-          "speed": 1,
-          "duration": 30.0002,
-          "srcDuration": 30.0002,
-          "volumeAutomation": {
-            "points": [
-              {
-                "t": 0,
-                "level": 50
-              },
-              {
-                "t": 1,
-                "level": 50
-              }
-            ]
-          }
-        },
-        {
-          "id": "clip_mrn3w4p8_1",
-          "type": "audio",
-          "srcRelPath": "timelines/Timeline_4/clips/clip_7ce71667dc804cc8b89ca9c0ce0ebd62.mp3",
-          "start": 13.711700000047683,
-          "inPoint": 0,
-          "outPoint": 23.838490478515624,
-          "speed": 1,
-          "duration": 23.838490478515624,
-          "srcDuration": 30.0002,
-          "volumeAutomation": {
-            "points": [
-              {
-                "t": 0,
-                "level": 8.18282499749573
-              },
-              {
-                "t": 1,
-                "level": 8.18282499749573
               }
             ]
           }

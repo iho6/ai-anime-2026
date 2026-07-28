@@ -72,7 +72,7 @@ export function TimelineClipFrameWorkspace(props: {
   onError: (message: string, error?: unknown) => void;
   /** Edit the frame-by-frame timeline strip (preview source). */
   onEditFrameSequence: (clipId: string) => void;
-  /** Edit a staging gallery sequence set (does not affect preview until dragged). */
+  /** Edit a staging gallery sequence set. Done applies to the clip when changed; drag-place still inserts onto a strip index. */
   onEditGallerySequence?: (clipId: string, galleryItemId: string) => void;
   onDownloadVideo?: (clipId: string) => void;
   /** When set (timeline host), gallery / strip cells can drop onto main tracks. */
@@ -194,6 +194,10 @@ export function TimelineClipFrameWorkspace(props: {
     (mutation: "delete" | "hide" | "unhide") => {
       if (!localPayload || !selectedFrames.size) return;
       commitPayload(mutateTimelineFrameSlots(localPayload, selectedFrames, mutation));
+      if (mutation === "delete") {
+        setSelectedFrames(new Set());
+        setSelectionAnchor(null);
+      }
     },
     [commitPayload, localPayload, selectedFrames]
   );

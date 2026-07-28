@@ -20,6 +20,7 @@ Per-timeline layout::
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,7 @@ from services.character_storage import DEFAULT_STORAGE_ROOT, sanitize_for_folder
 TIMELINES_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "timelines").resolve()
 
 _MANIFEST_NAME = "manifest.json"
+logger = logging.getLogger(__name__)
 
 
 def timelines_root() -> Path:
@@ -47,8 +49,13 @@ def timeline_assets_dir(timeline_key: str) -> Path:
     return timeline_dir(timeline_key) / "assets"
 
 
+def timeline_frames_root(timeline_key: str) -> Path:
+    """Root of all per-clip / per-group frame folders for a timeline."""
+    return timeline_dir(timeline_key) / "frames"
+
+
 def timeline_frames_dir(timeline_key: str, clip_id: str) -> Path:
-    return timeline_dir(timeline_key) / "frames" / sanitize_for_folder(clip_id)
+    return timeline_frames_root(timeline_key) / sanitize_for_folder(clip_id)
 
 
 def timeline_abs_to_rel(abs_path: Path | str) -> str:
@@ -103,8 +110,21 @@ def read_manifest(timeline_key: str) -> dict[str, Any]:
     path = timeline_dir(timeline_key) / _MANIFEST_NAME
     if not path.is_file():
         raise FileNotFoundError(f"Timeline manifest not found: {timeline_key}")
-    with path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+    text = path.read_text(encoding="utf-8")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as ex:
+        # Trailing junk (e.g. an extra ``}``) — take the first complete object.
+        if "Extra data" not in str(ex):
+            raise
+        data, end = json.JSONDecoder().raw_decode(text)
+        leftover = text[end:].strip()
+        logger.warning(
+            "Timeline %s manifest has trailing data after first JSON object "
+            "(%r); using first object only.",
+            timeline_key,
+            leftover[:80],
+        )
     if not isinstance(data, dict):
         raise ValueError("Invalid timeline manifest: expected an object.")
     return data

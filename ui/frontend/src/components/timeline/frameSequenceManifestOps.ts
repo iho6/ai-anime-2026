@@ -3,6 +3,7 @@ import type {
   TimelineClip,
   TimelineManifest,
 } from "../../lib/api";
+import { frameSequencePayloadEqual } from "../frameSequenceStripUtils";
 
 export function applyFrameSequencePayloads(
   manifest: TimelineManifest,
@@ -17,6 +18,27 @@ export function applyFrameSequencePayloads(
       ),
     })),
   };
+}
+
+/**
+ * Copy a staging gallery sequence onto ``clip.frameSequence`` when it differs.
+ * Used when finishing gallery edits / one-shot sync so the clip strip matches the set.
+ */
+export function syncGallerySequenceOntoClip(
+  clip: TimelineClip,
+  galleryItemId?: string
+): TimelineClip {
+  const gallery = clip.sequenceGallery;
+  if (!gallery?.length) return clip;
+  const item = galleryItemId
+    ? gallery.find((g) => g.id === galleryItemId)
+    : gallery[0];
+  const next = item?.frameSequence;
+  if (!next?.strip?.length) return clip;
+  if (clip.frameSequence && frameSequencePayloadEqual(clip.frameSequence, next)) {
+    return clip;
+  }
+  return { ...clip, frameSequence: next };
 }
 
 export type EncodedFrameSequenceReplacement = {

@@ -551,6 +551,11 @@ export type TimelineClip = {
       cpl?: number;
     }>;
   };
+  /**
+   * EBU R128 loudness correction toward the standard target (linear gain,
+   * default 1). Multiplied into preview and export gain, non-destructive.
+   */
+  normalizationGain?: number;
   /** Where this clip was imported from (for provenance / re-import). */
   source?: {
     charKey?: string;
@@ -570,7 +575,8 @@ export type TimelineClip = {
   frameSequence?: FrameSequencePayload;
   /**
    * Staging sequence-set gallery for Edit Video Frames.
-   * Edits here do not affect preview until dragged onto ``frameSequence``.
+   * Editing a set and pressing Done writes ``frameSequence`` and re-encodes the clip when changed;
+   * drag-place still inserts a set onto a strip index without opening the modal.
    */
   sequenceGallery?: SequenceGalleryItem[];
   frameEdit?: TimelineFrameEdit;
@@ -593,11 +599,24 @@ export type TimelineTrack = {
   hidden?: boolean;
 };
 
+/** Optional baked low-res preview of a timeline range (offline edit mode). */
+export type TimelinePreviewBake = {
+  srcRelPath: string;
+  inPointSec: number;
+  outPointSec: number;
+  fps: number;
+  width?: number;
+  height?: number;
+  sourceHash?: string;
+};
+
 export type TimelineManifest = {
   version: number;
   fps: number;
   previewAspect: "16:9" | "4:3" | "1:1" | "9:16";
   tracks: TimelineTrack[];
+  /** When set, preview may play this bake instead of stacking live clips. */
+  previewBake?: TimelinePreviewBake;
 };
 
 export async function apiTimelineHubItems(): Promise<HubTimeline[]> {
@@ -729,6 +748,8 @@ export type TimelineImportedFileResult = {
   width?: number;
   height?: number;
   fps?: number;
+  /** Audio only: EBU R128 loudness correction gain (default 1). */
+  normalizationGain?: number;
 };
 
 export async function apiTimelineImportFiles(params: {
@@ -790,6 +811,8 @@ export type TimelineAudioClipResult = {
   type: "audio";
   srcRelPath: string;
   durationSec: number;
+  /** EBU R128 loudness correction gain (default 1). */
+  normalizationGain?: number;
 };
 
 export async function apiTimelineImportAudio(params: {
@@ -806,6 +829,23 @@ export async function apiTimelineImportAudio(params: {
     }
   );
   return readJson<TimelineAudioClipResult>(res);
+}
+
+/** Backfill EBU R128 normalization gains for existing audio clips. */
+export async function apiTimelineNormalizeAudio(params: {
+  timelineKey: string;
+  clips: Array<{ clipId: string; srcRelPath: string }>;
+}): Promise<{ gains: Record<string, number> }> {
+  const res = await fetch(
+    `${API_BASE_URL}/timeline/${encodeURIComponent(params.timelineKey)}/normalize_audio`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clips: params.clips }),
+      credentials: "omit",
+    }
+  );
+  return readJson<{ gains: Record<string, number> }>(res);
 }
 
 export type TimelineAsset = {
@@ -897,6 +937,7 @@ export function runTimelineImportSequenceWsJob(params: {
   WsDoneMessage<{
     type: "video";
     srcRelPath: string;
+    alphaRelPath?: string;
     durationSec: number;
     width: number;
     height: number;
@@ -929,6 +970,7 @@ export function runTimelineImportSequenceWsJob(params: {
         result?: {
           type: "video";
           srcRelPath: string;
+          alphaRelPath?: string;
           durationSec: number;
           width: number;
           height: number;
@@ -949,6 +991,7 @@ export function runTimelineImportSequenceWsJob(params: {
           data as WsDoneMessage<{
             type: "video";
             srcRelPath: string;
+            alphaRelPath?: string;
             durationSec: number;
             width: number;
             height: number;

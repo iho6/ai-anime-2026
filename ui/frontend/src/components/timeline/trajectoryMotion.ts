@@ -168,7 +168,7 @@ export function trajectoryTransformAt(
 
   if (pauseAtA) {
 
-    s = applyGlideEase(s, a.blendEase, "departure");
+    s = applyGlideEase(s, a.blendEase ?? 0, "departure");
 
   }
 
@@ -186,7 +186,7 @@ export function trajectoryTransformAt(
 
   if (pauseAtB || arriveAtFinal) {
 
-    s = applyGlideEase(s, b.blendEase, "arrival");
+    s = applyGlideEase(s, b.blendEase ?? 0, "arrival");
 
   }
 

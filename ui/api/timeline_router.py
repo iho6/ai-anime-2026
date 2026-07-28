@@ -430,6 +430,8 @@ async def timeline_import_files(
                 item["height"] = int(info.get("height") or 0)
             if media_type == "video":
                 item["fps"] = float(info.get("fps") or 0)
+            if media_type == "audio":
+                item["normalizationGain"] = float(info.get("normalizationGain") or 1.0)
             items.append(item)
     except Exception as exc:
         for path in imported_paths:
@@ -461,7 +463,38 @@ def timeline_import_audio(timeline_key: str, body: dict[str, str]) -> dict[str, 
         "type": "audio",
         "srcRelPath": storage_rel_from_abs(info["absPath"]),
         "durationSec": info.get("durationSec") or 0,
+        "normalizationGain": float(info.get("normalizationGain") or 1.0),
     }
+
+
+@router.post("/timeline/{timeline_key}/normalize_audio")
+def timeline_normalize_audio(timeline_key: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Backfill EBU R128 normalization gains for existing audio clips.
+
+    Body: ``{"clips": [{"clipId": ..., "srcRelPath": ...}, ...]}``.
+    Returns ``{"gains": {clipId: gain}}``; the client writes the gains into
+    the manifest (non-destructive, matches import-time analysis).
+    """
+    from services.audio_loudness import analyze_normalization_gain
+
+    if not _timeline_dir(timeline_key).is_dir():
+        raise HTTPException(404, "Timeline not found.")
+    clips = body.get("clips") or []
+    if not isinstance(clips, list) or not clips:
+        raise HTTPException(400, "clips is required.")
+    gains: dict[str, float] = {}
+    for entry in clips:
+        clip_id = str((entry or {}).get("clipId") or "").strip()
+        rel = str((entry or {}).get("srcRelPath") or "").strip()
+        if not clip_id or not rel:
+            continue
+        try:
+            abs_path = resolve_storage_rel_file(rel)
+        except ValueError:
+            gains[clip_id] = 1.0
+            continue
+        gains[clip_id] = analyze_normalization_gain(abs_path)
+    return {"gains": gains}
 
 
 @router.post("/timeline/{timeline_key}/import_image")

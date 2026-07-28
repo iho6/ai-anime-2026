@@ -1,9 +1,19 @@
 "use client";
 
+/**
+ * Canvas preview for clips that need pixel work (coloring and/or alpha).
+ *
+ * v4 RMBG: unified ``.proxy.webm`` carries alpha in one stream — play is a
+ * single ``<video>`` drawn to canvas (no runtime matte pairing).
+ * Until that proxy exists, fall back to HTTP RGBA frames from the server.
+ */
+
 import React, { useEffect, useRef } from "react";
 import type { TimelineClip } from "../../lib/api";
-import { apiTimelineClipRgbaFrameUrl, assetUrlFromRelPath, previewSrcRelPath } from "../../lib/api";
-import { applyColoringToImageData } from "../../lib/clipColoring";
+import { apiTimelineClipRgbaFrameUrl, assetUrlFromRelPath } from "../../lib/api";
+import { applyColoringToImageData, isDefaultClipColoring } from "../../lib/clipColoring";
+import { isUnifiedAlphaProxy, resolvePreviewMedia } from "./playback/mediaProvider";
+import { getRgbaHttpQueue } from "./playback/rgbaHttpQueue";
 import { frameIdxFromSourceTime } from "./alphaFrameFetch";
 import {
   clampSourceTime,
@@ -17,12 +27,14 @@ import {
 } from "./alphaFrameCache";
 import { clipPreviewHoldStep, holdQuantizeFrameIndex } from "./previewHoldFrame";
 import { timelineEffectiveStripPreviewRelPath } from "./timelineStripPreview";
+import { forgetClipPaint, reportClipPaint } from "./playback/previewDiagnostics";
 
 const DEFAULT_PREVIEW_FPS = 24;
 const SCRUB_DEBOUNCE_MS = 80;
 const FETCH_TIMEOUT_MS = 5000;
 const PREFETCH_AHEAD = 4;
 const PREFETCH_BEHIND = 1;
+const FIRST_PAINT_FALLBACK_MS = 250;
 
 type VideoFrameRequestCallbackMetadata = {
   presentationTime: number;
@@ -50,6 +62,10 @@ export function ClipColoringCanvas(props: {
   sourceTimeSec: number;
   playing?: boolean;
   previewFps?: number;
+  skipPixelColoring?: boolean;
+  engineOwnsPresentation?: boolean;
+  /** @deprecated Prefer engine path; ignored when engineOwnsPresentation. */
+  holdStepOverride?: 1 | 2 | null;
   style: React.CSSProperties;
   setVideoRef?: (el: HTMLVideoElement | null) => void;
 }) {
@@ -59,6 +75,9 @@ export function ClipColoringCanvas(props: {
     sourceTimeSec,
     playing = false,
     previewFps = DEFAULT_PREVIEW_FPS,
+    skipPixelColoring = false,
+    engineOwnsPresentation = false,
+    holdStepOverride = null,
     style,
     setVideoRef,
   } = props;
@@ -74,20 +93,40 @@ export function ClipColoringCanvas(props: {
   const lastPaintedFrameIdxRef = useRef<number | null>(null);
   const sourceTimeRef = useRef(sourceTimeSec);
   sourceTimeRef.current = sourceTimeSec;
+  const skipPixelColoringRef = useRef(skipPixelColoring);
+  skipPixelColoringRef.current = skipPixelColoring;
 
-  const src = assetUrlFromRelPath(previewSrcRelPath(clip));
+  const media = resolvePreviewMedia(clip);
+  const src = media.rgbUrl;
   const hasAlphaVideo = Boolean(clip.alphaRelPath?.trim());
+  const unifiedAlpha = isUnifiedAlphaProxy(clip);
   const fps = Math.max(1, previewFps || DEFAULT_PREVIEW_FPS);
-  const holdStep = clipPreviewHoldStep(clip);
-  // Opaque RGB strips must not win over alpha.mkv mats (black reads as solid).
+  const holdStep = holdStepOverride ?? clipPreviewHoldStep(clip);
   const stripRelPath = timelineEffectiveStripPreviewRelPath(clip, sourceTimeSec, fps);
   const maxFrameIdx = Math.max(0, estimateFrameCount(clip, fps) - 1);
+  /** HTTP RGBA only while waiting for v4 unified proxy. */
+  const useHttpAlpha =
+    hasAlphaVideo &&
+    !unifiedAlpha &&
+    !stripRelPath &&
+    !engineOwnsPresentation;
 
   function paintFromSource(source: CanvasImageSource, w: number, h: number) {
     const canvas = canvasRef.current;
     if (!canvas || w < 1 || h < 1) return;
-    // Compose offscreen first so the visible canvas is never cleared to empty
-    // while a hard-cut preload / coloring pass is in flight.
+    if (skipPixelColoringRef.current || isDefaultClipColoring(clip.coloring)) {
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(source, 0, 0, w, h);
+      hasPaintedRef.current = true;
+      reportClipPaint(clip.id);
+      return;
+    }
     const off = document.createElement("canvas");
     off.width = w;
     off.height = h;
@@ -104,10 +143,10 @@ export function ClipColoringCanvas(props: {
     }
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    // Replace buffer so transparent RMBG/alpha frames don't stack on prior pixels.
     ctx.clearRect(0, 0, w, h);
     ctx.drawImage(off, 0, 0);
     hasPaintedRef.current = true;
+    reportClipPaint(clip.id);
   }
 
   function paintRgbaImage(img: HTMLImageElement): boolean {
@@ -115,24 +154,7 @@ export function ClipColoringCanvas(props: {
     if (!canvas || img.naturalWidth < 1 || img.naturalHeight < 1) return false;
     const w = img.naturalWidth;
     const h = img.naturalHeight;
-    // Draw to an offscreen canvas first so resizing the display canvas never
-    // leaves a cleared blank frame on screen.
-    const off = document.createElement("canvas");
-    off.width = w;
-    off.height = h;
-    const offCtx = off.getContext("2d");
-    if (!offCtx) return false;
-    offCtx.drawImage(img, 0, 0);
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return false;
-    // Replace buffer so transparent RMBG/alpha frames don't stack on prior pixels.
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(off, 0, 0);
-    hasPaintedRef.current = true;
+    paintFromSource(img, w, h);
     return true;
   }
 
@@ -173,10 +195,6 @@ export function ClipColoringCanvas(props: {
 
     const first = await loadRgbaFrameOnce(baseUrl, epoch);
     if (first || epoch !== requestEpochRef.current) return first;
-
-    // A transient server error (e.g. a decoder-cache reset) can 500 a single
-    // frame; retry once with a cache-buster before giving up so the canvas
-    // doesn't stay blank.
     return loadRgbaFrameOnce(`${baseUrl}&retry=${Date.now()}`, epoch);
   }
 
@@ -200,21 +218,25 @@ export function ClipColoringCanvas(props: {
     if (inFlightRef.current.has(frameIdx)) return;
     inFlightRef.current.add(frameIdx);
     try {
-      const img = await fetchAlphaFrameImage(frameIdx, epoch);
+      const img = await getRgbaHttpQueue().enqueue({
+        key: clip.id,
+        priority: Math.abs(frameIdx),
+        run: () => fetchAlphaFrameImage(frameIdx, epoch),
+      });
       if (!img || epoch !== requestEpochRef.current) return;
       cacheRef.current.set(frameIdx, img);
       if (paint) {
         lastPaintedFrameIdxRef.current = frameIdx;
         paintRgbaImage(img);
       }
+    } catch {
+      /* queue cleared */
     } finally {
       inFlightRef.current.delete(frameIdx);
     }
   }
 
   function prefetchAhead(fromFrameIdx: number, epoch: number) {
-    // Prefetch a window around the playhead so both playback (ahead) and small
-    // scrub jitter (behind) stay warm.
     for (let offset = -PREFETCH_BEHIND; offset <= PREFETCH_AHEAD; offset++) {
       if (offset === 0) continue;
       const idx = fromFrameIdx + offset;
@@ -224,7 +246,7 @@ export function ClipColoringCanvas(props: {
     }
   }
 
-  function handleAlphaFrameAtTime(sourceTime: number, epoch: number, prefetch: boolean) {
+  function handleHttpAlphaAtTime(sourceTime: number, epoch: number, prefetch: boolean) {
     const t = clampSourceTime(sourceTime, clip);
     const frameIdx = Math.min(
       maxFrameIdx,
@@ -275,8 +297,11 @@ export function ClipColoringCanvas(props: {
     };
   }, [clip.type, stripRelPath, clip.coloring, clip.id]);
 
+  // Plain video or unified WebM-with-alpha: one decode, draw to canvas.
   useEffect(() => {
-    if (clip.type !== "video" || hasAlphaVideo || stripRelPath) return;
+    if (engineOwnsPresentation || stripRelPath) return;
+    if (clip.type !== "video") return;
+    if (hasAlphaVideo && !unifiedAlpha) return;
     const video = videoRef.current;
     if (!video) return;
 
@@ -291,29 +316,62 @@ export function ClipColoringCanvas(props: {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [clip.type, hasAlphaVideo, stripRelPath, clip.coloring, clip.id, src]);
+  }, [
+    clip.type,
+    hasAlphaVideo,
+    unifiedAlpha,
+    stripRelPath,
+    clip.coloring,
+    clip.id,
+    src,
+    engineOwnsPresentation,
+  ]);
 
+  // HTTP RGBA while unified proxy is missing (stale v3 pair / regenerating).
   useEffect(() => {
-    if (clip.type !== "video" || !hasAlphaVideo || stripRelPath) return;
+    if (!useHttpAlpha) return;
 
     requestEpochRef.current += 1;
     const epoch = requestEpochRef.current;
     cacheRef.current = createAlphaFrameCache();
     inFlightRef.current.clear();
-    // Keep whatever is already on the canvas until the next frame paints —
-    // resetting hasPainted / clearing pixels causes a black blink at hard cuts.
     lastPaintedFrameIdxRef.current = null;
 
     if (shouldBulkPreload(clip, fps)) {
-      void prefetchFrames(frameIndicesForClip(clip, fps), (idx) => fetchAlphaFrameImage(idx, epoch), {
-        cache: cacheRef.current,
-        shouldAbort: () => epoch !== requestEpochRef.current,
-      });
+      void prefetchFrames(
+        frameIndicesForClip(clip, fps),
+        (idx) =>
+          getRgbaHttpQueue().enqueue({
+            key: clip.id,
+            priority: idx,
+            run: () => fetchAlphaFrameImage(idx, epoch),
+          }),
+        {
+          cache: cacheRef.current,
+          shouldAbort: () => epoch !== requestEpochRef.current,
+        }
+      );
     }
-  }, [clip.type, hasAlphaVideo, stripRelPath, clip.id, timelineKey, clip.coloring, fps, clip.inPoint, clip.outPoint, clip.srcDuration, holdStep]);
+  }, [
+    useHttpAlpha,
+    clip.id,
+    timelineKey,
+    clip.coloring,
+    fps,
+    clip.inPoint,
+    clip.outPoint,
+    clip.srcDuration,
+    holdStep,
+  ]);
 
   useEffect(() => {
-    if (clip.type !== "video" || !hasAlphaVideo || stripRelPath) return;
+    if (!useHttpAlpha) {
+      if (scrubTimerRef.current != null) {
+        clearTimeout(scrubTimerRef.current);
+        scrubTimerRef.current = null;
+      }
+      return;
+    }
     const video = videoRef.current as VideoWithFrameCallback | null;
     if (!video) return;
 
@@ -326,7 +384,6 @@ export function ClipColoringCanvas(props: {
       }
     };
 
-    // Hold-step preview is playhead-driven (every-other-frame), not free-running decode.
     if (playing && holdStep < 2) {
       if (scrubTimerRef.current != null) {
         clearTimeout(scrubTimerRef.current);
@@ -335,7 +392,7 @@ export function ClipColoringCanvas(props: {
 
       const onVideoFrame = () => {
         if (epoch !== requestEpochRef.current) return;
-        handleAlphaFrameAtTime(video.currentTime, epoch, true);
+        handleHttpAlphaAtTime(video.currentTime, epoch, true);
         if (video.requestVideoFrameCallback) {
           rvfcHandleRef.current = video.requestVideoFrameCallback(onVideoFrame);
         }
@@ -343,7 +400,7 @@ export function ClipColoringCanvas(props: {
 
       const onTimeUpdate = () => {
         if (epoch !== requestEpochRef.current) return;
-        handleAlphaFrameAtTime(video.currentTime, epoch, true);
+        handleHttpAlphaAtTime(video.currentTime, epoch, true);
       };
 
       if (video.requestVideoFrameCallback) {
@@ -362,7 +419,7 @@ export function ClipColoringCanvas(props: {
     if (scrubTimerRef.current != null) clearTimeout(scrubTimerRef.current);
     scrubTimerRef.current = setTimeout(() => {
       scrubTimerRef.current = null;
-      handleAlphaFrameAtTime(sourceTimeRef.current, epoch, true);
+      handleHttpAlphaAtTime(sourceTimeRef.current, epoch, true);
     }, delayMs);
 
     return () => {
@@ -373,9 +430,7 @@ export function ClipColoringCanvas(props: {
       }
     };
   }, [
-    clip.type,
-    hasAlphaVideo,
-    stripRelPath,
+    useHttpAlpha,
     playing,
     clip.id,
     fps,
@@ -385,10 +440,29 @@ export function ClipColoringCanvas(props: {
     holdStep > 1 ? sourceTimeSec : 0,
   ]);
 
+  useEffect(() => {
+    if (!useHttpAlpha) return;
+    hasPaintedRef.current = false;
+    const timer = setTimeout(() => {
+      if (hasPaintedRef.current) return;
+      const epoch = requestEpochRef.current;
+      const t = clampSourceTime(sourceTimeRef.current, clip);
+      const frameIdx = Math.min(
+        maxFrameIdx,
+        holdQuantizeFrameIndex(frameIdxFromSourceTime(t, fps), holdStep)
+      );
+      void ensureFrameAvailable(frameIdx, epoch, true);
+    }, FIRST_PAINT_FALLBACK_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clip.id, useHttpAlpha, playing]);
+
   useEffect(
     () => () => {
       requestEpochRef.current += 1;
+      forgetClipPaint(clip.id);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 

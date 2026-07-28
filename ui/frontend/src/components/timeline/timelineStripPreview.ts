@@ -52,10 +52,12 @@ export function timelineStripPreviewRelPath(
 }
 
 /**
- * Opaque RGB frameSequence strips must not override a real alpha matte.
- * When alphaRelPath is set, prefer video+alpha decode for true transparency.
+ * Prefer video+alpha decode only when there is no edited frame strip.
+ * When ``frameSequence.strip`` exists (incl. RMBG RGBA PNGs), strip preview
+ * wins so sequence-set removals show up immediately without waiting for re-encode.
  */
 export function clipPrefersAlphaDecodeOverStrip(clip: TimelineClip): boolean {
+  if (clip.frameSequence?.strip?.length) return false;
   return Boolean(clip.alphaRelPath?.trim());
 }
 

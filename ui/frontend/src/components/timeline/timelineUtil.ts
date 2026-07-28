@@ -725,9 +725,11 @@ export function buildAudioClip(params: {
   srcRelPath: string;
   durationSec: number;
   start?: number;
+  /** EBU R128 loudness correction from import analysis (default 1). */
+  normalizationGain?: number;
 }): TimelineClip {
   const dur = Math.max(0.05, params.durationSec);
-  return {
+  const clip: TimelineClip = {
     id: genId("clip"),
     type: "audio",
     srcRelPath: params.srcRelPath,
@@ -738,6 +740,14 @@ export function buildAudioClip(params: {
     duration: dur,
     srcDuration: dur,
   };
+  if (
+    typeof params.normalizationGain === "number" &&
+    params.normalizationGain > 0 &&
+    Math.abs(params.normalizationGain - 1) > 1e-3
+  ) {
+    clip.normalizationGain = params.normalizationGain;
+  }
+  return clip;
 }
 
 export type VideoBgReplaceTimingFallback = {

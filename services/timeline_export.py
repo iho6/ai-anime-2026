@@ -584,11 +584,22 @@ def _volume_level_at(clip: dict[str, Any], playhead: float) -> float:
     return _lerp(float(a.get("level", UNITY_VOLUME_LEVEL)), float(b.get("level", UNITY_VOLUME_LEVEL)), s)
 
 
+def _normalization_gain(clip: dict[str, Any]) -> float:
+    """Non-destructive EBU R128 loudness correction stored on the clip."""
+    try:
+        gain = float(clip.get("normalizationGain") or 1.0)
+    except (TypeError, ValueError):
+        return 1.0
+    return gain if gain > 0 else 1.0
+
+
 def _volume_gain_at(clip: dict[str, Any], playhead: float) -> float:
-    return _clamp(_volume_level_at(clip, playhead) / UNITY_VOLUME_LEVEL, 0, 2)
+    envelope = _volume_level_at(clip, playhead) / UNITY_VOLUME_LEVEL
+    return _clamp(envelope * _normalization_gain(clip), 0, 2)
 
 
-def _volume_envelope_needs_apply(clip: dict[str, Any]) -> bool:
+def _volume_envelope_curve_needed(clip: dict[str, Any]) -> bool:
+    """True when the clip has a non-flat volumeAutomation curve."""
     vol = clip.get("volumeAutomation")
     if not vol:
         return False
@@ -600,12 +611,21 @@ def _volume_envelope_needs_apply(clip: dict[str, Any]) -> bool:
     return False
 
 
+def _volume_envelope_needs_apply(clip: dict[str, Any]) -> bool:
+    return (
+        _volume_envelope_curve_needed(clip)
+        or abs(_normalization_gain(clip) - 1.0) > 1e-3
+    )
+
+
 def _volume_envelope_filter_parts(clip: dict[str, Any], in_label: str, out_label: str) -> list[str]:
     in_pt = float(clip.get("inPoint", 0))
     out_pt = float(clip.get("outPoint", 0))
     speed = max(0.01, float(clip.get("speed", 1)))
     post_dur = max(1e-6, (out_pt - in_pt) / speed)
-    step = 0.02
+    # 0.1s steps keep export smooth while avoiding multi‑MB filtergraphs that
+    # blow Windows CreateProcess argv limits (~32KB).
+    step = 0.1
     parts: list[str] = []
     cur = in_label
     idx = 0
@@ -1585,12 +1605,20 @@ def _mix_timeline_audio(
         start_ms = int(round(float(clip.get("start", 0)) * 1000))
         trim = f"atrim=start={in_pt:.6f}:end={out_pt:.6f},asetpts=PTS-STARTPTS"
         tempo = _atempo_filters(speed)
-        if _volume_envelope_needs_apply(clip):
+        if _volume_envelope_curve_needed(clip):
             pre = f"a{i}pre"
             vol_out = f"a{i}vol"
             filter_parts.append(f"[{i}:a]{trim},{tempo}[{pre}]")
             filter_parts.extend(_volume_envelope_filter_parts(clip, pre, vol_out))
             filter_parts.append(f"[{vol_out}]adelay={start_ms}|{start_ms}[a{i}]")
+        elif _volume_envelope_needs_apply(clip):
+            # Flat envelope but loudness normalization != 1: one volume filter.
+            g = _clamp(_normalization_gain(clip), 0, 2)
+            chain = (
+                f"[{i}:a]{trim},{tempo},volume=volume={g:.6f},"
+                f"adelay={start_ms}|{start_ms}[a{i}]"
+            )
+            filter_parts.append(chain)
         else:
             chain = f"[{i}:a]{trim},{tempo},adelay={start_ms}|{start_ms}[a{i}]"
             filter_parts.append(chain)
@@ -1601,12 +1629,17 @@ def _mix_timeline_audio(
     )
     filter_complex = ";".join(filter_parts)
 
+    # Put the filtergraph in a file so Windows CreateProcess argv (~32KB) is
+    # never blown up by long volume-automation chains (WinError 206).
+    script_path = output_aac.with_suffix(".filter.txt")
+    script_path.write_text(filter_complex, encoding="utf-8")
+
     cmd = [
         ffmpeg,
         "-y",
         *inputs,
-        "-filter_complex",
-        filter_complex,
+        "-filter_complex_script",
+        str(script_path),
         "-map",
         "[aout]",
         "-t",
@@ -1619,7 +1652,15 @@ def _mix_timeline_audio(
     ]
     if log_cb:
         log_cb(f"Mixing {len(resolved)} audio clip(s)...")
-    subprocess.run(cmd, check=True, capture_output=True)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+    except subprocess.CalledProcessError as ex:
+        err = (ex.stderr or b"").decode("utf-8", errors="replace").strip()
+        if log_cb and err:
+            # Keep log readable; ffmpeg stderr can be large.
+            tail = err[-2000:] if len(err) > 2000 else err
+            log_cb(f"ffmpeg audio mix failed: {tail}")
+        raise
     return output_aac.is_file()
 
 

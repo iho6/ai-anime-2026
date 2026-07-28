@@ -19,6 +19,60 @@ export function frameSequenceHasExportableFrames(payload: FrameSequencePayload):
   return payload.strip.some(stripSlotVisibleForExport);
 }
 
+/** Plan for finishing a single-clip timeline frame-sequence editor. */
+export type TimelineFrameSequenceFinishPlan =
+  | { kind: "noop" }
+  | { kind: "save"; apply: boolean };
+
+/** Plan for finishing a multi-clip timeline frame-sequence editor. */
+export type TimelineFrameSequenceGroupFinishPlan =
+  | { kind: "noop" }
+  | { kind: "save"; applyPayloads: Record<string, FrameSequencePayload> };
+
+/** Skip save/apply when the strip matches the open snapshot. */
+export function planTimelineFrameSequenceFinish(
+  payload: FrameSequencePayload,
+  initial: FrameSequencePayload
+): TimelineFrameSequenceFinishPlan {
+  if (frameSequencePayloadEqual(payload, initial)) return { kind: "noop" };
+  return {
+    kind: "save",
+    apply: frameSequenceHasExportableFrames(payload),
+  };
+}
+
+/** Close SequenceEditor opened from a timeline clip: rematerialize only if the gallery strip changed. */
+export type LinkedSequenceClipClosePlan = { kind: "noop" } | { kind: "rematerialize" };
+
+export function planLinkedSequenceClipClose(
+  current: FrameSequencePayload | undefined,
+  snapshot: FrameSequencePayload | undefined
+): LinkedSequenceClipClosePlan {
+  if (current && snapshot && frameSequencePayloadEqual(current, snapshot)) {
+    return { kind: "noop" };
+  }
+  return { kind: "rematerialize" };
+}
+
+/** Skip save/apply when every layer matches its open snapshot. */
+export function planTimelineFrameSequenceGroupFinish(
+  payloads: Record<string, FrameSequencePayload>,
+  initials: Record<string, FrameSequencePayload>
+): TimelineFrameSequenceGroupFinishPlan {
+  const changed: Record<string, FrameSequencePayload> = {};
+  for (const [clipId, payload] of Object.entries(payloads)) {
+    const initialPayload = initials[clipId];
+    if (!initialPayload || !frameSequencePayloadEqual(payload, initialPayload)) {
+      changed[clipId] = payload;
+    }
+  }
+  if (Object.keys(changed).length === 0) return { kind: "noop" };
+  const applyPayloads = Object.fromEntries(
+    Object.entries(changed).filter(([, payload]) => frameSequenceHasExportableFrames(payload))
+  );
+  return { kind: "save", applyPayloads };
+}
+
 function cropEqual(a?: SequenceCrop, b?: SequenceCrop): boolean {
   if (!a && !b) return true;
   if (!a || !b) return false;

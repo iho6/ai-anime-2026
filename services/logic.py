@@ -8813,8 +8813,13 @@ def encode_rgba_frames_to_webm(
     height: int,
     output_path: str | Path,
     log_cb: Callable[[str], None] | None = None,
+    keyint: int | None = None,
 ) -> dict[str, Any]:
-    """Encode an iterable of RGBA uint8 frames (H×W×4) to WebM VP9+alpha."""
+    """Encode an iterable of RGBA uint8 frames (H×W×4) to WebM VP9+alpha.
+
+    ``keyint`` when set (e.g. preview proxies) caps VP9 keyframe distance via
+    ``kf-max-dist`` for faster browser seeks. Omit for export defaults.
+    """
     import av
     import itertools
     import numpy as np
@@ -8849,7 +8854,7 @@ def encode_rgba_frames_to_webm(
     out_stream.width = width
     out_stream.height = height
     out_stream.pix_fmt = "yuva420p"
-    out_stream.options = {
+    vp9_opts: dict[str, str] = {
         "crf": "10",
         "b:v": "0",
         "deadline": "realtime",
@@ -8857,6 +8862,9 @@ def encode_rgba_frames_to_webm(
         "row-mt": "1",
         "auto-alt-ref": "0",
     }
+    if keyint is not None and int(keyint) > 0:
+        vp9_opts["kf-max-dist"] = str(int(keyint))
+    out_stream.options = vp9_opts
 
     # Companion alpha — VP9 silently drops yuva420p on this platform; write alpha as FFv1.
     alpha_path = out.parent / (out.stem + ".alpha.mkv")
@@ -11841,7 +11849,9 @@ def timeline_frame_sequence_to_video(
     strip: list[dict[str, Any]] = [s for s in strip_raw if isinstance(s, dict)]
     gid = str(fs.get("sequenceGroupId") or "").strip()
     if gid:
-        allowed = timeline_storage.timeline_frames_dir(timeline_key, gid)
+        # Gallery seed/place may mint a new sequenceGroupId while frame PNGs
+        # still live under frames/<clipId>/ — sandbox the whole frames tree.
+        allowed = timeline_storage.timeline_frames_root(timeline_key)
         _validate_strip_paths_under_dir(strip, allowed)
 
     current_path: Path | None = None
@@ -13198,9 +13208,16 @@ def import_audio_to_timeline_clip(
     source_abs_path: Path | str,
     dest_dir: Path | str,
 ) -> dict[str, Any]:
-    """Copy an audio file into ``dest_dir`` and return ``{absPath, durationSec}``."""
+    """Copy an audio file into ``dest_dir``.
+
+    Returns ``{absPath, durationSec, normalizationGain}`` — the gain is the
+    EBU R128 loudness correction toward the standard preview target
+    (non-destructive; stored on the clip, applied in preview and export).
+    """
     import shutil
     import uuid
+
+    from services.audio_loudness import analyze_normalization_gain
 
     src = Path(source_abs_path)
     if not src.is_file():
@@ -13220,4 +13237,5 @@ def import_audio_to_timeline_clip(
     return {
         "absPath": str(out_path.resolve()),
         "durationSec": meta.get("durationSec") or 0.0,
+        "normalizationGain": analyze_normalization_gain(out_path),
     }

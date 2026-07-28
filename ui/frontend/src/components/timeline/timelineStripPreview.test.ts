@@ -75,22 +75,64 @@ describe("timelineStripPreviewRelPath", () => {
   });
 });
 
-describe("alpha over opaque strip", () => {
-  it("prefers alpha decode when alphaRelPath is set", () => {
+describe("alpha vs strip preview", () => {
+  it("prefers strip when frameSequence exists even with alphaRelPath", () => {
     expect(clipPrefersAlphaDecodeOverStrip(clip)).toBe(false);
     expect(
       clipPrefersAlphaDecodeOverStrip({
         ...clip,
         alphaRelPath: "timelines/t/clips/clip.alpha.mkv",
       })
+    ).toBe(false);
+  });
+
+  it("prefers alpha decode when alphaRelPath is set and no strip", () => {
+    expect(
+      clipPrefersAlphaDecodeOverStrip({
+        ...clip,
+        frameSequence: undefined,
+        alphaRelPath: "timelines/t/clips/clip.alpha.mkv",
+      })
     ).toBe(true);
   });
 
-  it("effective strip path is null when alphaRelPath is set", () => {
+  it("effective strip path uses strip when alphaRelPath is set with frameSequence", () => {
     expect(timelineEffectiveStripPreviewRelPath(clip, 2.5, 2)).toBe("frames/3.png");
     expect(
       timelineEffectiveStripPreviewRelPath(
         { ...clip, alphaRelPath: "timelines/t/clips/clip.alpha.mkv" },
+        2.5,
+        2
+      )
+    ).toBe("frames/3.png");
+  });
+
+  it("after a removed strip slot, preview holds the previous visible frame (with alpha)", () => {
+    const removed: TimelineClip = {
+      ...clip,
+      alphaRelPath: "timelines/t/clips/clip.alpha.mkv",
+      frameSequence: {
+        sequenceGroupId: "seq",
+        strip: [
+          { kind: "image", relPath: "frames/0.png" },
+          { kind: "empty" }, // removed
+          { kind: "image", relPath: "frames/3.png" },
+        ],
+        hidden: [],
+      },
+    };
+    // fps=2, inPoint=1 → t=1.5 → index 1 (empty) → hold frames/0.png
+    expect(timelineEffectiveStripPreviewRelPath(removed, 1.5, 2)).toBe("frames/0.png");
+  });
+
+  it("effective strip path is null when alphaRelPath is set without strip", () => {
+    expect(
+      timelineEffectiveStripPreviewRelPath(
+        {
+          ...clip,
+          frameSequence: undefined,
+          alphaRelPath: "timelines/t/clips/clip.alpha.mkv",
+        },
         2.5,
         2
       )

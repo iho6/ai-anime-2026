@@ -54,11 +54,29 @@ import { TextClipLayer } from "./TextClipLayer";
 import { TextStyleBar, type TextStyleModal } from "./TextStyleBar";
 import { TextPickerModals } from "./TextPickerModals";
 import { ClipColoringCanvas } from "./ClipColoringCanvas";
-import { clipPreviewHoldStep, heldSourceTimeSec } from "./previewHoldFrame";
 import { clipNeedsColoringCanvas } from "../../lib/clipColoring";
-
-/** Cap on simultaneous <video> decoders during preview to bound CPU/GPU load. */
-const MAX_ACTIVE_VIDEO_DECODES = 4;
+import { clipPreviewHoldStep, heldSourceTimeSec } from "./previewHoldFrame";
+import {
+  createPlaybackClock,
+  getTimelinePreviewBake,
+  bakeCoversPlayhead,
+  previewQualityPolicy,
+  resolveScene,
+  timelineHasMissingProxies,
+} from "./playback";
+import { useWebcodecsEngine } from "./playback/webcodecs/useWebcodecsEngine";
+import {
+  assignPlaySlots,
+  MAX_ACTIVE_VIDEO_DECODES,
+  playBudgetRotationEpoch,
+} from "./playback/decodeBudget";
+import {
+  clipPaintAgeMs,
+  engineTelemetry,
+  previewDebugEnabled,
+  type ClipLayerDiagnostic,
+} from "./playback/previewDiagnostics";
+import { audioSinkMode, getPreviewAudioGraph } from "./playback/previewAudioGraph";
 
 type DragPreviewState = {
   clipId: string;
@@ -154,15 +172,53 @@ export function TimelinePreviewPlayer(props: {
   // ruler line and time readout) re-renders on rAF ticks, not the whole page.
   const playhead = usePlayheadValue(playheadStore);
 
-  const total = timelineDuration(manifest);
-  const ratio = aspectRatio(manifest.previewAspect);
+  const playbackClock = useMemo(
+    () => createPlaybackClock(manifest.fps, playheadStore),
+    [manifest.fps, playheadStore]
+  );
+  const resolvedScene = useMemo(
+    () => resolveScene(manifest, playbackClock.frameAtSec(playhead)),
+    [manifest, playbackClock, playhead]
+  );
+  const qualityPolicy = useMemo(
+    () => previewQualityPolicy(playing, resolvedScene),
+    [playing, resolvedScene]
+  );
+  const missingProxies = useMemo(() => {
+    const clips = manifest.tracks.flatMap((t) => t.clips);
+    return timelineHasMissingProxies(clips);
+  }, [manifest.tracks]);
+  const previewBake = useMemo(() => getTimelinePreviewBake(manifest), [manifest]);
+  const useBake =
+    Boolean(previewBake && bakeCoversPlayhead(previewBake, playhead));
 
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const debugEnabled = previewDebugEnabled();
+  const [layerDiagnostics, setLayerDiagnostics] = useState<ClipLayerDiagnostic[]>([]);
   const mediaRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const audioOutputRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
   const audioPlayPendingRef = useRef<Set<string>>(new Set());
   const audioFailureReportedRef = useRef<Set<string>>(new Set());
   const [frameSize, setFrameSize] = useState({ w: 0, h: 0 });
+
+  // Presentation contract (DOM-first revamp):
+  // - Presentation truth = DOM stack (videos + ClipColoringCanvas).
+  // - WebCodecs = scrub assist / experimental opt-in only; ownership is forced off.
+  // - Bake overlay is the only other surface that may hide the DOM stack.
+  const {
+    canvasRef: engineCanvasRef,
+    engineOwnsPresentation,
+  } = useWebcodecsEngine({
+    manifest,
+    playing,
+    playhead,
+    frameSize,
+    bakeActive: useBake,
+  });
+  // Ownership is always false this phase; keep the binding for debug overlay.
+
+  const total = timelineDuration(manifest);
+  const ratio = aspectRatio(manifest.previewAspect);
   const [alignGuides, setAlignGuides] = useState<AlignGuide[]>([]);
   const [draggingClipId, setDraggingClipId] = useState<string | null>(null);
   const dragExtendRef = useRef<PreviewFrameExtension>(PREVIEW_FRAME_EXTENSION_NONE);
@@ -221,11 +277,17 @@ export function TimelinePreviewPlayer(props: {
       anchorRef.current = null;
       return;
     }
-    anchorRef.current = { wall: performance.now(), head: playheadStore.get() };
+    // Audio-master clock: when WebAudio is available, elapsed time comes from
+    // the hardware audio clock so video stays locked to what's audible.
+    const audioGraph = getPreviewAudioGraph();
+    void audioGraph?.resume();
+    const nowSec = () =>
+      audioGraph?.isRunning() ? audioGraph.now() : performance.now() / 1000;
+    anchorRef.current = { wall: nowSec(), head: playheadStore.get() };
     const tick = () => {
       const a = anchorRef.current;
       if (!a) return;
-      const t = a.head + (performance.now() - a.wall) / 1000;
+      const t = a.head + (nowSec() - a.wall);
       if (total > 0 && t >= total) {
         const endT = playbackEndPlayhead(total, manifest.fps);
         playheadStore.set(endT);
@@ -264,16 +326,25 @@ export function TimelinePreviewPlayer(props: {
     const key = `${output.sourceKind}:${output.clip.id}`;
     if (audioPlayPendingRef.current.has(key)) return;
     audioPlayPendingRef.current.add(key);
-    void el.play().then(
-      () => {
+    void (async () => {
+      try {
+        await getPreviewAudioGraph()?.resume();
+        const graph = getPreviewAudioGraph();
+        if (graph?.isRunning()) {
+          graph.attach(output.clip.id, el);
+          graph.setGain(output.clip.id, clamp(output.gain, 0, 2));
+          el.volume = 1;
+        } else {
+          el.volume = clamp(output.gain, 0, 1);
+        }
+        await el.play();
         audioPlayPendingRef.current.delete(key);
         audioFailureReportedRef.current.delete(key);
-      },
-      (error) => {
+      } catch (error) {
         audioPlayPendingRef.current.delete(key);
         reportAudioFailure(output, error);
       }
-    );
+    })();
   }, [reportAudioFailure]);
 
   const syncAudioOutput = useCallback((
@@ -283,7 +354,17 @@ export function TimelinePreviewPlayer(props: {
     const { clip, sourceTime, gain } = output;
     const reversed = !!clip.reversed;
     el.playbackRate = Math.min(16, Math.max(0.1, clip.speed || 1));
-    el.volume = clamp(gain, 0, 1);
+    // WebAudio GainNode supports gain > 1; only attach once the context is
+    // running so a suspended MediaElementSource cannot mute the element.
+    const graph = getPreviewAudioGraph();
+    if (graph && audioSinkMode(graph.state()) === "webaudio") {
+      graph.attach(clip.id, el);
+      graph.setGain(clip.id, clamp(gain, 0, 2));
+      el.volume = 1;
+    } else {
+      void graph?.resume();
+      el.volume = clamp(gain, 0, 1);
+    }
     const seekThreshold = reversed ? 0.05 : playing ? 0.35 : 0.05;
     if (Math.abs(el.currentTime - sourceTime) > seekThreshold) {
       try {
@@ -303,24 +384,34 @@ export function TimelinePreviewPlayer(props: {
     const seenVisual = new Set<string>();
     const seenAudio = new Set<string>();
 
-    const syncVisualClip = (clip: TimelineClip, track: TimelineTrack) => {
+    const syncVisualClip = (
+      clip: TimelineClip,
+      track: TimelineTrack,
+      allowPlay: boolean
+    ) => {
       seenVisual.add(clip.id);
       const el = mediaRefs.current.get(clip.id);
       if (!el) return;
       const wantRaw = sourceTimeAtWithTransition(clip, playhead, track);
       const holdStep = clipPreviewHoldStep(clip);
+      // While playing, free-run at wall clock — do not park on holdStep seeks
+      // (hold is for scrub / canvas sample only).
       const want =
-        holdStep > 1
+        !playing && holdStep > 1
           ? heldSourceTimeSec(clip, wantRaw, Math.max(1, manifest.fps), holdStep)
           : wantRaw;
       const reversed = !!clip.reversed;
       el.playbackRate = Math.min(16, Math.max(0.1, clip.speed || 1));
       const seekThreshold =
-        holdStep > 1 ? 0.001 : reversed ? 0.05 : playing ? 0.35 : 0.05;
-      if (!playing || reversed) {
-        if (!el.paused) el.pause();
-      } else if (holdStep > 1) {
-        // Stepped hold: park on the held frame; canvas/playhead drives motion.
+        !playing && holdStep > 1
+          ? 0.001
+          : reversed
+            ? 0.05
+            : playing
+              ? 0.35
+              : 0.05;
+      // Hold-step must not pause free-run during play.
+      if (!playing || reversed || !allowPlay) {
         if (!el.paused) el.pause();
       }
       if (Math.abs(el.currentTime - want) > seekThreshold) {
@@ -330,29 +421,48 @@ export function TimelinePreviewPlayer(props: {
           /* not seekable yet */
         }
       }
-      if (playing && !reversed && holdStep < 2 && el.paused) {
+      if (playing && !reversed && allowPlay && el.paused) {
         void el.play().catch(() => {});
       }
     };
 
-    // Video tracks are ordered top-first; cap simultaneous video decodes so
-    // heavily-stacked timelines don't spin up an unbounded number of decoders.
-    let activeVideoDecodes = 0;
+    // Unique active videos (skip preload-only dups for budget accounting).
+    const activeVideoEntries: Array<{ clip: TimelineClip; track: TimelineTrack }> =
+      [];
+    const seenClipIds = new Set<string>();
     for (const track of videoTracks) {
-      const clips = activeLayersAt(track, playhead)
-        .filter((l) => l.clip.type === "video" && (l.opacity > 0.01 || l.preload))
-        .map((l) => l.clip);
-      for (const clip of clips) {
-        if (activeVideoDecodes < MAX_ACTIVE_VIDEO_DECODES) {
-          activeVideoDecodes += 1;
-          syncVisualClip(clip, track);
-        } else {
-          // Over budget: keep it paused (still "seen" so it isn't re-paused).
-          seenVisual.add(clip.id);
-          const el = mediaRefs.current.get(clip.id);
-          if (el && !el.paused) el.pause();
-        }
+      for (const layer of activeLayersAt(track, playhead)) {
+        if (layer.clip.type !== "video") continue;
+        if (!(layer.opacity > 0.01 || layer.preload)) continue;
+        if (seenClipIds.has(layer.clip.id)) continue;
+        seenClipIds.add(layer.clip.id);
+        activeVideoEntries.push({ clip: layer.clip, track });
       }
+    }
+    const frameIdx = playbackClock.frameAtSec(playhead);
+    const playSlots = assignPlaySlots(
+      activeVideoEntries.map((e) => e.clip.id),
+      MAX_ACTIVE_VIDEO_DECODES,
+      playBudgetRotationEpoch(frameIdx)
+    );
+    for (const { clip, track } of activeVideoEntries) {
+      syncVisualClip(clip, track, playSlots.has(clip.id));
+    }
+
+    if (debugEnabled) {
+      setLayerDiagnostics(
+        activeVideoEntries.map(({ clip, track }) => {
+          const el = mediaRefs.current.get(clip.id);
+          return {
+            clipId: clip.id,
+            playSlot: playSlots.has(clip.id),
+            readyState: el?.readyState ?? -1,
+            paused: el?.paused ?? true,
+            currentTime: el?.currentTime ?? -1,
+            wantTime: sourceTimeAtWithTransition(clip, playhead, track),
+          };
+        })
+      );
     }
 
     for (const output of audioOutputs) {
@@ -367,7 +477,16 @@ export function TimelinePreviewPlayer(props: {
     for (const [id, el] of audioOutputRefs.current) {
       if (!seenAudio.has(id) && !el.paused) el.pause();
     }
-  }, [playhead, playing, videoTracks, audioOutputs, syncAudioOutput]);
+  }, [
+    playhead,
+    playing,
+    videoTracks,
+    audioOutputs,
+    syncAudioOutput,
+    manifest.fps,
+    playbackClock,
+    debugEnabled,
+  ]);
 
   useEffect(() => {
     setTextStyleModal(null);
@@ -929,7 +1048,14 @@ export function TimelinePreviewPlayer(props: {
         {renderClipContent(
           clip,
           1,
-          sourceTimeAtWithTransition(clip, playhead, track),
+          (() => {
+            const raw = sourceTimeAtWithTransition(clip, playhead, track);
+            if (clip.type !== "video") return raw;
+            const hold = clipPreviewHoldStep(clip);
+            return hold > 1
+              ? heldSourceTimeSec(clip, raw, Math.max(1, manifest.fps), hold)
+              : raw;
+          })(),
           track
         )}
       </div>
@@ -1048,6 +1174,8 @@ export function TimelinePreviewPlayer(props: {
             sourceTimeSec={sourceTimeSec}
             playing={playing}
             previewFps={manifest.fps}
+            skipPixelColoring={qualityPolicy.skipPixelColoring}
+            engineOwnsPresentation={engineOwnsPresentation}
             style={{
               width: "100%",
               height: "100%",
@@ -1085,6 +1213,8 @@ export function TimelinePreviewPlayer(props: {
             sourceTimeSec={sourceTimeSec}
             playing={playing}
             previewFps={manifest.fps}
+            skipPixelColoring={qualityPolicy.skipPixelColoring}
+            engineOwnsPresentation={engineOwnsPresentation}
             setVideoRef={(el) => {
               if (el) mediaRefs.current.set(clip.id, el);
               else mediaRefs.current.delete(clip.id);
@@ -1251,12 +1381,116 @@ export function TimelinePreviewPlayer(props: {
           boxShadow: "0 0 0 1px rgba(0,0,0,0.6)",
         }}
       >
+        {missingProxies ? (
+          <div
+            style={{
+              position: "absolute",
+              top: 6,
+              left: 6,
+              zIndex: PREVIEW_SELECTION_CHROME_Z + 2,
+              fontSize: 11,
+              padding: "3px 8px",
+              background: "rgba(0,0,0,0.65)",
+              color: "#fc6",
+              pointerEvents: "none",
+            }}
+          >
+            Building preview proxies…
+          </div>
+        ) : null}
+        {debugEnabled ? (
+          <div
+            style={{
+              position: "absolute",
+              top: 6,
+              right: 6,
+              zIndex: PREVIEW_SELECTION_CHROME_Z + 3,
+              fontSize: 10,
+              lineHeight: 1.5,
+              fontFamily: "monospace",
+              padding: "4px 8px",
+              background: "rgba(0,0,0,0.75)",
+              color: "#9f9",
+              pointerEvents: "none",
+              maxWidth: 340,
+            }}
+          >
+            <div style={{ color: "#fff" }}>
+              engine {engineOwnsPresentation ? "OWNS" : "off"} · promo{" "}
+              {engineTelemetry.promotions} · demo {engineTelemetry.demotions} ·
+              miss {engineTelemetry.missedFrames}
+            </div>
+            {layerDiagnostics.map((d) => {
+              const age = clipPaintAgeMs(d.clipId);
+              const drift = Math.abs(d.currentTime - d.wantTime);
+              const stale = age != null && age > 500;
+              return (
+                <div
+                  key={d.clipId}
+                  style={{ color: stale ? "#f96" : undefined }}
+                >
+                  {d.clipId.slice(0, 8)} {d.playSlot ? "PLAY" : "hold"} rs
+                  {d.readyState} {d.paused ? "pause" : "run"} drift
+                  {drift.toFixed(2)}
+                  {age != null ? ` paint ${(age / 1000).toFixed(1)}s` : ""}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+        {useBake && previewBake ? (
+          <video
+            key={previewBake.srcRelPath}
+            src={assetUrlFromRelPath(previewBake.srcRelPath)}
+            muted
+            playsInline
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              zIndex: PREVIEW_SELECTION_CHROME_Z + 1,
+              pointerEvents: "none",
+            }}
+            ref={(el) => {
+              if (!el) return;
+              const local = Math.max(0, playhead - previewBake.inPointSec);
+              if (Math.abs(el.currentTime - local) > 0.08) {
+                try {
+                  el.currentTime = local;
+                } catch {
+                  /* ignore */
+                }
+              }
+              if (playing && el.paused) void el.play().catch(() => {});
+              if (!playing && !el.paused) el.pause();
+            }}
+          />
+        ) : null}
+        <canvas
+          ref={engineCanvasRef}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            zIndex: PREVIEW_SELECTION_CHROME_Z + 1,
+            pointerEvents: "none",
+            background: "#000",
+            // DOM-first: engine canvas stays hidden; never owns presentation.
+            visibility: "hidden",
+          }}
+        />
         <div
           style={{
             position: "absolute",
             inset: 0,
             overflow: "hidden",
             pointerEvents: "none",
+            // Bake is the only surface that may hide the DOM stack.
+            visibility: useBake ? "hidden" : "visible",
           }}
         >
           {videoRenderLayers.map(({ clip, layer, trackZ, track }) => {
@@ -1650,9 +1884,15 @@ export function TimelinePreviewPlayer(props: {
             <audio
               key={`audio-output-${clip.id}`}
               preload="auto"
+              crossOrigin="anonymous"
               ref={(el) => {
-                if (el) audioOutputRefs.current.set(clip.id, el);
-                else audioOutputRefs.current.delete(clip.id);
+                if (el) {
+                  audioOutputRefs.current.set(clip.id, el);
+                  // Attach only once AudioContext is running (see syncAudioOutput).
+                } else {
+                  audioOutputRefs.current.delete(clip.id);
+                  getPreviewAudioGraph()?.detach(clip.id);
+                }
               }}
               src={assetUrlFromRelPath(clip.srcRelPath)}
               onLoadedMetadata={(e) => syncAudioOutput(e.currentTarget, output)}

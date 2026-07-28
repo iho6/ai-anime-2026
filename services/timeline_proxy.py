@@ -8,12 +8,20 @@ data. Export keeps using the master.
 Proxies live next to their master under ``storage/timelines/<key>/clips/``:
 
     clip_x.mp4                -> clip_x.proxy.mp4                 (plain video)
-    clip_x_rmbg.webm          -> clip_x_rmbg.proxy.webm           (color)
-    clip_x_rmbg.alpha.mkv     -> clip_x_rmbg.proxy.alpha.mkv      (alpha companion)
+    clip_x_rmbg.webm          -> clip_x_rmbg.proxy.webm           (VP9 + alpha)
+    (+ clip_x_rmbg.alpha.mkv master kept for export only)
+
+Alpha clips get a **single** VP9 WebM with a real alpha channel so preview
+play is one decode (no runtime color/matte pairing). Masters stay split for
+export quality.
+
+Encode settings prioritize browser scrub/seek (short GOP). Bump
+``PROXY_ENCODE_VERSION`` when those settings change so stale proxies regenerate.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -30,9 +38,44 @@ logger = logging.getLogger(__name__)
 # Target max height for preview proxies. 480p is plenty for the small preview
 # frame while cutting decode cost dramatically vs 1080p/4K masters.
 PROXY_MAX_H = 480
-# Skip generating an alpha proxy for very long clips to bound memory (alpha
-# proxying decodes RGBA frames into memory before re-encoding).
-ALPHA_PROXY_MAX_FRAMES = 900
+
+# Seek-friendly encode profile. Bump when options change so old long-GOP
+# proxies are rebuilt on next ensure_clip_proxy.
+# v4: alpha preview is one VP9 WebM with alpha (no H.264 color+matte pair).
+PROXY_ENCODE_VERSION = 4
+PROXY_KEYINT = 12
+
+_H264_PROXY_OPTIONS = {
+    "crf": "26",
+    "preset": "veryfast",
+    "g": str(PROXY_KEYINT),
+    "keyint_min": str(PROXY_KEYINT),
+    "scenecut": "0",
+}
+
+
+def _sidecar_path(proxy: Path) -> Path:
+    """Sidecar metadata: ``clip.proxy.mp4.proxy.json``."""
+    return Path(str(proxy) + ".proxy.json")
+
+
+def _write_proxy_sidecar(proxy: Path) -> None:
+    meta = {
+        "encodeVersion": PROXY_ENCODE_VERSION,
+        "keyint": PROXY_KEYINT,
+    }
+    _sidecar_path(proxy).write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+
+def _sidecar_matches_version(proxy: Path) -> bool:
+    side = _sidecar_path(proxy)
+    if not side.is_file():
+        return False
+    try:
+        data = json.loads(side.read_text(encoding="utf-8"))
+        return int(data.get("encodeVersion", -1)) == PROXY_ENCODE_VERSION
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return False
 
 
 def _rel_from_abs(abs_path: Path) -> str:
@@ -60,12 +103,15 @@ def _scaled_even(w: int, h: int) -> tuple[int, int]:
 
 
 def _is_fresh(proxy: Path, master: Path) -> bool:
+    """True when proxy exists, is newer than master, and matches encode version."""
     try:
-        return (
+        if not (
             proxy.is_file()
             and proxy.stat().st_mtime >= master.stat().st_mtime
             and proxy.stat().st_size > 0
-        )
+        ):
+            return False
+        return _sidecar_matches_version(proxy)
     except OSError:
         return False
 
@@ -83,7 +129,7 @@ def _transcode_plain_h264(master: Path, proxy: Path, out_w: int, out_h: int) -> 
             out_stream.width = out_w
             out_stream.height = out_h
             out_stream.pix_fmt = "yuv420p"
-            out_stream.options = {"crf": "26", "preset": "veryfast"}
+            out_stream.options = dict(_H264_PROXY_OPTIONS)
             for frame in in_container.decode(in_stream):
                 reframed = frame.reformat(width=out_w, height=out_h, format="yuv420p")
                 for pkt in out_stream.encode(reframed):
@@ -92,76 +138,110 @@ def _transcode_plain_h264(master: Path, proxy: Path, out_w: int, out_h: int) -> 
                 out_container.mux(pkt)
     finally:
         in_container.close()
+    _write_proxy_sidecar(proxy)
 
 
-def _transcode_alpha_webm(
+def _transcode_alpha_webm_rgba(
     clip: dict[str, Any],
     master: Path,
     proxy_webm: Path,
     out_w: int,
     out_h: int,
 ) -> bool:
-    """Downscale a color+alpha clip into a proxy WebM (+ .alpha.mkv companion).
+    """Bake color+alpha masters into one VP9 WebM with a real alpha channel.
 
-    Returns False (skip) when the clip is too long to buffer safely.
+    Uses ffmpeg alphamerge so pairing is done once at bake time; preview play
+    is a single decode. libvpx-vp9 requires ``-auto-alt-ref 0`` for alpha.
     """
-    import av
-    import numpy as np
-    from PIL import Image
+    import subprocess
 
-    from services.logic import encode_rgba_frames_to_webm
+    from utils.video_utils import require_ffmpeg
 
     alpha_rel = str(clip.get("alphaRelPath") or "").strip() or None
     alpha_path = _alpha_companion_path(master, alpha_rel)
     if alpha_path is None:
         return False
 
-    color_container = av.open(str(master))
-    alpha_container = av.open(str(alpha_path))
+    proxy_webm.parent.mkdir(parents=True, exist_ok=True)
+    # Remove stale output so a failed encode cannot look "fresh".
     try:
-        cstream = color_container.streams.video[0]
-        rate = cstream.average_rate or cstream.base_rate or 24
-        color_iter = color_container.decode(cstream)
-        alpha_iter = alpha_container.decode(alpha_container.streams.video[0])
+        if proxy_webm.is_file():
+            proxy_webm.unlink()
+    except OSError:
+        pass
 
-        rgba_frames: list[Any] = []
-        for av_frame in color_iter:
-            try:
-                alpha_frame = next(alpha_iter)
-            except StopIteration:
-                break
-            color_np = av_frame.to_ndarray(format="rgb24")
-            alpha_np = alpha_frame.to_ndarray(format="gray")
-            combined = np.dstack([color_np, alpha_np])
-            img = Image.fromarray(combined, mode="RGBA").resize(
-                (out_w, out_h), Image.BILINEAR
-            )
-            rgba_frames.append(np.asarray(img, dtype=np.uint8))
-            if len(rgba_frames) > ALPHA_PROXY_MAX_FRAMES:
-                return False
-    finally:
-        color_container.close()
-        alpha_container.close()
-
-    if not rgba_frames:
-        return False
-
-    encode_rgba_frames_to_webm(
-        rgba_frames,
-        fps=float(rate),
-        width=out_w,
-        height=out_h,
-        output_path=proxy_webm,
+    ffmpeg = require_ffmpeg()
+    # Color + gray matte → single yuva420p stream (pairing at bake).
+    filt = (
+        f"[0:v]scale={out_w}:{out_h}:flags=bicubic,format=yuv420p[c];"
+        f"[1:v]scale={out_w}:{out_h}:flags=bicubic,format=gray[a];"
+        f"[c][a]alphamerge,format=yuva420p[v]"
     )
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(master),
+        "-i",
+        str(alpha_path),
+        "-filter_complex",
+        filt,
+        "-map",
+        "[v]",
+        "-c:v",
+        "libvpx-vp9",
+        "-pix_fmt",
+        "yuva420p",
+        "-auto-alt-ref",
+        "0",
+        "-g",
+        str(PROXY_KEYINT),
+        "-keyint_min",
+        str(PROXY_KEYINT),
+        "-crf",
+        "32",
+        "-b:v",
+        "0",
+        "-cpu-used",
+        "8",
+        "-row-mt",
+        "1",
+        "-an",
+        str(proxy_webm),
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=600,
+        )
+    except (OSError, subprocess.TimeoutExpired) as ex:
+        logger.warning("VP9 alpha proxy ffmpeg failed for %s: %s", master.name, ex)
+        return False
+    if proc.returncode != 0 or not proxy_webm.is_file() or proxy_webm.stat().st_size <= 0:
+        tail = (proc.stderr or "")[-800:]
+        logger.warning(
+            "VP9 alpha proxy encode failed for %s (code %s): %s",
+            master.name,
+            proc.returncode,
+            tail,
+        )
+        return False
+    _write_proxy_sidecar(proxy_webm)
     return True
 
 
 def ensure_clip_proxy(clip: dict[str, Any]) -> dict[str, str] | None:
-    """Ensure a preview proxy exists for a video clip.
+    """Ensure a seek-friendly preview proxy exists for a video clip.
 
-    Returns the fields to merge into the clip (``proxyRelPath`` and, for alpha
-    clips, ``proxyAlphaRelPath``) or ``None`` when no proxy is needed / possible
-    (image clips, already-small sources, or on failure -> fall back to master).
+    Returns fields to merge into the clip (``proxyRelPath`` only). Alpha clips
+    get a unified ``.proxy.webm``; callers should drop stale
+    ``proxyAlphaRelPath``. Returns ``None`` when not possible.
+
+    Always re-encodes for short-GOP even when the master is already ≤480p;
+    dimensions are capped via ``_scaled_even`` (no upscale).
     """
     if str(clip.get("type") or "") != "video":
         return None
@@ -179,8 +259,8 @@ def ensure_clip_proxy(clip: dict[str, Any]) -> dict[str, str] | None:
         return None
     w = int(meta.get("width") or 0)
     h = int(meta.get("height") or 0)
-    if h <= 0 or w <= 0 or h <= PROXY_MAX_H:
-        return None  # already small enough; preview can use the master
+    if h <= 0 or w <= 0:
+        return None
 
     out_w, out_h = _scaled_even(w, h)
     has_alpha = bool(str(clip.get("alphaRelPath") or "").strip()) or (
@@ -190,19 +270,14 @@ def ensure_clip_proxy(clip: dict[str, Any]) -> dict[str, str] | None:
     try:
         if has_alpha:
             proxy_webm = master.parent / (master.stem + ".proxy.webm")
-            proxy_alpha = master.parent / (proxy_webm.stem + ".alpha.mkv")
-            if _is_fresh(proxy_webm, master) and proxy_alpha.is_file():
-                return {
-                    "proxyRelPath": _rel_from_abs(proxy_webm),
-                    "proxyAlphaRelPath": _rel_from_abs(proxy_alpha),
-                }
-            ok = _transcode_alpha_webm(clip, master, proxy_webm, out_w, out_h)
-            if not ok or not proxy_webm.is_file():
+            if _is_fresh(proxy_webm, master):
+                return {"proxyRelPath": _rel_from_abs(proxy_webm)}
+            ok = _transcode_alpha_webm_rgba(
+                clip, master, proxy_webm, out_w, out_h
+            )
+            if not ok:
                 return None
-            result = {"proxyRelPath": _rel_from_abs(proxy_webm)}
-            if proxy_alpha.is_file():
-                result["proxyAlphaRelPath"] = _rel_from_abs(proxy_alpha)
-            return result
+            return {"proxyRelPath": _rel_from_abs(proxy_webm)}
 
         proxy_mp4 = master.parent / (master.stem + ".proxy.mp4")
         if _is_fresh(proxy_mp4, master):
@@ -220,6 +295,7 @@ def ensure_manifest_proxies(manifest: dict[str, Any]) -> int:
     """Generate missing proxies for every video clip; mutate manifest in place.
 
     Returns the number of clips whose proxy fields were updated.
+    Drops stale ``proxyAlphaRelPath`` when a unified WebM proxy is installed.
     """
     updated = 0
     for track in manifest.get("tracks") or []:
@@ -229,8 +305,15 @@ def ensure_manifest_proxies(manifest: dict[str, Any]) -> int:
             fields = ensure_clip_proxy(clip)
             if not fields:
                 continue
-            if all(clip.get(k) == v for k, v in fields.items()):
+            proxy_rel = str(fields.get("proxyRelPath") or "")
+            clear_alpha = proxy_rel.lower().endswith(".webm")
+            already = all(clip.get(k) == v for k, v in fields.items()) and (
+                not clear_alpha or "proxyAlphaRelPath" not in clip
+            )
+            if already:
                 continue
             clip.update(fields)
+            if clear_alpha:
+                clip.pop("proxyAlphaRelPath", None)
             updated += 1
     return updated

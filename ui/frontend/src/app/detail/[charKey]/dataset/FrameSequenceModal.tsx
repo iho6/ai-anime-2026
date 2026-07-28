@@ -47,8 +47,8 @@ import {
   relPathsFromStripSelection,
   reverseStripSelection,
   spliceStripFrames,
-  frameSequencePayloadEqual,
-  frameSequenceHasExportableFrames,
+  planTimelineFrameSequenceFinish,
+  planTimelineFrameSequenceGroupFinish,
 } from "../../../../components/frameSequenceStripUtils";
 
 export type FrameSequenceEditorMode = "sequence" | "timeline";
@@ -770,6 +770,57 @@ export function FrameSequenceModal(props: {
     );
   }, [groupLayers, layerStrips]);
 
+  const NO_EXPORTABLE_NOTIFY =
+    "Frame strip saved. No visible frames to encode — clip video unchanged. Use Re-extract to rebuild from video.";
+
+  /** Timeline Done / backdrop: skip save+apply when unchanged. */
+  const finishTimelineAndClose = useCallback(() => {
+    if (isGroupMode && onSaveGroup) {
+      const payloads = groupPayloadsFromState();
+      const plan = planTimelineFrameSequenceGroupFinish(
+        payloads,
+        groupInitialSnapshotRef.current
+      );
+      if (plan.kind === "noop") {
+        onClose();
+        return;
+      }
+      onSaveGroup(payloads);
+      if (Object.keys(plan.applyPayloads).length > 0) {
+        onApplyVideoGroup?.(plan.applyPayloads);
+      } else {
+        onNotify?.(NO_EXPORTABLE_NOTIFY);
+      }
+      onClose();
+      return;
+    }
+
+    const payload = payloadFromState(initial.sequenceGroupId, strip);
+    const plan = planTimelineFrameSequenceFinish(payload, initialSnapshotRef.current);
+    if (plan.kind === "noop") {
+      onClose();
+      return;
+    }
+    onSave(payload);
+    if (plan.apply) {
+      onApplyVideo?.(payload);
+    } else {
+      onNotify?.(NO_EXPORTABLE_NOTIFY);
+    }
+    onClose();
+  }, [
+    groupPayloadsFromState,
+    initial.sequenceGroupId,
+    isGroupMode,
+    onApplyVideo,
+    onApplyVideoGroup,
+    onClose,
+    onNotify,
+    onSave,
+    onSaveGroup,
+    strip,
+  ]);
+
   const pushUndo = useCallback(() => {
     if (isGroupMode) {
       groupUndoStack.current.push(layerStripsRef.current.map((s) => s.map(cloneStripSlot)));
@@ -1256,11 +1307,8 @@ export function FrameSequenceModal(props: {
         if (e.target !== e.currentTarget) return;
         if (active != null) return;
         if (editorMode === "timeline") {
-          if (isGroupMode && onSaveGroup) {
-            onSaveGroup(groupPayloadsFromState());
-          } else {
-            onSave(payloadFromState(initial.sequenceGroupId, strip));
-          }
+          finishTimelineAndClose();
+          return;
         }
         onClose();
       }}
@@ -1738,46 +1786,13 @@ export function FrameSequenceModal(props: {
             style={modalBtnPrimary}
             onClick={() => {
               if (editorMode === "timeline") {
-                if (isGroupMode && onSaveGroup && onApplyVideoGroup) {
-                  const payloads = groupPayloadsFromState();
-                  onSaveGroup(payloads);
-                  const changed: Record<string, FrameSequencePayload> = {};
-                  for (const [clipId, payload] of Object.entries(payloads)) {
-                    const initialPayload = groupInitialSnapshotRef.current[clipId];
-                    if (!initialPayload || !frameSequencePayloadEqual(payload, initialPayload)) {
-                      changed[clipId] = payload;
-                    }
-                  }
-                  const exportable = Object.fromEntries(
-                    Object.entries(changed).filter(([, payload]) =>
-                      frameSequenceHasExportableFrames(payload)
-                    )
-                  );
-                  if (Object.keys(exportable).length > 0) {
-                    onApplyVideoGroup(exportable);
-                  } else if (Object.keys(changed).length > 0) {
-                    onNotify?.(
-                      "Frame strip saved. No visible frames to encode — clip video unchanged. Use Re-extract to rebuild from video."
-                    );
-                  }
-                } else {
-                  const payload = payloadFromState(initial.sequenceGroupId, strip);
-                  onSave(payload);
-                  const changed = !frameSequencePayloadEqual(payload, initialSnapshotRef.current);
-                  if (changed && frameSequenceHasExportableFrames(payload)) {
-                    onApplyVideo?.(payload);
-                  } else if (changed) {
-                    onNotify?.(
-                      "Frame strip saved. No visible frames to encode — clip video unchanged. Use Re-extract to rebuild from video."
-                    );
-                  }
-                }
+                finishTimelineAndClose();
+                return;
+              }
+              if (isGroupMode && onSaveGroup) {
+                onSaveGroup(groupPayloadsFromState());
               } else {
-                if (isGroupMode && onSaveGroup) {
-                  onSaveGroup(groupPayloadsFromState());
-                } else {
-                  onSave(payloadFromState(initial.sequenceGroupId, strip));
-                }
+                onSave(payloadFromState(initial.sequenceGroupId, strip));
               }
               onClose();
             }}

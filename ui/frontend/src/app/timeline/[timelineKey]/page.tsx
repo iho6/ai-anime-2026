@@ -16,11 +16,13 @@ import {
   apiTimelineGet,
   apiTimelineImportAudio,
   apiTimelineImportFiles,
+  apiTimelineNormalizeAudio,
   apiTimelineImportImage,
   apiTimelineDuplicateFrameAsset,
   apiTimelinePut,
   apiTimelineSavedShapes,
   apiSaveTimelineShape,
+  apiSequenceGet,
   AudioReference,
   runReferenceAudioGenerateWsJob,
   assetUrlFromRelPath,
@@ -81,6 +83,7 @@ import { ConnectedJobRunModal } from "../../../components/ConnectedJobRunModal";
 import { useJobRunSession } from "../../../hooks/useJobRunSession";
 import { useAppError } from "../../../components/ErrorProvider";
 import { TimelinePreviewPlayer } from "../../../components/timeline/TimelinePreviewPlayer";
+import { getPreviewAudioGraph } from "../../../components/timeline/playback/previewAudioGraph";
 import { GeometryShapePicker } from "../../../components/timeline/GeometryShapePicker";
 import {
   cloneTimelineGeometry,
@@ -165,6 +168,8 @@ import {
 import {
   frameSequencePayloadEqual,
   frameSequenceHasExportableFrames,
+  planLinkedSequenceClipClose,
+  planTimelineFrameSequenceGroupFinish,
   syncTrimHiddenToFrameSequence,
 } from "../../../components/frameSequenceStripUtils";
 import {
@@ -189,9 +194,10 @@ import { sanitizeDownloadBaseName } from "../../../lib/downloadVideo";
 import { sanitizeClipColoringForSave } from "../../../lib/clipColoring";
 import { ClipColoringFlyout } from "../../../components/timeline/ClipColoringFlyout";
 import { ClipSpeedFlyout } from "../../../components/timeline/ClipSpeedFlyout";
+import { ClipAudioTransitionFlyout } from "../../../components/timeline/ClipAudioTransitionFlyout";
 import { RemoveBgRmbgFlyout } from "../../../components/timeline/RemoveBgRmbgFlyout";
 import { TimelineClipFrameWorkspace } from "../../../components/timeline/TimelineClipFrameWorkspace";
-import { seedSequenceGalleryFromStrip } from "../../../components/timeline/frameWorkspaceOps";
+import { cloneFrameSequencePayload, seedSequenceGalleryFromStrip } from "../../../components/timeline/frameWorkspaceOps";
 import { rasterizeGeometryToPngBase64 } from "../../../components/timeline/geometryRasterize";
 import { usePlayheadValue } from "../../../components/timeline/timelinePlayback";
 
@@ -404,7 +410,7 @@ export default function TimelineEditorPage() {
     primaryClipId: string;
     primaryTrackId: string;
   } | null>(null);
-  /** Edit a staging gallery sequence set (does not touch frameSequence until drag-place). */
+  /** Edit a staging gallery sequence set. Done applies strip + re-encodes the clip when changed. */
   const [gallerySequenceEditor, setGallerySequenceEditor] = useState<{
     clipId: string;
     galleryItemId: string;
@@ -412,11 +418,18 @@ export default function TimelineEditorPage() {
   const [seqEditorSource, setSeqEditorSource] = useState<{
     charKey: string;
     sequenceName: string;
+    /** Timeline clip to rematerialize when SequenceEditor closes. */
+    linkedClipId?: string;
+    galleryItemId?: string;
+    /** Gallery frameSequence snapshot at open — skip rematerialize if unchanged. */
+    gallerySnapshot?: FrameSequencePayload;
   } | null>(null);
   const [seqExternalDrag, setSeqExternalDrag] = useState(false);
   const videoFrameApplyStripRef = useRef<FrameSequencePayload | null>(null);
   const videoFrameApplyGroupRef = useRef<Record<string, FrameSequencePayload> | null>(null);
   const videoFrameApplyEditorRef = useRef<{ clipIds: string[]; primaryClipId: string; primaryTrackId: string } | null>(null);
+  /** Strip snapshots when Edit Video Frames workspace opened — encode on close if changed. */
+  const workspaceStripSnapshotRef = useRef<Record<string, FrameSequencePayload> | null>(null);
   const [stripAiEditOpen, setStripAiEditOpen] = useState(false);
   const [stripAiEditImageSrc, setStripAiEditImageSrc] = useState("");
   const stripAiEditResolveRef = useRef<((rel: string) => void) | null>(null);
@@ -579,6 +592,7 @@ export default function TimelineEditorPage() {
             return buildAudioClip({
               srcRelPath: item.srcRelPath,
               durationSec: item.durationSec ?? 0,
+              normalizationGain: item.normalizationGain,
             });
           }
           if (item.type === "video") {
@@ -903,6 +917,7 @@ export default function TimelineEditorPage() {
       buildAudioClip({
         srcRelPath: imported.srcRelPath,
         durationSec: dur,
+        normalizationGain: imported.normalizationGain,
       })
     );
   }
@@ -2771,14 +2786,35 @@ export default function TimelineEditorPage() {
       if (!relPath) return null;
       const m = relPath.match(/^characters\/([^/]+)\/sequence\/([^/]+)\//);
       if (!m) return null;
-      return { charKey: m[1], sequenceName: m[2] };
+      return { charKey: m[1]!, sequenceName: m[2]! };
     };
     const charInfo =
       src?.charKey && src?.sequenceName
         ? { charKey: src.charKey, sequenceName: src.sequenceName }
         : charInfoFromStrip();
-    if (charInfo) {
-      setSeqEditorSource(charInfo);
+    // Alpha clips: extract RGBA cutouts from the RMBG video instead of the
+    // opaque character gallery strip (SequenceEditor).
+    const hasAlpha = Boolean(found.clip.alphaRelPath?.trim());
+    if (charInfo && !hasAlpha) {
+      const galleryItemId = src?.galleryItemId?.trim() || undefined;
+      let gallerySnapshot: FrameSequencePayload | undefined;
+      if (galleryItemId) {
+        try {
+          const seqManifest = await apiSequenceGet(charInfo.charKey, charInfo.sequenceName);
+          const item = seqManifest.gallery?.find((g) => g.id === galleryItemId);
+          if (item?.frameSequence) {
+            gallerySnapshot = cloneFrameSequencePayload(item.frameSequence);
+          }
+        } catch {
+          /* snapshot optional — close will rematerialize */
+        }
+      }
+      setSeqEditorSource({
+        ...charInfo,
+        linkedClipId: clipId,
+        ...(galleryItemId ? { galleryItemId } : {}),
+        ...(gallerySnapshot ? { gallerySnapshot } : {}),
+      });
       return;
     }
 
@@ -2791,11 +2827,205 @@ export default function TimelineEditorPage() {
     if (!ok) return;
     historyUpdate((m) => syncVideoFrameTrimHiddenInManifest(m, clipIds));
     await ensureSequenceGalleriesSeeded(clipIds);
+    const snapshots: Record<string, FrameSequencePayload> = {};
+    for (const id of clipIds) {
+      const fs = findClip(id)?.clip.frameSequence;
+      if (fs?.strip?.length) {
+        snapshots[id] = cloneFrameSequencePayload(fs);
+      }
+    }
+    workspaceStripSnapshotRef.current = snapshots;
     setTimelineFrameWorkspace({
       clipIds,
       primaryClipId: clipId,
       primaryTrackId: trackId,
     });
+  }
+
+  /** Rematerialize a timeline clip from its linked character sequence gallery set. */
+  async function rematerializeClipFromSequenceSource(clipId: string) {
+    const found = findClip(clipId);
+    if (!found || found.clip.type !== "video") return;
+    const src = found.clip.source;
+    const charKey = src?.charKey?.trim();
+    const sequenceName = src?.sequenceName?.trim();
+    const galleryItemId = src?.galleryItemId?.trim();
+    if (!charKey || !sequenceName) return;
+
+    const hadAlpha = Boolean(found.clip.alphaRelPath?.trim());
+    beginSession({ title: "Updating clip from sequence set", clearLog: true });
+    await Promise.resolve();
+    try {
+      pushLog(`Materializing ${sequenceName}${galleryItemId ? ` / ${galleryItemId}` : ""}…`);
+      const done = await runTimelineImportSequenceWsJob({
+        timelineKey,
+        charKey,
+        sequenceName,
+        galleryItemId,
+        onLogLine: (line) => pushLog(line),
+      });
+      const r = done.result;
+      if (!done.ok || !r?.srcRelPath) {
+        throw new Error(done.error || "Import returned no clip.");
+      }
+
+      let srcRelPath = r.srcRelPath;
+      let alphaRelPath = r.alphaRelPath;
+      let durationSec = r.durationSec || 0;
+      let width = r.width || 0;
+      let height = r.height || 0;
+
+      if (hadAlpha && !alphaRelPath) {
+        pushLog("Re-applying background removal…");
+        const rmbg = await runTimelineVideoRemoveBgRmbgWsJob({
+          timelineKey,
+          videoRelPath: srcRelPath,
+          onLogLine: (line) => pushLog(line),
+        });
+        if (rmbg.ok && rmbg.result?.srcRelPath) {
+          srcRelPath = rmbg.result.srcRelPath;
+          alphaRelPath = rmbg.result.alphaRelPath;
+          durationSec = rmbg.result.durationSec || durationSec;
+          width = rmbg.result.width || width;
+          height = rmbg.result.height || height;
+        } else {
+          pushLog(
+            rmbg.error ||
+              "Background removal failed — applying opaque sequence video."
+          );
+        }
+      }
+
+      const dur = durationSec > 0 ? durationSec : found.clip.srcDuration || found.clip.duration;
+      let nextManifest: TimelineManifest | null = null;
+      historyUpdate((m) => {
+        nextManifest = {
+          ...m,
+          tracks: m.tracks.map((t) => ({
+            ...t,
+            clips: t.clips.map((c) => {
+              if (c.id !== clipId) return c;
+              const speed = Math.max(0.01, c.speed || 1);
+              const {
+                alphaRelPath: _a,
+                proxyRelPath: _p,
+                proxyAlphaRelPath: _pa,
+                ...rest
+              } = c;
+              return {
+                ...rest,
+                srcRelPath,
+                ...(alphaRelPath ? { alphaRelPath } : {}),
+                inPoint: 0,
+                outPoint: dur,
+                srcDuration: dur,
+                duration: dur / speed,
+                ...(width ? { naturalW: width } : {}),
+                ...(height ? { naturalH: height } : {}),
+              };
+            }),
+          })),
+        };
+        return nextManifest;
+      });
+      if (nextManifest) {
+        try {
+          await apiTimelinePut(timelineKey, nextManifest);
+        } catch {
+          /* autosave will retry */
+        }
+      }
+      try {
+        const proxyRes = await apiTimelineEnsureProxies(timelineKey);
+        if (proxyRes.manifest) {
+          const proxies = new Map(
+            proxyRes.manifest.tracks
+              .flatMap((t) => t.clips)
+              .map((c) => [
+                c.id,
+                {
+                  proxyRelPath: c.proxyRelPath,
+                  proxyAlphaRelPath: c.proxyAlphaRelPath,
+                },
+              ])
+          );
+          historyUpdate((m) => ({
+            ...m,
+            tracks: m.tracks.map((t) => ({
+              ...t,
+              clips: t.clips.map((c) => {
+                const p = proxies.get(c.id);
+                if (!p?.proxyRelPath) return c;
+                return {
+                  ...c,
+                  proxyRelPath: p.proxyRelPath,
+                  ...(p.proxyAlphaRelPath
+                    ? { proxyAlphaRelPath: p.proxyAlphaRelPath }
+                    : { proxyAlphaRelPath: undefined }),
+                };
+              }),
+            })),
+          }));
+        }
+      } catch {
+        /* proxy ensure best-effort */
+      }
+      endSession();
+    } catch (e) {
+      failSession(e, "Could not update clip from sequence set.");
+    }
+  }
+
+  async function closeSeqEditorFromTimeline() {
+    const src = seqEditorSource;
+    setSeqExternalDrag(false);
+    setSeqEditorSource(null);
+    if (!src?.linkedClipId) return;
+
+    const galleryItemId = src.galleryItemId;
+    if (src.gallerySnapshot && galleryItemId) {
+      try {
+        const seqManifest = await apiSequenceGet(src.charKey, src.sequenceName);
+        const item = seqManifest.gallery?.find((g) => g.id === galleryItemId);
+        if (
+          planLinkedSequenceClipClose(item?.frameSequence, src.gallerySnapshot).kind ===
+          "noop"
+        ) {
+          return;
+        }
+      } catch {
+        /* fall through to rematerialize */
+      }
+    }
+    await rematerializeClipFromSequenceSource(src.linkedClipId);
+  }
+
+  /** Close workspace; re-encode any clip whose strip changed while editing. */
+  function closeTimelineFrameWorkspace() {
+    const workspace = timelineFrameWorkspace;
+    const snapshots = workspaceStripSnapshotRef.current;
+    workspaceStripSnapshotRef.current = null;
+    setTimelineFrameWorkspace(null);
+    setVideoFrameEditor(null);
+    setGallerySequenceEditor(null);
+    if (!workspace || !snapshots) return;
+
+    const payloads: Record<string, FrameSequencePayload> = {};
+    for (const clipId of workspace.clipIds) {
+      const current = findClip(clipId)?.clip.frameSequence;
+      if (current?.strip?.length) payloads[clipId] = current;
+    }
+    const plan = planTimelineFrameSequenceGroupFinish(payloads, snapshots);
+    if (plan.kind === "noop" || Object.keys(plan.applyPayloads).length === 0) return;
+
+    videoFrameApplyGroupRef.current = plan.applyPayloads;
+    videoFrameApplyStripRef.current = null;
+    videoFrameApplyEditorRef.current = {
+      clipIds: workspace.clipIds,
+      primaryClipId: workspace.primaryClipId,
+      primaryTrackId: workspace.primaryTrackId,
+    };
+    void applyVideoFrameStrip("replace");
   }
 
   function openTimelineFrameStripFromWorkspace(clipId: string) {
@@ -2821,6 +3051,8 @@ export default function TimelineEditorPage() {
     const found = findClip(clipId);
     const gallery = found?.clip.sequenceGallery;
     if (!gallery?.length) return;
+    const current = gallery.find((item) => item.id === galleryItemId)?.frameSequence;
+    if (current && frameSequencePayloadEqual(next, current)) return;
     const thumb =
       next.strip.find((s) => s.kind === "image" && s.relPath?.trim())?.relPath?.trim() ?? null;
     updateClipFrameSequence(clipId, {
@@ -2833,7 +3065,25 @@ export default function TimelineEditorPage() {
             }
           : item
       ),
+      frameSequence: next,
     });
+  }
+
+  /** Encode/replace clip video from a finished gallery sequence. */
+  function applyGallerySequenceToClipVideo(next: FrameSequencePayload) {
+    if (!gallerySequenceEditor) return;
+    if (!frameSequenceHasExportableFrames(next)) return;
+    const { clipId } = gallerySequenceEditor;
+    const found = findClip(clipId);
+    if (!found || found.clip.type !== "video") return;
+    videoFrameApplyStripRef.current = next;
+    videoFrameApplyGroupRef.current = null;
+    videoFrameApplyEditorRef.current = {
+      clipIds: [clipId],
+      primaryClipId: clipId,
+      primaryTrackId: found.trackId,
+    };
+    void applyVideoFrameStrip("replace");
   }
 
   async function downloadVideoClip(clipId: string) {
@@ -3199,7 +3449,7 @@ export default function TimelineEditorPage() {
       });
     }
 
-    // Audio: Adjust Volume (after Speed)
+    // Audio: Adjust Volume + Transition (after Speed)
     if (isAudio) {
       items.push({
         key: "adjustVolume",
@@ -3215,6 +3465,58 @@ export default function TimelineEditorPage() {
           setGeometryEditClipId(null);
           setVolumeEditClipId(volumeEditClipId === clip.id ? null : clip.id);
           setClipMenu((s) => ({ ...s, open: false }));
+        },
+      });
+      items.push({
+        key: "audioTransition",
+        label: "Transition",
+        keepOpenOnSelect: true,
+        submenu: (
+          <ClipAudioTransitionFlyout
+            durationSec={rc!.clip.duration}
+            points={rc!.clip.volumeAutomation?.points}
+            onChange={(points) => onVolumePointsChange(clipMenu.clipId, points)}
+            onCommit={() => {
+              historyUpdate((m) => ({
+                ...m,
+                tracks: m.tracks.map((t) => ({
+                  ...t,
+                  clips: t.clips.map((c) =>
+                    c.id === clipMenu.clipId ? { ...c } : c
+                  ),
+                })),
+              }));
+            }}
+          />
+        ),
+      });
+      items.push({
+        key: "normalizeLoudness",
+        label: "Normalize Loudness",
+        onSelect: () => {
+          setClipMenu((s) => ({ ...s, open: false }));
+          const audioClips = (manifest?.tracks ?? [])
+            .flatMap((t) => t.clips)
+            .filter((c) => c.type === "audio" && c.srcRelPath?.trim())
+            .map((c) => ({ clipId: c.id, srcRelPath: c.srcRelPath }));
+          if (audioClips.length === 0) return;
+          void apiTimelineNormalizeAudio({ timelineKey, clips: audioClips })
+            .then(({ gains }) => {
+              historyUpdate((m) => ({
+                ...m,
+                tracks: m.tracks.map((t) => ({
+                  ...t,
+                  clips: t.clips.map((c) =>
+                    gains[c.id] != null
+                      ? { ...c, normalizationGain: gains[c.id] }
+                      : c
+                  ),
+                })),
+              }));
+            })
+            .catch((err) => {
+              console.warn("Loudness normalization failed.", err);
+            });
         },
       });
     }
@@ -3549,11 +3851,15 @@ export default function TimelineEditorPage() {
 
   function togglePlay() {
     if (total <= 0) return;
-    setPlaying((p) => {
-      const next = !p;
-      if (next && playheadRef.current >= total) seekPlayhead(0);
-      return next;
-    });
+    if (!playing) {
+      // Kick AudioContext resume on the click gesture so MediaElementSource
+      // routing is audible (useEffect resume often loses the gesture token).
+      void getPreviewAudioGraph()?.resume();
+      if (playheadRef.current >= total) seekPlayhead(0);
+      setPlaying(true);
+      return;
+    }
+    setPlaying(false);
   }
 
   function leaveTimeline(path: string) {
@@ -4279,9 +4585,7 @@ export default function TimelineEditorPage() {
             })
             .filter((x): x is NonNullable<typeof x> => x != null)}
           onClose={() => {
-            setTimelineFrameWorkspace(null);
-            setVideoFrameEditor(null);
-            setGallerySequenceEditor(null);
+            closeTimelineFrameWorkspace();
           }}
           onFrameSequenceChange={(clipId, frameSequence) =>
             updateClipFrameSequence(clipId, { frameSequence })
@@ -4347,6 +4651,7 @@ export default function TimelineEditorPage() {
             onError={(message, error) => showError({ message, error })}
             onClose={() => setGallerySequenceEditor(null)}
             onSave={saveGallerySequenceStrip}
+            onApplyVideo={applyGallerySequenceToClipVideo}
             onNotify={(message) => pushLog(message)}
             duplicateStripAsset={(_targetClipId, sourceRelPath) =>
               duplicateClipFrameAsset(clipId, sourceRelPath)
@@ -4422,8 +4727,7 @@ export default function TimelineEditorPage() {
             pointerEvents: seqExternalDrag ? "none" : "auto",
           }}
           onMouseDown={() => {
-            setSeqExternalDrag(false);
-            setSeqEditorSource(null);
+            void closeSeqEditorFromTimeline();
           }}
         >
           <div
@@ -4443,8 +4747,7 @@ export default function TimelineEditorPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setSeqExternalDrag(false);
-                  setSeqEditorSource(null);
+                  void closeSeqEditorFromTimeline();
                 }}
                 style={{ borderRadius: 0, border: "1px solid rgba(0,0,0,0.5)", background: "transparent", padding: "4px 12px", cursor: "pointer" }}
               >

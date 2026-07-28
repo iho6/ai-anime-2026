@@ -187,4 +187,20 @@ describe("mutateTimelineFrameSlots", () => {
       relPath: "a.png",
     });
   });
+
+  it("delete splices selected slots out of the strip", () => {
+    const next = mutateTimelineFrameSlots(
+      payload("g", [
+        { kind: "image", relPath: "a.png" },
+        { kind: "image", relPath: "b.png" },
+        { kind: "image", relPath: "c.png" },
+      ]),
+      new Set([1]),
+      "delete"
+    );
+    expect(next.strip).toEqual([
+      { kind: "image", relPath: "a.png" },
+      { kind: "image", relPath: "c.png" },
+    ]);
+  });
 });

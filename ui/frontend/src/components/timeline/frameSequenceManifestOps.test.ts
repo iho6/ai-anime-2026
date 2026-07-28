@@ -7,6 +7,7 @@ import type {
 import {
   applyEncodedFrameSequenceReplacements,
   applyFrameSequencePayloads,
+  syncGallerySequenceOntoClip,
 } from "./frameSequenceManifestOps";
 
 function strip(group: string, relPath: string): FrameSequencePayload {
@@ -57,6 +58,39 @@ describe("applyFrameSequencePayloads", () => {
     expect(out.tracks[1]!.clips[0]!.frameSequence?.sequenceGroupId).toBe("gb");
     expect(out.tracks[0]!.clips[1]).toBe(untouched);
     expect(input.tracks[0]!.clips[0]!.frameSequence).toBeUndefined();
+  });
+});
+
+describe("syncGallerySequenceOntoClip", () => {
+  it("copies gallery frameSequence onto the clip when different", () => {
+    const c = clip("a");
+    c.sequenceGallery = [
+      {
+        id: "gal1",
+        relPath: "g/a.png",
+        frameSequence: strip("gallery-g", "g/a.png"),
+      },
+    ];
+    c.frameSequence = strip("old", "old.png");
+    const synced = syncGallerySequenceOntoClip(c, "gal1");
+    expect(synced.frameSequence?.sequenceGroupId).toBe("gallery-g");
+    expect(synced.frameSequence?.strip[0]).toMatchObject({
+      kind: "image",
+      relPath: "g/a.png",
+    });
+  });
+
+  it("is a no-op when gallery matches clip strip", () => {
+    const fs = strip("same", "a.png");
+    const c = clip("a");
+    c.frameSequence = fs;
+    c.sequenceGallery = [{ id: "gal1", relPath: "a.png", frameSequence: fs }];
+    expect(syncGallerySequenceOntoClip(c)).toBe(c);
+  });
+
+  it("is a no-op without gallery strip", () => {
+    const c = clip("a");
+    expect(syncGallerySequenceOntoClip(c)).toBe(c);
   });
 });
 

@@ -114,3 +114,61 @@ def test_transparent_timeline_strip_round_trips_alpha_paths(
     assert result["alphaRelPath"] == (
         "timelines/timeline-1/clips/transparent-strip.alpha.mkv"
     )
+
+
+def test_encode_allows_frames_under_clip_dir_when_sequence_group_mismatches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gallery seed mints sg_* ids while duplicate_timeline_frame_asset writes under clipId."""
+    from services import timeline_storage
+
+    timelines_root = tmp_path / "timelines"
+    monkeypatch.setattr(timeline_storage, "TIMELINES_STORAGE_ROOT", timelines_root)
+    frame_dir = timeline_storage.timeline_frames_dir("timeline-1", "clip_abc")
+    frame_dir.mkdir(parents=True)
+    frame = frame_dir / "frame.png"
+    Image.new("RGB", (32, 32), (10, 20, 30)).save(frame)
+    frame_rel = timeline_storage.timeline_abs_to_rel(frame)
+
+    encoded = timeline_frame_sequence_to_video(
+        "timeline-1",
+        {
+            "sequenceGroupId": "sg_mismatch",
+            "strip": [{"kind": "image", "relPath": frame_rel}],
+            "hidden": [],
+        },
+        fps=12,
+        output_basename="mismatch-gid",
+    )
+    assert Path(encoded["absPath"]).is_file()
+    assert encoded["srcRelPath"] == "timelines/timeline-1/clips/mismatch-gid.mp4"
+
+
+def test_encode_rejects_character_strip_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from services import logic, timeline_storage
+
+    timelines_root = tmp_path / "timelines"
+    storage_root = tmp_path / "storage"
+    storage_root.mkdir()
+    monkeypatch.setattr(timeline_storage, "TIMELINES_STORAGE_ROOT", timelines_root)
+    monkeypatch.setattr(logic, "DEFAULT_STORAGE_ROOT", storage_root)
+    timeline_storage.timeline_frames_root("timeline-1").mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="path outside allowed directory"):
+        timeline_frame_sequence_to_video(
+            "timeline-1",
+            {
+                "sequenceGroupId": "sg_any",
+                "strip": [
+                    {
+                        "kind": "image",
+                        "relPath": "characters/office1/sequence/seq/gallery/frame.png",
+                    }
+                ],
+                "hidden": [],
+            },
+            fps=12,
+            output_basename="char-strip",
+        )

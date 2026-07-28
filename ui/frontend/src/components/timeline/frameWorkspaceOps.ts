@@ -93,9 +93,12 @@ export function mutateTimelineFrameSlots(
   selectedIndices: ReadonlySet<number>,
   mutation: "delete" | "hide" | "unhide"
 ): FrameSequencePayload {
+  if (mutation === "delete") {
+    const strip = payload.strip.filter((_, index) => !selectedIndices.has(index));
+    return { ...payload, strip };
+  }
   const strip = payload.strip.map((slot, index): FrameSequenceStripSlot => {
     if (!selectedIndices.has(index)) return slot;
-    if (mutation === "delete") return { kind: "empty" };
     if (slot.kind !== "image") return slot;
     if (mutation === "hide") {
       const { trimHidden: _trimHidden, ...rest } = slot;

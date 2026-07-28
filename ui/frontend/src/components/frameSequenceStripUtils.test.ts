@@ -3,6 +3,9 @@ import type { FrameSequencePayload } from "../lib/api";
 import {
   frameSequenceHasExportableFrames,
   frameSequencePayloadEqual,
+  planLinkedSequenceClipClose,
+  planTimelineFrameSequenceFinish,
+  planTimelineFrameSequenceGroupFinish,
   syncTrimHiddenToFrameSequence,
 } from "./frameSequenceStripUtils";
 
@@ -35,6 +38,89 @@ describe("frameSequenceHasExportableFrames", () => {
         ])
       )
     ).toBe(true);
+  });
+});
+
+describe("planLinkedSequenceClipClose", () => {
+  it("is noop when current equals snapshot", () => {
+    const snap = payload([{ kind: "image", relPath: "a.png" }]);
+    expect(planLinkedSequenceClipClose(snap, snap)).toEqual({ kind: "noop" });
+    expect(
+      planLinkedSequenceClipClose(payload([{ kind: "image", relPath: "a.png" }]), snap)
+    ).toEqual({ kind: "noop" });
+  });
+
+  it("rematerializes when strip changed or snapshot missing", () => {
+    const snap = payload([{ kind: "image", relPath: "a.png" }]);
+    expect(
+      planLinkedSequenceClipClose(
+        payload([{ kind: "image", relPath: "a.png", hidden: true }]),
+        snap
+      )
+    ).toEqual({ kind: "rematerialize" });
+    expect(planLinkedSequenceClipClose(snap, undefined)).toEqual({ kind: "rematerialize" });
+    expect(planLinkedSequenceClipClose(undefined, snap)).toEqual({ kind: "rematerialize" });
+  });
+});
+
+describe("planTimelineFrameSequenceFinish", () => {
+  it("is noop when payload equals initial", () => {
+    const initial = payload([{ kind: "image", relPath: "a.png" }]);
+    expect(planTimelineFrameSequenceFinish(initial, initial)).toEqual({ kind: "noop" });
+    expect(
+      planTimelineFrameSequenceFinish(
+        payload([{ kind: "image", relPath: "a.png" }]),
+        initial
+      )
+    ).toEqual({ kind: "noop" });
+  });
+
+  it("saves and applies when changed with exportable frames", () => {
+    const initial = payload([{ kind: "image", relPath: "a.png" }]);
+    const next = payload([
+      { kind: "image", relPath: "a.png" },
+      { kind: "empty" },
+    ]);
+    expect(planTimelineFrameSequenceFinish(next, initial)).toEqual({
+      kind: "save",
+      apply: true,
+    });
+  });
+
+  it("saves without apply when changed but no exportable frames", () => {
+    const initial = payload([{ kind: "image", relPath: "a.png" }]);
+    const next = payload([{ kind: "image", relPath: "a.png", hidden: true }]);
+    expect(planTimelineFrameSequenceFinish(next, initial)).toEqual({
+      kind: "save",
+      apply: false,
+    });
+  });
+});
+
+describe("planTimelineFrameSequenceGroupFinish", () => {
+  it("is noop when every layer is unchanged", () => {
+    const a = payload([{ kind: "image", relPath: "a.png" }]);
+    const b = payload([{ kind: "image", relPath: "b.png" }]);
+    expect(
+      planTimelineFrameSequenceGroupFinish({ c1: a, c2: b }, { c1: a, c2: b })
+    ).toEqual({ kind: "noop" });
+  });
+
+  it("saves and applies only changed exportable layers", () => {
+    const a0 = payload([{ kind: "image", relPath: "a.png" }]);
+    const a1 = payload([
+      { kind: "image", relPath: "a.png" },
+      { kind: "image", relPath: "a2.png" },
+    ]);
+    const b = payload([{ kind: "image", relPath: "b.png" }]);
+    const plan = planTimelineFrameSequenceGroupFinish(
+      { c1: a1, c2: b },
+      { c1: a0, c2: b }
+    );
+    expect(plan).toEqual({
+      kind: "save",
+      applyPayloads: { c1: a1 },
+    });
   });
 });
 

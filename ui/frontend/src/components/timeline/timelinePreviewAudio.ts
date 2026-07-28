@@ -37,7 +37,9 @@ export function previewAudioOutputsAt(
         clip,
         track,
         sourceTime: sourceTimeAt(clip, playhead),
-        gain: clamp(volumeGainAt(clip, playhead), 0, 1),
+        // Full 0..2 range: the WebAudio sink supports boosts (crescendo,
+        // normalization); the el.volume fallback clamps to 1 at the sink.
+        gain: clamp(volumeGainAt(clip, playhead), 0, 2),
         sourceKind: "audio-track",
       });
       continue;
