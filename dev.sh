@@ -251,6 +251,84 @@ VENV_PATH="${REPO_ROOT}/${VENV_DIR}"
 VENV_PYTHON="${VENV_PATH}/bin/python"
 FRONTEND_DIR="${REPO_ROOT}/ui/frontend"
 REQUIREMENTS_PY="${REPO_ROOT}/requirements.txt"
+ON_DRIVE_PYTHON_DIR="$(cd "${REPO_ROOT}/.." && pwd)/python311"
+ON_DRIVE_PYTHON_EXE="${ON_DRIVE_PYTHON_DIR}/bin/python3"
+# Windows-style sibling layout when this script is run via Git Bash on the Seagate:
+if [[ ! -x "${ON_DRIVE_PYTHON_EXE}" && -x "${ON_DRIVE_PYTHON_DIR}/python.exe" ]]; then
+  ON_DRIVE_PYTHON_EXE="${ON_DRIVE_PYTHON_DIR}/python.exe"
+fi
+
+resolve_base_python() {
+  if [[ -n "${ANIME2026_PYTHON:-}" && -x "${ANIME2026_PYTHON}" ]]; then
+    printf '%s\n' "${ANIME2026_PYTHON}"
+    return 0
+  fi
+  if [[ -x "${ON_DRIVE_PYTHON_EXE}" ]]; then
+    printf '%s\n' "${ON_DRIVE_PYTHON_EXE}"
+    return 0
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    command -v python3
+    return 0
+  fi
+  return 1
+}
+
+repair_venv_pyvenv_cfg() {
+  local base_python="$1"
+  local cfg="${VENV_PATH}/pyvenv.cfg"
+  [[ -f "${cfg}" ]] || return 1
+  [[ -x "${VENV_PYTHON}" ]] || return 1
+  local base_home
+  base_home="$(cd "$(dirname "${base_python}")" && pwd)"
+  local venv_resolved
+  venv_resolved="$(cd "${VENV_PATH}" && pwd)"
+  # Rewrite home/executable/command; keep include-system-site-packages / version lines.
+  local tmp
+  tmp="$(mktemp)"
+  awk -v home="${base_home}" -v exe="${base_python}" -v cmd="${base_python} -m venv ${venv_resolved}" '
+    BEGIN { h=0; e=0; c=0 }
+    /^[[:space:]]*home[[:space:]]*=/ { print "home = " home; h=1; next }
+    /^[[:space:]]*executable[[:space:]]*=/ { print "executable = " exe; e=1; next }
+    /^[[:space:]]*command[[:space:]]*=/ { print "command = " cmd; c=1; next }
+    { print }
+    END {
+      if (!h) print "home = " home
+      if (!e) print "executable = " exe
+      if (!c) print "command = " cmd
+    }
+  ' "${cfg}" > "${tmp}"
+  mv "${tmp}" "${cfg}"
+  if "${VENV_PYTHON}" -c "import sys; raise SystemExit(0 if sys.prefix else 1)" >/dev/null 2>&1; then
+    meta_log "Venv probe OK after path repair"
+    return 0
+  fi
+  return 1
+}
+
+ensure_venv() {
+  local base_python="$1"
+  if [[ -x "${VENV_PYTHON}" ]] && "${VENV_PYTHON}" -c "import sys; raise SystemExit(0 if sys.prefix else 1)" >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ -x "${VENV_PYTHON}" ]]; then
+    meta_log "Venv not ready; attempting path repair…"
+    if repair_venv_pyvenv_cfg "${base_python}"; then
+      return 0
+    fi
+    meta_log "Venv irreparable; recreating at: ${VENV_PATH}"
+    rm -rf "${VENV_PATH}"
+  else
+    meta_log "Creating venv at: ${VENV_PATH}"
+  fi
+  "${base_python}" -m venv "${VENV_PATH}"
+  repair_venv_pyvenv_cfg "${base_python}" || true
+  if [[ ! -x "${VENV_PYTHON}" ]]; then
+    echo "Failed to create usable venv at: ${VENV_PATH}" >&2
+    exit 1
+  fi
+  meta_log "Venv creation completed"
+}
 
 ensure_port_kill_tools
 kill_listeners_on_port "${API_PORT}"
@@ -281,23 +359,20 @@ else
   meta_log "Skipping git lfs pull (minimal mode). Provide GitHub PAT in the UI and click Launch."
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "Python3 not found. Install Python 3 and retry." >&2
+if ! BASE_PYTHON="$(resolve_base_python)"; then
+  echo "Python3 not found for portable bootstrap." >&2
+  echo "Install CPython under ${ON_DRIVE_PYTHON_DIR} (sibling python311), set ANIME2026_PYTHON, or install host python3." >&2
   exit 1
 fi
-
-if [[ ! -x "${VENV_PYTHON}" ]]; then
-  meta_log "Creating venv at: ${VENV_PATH}"
-  python3 -m venv "${VENV_PATH}"
-  meta_log "Venv creation completed"
-fi
+meta_log "Using base Python: ${BASE_PYTHON}"
+ensure_venv "${BASE_PYTHON}"
 
 if [[ "${BOOTSTRAP_MODE}" == "minimal" ]]; then
   ensure_bootstrap_python_deps
 elif [[ "${SKIP_PYTHON_INSTALL}" != "1" ]]; then
   meta_log "Upgrading pip tooling in venv..."
   "${VENV_PYTHON}" -m pip install --upgrade pip "setuptools<82" wheel
-  meta_log "Installing PyTorch (cu128, 2.8+) via services.pytorch_setup..."
+  meta_log "Installing PyTorch (ANIME2026_TORCH_PROFILE) via services.pytorch_setup..."
   "${VENV_PYTHON}" -c "from services.pytorch_setup import ensure_pytorch_stack; ensure_pytorch_stack()"
   meta_log "Installing Python requirements into venv..."
   "${VENV_PYTHON}" -m pip install -r "${REQUIREMENTS_PY}"

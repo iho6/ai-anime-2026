@@ -1,5 +1,7 @@
-# PyTorch/torchvision/torchaudio: install via services/pytorch_setup.py (cu128, 2.8+)
-# or UI Launch / dev.sh --full-bootstrap before pip install -r requirements.txt
+# PyTorch/torchvision/torchaudio: install via services/pytorch_setup.py
+# (ANIME2026_TORCH_PROFILE=cu128|rtx40|rtx50; default cu128 / 2.8+)
+# or UI Launch / dev.sh --full-bootstrap / dev.ps1 -BootstrapMode full
+# before pip install -r requirements.txt
 # torch
 torchsde
 # torchvision

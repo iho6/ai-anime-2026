@@ -594,8 +594,9 @@ def _normalization_gain(clip: dict[str, Any]) -> float:
 
 
 def _volume_gain_at(clip: dict[str, Any], playhead: float) -> float:
+    """Linear gain matching preview ``el.volume`` (clamped to 0..1)."""
     envelope = _volume_level_at(clip, playhead) / UNITY_VOLUME_LEVEL
-    return _clamp(envelope * _normalization_gain(clip), 0, 2)
+    return _clamp(envelope * _normalization_gain(clip), 0, 1)
 
 
 def _volume_envelope_curve_needed(clip: dict[str, Any]) -> bool:
@@ -1613,7 +1614,8 @@ def _mix_timeline_audio(
             filter_parts.append(f"[{vol_out}]adelay={start_ms}|{start_ms}[a{i}]")
         elif _volume_envelope_needs_apply(clip):
             # Flat envelope but loudness normalization != 1: one volume filter.
-            g = _clamp(_normalization_gain(clip), 0, 2)
+            # Clamp to 0..1 to match preview el.volume.
+            g = _clamp(_normalization_gain(clip), 0, 1)
             chain = (
                 f"[{i}:a]{trim},{tempo},volume=volume={g:.6f},"
                 f"adelay={start_ms}|{start_ms}[a{i}]"
@@ -1624,8 +1626,13 @@ def _mix_timeline_audio(
             filter_parts.append(chain)
 
     mix_inputs = "".join(f"[a{i}]" for i in range(len(resolved)))
+    # normalize=0: sum levels like preview (do not divide by N inputs).
+    # apad: pad silence so the mix spans the full timeline (avoids mux truncation).
+    dur = max(0.0, float(duration_sec))
     filter_parts.append(
-        f"{mix_inputs}amix=inputs={len(resolved)}:duration=longest:dropout_transition=0[aout]"
+        f"{mix_inputs}amix=inputs={len(resolved)}:duration=longest:"
+        f"dropout_transition=0:normalize=0,"
+        f"apad=whole_dur={dur:.6f}[aout]"
     )
     filter_complex = ";".join(filter_parts)
 
@@ -1857,7 +1864,8 @@ def write_timeline_manifest_mp4(
                     "aac",
                     "-b:a",
                     "192k",
-                    "-shortest",
+                    "-t",
+                    f"{duration_sec:.6f}",
                     str(output_path),
                 ],
                 check=True,

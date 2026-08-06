@@ -37,6 +37,76 @@ def test_persist_qwen_sidecar_for_plate(tmp_path: Path) -> None:
     assert meta.get("qwenOutputRelPath") == "frame_001_qwen.png"
 
 
+def test_apply_hd_qwen_as_strip_master(tmp_path: Path) -> None:
+    plate = tmp_path / "frame_001.png"
+    Image.new("RGB", (200, 100), (255, 255, 255)).save(plate)
+    qwen_tmp = tmp_path / "native_qwen.png"
+    Image.new("RGB", (256, 256), (11, 22, 33)).save(qwen_tmp)
+
+    slot: dict = {"kind": "image", "relPath": ""}
+    meta = logic._apply_hd_qwen_as_strip_master(
+        slot,
+        plate,
+        {
+            "canvas": {"width": 200, "height": 100},
+            "placement": {"x": 10, "y": 5, "width": 80, "height": 80},
+            "_qwenTmpPath": str(qwen_tmp),
+        },
+        storage_root=tmp_path,
+    )
+    assert meta is not None
+    assert slot["relPath"] == "frame_001_qwen.png"
+    assert meta.get("layoutPlateRelPath") == "frame_001.png"
+    assert meta.get("qwenOutputRelPath") == "frame_001_qwen.png"
+    with Image.open(tmp_path / "frame_001_qwen.png") as im:
+        assert im.size == (256, 256)
+
+
+def test_late_composite_hd_plate_for_export(tmp_path: Path) -> None:
+    qwen = tmp_path / "frame_001_qwen.png"
+    Image.new("RGB", (1024, 1024), (40, 50, 60)).save(qwen)
+    slot = {
+        "kind": "image",
+        "relPath": "frame_001_qwen.png",
+        "placedFigure": {
+            "canvas": {"width": 1024, "height": 576},
+            "placement": {"x": 100, "y": 50, "width": 400, "height": 400},
+            "workingSquareSize": 1024,
+            "qwenOutputRelPath": "frame_001_qwen.png",
+            "layoutPlateRelPath": "frame_001.png",
+        },
+    }
+    out, tmp = logic._late_composite_hd_plate_for_export(
+        slot, qwen, storage_root=tmp_path
+    )
+    try:
+        assert tmp is not None
+        with Image.open(out) as im:
+            assert im.size[0] > 1024
+            assert im.size[1] > 576
+            # Sample inside the upscaled placement box (not canvas center).
+            from services.figure_crop import scale_placed_figure_for_min_placement
+
+            _cw, _ch, box = scale_placed_figure_for_min_placement(slot["placedFigure"])
+            cx = box["x"] + box["width"] // 2
+            cy = box["y"] + box["height"] // 2
+            assert im.getpixel((cx, cy)) == (40, 50, 60)
+            assert im.getpixel((0, 0)) == (255, 255, 255)
+    finally:
+        if tmp is not None:
+            tmp.unlink(missing_ok=True)
+
+
+def test_i2v_dims_from_source_image_aspect(tmp_path: Path) -> None:
+    img = tmp_path / "plate.png"
+    Image.new("RGB", (1024, 576), (1, 2, 3)).save(img)
+    w, h = logic._i2v_dims_from_source_image(img, None, None)
+    assert w == 1280
+    assert h == 720
+    w2, h2 = logic._i2v_dims_from_source_image(img, 960, 540)
+    assert (w2, h2) == (960, 540)
+
+
 def test_resolve_rmbg_input_prefers_sidecar(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     plate = tmp_path / "pose_001.png"
     Image.new("RGB", (200, 100), (255, 255, 255)).save(plate)

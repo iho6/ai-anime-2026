@@ -69,9 +69,13 @@ MULTI_ANGLE_MODELS = [
         "path": "comfyui/models/loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
     },
     {
-        "name": "qwen_image_edit_2511_bf16.safetensors (Diffusion Model)",
-        "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors",
-        "path": "comfyui/models/diffusion_models/qwen_image_edit_2511_bf16.safetensors",
+        # Official Comfy-Org FP8-mixed (~20 GB). Prefer over BF16 (~38 GB): half the
+        # disk I/O and far less --lowvram thrash on 16 GB cards. Keep Lightning +
+        # fal multi-angle LoRAs. Fallback if needed: community fp8_e4m3fn quants
+        # (armychimp/drbaph/xms991) or GGUF + ComfyUI-GGUF.
+        "name": "qwen_image_edit_2511_fp8mixed.safetensors (Diffusion Model)",
+        "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
+        "path": "comfyui/models/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
     },
     {
         "name": "qwen_image_vae.safetensors (VAE)",

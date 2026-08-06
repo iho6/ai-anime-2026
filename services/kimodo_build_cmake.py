@@ -53,12 +53,20 @@ def python_dev_headers_ready() -> bool:
 def require_python_dev_headers() -> None:
     if python_dev_headers_ready():
         return
-    packages = " ".join(kimodo_build_packages())
     include = sysconfig.get_path("include") or "(unknown)"
+    if sys.platform.startswith("linux"):
+        packages = " ".join(kimodo_build_packages())
+        hint = f"Install: sudo apt-get install -y {packages}"
+    elif os.name == "nt":
+        hint = (
+            "Use a full CPython install (not the Windows Store stub) so "
+            f"Python.h exists under the interpreter include dir. Active: {sys.executable}"
+        )
+    else:
+        hint = "Install Python development headers for this interpreter."
     raise RuntimeError(
         f"Python development headers missing for {sys.executable} "
-        f"(expected Python.h under {include}). "
-        f"Install: sudo apt-get install -y {packages}"
+        f"(expected Python.h under {include}). {hint}"
     )
 
 

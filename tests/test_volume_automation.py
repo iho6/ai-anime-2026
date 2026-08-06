@@ -70,12 +70,14 @@ def test_gain_clamps_at_extremes():
         }
     )
     assert _volume_gain_at(clip, 0.0) == pytest.approx(0.0)
-    assert _volume_gain_at(clip, 10.0) == pytest.approx(2.0)
+    # Preview el.volume clamps boost to 1; export matches.
+    assert _volume_gain_at(clip, 10.0) == pytest.approx(1.0)
 
 
 def test_normalization_gain_multiplies_flat_envelope():
     clip = _clip(normalizationGain=1.5)
-    assert _volume_gain_at(clip, 5.0) == pytest.approx(1.5)
+    # 1.5 would exceed preview volume max; clamp to 1.
+    assert _volume_gain_at(clip, 5.0) == pytest.approx(1.0)
     assert _volume_envelope_needs_apply(clip) is True
 
 
@@ -89,10 +91,10 @@ def test_normalization_gain_multiplies_automation_and_clamps():
             ]
         },
     )
-    # 50 level (unity) * 1.5 normalization = 1.5
-    assert _volume_gain_at(clip, 5.0) == pytest.approx(1.5)
-    # 100 level (2.0 gain) * 1.5 clamps at 2.
-    assert _volume_gain_at(clip, 10.0) == pytest.approx(2.0)
+    # 50 level (unity) * 1.5 normalization clamps at 1 for preview parity.
+    assert _volume_gain_at(clip, 5.0) == pytest.approx(1.0)
+    # 100 level * 1.5 also clamps at 1.
+    assert _volume_gain_at(clip, 10.0) == pytest.approx(1.0)
 
 
 def test_unity_normalization_gain_needs_no_apply():

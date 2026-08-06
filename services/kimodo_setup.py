@@ -271,6 +271,153 @@ def _apt_runner() -> list[str]:
     return []
 
 
+def _kimodo_build_deps_hint() -> str:
+    """Platform-specific instructions for MotionCorrection build tools."""
+    if sys.platform.startswith("linux"):
+        packages = " ".join(kimodo_build_packages())
+        return f"Install manually: sudo apt-get install -y {packages}"
+    if os.name == "nt":
+        return (
+            "On Windows: install CMake (e.g. winget install Kitware.CMake --scope user), "
+            "open a new terminal so cmake is on PATH, ensure Visual Studio Build Tools "
+            "with C++ are installed, and use a full CPython with include\\Python.h "
+            f"(active interpreter: {sys.executable})."
+        )
+    return "Install cmake and Python development headers for this platform."
+
+
+def _require_cmake() -> None:
+    if shutil.which("cmake"):
+        return
+    raise RuntimeError(
+        "cmake not found on PATH (required to build kimodo motion_correction).\n"
+        + _kimodo_build_deps_hint()
+    )
+
+
+def _refresh_windows_path() -> None:
+    """Rebuild PATH from Machine + User registry (pick up winget installs in-process)."""
+    if os.name != "nt":
+        return
+    try:
+        import winreg
+    except ImportError:
+        return
+    parts: list[str] = []
+    for hive, subkey in (
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+        ),
+        (winreg.HKEY_CURRENT_USER, "Environment"),
+    ):
+        try:
+            with winreg.OpenKey(hive, subkey) as key:
+                val, _ = winreg.QueryValueEx(key, "Path")
+                if val:
+                    parts.append(str(val))
+        except OSError:
+            pass
+    if parts:
+        os.environ["PATH"] = ";".join(parts)
+
+
+def _prepend_known_cmake_dirs() -> bool:
+    """If cmake.exe exists in common install locations, prepend that dir to PATH."""
+    candidates: list[Path] = []
+    local_app = (os.environ.get("LOCALAPPDATA") or "").strip()
+    if local_app:
+        candidates.append(Path(local_app) / "Programs" / "CMake" / "bin")
+    candidates.append(
+        Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "CMake" / "bin"
+    )
+    candidates.append(
+        Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+        / "CMake"
+        / "bin"
+    )
+    for d in candidates:
+        exe = d / "cmake.exe"
+        if exe.is_file():
+            os.environ["PATH"] = str(d) + os.pathsep + os.environ.get("PATH", "")
+            return True
+    return False
+
+
+def _ensure_cmake_windows(
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> None:
+    """Install CMake via user-scope winget when missing (Windows only)."""
+    if os.name != "nt":
+        return
+    if shutil.which("cmake"):
+        return
+
+    # Already installed but PATH not refreshed in this process.
+    _refresh_windows_path()
+    if shutil.which("cmake") or _prepend_known_cmake_dirs():
+        if shutil.which("cmake"):
+            if log_cb:
+                log_cb(f"Found cmake on PATH: {shutil.which('cmake')}")
+            return
+
+    winget = shutil.which("winget")
+    if not winget:
+        raise RuntimeError(
+            "cmake not found on PATH and winget is unavailable.\n"
+            + _kimodo_build_deps_hint()
+        )
+
+    cmd = [
+        winget,
+        "install",
+        "-e",
+        "--id",
+        "Kitware.CMake",
+        "--scope",
+        "user",
+        "--accept-package-agreements",
+        "--accept-source-agreements",
+    ]
+    if log_cb:
+        log_cb("cmake not found; installing Kitware.CMake via winget (user scope)…")
+        log_cb("$ " + " ".join(cmd))
+    proc = subprocess.run(
+        cmd,
+        cwd=str(_REPO_ROOT),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if log_cb and proc.stdout:
+        for line in proc.stdout.splitlines():
+            if line.strip():
+                log_cb(line)
+    if log_cb and proc.stderr:
+        for line in proc.stderr.splitlines():
+            if line.strip():
+                log_cb(line)
+
+    _refresh_windows_path()
+    if not shutil.which("cmake"):
+        _prepend_known_cmake_dirs()
+
+    if shutil.which("cmake"):
+        if log_cb:
+            log_cb(f"cmake ready: {shutil.which('cmake')}")
+        return
+
+    detail = (proc.stderr or proc.stdout or "").strip()
+    raise RuntimeError(
+        "cmake still not on PATH after winget install of Kitware.CMake "
+        f"(exit {proc.returncode}). Open a new terminal and retry, or install CMake manually.\n"
+        f"{detail}\n"
+        + _kimodo_build_deps_hint()
+    )
+
+
 def _run_apt_build_deps(*, log_cb: Callable[[str], None] | None = None) -> None:
     if not sys.platform.startswith("linux") or not shutil.which("apt-get"):
         return
@@ -290,10 +437,9 @@ def _run_apt_build_deps(*, log_cb: Callable[[str], None] | None = None) -> None:
     )
     if proc.returncode != 0:
         out = (proc.stderr or proc.stdout or "apt-get install failed").strip()
-        packages = " ".join(kimodo_build_packages())
         raise RuntimeError(
             f"Failed to install kimodo build dependencies: {out}\n"
-            f"Install manually: sudo apt-get install -y {packages}"
+            + _kimodo_build_deps_hint()
         )
     if log_cb and proc.stdout:
         for line in proc.stdout.splitlines():
@@ -305,21 +451,35 @@ def ensure_kimodo_build_deps(
     run_command: Callable[..., None],
     log_cb: Callable[[str], None] | None = None,
 ) -> None:
-    """Install apt packages needed to compile motion_correction."""
-    packages = kimodo_build_packages()
-    if log_cb:
-        log_cb(f"Ensuring kimodo build deps: {', '.join(packages)}")
-    try:
-        run_command(
-            _build_deps_apt_cmd(),
-            cwd=_REPO_ROOT,
-            log_cb=log_cb,
-        )
-    except RuntimeError as exc:
-        raise RuntimeError(
-            "Failed to install kimodo build dependencies. "
-            f"Install manually: sudo apt-get install -y {' '.join(packages)}"
-        ) from exc
+    """Ensure tools needed to compile motion_correction (apt on Linux only)."""
+    linux_apt = sys.platform.startswith("linux") and bool(shutil.which("apt-get"))
+
+    if linux_apt:
+        packages = kimodo_build_packages()
+        if log_cb:
+            log_cb(f"Ensuring kimodo build deps (apt): {', '.join(packages)}")
+        try:
+            run_command(
+                [*_apt_runner(), *_build_deps_apt_cmd()],
+                cwd=_REPO_ROOT,
+                log_cb=log_cb,
+            )
+        except RuntimeError as exc:
+            raise RuntimeError(
+                "Failed to install kimodo build dependencies. "
+                + _kimodo_build_deps_hint()
+            ) from exc
+    else:
+        if log_cb:
+            log_cb(
+                "Ensuring kimodo build deps (non-apt): cmake on PATH + Python headers"
+            )
+        # Windows: auto-install CMake via winget when missing (no apt-get).
+        if os.name == "nt":
+            _ensure_cmake_windows(log_cb=log_cb)
+
+    # Never call apt-get here on Windows; verify local toolchain.
+    _require_cmake()
     require_python_dev_headers()
 
 
@@ -406,21 +566,19 @@ def update_kimodo_repo(
 
 
 def _kimodo_install_failure_message(err: str) -> str:
-    packages = " ".join(kimodo_build_packages())
     return (
         f"{err}\n"
         f"Kimodo builds MotionCorrection against {sys.executable} (not system python). "
-        f"Ensure build deps are installed: sudo apt-get install -y {packages}"
+        f"{_kimodo_build_deps_hint()}"
     )
 
 
 def _kimodo_post_install_failure_message(kimodo_dir: Path) -> str:
-    packages = " ".join(kimodo_build_packages())
     _, status = _kimodo_import_status(kimodo_dir)
     return (
         "kimodo install finished but motion_correction is not importable.\n"
         f"{status}\n"
-        f"Build deps (if needed): sudo apt-get install -y {packages}"
+        f"{_kimodo_build_deps_hint()}"
     )
 
 

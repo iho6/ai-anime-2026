@@ -1,13 +1,10 @@
 /**
- * WebAudio graph for preview playback.
+ * WebAudio graph for preview playback clock (optional).
  *
- * Each active audio output element is routed through its own GainNode so
- * per-clip gain is applied in [0, 2] (HTMLMediaElement.volume clamps at 1,
- * which silently flattened crescendo boosts and normalization gains > 1).
- * AudioContext.currentTime doubles as the master playback clock.
- *
- * MediaElementSource disconnects the element's default speaker path, so we
- * only attach once the context is running; otherwise callers use el.volume.
+ * Preview audio uses plain HTMLMediaElement.volume (same as Add Audio picker).
+ * MediaElementSource is not used for preview sinks — it disconnects the default
+ * speaker path and was silencing boosted clips. AudioContext.currentTime may
+ * still be used as a master playback clock when running.
  */
 
 export type AudioSinkMode = "webaudio" | "element";
@@ -17,6 +14,18 @@ export function audioSinkMode(
   contextState: AudioContextState | null | undefined
 ): AudioSinkMode {
   return contextState === "running" ? "webaudio" : "element";
+}
+
+/**
+ * Prefer plain HTML element volume (like Add Audio picker).
+ * Preview never attaches MediaElementSource — that path silently muted
+ * boosted clips. Gain above 1 is clamped by el.volume.
+ */
+export function shouldUseWebAudioSink(
+  _gain: number,
+  _contextState: AudioContextState | null | undefined
+): boolean {
+  return false;
 }
 
 export type PreviewAudioGraph = {

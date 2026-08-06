@@ -1706,6 +1706,10 @@ export default function TimelineEditorPage() {
     await Promise.resolve();
     pushLog("Starting export…");
     try {
+      if (manifest) {
+        pushLog("Saving timeline…");
+        await apiTimelinePut(timelineKey, manifest);
+      }
       const done = await runTimelineExportMp4WsJob({
         timelineKey,
         onLogLine: (line) => pushLog(line),

@@ -78,4 +78,32 @@ def test_mix_timeline_audio_uses_filter_complex_script(
     assert script_path.is_file()
     text = script_path.read_text(encoding="utf-8")
     assert "amix=inputs=1" in text
+    assert "normalize=0" in text
+    assert "apad=whole_dur=2.000000" in text
     assert "[aout]" in text
+
+
+def test_volume_gain_at_clamps_boost_to_unity_for_preview_parity():
+    clip = {
+        "start": 0.0,
+        "duration": 2.0,
+        "volumeAutomation": {
+            "points": [
+                {"t": 0.0, "level": 100.0},
+                {"t": 1.0, "level": 100.0},
+            ]
+        },
+    }
+    from services.timeline_export import _volume_gain_at
+
+    assert _volume_gain_at(clip, 1.0) == pytest.approx(1.0)
+
+
+def test_write_timeline_manifest_mp4_mux_uses_duration_not_shortest():
+    import inspect
+
+    from services.timeline_export import write_timeline_manifest_mp4
+
+    src = inspect.getsource(write_timeline_manifest_mp4)
+    assert "-shortest" not in src
+    assert '"-t"' in src or "'-t'" in src

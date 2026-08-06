@@ -40,11 +40,17 @@ angle_library/<key>/angle_095/...
 
 ## Models
 
+Default diffusion UNet is **Comfy-Org FP8-mixed** (`qwen_image_edit_2511_fp8mixed.safetensors`, ~20 GB), not the 38 GB BF16 file. Lightning 4-step + fal multi-angle LoRAs are unchanged.
+
 From repo root:
 
 ```bash
 python utils/download_models.py --multi-angle [--hf-token YOUR_TOKEN]
 ```
+
+Comfy VRAM mode (API launch): `COMFY_VRAM_MODE=normalvram` (default) or `lowvram` if OOM.
+
+If FP8-mixed is still too slow/OOM: try a community `fp8_e4m3fn` UNet (armychimp / drbaph / xms991 on Hugging Face), or GGUF + [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF). Avoid running a second Comfy (e.g. photoreal on 8188) on the same GPU during multi-angle.
 
 ## RunPod cached models (optional)
 

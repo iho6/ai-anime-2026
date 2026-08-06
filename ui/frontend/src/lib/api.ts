@@ -2342,6 +2342,21 @@ export async function apiSettingsGetHfToken(): Promise<string> {
   return typeof data.hf_token === "string" ? data.hf_token : "";
 }
 
+export async function apiGetStartupTokens(): Promise<{
+  hf_token: string;
+  github_pat: string;
+}> {
+  const res = await fetch(`${API_BASE_URL}/settings/startup_tokens`, {
+    method: "GET",
+    credentials: "omit",
+  });
+  const data = await readJson<{ hf_token?: string; github_pat?: string }>(res);
+  return {
+    hf_token: typeof data.hf_token === "string" ? data.hf_token : "",
+    github_pat: typeof data.github_pat === "string" ? data.github_pat : "",
+  };
+}
+
 export async function apiHubDelete(charKey: string): Promise<void> {
   const res = await fetch(
     `${API_BASE_URL}/hub/${encodeURIComponent(charKey)}/delete`,

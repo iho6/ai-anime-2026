@@ -216,23 +216,44 @@ def _log_cb_coalesce_tqdm_updates(
 
 
 def _ensure_comfy_running(log_cb: Callable[[str], None] | None = None) -> None:
-    """Restart ComfyUI if its process has exited, so service calls don't hang."""
-    global _comfy_proc, _comfy_port
-    if _comfy_proc is None:
-        return  # Never launched by us — not our responsibility
-    if _comfy_proc.poll() is None and _port_open("127.0.0.1", _comfy_port):
-        return  # Still alive and reachable
+    """Ensure *this repo's* ComfyUI is reachable (not a foreign app on the same port)."""
+    port = int(_comfy_port)
+    if _port_open("127.0.0.1", port) and _comfy_on_port_is_ours(port):
+        return
+
+    if _port_open("127.0.0.1", port) and not _comfy_on_port_is_ours(port):
+        alt = _find_free_comfy_port(port + 1)
+        if log_cb:
+            log_cb(
+                f"Port {port} is owned by another app (not this repo's ComfyUI). "
+                f"Starting this repo's ComfyUI on 127.0.0.1:{alt}."
+            )
+        _set_active_comfy_port(alt)
+        _launch_comfy_and_wait(alt, log_cb=log_cb)
+        return
+
     if log_cb:
-        log_cb("ComfyUI process has exited — restarting...")
-    _comfy_proc, _, _, _ = _launch_main_background(_comfy_port, log_cb=log_cb)
-    deadline = time.time() + 120
-    while time.time() < deadline:
-        if _port_open("127.0.0.1", _comfy_port):
-            if log_cb:
-                log_cb(f"ComfyUI restarted and ready on port {_comfy_port}.")
-            return
-        time.sleep(0.5)
-    raise RuntimeError("ComfyUI did not restart within 120 s.")
+        log_cb(
+            f"ComfyUI not reachable on 127.0.0.1:{port} — "
+            "clearing stale processes and restarting…"
+        )
+    restart_comfy_server(log_cb=log_cb, port=port)
+
+
+def _taskkill_tree(pid: int, log_cb: Callable[[str], None] | None = None) -> None:
+    """Force-kill a Windows process tree (best-effort)."""
+    try:
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=20,
+        )
+    except Exception as e:
+        if log_cb:
+            log_cb(f"Warning: taskkill /T failed for PID {pid}: {e}")
 
 
 def _kill_comfy_proc(log_cb: Callable[[str], None] | None = None) -> None:
@@ -241,6 +262,7 @@ def _kill_comfy_proc(log_cb: Callable[[str], None] | None = None) -> None:
     proc = _comfy_proc
     if proc is None:
         return
+    pid = getattr(proc, "pid", None)
     try:
         if proc.poll() is None:
             if os.name != "nt":
@@ -260,7 +282,18 @@ def _kill_comfy_proc(log_cb: Callable[[str], None] | None = None) -> None:
                     except Exception:
                         proc.kill()
                 else:
-                    proc.kill()
+                    # Kill the whole tree; plain proc.kill() often leaves main.py children.
+                    if pid is not None:
+                        _taskkill_tree(int(pid), log_cb=log_cb)
+                    else:
+                        proc.kill()
+                try:
+                    proc.wait(timeout=5)
+                except Exception:
+                    pass
+            # Windows: if still alive after soft terminate, force the tree.
+            if os.name == "nt" and proc.poll() is None and pid is not None:
+                _taskkill_tree(int(pid), log_cb=log_cb)
                 try:
                     proc.wait(timeout=5)
                 except Exception:
@@ -268,6 +301,8 @@ def _kill_comfy_proc(log_cb: Callable[[str], None] | None = None) -> None:
     except Exception as e:
         if log_cb:
             log_cb(f"Warning while stopping ComfyUI: {e}")
+        if os.name == "nt" and pid is not None:
+            _taskkill_tree(int(pid), log_cb=log_cb)
     finally:
         _comfy_proc = None
 
@@ -319,12 +354,11 @@ def _kill_port_listeners(port: int, log_cb: Callable[[str], None] | None = None)
 def restart_comfy_server(
     *,
     log_cb: Callable[[str], None] | None = None,
-    port: int = COMFY_PORT,
+    port: int | None = None,
 ) -> dict[str, Any]:
-    """Kill ComfyUI and relaunch it on ``port`` (default 8188); wait until reachable."""
-    global _comfy_proc, _comfy_port
-    port = int(port)
-    _comfy_port = port
+    """Kill ComfyUI on ``port`` and relaunch; wait until reachable."""
+    port = int(_comfy_port if port is None else port)
+    _set_active_comfy_port(port)
 
     if log_cb:
         log_cb(f"Stopping ComfyUI on port {port}…")
@@ -338,27 +372,21 @@ def restart_comfy_server(
 
     if log_cb:
         log_cb("Launching ComfyUI…")
-    proc, forward_logs, _comfy_tail, _comfy_tail_lock = _launch_main_background(port, log_cb=log_cb)
-    _comfy_proc = proc
+    return _launch_comfy_and_wait(port, log_cb=log_cb)
 
-    deadline = time.time() + 120
-    while time.time() < deadline:
-        if _port_open("127.0.0.1", port):
-            try:
-                forward_logs.clear()
-            except Exception:
-                pass
-            if log_cb:
-                log_cb(f"ComfyUI is ready on 127.0.0.1:{port}.")
-            return {"ok": True, "port": port}
-        rc = proc.poll()
-        if rc is not None:
-            raise RuntimeError(
-                f"ComfyUI exited before the server became reachable (exit code {rc}). "
-                "See [comfy] lines above for the root cause."
-            )
-        time.sleep(0.5)
-    raise RuntimeError("ComfyUI did not become reachable within 120 s.")
+
+def _comfy_output_looks_unreachable(combined_l: str) -> bool:
+    """True when service stderr/stdout indicates ComfyUI never answered."""
+    # Common --test-mode patterns:
+    # - "waiting for server <addr> to start, .../120s"
+    # - "server <addr> startup timeout, 120s"
+    # - "ERROR: ComfyUI not reachable at <addr>"
+    return (
+        "comfyui not reachable" in combined_l
+        or "comfyui not at" in combined_l
+        or ("startup timeout" in combined_l and "waiting for server" in combined_l)
+        or ("waiting for server" in combined_l and "startup timeout" in combined_l)
+    )
 
 
 def _run_service_testmode(
@@ -366,71 +394,77 @@ def _run_service_testmode(
     args: list[str],
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
-    _ensure_comfy_running(log_cb=log_cb)
-    cmd = [sys.executable, "-m", module] + args
-    proc = subprocess.Popen(
-        cmd,
-        cwd=str(_REPO_ROOT),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        bufsize=1,  # line-buffered where possible
-    )
+    def _once() -> tuple[int, str, str]:
+        cmd = [sys.executable, "-m", module] + args
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(_REPO_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,  # line-buffered where possible
+        )
 
-    stdout_lines: list[str] = []
-    stderr_lines: list[str] = []
+        stdout_lines: list[str] = []
+        stderr_lines: list[str] = []
 
-    def _reader(stream, sink: list[str]) -> None:
-        try:
-            for line in iter(stream.readline, ""):
-                if line == "":
-                    break
-                sink.append(line)
-                if log_cb is not None:
-                    # Keep log payload compact and single-line per log_cb call.
-                    log_cb(line.rstrip("\r\n"))
-        finally:
+        def _reader(stream, sink: list[str]) -> None:
             try:
-                stream.close()
-            except Exception:
-                pass
+                for line in iter(stream.readline, ""):
+                    if line == "":
+                        break
+                    sink.append(line)
+                    if log_cb is not None:
+                        # Keep log payload compact and single-line per log_cb call.
+                        log_cb(line.rstrip("\r\n"))
+            finally:
+                try:
+                    stream.close()
+                except Exception:
+                    pass
 
-    t_out = threading.Thread(
-        target=_reader, args=(proc.stdout, stdout_lines), daemon=True
-    )
-    t_err = threading.Thread(
-        target=_reader, args=(proc.stderr, stderr_lines), daemon=True
-    )
-    t_out.start()
-    t_err.start()
+        t_out = threading.Thread(
+            target=_reader, args=(proc.stdout, stdout_lines), daemon=True
+        )
+        t_err = threading.Thread(
+            target=_reader, args=(proc.stderr, stderr_lines), daemon=True
+        )
+        t_out.start()
+        t_err.start()
 
-    proc.wait()
-    t_out.join()
-    t_err.join()
+        proc.wait()
+        t_out.join()
+        t_err.join()
 
-    stdout = "".join(stdout_lines).strip() if stdout_lines else ""
-    stderr = "".join(stderr_lines).strip() if stderr_lines else ""
-    if proc.returncode != 0:
+        stdout = "".join(stdout_lines).strip() if stdout_lines else ""
+        stderr = "".join(stderr_lines).strip() if stderr_lines else ""
+        return int(proc.returncode or 0), stdout, stderr
+
+    _ensure_comfy_running(log_cb=log_cb)
+    rc, stdout, stderr = _once()
+
+    if rc != 0 and _comfy_output_looks_unreachable(f"{stdout}\n{stderr}".lower()):
+        if log_cb:
+            log_cb(
+                "Service reported ComfyUI unreachable — "
+                "restarting ComfyUI and retrying once…"
+            )
+        restart_comfy_server(log_cb=log_cb, port=_comfy_port)
+        rc, stdout, stderr = _once()
+
+    if rc != 0:
         combined_l = f"{stdout}\n{stderr}".lower()
-        # ComfyUI-down path (common in --test-mode before we can queue a workflow):
-        # - "waiting for server <addr> to start, .../120s"
-        # - "server <addr> startup timeout, 120s"
-        # - "ERROR: ComfyUI not reachable at <addr>"
-        if (
-            "comfyui not reachable" in combined_l
-            or "comfyui not at" in combined_l
-            or ("startup timeout" in combined_l and "waiting for server" in combined_l)
-            or ("waiting for server" in combined_l and "startup timeout" in combined_l)
-        ):
+        if _comfy_output_looks_unreachable(combined_l):
             raise RuntimeError(
                 "ComfyUI Server Not Started: nothing responded while waiting for "
-                f"127.0.0.1:{COMFY_PORT}. Start ComfyUI on that port or set COMFY_PORT "
-                "to match your running instance."
+                f"127.0.0.1:{COMFY_PORT} after an automatic restart. "
+                "Check Comfy logs, free the port, or set COMFY_PORT to match "
+                "your running instance."
             )
         raise RuntimeError(
-            f"Service failed: {module}\nexit_code={proc.returncode}\nstdout={stdout}\nstderr={stderr}"
+            f"Service failed: {module}\nexit_code={rc}\nstdout={stdout}\nstderr={stderr}"
         )
 
     try:
@@ -531,15 +565,74 @@ def _run_command_stream_no_echo(
     return merged
 
 
-def _git_origin_url() -> str:
-    out = subprocess.check_output(
-        ["git", "remote", "get-url", "origin"],
-        cwd=str(_REPO_ROOT),
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+def _git_safe_directory_path(repo_root: Path | None = None) -> str:
+    """Absolute repo path in the forward-slash form Git expects for safe.directory."""
+    root = (repo_root or _REPO_ROOT).resolve()
+    return str(root).replace("\\", "/")
+
+
+def _ensure_git_safe_directory(
+    repo_root: Path | None = None,
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> None:
+    """
+    Mark the checkout as a Git safe.directory (user global config).
+
+    Needed when the repo was copied from another Windows user/machine (portable
+    drive): Git refuses commands with "detected dubious ownership".
+    """
+    path = _git_safe_directory_path(repo_root)
+    existing: set[str] = set()
+    try:
+        out = subprocess.check_output(
+            ["git", "config", "--global", "--get-all", "safe.directory"],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        existing = {ln.strip() for ln in (out or "").splitlines() if ln.strip()}
+    except subprocess.CalledProcessError:
+        # Key missing or no global config yet.
+        existing = set()
+    except FileNotFoundError as e:
+        raise RuntimeError("git is not installed or not on PATH.") from e
+
+    if path in existing:
+        return
+
+    subprocess.check_call(
+        ["git", "config", "--global", "--add", "safe.directory", path],
     )
-    return (out or "").strip()
+    if log_cb:
+        log_cb(f"Added git safe.directory for portable checkout: {path}")
+
+
+def _git_origin_url(*, _retried: bool = False) -> str:
+    try:
+        out = subprocess.check_output(
+            ["git", "remote", "get-url", "origin"],
+            cwd=str(_REPO_ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stderr=subprocess.STDOUT,
+        )
+        return (out or "").strip()
+    except subprocess.CalledProcessError as e:
+        detail = (e.output or str(e) or "").strip()
+        dubious = "dubious ownership" in detail.lower() or "safe.directory" in detail.lower()
+        if dubious and not _retried:
+            _ensure_git_safe_directory()
+            return _git_origin_url(_retried=True)
+        if dubious:
+            raise RuntimeError(
+                "Git refused this checkout (dubious ownership). "
+                f"Add a safe.directory for {_git_safe_directory_path()!r} and retry.\n{detail}"
+            ) from e
+        raise RuntimeError(
+            f"Could not determine git remote origin URL.\n{detail}"
+        ) from e
 
 
 def _git_lfs_pull_with_github_pat(
@@ -550,6 +643,8 @@ def _git_lfs_pull_with_github_pat(
     pat = (github_pat or "").strip()
     if not pat:
         raise ValueError("Please enter GitHub Personal Access Token (PAT).")
+
+    _ensure_git_safe_directory(log_cb=log_cb)
 
     # Ensure git-lfs exists and is callable.
     try:
@@ -626,6 +721,165 @@ def _port_open(host: str, port: int, timeout_s: float = 0.6) -> bool:
             sock.close()
         except Exception:
             pass
+
+
+def _comfy_main_py() -> Path:
+    return (_REPO_ROOT / "comfyui" / "main.py").resolve()
+
+
+def _normalize_path_key(path: str | Path) -> str:
+    return str(Path(path)).replace("\\", "/").casefold()
+
+
+def _listener_pids(port: int) -> set[int]:
+    """PIDs with a LISTEN socket on ``port`` (best-effort; empty if psutil unavailable)."""
+    try:
+        import psutil  # type: ignore
+    except Exception:
+        return set()
+    pids: set[int] = set()
+    try:
+        for c in psutil.net_connections(kind="inet"):
+            if (
+                c.status == psutil.CONN_LISTEN
+                and c.laddr
+                and getattr(c.laddr, "port", None) == int(port)
+                and c.pid
+            ):
+                pids.add(int(c.pid))
+    except Exception:
+        return set()
+    return pids
+
+
+def _listener_cmdlines(port: int) -> list[str]:
+    """Command lines of processes listening on ``port``."""
+    try:
+        import psutil  # type: ignore
+    except Exception:
+        return []
+    out: list[str] = []
+    for pid in _listener_pids(port):
+        try:
+            p = psutil.Process(pid)
+            cmdline = p.cmdline()
+            if cmdline:
+                out.append(" ".join(str(x) for x in cmdline))
+            else:
+                out.append(p.name() or f"pid={pid}")
+        except Exception:
+            continue
+    return out
+
+
+def _comfy_on_port_is_ours(port: int) -> bool:
+    """True if a listener on ``port`` is this repo's ``comfyui/main.py``."""
+    marker = _normalize_path_key(_comfy_main_py())
+    repo = _normalize_path_key(_REPO_ROOT)
+    cmdlines = _listener_cmdlines(int(port))
+    if not cmdlines:
+        # Cannot verify ownership — treat as not ours so we do not reuse a foreign Comfy.
+        return False
+    for cmd in cmdlines:
+        norm = cmd.replace("\\", "/").casefold()
+        if marker in norm:
+            return True
+        if repo in norm and "comfyui/main.py" in norm:
+            return True
+    return False
+
+
+def _set_active_comfy_port(port: int) -> None:
+    """Point handlers and subprocesses at the active Comfy listen port."""
+    global COMFY_PORT, _comfy_port
+    port = int(port)
+    COMFY_PORT = port
+    _comfy_port = port
+    os.environ["COMFY_PORT"] = str(port)
+
+
+def _find_free_comfy_port(start: int, *, span: int = 32) -> int:
+    """First free TCP port in ``[start, start+span)`` on 127.0.0.1."""
+    start = int(start)
+    for p in range(start, start + int(span)):
+        if not _port_open("127.0.0.1", p):
+            return p
+    raise RuntimeError(
+        f"No free ComfyUI port in range {start}–{start + int(span) - 1}. "
+        "Stop another listener or set COMFY_PORT to a free port."
+    )
+
+
+def _resolve_comfy_listen_port(
+    preferred: int,
+    log_cb: Callable[[str], None] | None = None,
+) -> tuple[int, str]:
+    """
+    Choose a listen port for this repo's ComfyUI.
+
+    Returns ``(port, reason)`` where reason is ``free``, ``ours``, or ``foreign_relocated``.
+    """
+    preferred = int(preferred)
+    if not _port_open("127.0.0.1", preferred):
+        return preferred, "free"
+    if _comfy_on_port_is_ours(preferred):
+        return preferred, "ours"
+    alt = _find_free_comfy_port(preferred + 1)
+    if log_cb:
+        samples = _listener_cmdlines(preferred)
+        hint = samples[0] if samples else "(unknown process)"
+        if len(hint) > 180:
+            hint = hint[:177] + "..."
+        log_cb(
+            f"Port {preferred} is in use by another app (not this repo's ComfyUI): {hint}. "
+            f"Launching this repo's ComfyUI on 127.0.0.1:{alt}."
+        )
+    return alt, "foreign_relocated"
+
+
+def _launch_comfy_and_wait(
+    port: int,
+    log_cb: Callable[[str], None] | None = None,
+    *,
+    timeout_s: float = 120.0,
+) -> dict[str, Any]:
+    """Launch this repo's Comfy ``main.py`` on ``port`` and wait until reachable."""
+    global _comfy_proc
+    port = int(port)
+    _set_active_comfy_port(port)
+    proc, forward_logs, comfy_tail, comfy_tail_lock = _launch_main_background(
+        port, log_cb=log_cb
+    )
+    _comfy_proc = proc
+    deadline = time.time() + float(timeout_s)
+    wait_log_t0 = time.time()
+    while time.time() < deadline:
+        if _port_open("127.0.0.1", port):
+            try:
+                forward_logs.clear()
+            except Exception:
+                pass
+            if log_cb:
+                log_cb(f"ComfyUI is ready on 127.0.0.1:{port}.")
+            return {"ok": True, "port": port}
+        rc = proc.poll()
+        if rc is not None:
+            with comfy_tail_lock:
+                tail_snapshot = list(comfy_tail)
+            parts = [
+                f"ComfyUI exited before the server became reachable (exit code {rc}).",
+                "See [comfy] lines above for the root cause.",
+            ]
+            if tail_snapshot:
+                parts.append("--- Comfy log tail ---\n" + "\n".join(tail_snapshot))
+            raise RuntimeError("\n".join(parts))
+        if log_cb and (time.time() - wait_log_t0) >= 60.0:
+            log_cb(f"Still waiting for ComfyUI on 127.0.0.1:{port}...")
+            wait_log_t0 = time.time()
+        time.sleep(0.5)
+    raise RuntimeError(
+        f"ComfyUI did not become reachable on 127.0.0.1:{port} within {int(timeout_s)} s."
+    )
 
 
 def _pip_check_ok(log_cb: Callable[[str], None] | None = None) -> bool:
@@ -803,9 +1057,17 @@ def _launch_main_background(
         cmd.append("--cache-none")
     # Async weight offloading is unstable with legacy ModelPatcher (PyTorch < 2.8).
     cmd.append("--disable-async-offload")
-    # Offload models to CPU between pipeline stages to prevent OOM on 24 GB cards
-    # when loading the BF16→FP8 diffusion model alongside the 7.9 GB text encoder.
-    cmd.append("--lowvram")
+    # VRAM mode: default normalvram (faster with FP8 UNets on 16 GB). Set
+    # COMFY_VRAM_MODE=lowvram if OOM with text encoder + diffusion loaded.
+    vram_mode = (os.environ.get("COMFY_VRAM_MODE") or "normalvram").strip().lower()
+    if vram_mode in {"lowvram", "novram", "highvram", "normalvram"}:
+        cmd.append(f"--{vram_mode}")
+    elif vram_mode not in {"", "default", "auto", "none"}:
+        if log_cb:
+            log_cb(
+                f"Warning: unknown COMFY_VRAM_MODE={vram_mode!r}; "
+                "expected lowvram|normalvram|highvram|novram|default"
+            )
     if log_cb:
         log_cb("$ " + " ".join(cmd))
     popen_env = os.environ.copy()
@@ -870,10 +1132,18 @@ def run_startup_setup_and_launch(
     if not pat:
         raise ValueError("Please enter GitHub Personal Access Token (PAT).")
 
-    if _port_open("127.0.0.1", int(port)):
-        if log_cb:
-            log_cb(f"ComfyUI already running at 127.0.0.1:{int(port)}")
-        return {"ok": True, "already_running": True, "port": int(port)}
+    preferred_port = int(port)
+    if _port_open("127.0.0.1", preferred_port) and log_cb:
+        if _comfy_on_port_is_ours(preferred_port):
+            log_cb(
+                f"This repo's ComfyUI already on 127.0.0.1:{preferred_port}; "
+                "continuing setup, then restarting it so new weights are visible."
+            )
+        else:
+            log_cb(
+                f"Something else is listening on 127.0.0.1:{preferred_port}; "
+                "continuing setup, then launching this repo's ComfyUI on a free port."
+            )
 
     # Git LFS assets (images/datasets/etc.) are required for a usable UI.
     _git_lfs_pull_with_github_pat(pat, log_cb=log_cb)
@@ -931,9 +1201,17 @@ def run_startup_setup_and_launch(
         log_cb(f"GPU preflight OK: {gpu_detail}")
 
     # Editable kimodo install (MotionCorrection C extension + apt build deps).
+    # Non-fatal: Windows/build failures must not block weight download or Comfy.
     from services.kimodo_setup import ensure_kimodo_installed
 
-    ensure_kimodo_installed(run_command=_run_command_logged, log_cb=log_cb)
+    try:
+        ensure_kimodo_installed(run_command=_run_command_logged, log_cb=log_cb)
+    except Exception as e:
+        if log_cb:
+            log_cb(
+                f"Warning: kimodo install failed ({e}). "
+                "Continuing setup; motion features may be unavailable."
+            )
 
     # smplx: skins the kimodo SMPL-X motion into a white body mesh for the viewer.
     # Requires the SMPL-X body model staged at $SMPLX_MODEL_DIR/smplx/SMPLX_NEUTRAL.npz
@@ -979,8 +1257,6 @@ def run_startup_setup_and_launch(
     except Exception:
         pass
 
-    # Custom nodes are installed in _launch_main_background before Comfy starts.
-
     env = os.environ.copy()
     env["HF_TOKEN"] = token
     _run_command_logged(
@@ -994,36 +1270,29 @@ def run_startup_setup_and_launch(
         env=env,
     )
 
-    global _comfy_proc, _comfy_port
-    _comfy_port = int(port)
-    proc, forward_logs, comfy_tail, comfy_tail_lock = _launch_main_background(
-        int(port), log_cb=log_cb
-    )
-    _comfy_proc = proc
+    # Always stage custom nodes on disk (also done inside _launch_main_background).
+    install_required_custom_nodes(log_cb=log_cb)
+
+    listen_port, reason = _resolve_comfy_listen_port(preferred_port, log_cb=log_cb)
+    _set_active_comfy_port(listen_port)
+
+    if reason == "ours":
+        # Restart so freshly downloaded weights appear in Comfy model lists.
+        result = restart_comfy_server(log_cb=log_cb, port=listen_port)
+        return {
+            "ok": True,
+            "already_running": True,
+            "port": int(result.get("port", listen_port)),
+        }
+
     if log_cb:
-        log_cb("Waiting for ComfyUI to become reachable (no timeout)...")
-    wait_log_t0 = time.time()
-    while True:
-        if _port_open("127.0.0.1", int(port)):
-            forward_logs.clear()
-            if log_cb:
-                log_cb(f"ComfyUI is ready at 127.0.0.1:{int(port)}")
-            return {"ok": True, "already_running": False, "port": int(port)}
-        rc = proc.poll()
-        if rc is not None:
-            with comfy_tail_lock:
-                tail_snapshot = list(comfy_tail)
-            parts = [
-                f"ComfyUI exited before the server became reachable (exit code {rc}).",
-                "See [comfy] lines above for the root cause.",
-            ]
-            if tail_snapshot:
-                parts.append("--- Comfy log tail ---\n" + "\n".join(tail_snapshot))
-            raise RuntimeError("\n".join(parts))
-        if log_cb and (time.time() - wait_log_t0) >= 60.0:
-            log_cb(f"Still waiting for ComfyUI on 127.0.0.1:{int(port)}...")
-            wait_log_t0 = time.time()
-        time.sleep(1.0)
+        log_cb(f"Waiting for ComfyUI to become reachable on 127.0.0.1:{listen_port}...")
+    result = _launch_comfy_and_wait(listen_port, log_cb=log_cb, timeout_s=1e9)
+    return {
+        "ok": True,
+        "already_running": False,
+        "port": int(result.get("port", listen_port)),
+    }
 
 
 def _extract_image_url_from_anime_results(body: dict[str, Any]) -> str:
@@ -3842,12 +4111,61 @@ def _persist_qwen_sidecar_for_plate(
     return meta
 
 
+def _rel_under_storage_root(abs_path: Path, storage_root: Path) -> str:
+    root = storage_root.resolve()
+    p = abs_path.resolve()
+    try:
+        return str(p.relative_to(root)).replace("\\", "/")
+    except ValueError:
+        return str(p.relative_to(root.parent)).replace("\\", "/")
+
+
+def _layout_plate_abs_for_strip_slot(slot: dict[str, Any], storage_root: Path) -> Path:
+    """Resolve the layout-only white plate path for a strip slot (not the HD master)."""
+    root = storage_root.resolve()
+    pf = slot.get("placedFigure") if isinstance(slot.get("placedFigure"), dict) else {}
+    layout_rel = str((pf or {}).get("layoutPlateRelPath") or "").strip().replace("\\", "/").lstrip("/")
+    if layout_rel:
+        return (root / layout_rel).resolve()
+    rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+    if not rel:
+        raise ValueError("Strip slot has no relPath.")
+    p = (root / rel).resolve()
+    if p.stem.endswith("_qwen"):
+        return p.parent / f"{p.stem[: -len('_qwen')]}{p.suffix or '.png'}"
+    return p
+
+
+def _apply_hd_qwen_as_strip_master(
+    slot: dict[str, Any],
+    plate_abs: Path,
+    square_meta: dict[str, Any] | None,
+    *,
+    storage_root: Path,
+) -> dict[str, Any] | None:
+    """Persist Qwen sidecar; set strip ``relPath`` to HD master; plate is layout-only."""
+    root = storage_root.resolve()
+    plate_rel = _rel_under_storage_root(plate_abs, root)
+    meta = _persist_qwen_sidecar_for_plate(plate_abs, square_meta, storage_root=root)
+    if not meta:
+        slot["relPath"] = plate_rel
+        return meta
+    qwen_rel = str(meta.get("qwenOutputRelPath") or "").strip()
+    if qwen_rel:
+        meta["layoutPlateRelPath"] = plate_rel
+        slot["relPath"] = qwen_rel
+    else:
+        slot["relPath"] = plate_rel
+    slot["placedFigure"] = meta
+    return meta
+
+
 def _pose_gallery_save_plate_with_qwen_sidecar(
     character_name: str,
     plate_abs: str,
     qwen_abs: str,
 ) -> tuple[str, str]:
-    """Save white plate to pose gallery and native Qwen as ``pose_NNN_qwen.png``."""
+    """Save layout plate + native Qwen; gallery order points at HD Qwen master."""
     character = get_character_paths(character_name)
     ensure_dirs(character.poses_dir)
     plate_src = Path(plate_abs)
@@ -3857,8 +4175,8 @@ def _pose_gallery_save_plate_with_qwen_sidecar(
     shutil.copy2(plate_src, plate_dest)
     qwen_dest = character.poses_dir / f"pose_{pid:03d}_qwen.png"
     shutil.copy2(qwen_abs, qwen_dest)
-    rel = _append_pose_gallery_file_to_order(character_name, plate_dest)
-    return str(plate_dest), rel
+    rel = _append_pose_gallery_file_to_order(character_name, qwen_dest)
+    return str(qwen_dest), rel
 
 
 def _finalize_qwen_pose_result(
@@ -4492,22 +4810,26 @@ def generate_pose_sequence_from_keypoints(
             raise RuntimeError(
                 f"{error_tag} frame download failed (index {i}, url={url[:200]}): {ex}"
             ) from ex
-        rel_str = str(dest.resolve().relative_to(root)).replace("\\", "/")
         try:
             kp_rel = str(Path(kp_abs).resolve().relative_to(root)).replace("\\", "/")
         except ValueError:
             kp_rel = str(Path(kp_abs).resolve().relative_to(root.parent)).replace("\\", "/")
-        slot: dict[str, Any] = {"kind": "image", "relPath": rel_str, "sourceKeypointRelPath": kp_rel}
+        slot: dict[str, Any] = {"kind": "image", "relPath": "", "sourceKeypointRelPath": kp_rel}
         if square_meta:
             sq_tmp = square_meta.pop("_squareTmpPath", None)
-            square_meta = _persist_qwen_sidecar_for_plate(dest, square_meta, storage_root=root)
-            if sq_tmp and Path(sq_tmp).is_file():
+            square_meta = _apply_hd_qwen_as_strip_master(
+                slot, dest, square_meta, storage_root=root
+            )
+            if sq_tmp and Path(sq_tmp).is_file() and isinstance(square_meta, dict):
                 sq_dest = out_dir / f"frame_{i + 1:06d}_sq.png"
                 shutil.copy2(sq_tmp, sq_dest)
                 square_meta["figureSquareCropRelPath"] = str(
                     sq_dest.resolve().relative_to(root)
                 ).replace("\\", "/")
-            slot["placedFigure"] = square_meta
+                slot["placedFigure"] = square_meta
+        else:
+            slot["relPath"] = str(dest.resolve().relative_to(root)).replace("\\", "/")
+        rel_str = str(slot.get("relPath") or "")
         strip.append(slot)
         if i == 0:
             gallery_item["relPath"] = rel_str
@@ -4685,20 +5007,24 @@ def regenerate_sequence_strip_frame(
         extra_pad_frac=float(extra_pad_frac),
         cfg_scale=float(cfg_scale) if cfg_scale is not None else None,
     )
-    dest_rel = str(slot.get("relPath") or "").strip()
-    dest_path = (root / dest_rel.lstrip("/")).resolve()
-    download_url_to_file(url.strip(), dest_path)
+    plate_path = _layout_plate_abs_for_strip_slot(slot, root)
+    plate_path.parent.mkdir(parents=True, exist_ok=True)
+    download_url_to_file(url.strip(), plate_path)
 
     if square_meta:
         sq_tmp = square_meta.pop("_squareTmpPath", None)
-        square_meta = _persist_qwen_sidecar_for_plate(dest_path, square_meta, storage_root=root)
-        sq_dest = dest_path.parent / (dest_path.stem + "_sq" + dest_path.suffix)
-        if sq_tmp and Path(sq_tmp).is_file():
+        square_meta = _apply_hd_qwen_as_strip_master(
+            slot, plate_path, square_meta, storage_root=root
+        )
+        if sq_tmp and Path(sq_tmp).is_file() and isinstance(square_meta, dict):
+            sq_dest = plate_path.parent / f"{plate_path.stem}_sq{plate_path.suffix}"
             shutil.copy2(sq_tmp, sq_dest)
             square_meta["figureSquareCropRelPath"] = str(
                 sq_dest.resolve().relative_to(root)
             ).replace("\\", "/")
-        slot["placedFigure"] = square_meta
+            slot["placedFigure"] = square_meta
+    else:
+        slot["relPath"] = _rel_under_storage_root(plate_path, root)
 
     manifest2 = read_sequence_manifest(char_key, seq_name)
     for g in manifest2.get("gallery") or []:
@@ -4708,7 +5034,7 @@ def regenerate_sequence_strip_frame(
                 strip2[strip_index] = slot
             break
     write_sequence_manifest(char_key, seq_name, manifest2)
-    return {"relPath": str(dest_path.resolve().relative_to(root)).replace("\\", "/")}
+    return {"relPath": str(slot.get("relPath") or "")}
 
 
 def generate_expression_starting_image(
@@ -10766,6 +11092,61 @@ def _frame_sequence_strip_slot_visible_for_export(slot: dict[str, Any]) -> bool:
     return bool(rel)
 
 
+def _late_composite_hd_plate_for_export(
+    slot: dict[str, Any],
+    source_abs: Path,
+    *,
+    storage_root: Path | None = None,
+) -> tuple[Path, Path | None]:
+    """
+    When ``placedFigure`` has layout meta and an HD Qwen (or crop) master, paste onto an
+    upscaled white plate for bake/export. Returns ``(path, temp_to_cleanup|None)``.
+    """
+    from PIL import Image
+
+    from services.figure_crop import (
+        MIN_SQUARE_WORKING_SIZE,
+        composite_hd_figure_on_canvas,
+    )
+
+    pf = slot.get("placedFigure") if isinstance(slot.get("placedFigure"), dict) else None
+    if not isinstance(pf, dict):
+        return source_abs, None
+    canvas = pf.get("canvas")
+    placement = pf.get("placement")
+    if not isinstance(canvas, dict) or not isinstance(placement, dict):
+        return source_abs, None
+    c_w = int(canvas.get("width") or 0)
+    c_h = int(canvas.get("height") or 0)
+    if c_w < 1 or c_h < 1:
+        return source_abs, None
+
+    root = (storage_root or DEFAULT_STORAGE_ROOT).resolve()
+    hd_abs = source_abs
+    qwen_rel = str(pf.get("qwenOutputRelPath") or "").strip().replace("\\", "/").lstrip("/")
+    if qwen_rel:
+        candidate = (root / qwen_rel).resolve()
+        if candidate.is_file():
+            hd_abs = candidate
+
+    try:
+        with Image.open(hd_abs) as im:
+            if im.size == (c_w, c_h):
+                # Already a full plate at layout resolution — keep as-is.
+                return hd_abs, None
+            plate = composite_hd_figure_on_canvas(
+                im,
+                pf,
+                min_placement_side=int(pf.get("workingSquareSize") or MIN_SQUARE_WORKING_SIZE),
+            )
+    except OSError:
+        return source_abs, None
+
+    tmp = Path(tempfile.gettempdir()) / f"late_plate_{unique_suffix()}.png"
+    plate.save(tmp)
+    return tmp, tmp
+
+
 def _first_exportable_gallery_frame_sequence_id(manifest: dict[str, Any]) -> str | None:
     """First gallery item with at least one exportable ``frameSequence.strip`` image."""
     gallery = manifest.get("gallery") or []
@@ -10831,38 +11212,48 @@ def write_gallery_frame_sequence_set_mp4(
     current_crop: dict[str, Any] | None = None
     segments: list[tuple[Path | None, dict[str, Any] | None, int]] = []
     L = len(strip)
+    temp_cleanup: list[Path] = []
+    root = DEFAULT_STORAGE_ROOT.resolve()
 
-    for k in range(L):
-        slot = strip[k]
-        if str(slot.get("kind") or "") == "image" and slot.get("hidden") is True:
-            continue
-        if _frame_sequence_strip_slot_visible_for_export(slot):
-            rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
-            _ensure_rel_under_sequence_folder(char_key, sequence_name, rel)
-            pth = (DEFAULT_STORAGE_ROOT / rel).resolve()
-            root = DEFAULT_STORAGE_ROOT.resolve()
-            if root != pth and root not in pth.parents:
-                raise ValueError(f"Strip slot {k}: invalid resolved path.")
-            if not pth.is_file():
-                raise ValueError(f"Strip slot {k}: missing file {rel!r}.")
-            raw_crop = slot.get("crop")
-            crop_dict: dict[str, Any] | None
-            if isinstance(raw_crop, dict):
-                crop_dict = raw_crop
-            else:
-                crop_dict = None
-            current_path = pth
-            current_crop = crop_dict
+    try:
+        for k in range(L):
+            slot = strip[k]
+            if str(slot.get("kind") or "") == "image" and slot.get("hidden") is True:
+                continue
+            if _frame_sequence_strip_slot_visible_for_export(slot):
+                rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+                _ensure_rel_under_sequence_folder(char_key, sequence_name, rel)
+                pth = (DEFAULT_STORAGE_ROOT / rel).resolve()
+                if root != pth and root not in pth.parents:
+                    raise ValueError(f"Strip slot {k}: invalid resolved path.")
+                if not pth.is_file():
+                    raise ValueError(f"Strip slot {k}: missing file {rel!r}.")
+                export_path, tmp = _late_composite_hd_plate_for_export(
+                    slot, pth, storage_root=root
+                )
+                if tmp is not None:
+                    temp_cleanup.append(tmp)
+                raw_crop = slot.get("crop")
+                crop_dict: dict[str, Any] | None
+                if isinstance(raw_crop, dict):
+                    crop_dict = raw_crop
+                else:
+                    crop_dict = None
+                current_path = export_path
+                current_crop = crop_dict
 
-        segments.append((current_path, current_crop, 1))
+            segments.append((current_path, current_crop, 1))
 
-    if not segments:
-        raise ValueError(
-            "No frames to export: frameSequence.strip is only hidden images, "
-            "or has no non-hidden slots that emit a frame."
-        )
+        if not segments:
+            raise ValueError(
+                "No frames to export: frameSequence.strip is only hidden images, "
+                "or has no non-hidden slots that emit a frame."
+            )
 
-    return _encode_slideshow_video(segments=segments, fps=24.0, output_path=output_path)
+        return _encode_slideshow_video(segments=segments, fps=24.0, output_path=output_path)
+    finally:
+        for tmp in temp_cleanup:
+            tmp.unlink(missing_ok=True)
 
 
 def probe_video_meta(path: Path | str) -> dict[str, Any]:
@@ -11431,6 +11822,7 @@ def _run_i2v_service(
 ) -> list[str]:
     """Invoke img2video with one image + prompt; return ordered frame URLs."""
     length = normalize_wan_video_length(length)
+    out_w, out_h = _i2v_dims_from_source_image(path_img, width, height)
     argv: list[str] = [
         "--test-mode",
         "--enable-default",
@@ -11443,11 +11835,14 @@ def _run_i2v_service(
         str(length),
         "--positive-prompt",
         prompt_text,
+        "--width",
+        str(int(out_w)),
+        "--height",
+        str(int(out_h)),
     ]
-    if width is not None:
-        argv.extend(["--width", str(int(width))])
-    if height is not None:
-        argv.extend(["--height", str(int(height))])
+
+    if log_cb:
+        log_cb(f"I2V size: {out_w}×{out_h}")
 
     body = _run_service_testmode(
         "services.img2video_ai_service.serverless",
@@ -11466,6 +11861,29 @@ def _run_i2v_service(
             "I2V did not return frame_urls (is the service running with --individual-frames?)."
         )
     return [str(u).strip() for u in frame_urls if isinstance(u, str) and str(u).strip()]
+
+
+def _i2v_dims_from_source_image(
+    path_img: Path,
+    width: int | None,
+    height: int | None,
+    *,
+    target_long_edge: int = 1280,
+) -> tuple[int, int]:
+    """Resolve I2V width/height from explicit args or source image aspect (not 640 default)."""
+    if width is not None and height is not None:
+        return max(64, int(width)), max(64, int(height))
+    from PIL import Image
+
+    with Image.open(path_img) as im:
+        iw, ih = im.size
+    if iw < 1 or ih < 1:
+        return 1280, 720
+    long_edge = max(iw, ih)
+    scale = float(target_long_edge) / float(long_edge)
+    w = max(64, int(round(iw * scale / 2) * 2))
+    h = max(64, int(round(ih * scale / 2) * 2))
+    return w, h
 
 
 def _download_frame_urls_to_dir(frame_urls: list[str], out_dir: Path) -> list[Path]:
@@ -11742,91 +12160,110 @@ def write_frame_sequence_strip_mp4(
         return _timeline_strip_rel_to_abs(rel_norm)
 
     export_paths: list[Path] = []
-    for k, slot in enumerate(strip):
-        if not isinstance(slot, dict):
-            continue
-        if not _frame_sequence_strip_slot_visible_for_export(slot):
-            continue
-        rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
-        pth = resolve_slot_path(rel)
-        if not pth.is_file():
-            raise ValueError(f"Strip slot {k}: missing file {rel!r}.")
-        export_paths.append(pth)
-
-    w, h = _sequence_export_dimensions_from_images(export_paths)
-    export_bg = (255, 255, 255)
-    rate = max(1, int(fps))
-    from services.utils import av_output_framerate
-
-    out_rate = av_output_framerate(rate)
-
-    def load_rgb_array(path: Path, crop: dict[str, Any] | None) -> Any:
-        if use_sequence_cell_render:
-            rgba = render_sequence_timeline_cell_rgba(path, crop, w, h)
-            rgb = _flatten_rgba_for_video(rgba, export_bg)
-            return np.asarray(rgb, dtype=np.uint8)
-        with Image.open(path) as im:
-            im_rgba = im.convert("RGBA")
-            if im_rgba.size != (w, h):
-                im_rgba = im_rgba.resize((w, h), Image.Resampling.LANCZOS)
-            rgb = _flatten_rgba_for_video(im_rgba, export_bg)
-            return np.asarray(rgb, dtype=np.uint8)
-
-    def blank_rgb_array() -> Any:
-        return np.asarray(Image.new("RGB", (w, h), export_bg), dtype=np.uint8)
-
-    current_path: Path | None = None
-    current_crop: dict[str, Any] | None = None
-    out_p = Path(output_path)
-    out_p.parent.mkdir(parents=True, exist_ok=True)
-    frames_written = 0
-
+    temp_cleanup: list[Path] = []
     try:
-        with av.open(str(out_p), mode="w") as container:
-            stream = container.add_stream("libx264", rate=out_rate)
-            stream.width = w
-            stream.height = h
-            stream.pix_fmt = "yuv420p"
-            stream.options = {"crf": "23", "preset": "veryfast"}
+        for k, slot in enumerate(strip):
+            if not isinstance(slot, dict):
+                continue
+            if not _frame_sequence_strip_slot_visible_for_export(slot):
+                continue
+            rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+            pth = resolve_slot_path(rel)
+            if not pth.is_file():
+                raise ValueError(f"Strip slot {k}: missing file {rel!r}.")
+            export_path, tmp = _late_composite_hd_plate_for_export(slot, pth)
+            if tmp is not None:
+                temp_cleanup.append(tmp)
+            export_paths.append(export_path)
 
-            for k, slot in enumerate(strip):
-                if not isinstance(slot, dict):
-                    continue
-                if str(slot.get("kind") or "") == "image" and slot.get("hidden") is True:
-                    continue
-                if _frame_sequence_strip_slot_visible_for_export(slot):
-                    rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
-                    pth = resolve_slot_path(rel)
-                    raw_crop = slot.get("crop")
-                    current_crop = raw_crop if isinstance(raw_crop, dict) else None
-                    current_path = pth
+        if not export_paths:
+            raise ValueError("No frames to export from strip.")
 
-                if current_path is not None:
-                    arr = load_rgb_array(current_path, current_crop)
-                else:
-                    arr = blank_rgb_array()
+        w, h = _sequence_export_dimensions_from_images(export_paths)
+        export_bg = (255, 255, 255)
+        rate = max(1, int(fps))
+        from services.utils import av_output_framerate
 
-                frame = av.VideoFrame.from_ndarray(arr, format="rgb24")
-                frame = frame.reformat(format="yuv420p")
-                for packet in stream.encode(frame):
+        out_rate = av_output_framerate(rate)
+
+        def load_rgb_array(path: Path, crop: dict[str, Any] | None) -> Any:
+            if use_sequence_cell_render:
+                rgba = render_sequence_timeline_cell_rgba(path, crop, w, h)
+                rgb = _flatten_rgba_for_video(rgba, export_bg)
+                return np.asarray(rgb, dtype=np.uint8)
+            with Image.open(path) as im:
+                im_rgba = im.convert("RGBA")
+                if im_rgba.size != (w, h):
+                    im_rgba = im_rgba.resize((w, h), Image.Resampling.LANCZOS)
+                rgb = _flatten_rgba_for_video(im_rgba, export_bg)
+                return np.asarray(rgb, dtype=np.uint8)
+
+        def blank_rgb_array() -> Any:
+            return np.asarray(Image.new("RGB", (w, h), export_bg), dtype=np.uint8)
+
+        current_path: Path | None = None
+        current_crop: dict[str, Any] | None = None
+        out_p = Path(output_path)
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        frames_written = 0
+
+        try:
+            with av.open(str(out_p), mode="w") as container:
+                stream = container.add_stream("libx264", rate=out_rate)
+                stream.width = w
+                stream.height = h
+                stream.pix_fmt = "yuv420p"
+                stream.options = {"crf": "23", "preset": "veryfast"}
+
+                path_by_rel: dict[str, Path] = {}
+                path_i = 0
+                for k, slot in enumerate(strip):
+                    if not isinstance(slot, dict):
+                        continue
+                    if str(slot.get("kind") or "") == "image" and slot.get("hidden") is True:
+                        continue
+                    if _frame_sequence_strip_slot_visible_for_export(slot):
+                        rel = str(slot.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+                        # Reuse already late-composited path from the dimension pass.
+                        if rel not in path_by_rel:
+                            if path_i >= len(export_paths):
+                                raise ValueError(f"Strip slot {k}: export path mismatch.")
+                            path_by_rel[rel] = export_paths[path_i]
+                            path_i += 1
+                        pth = path_by_rel[rel]
+                        raw_crop = slot.get("crop")
+                        current_crop = raw_crop if isinstance(raw_crop, dict) else None
+                        current_path = pth
+
+                    if current_path is not None:
+                        arr = load_rgb_array(current_path, current_crop)
+                    else:
+                        arr = blank_rgb_array()
+
+                    frame = av.VideoFrame.from_ndarray(arr, format="rgb24")
+                    frame = frame.reformat(format="yuv420p")
+                    for packet in stream.encode(frame):
+                        if packet is not None:
+                            container.mux(packet)
+                    frames_written += 1
+                for packet in stream.encode(None):
                     if packet is not None:
                         container.mux(packet)
-                frames_written += 1
-            for packet in stream.encode(None):
-                if packet is not None:
-                    container.mux(packet)
-        if frames_written == 0:
+            if frames_written == 0:
+                if out_p.is_file():
+                    out_p.unlink(missing_ok=True)
+                raise ValueError("No frames to export from strip.")
+        except ValueError:
             if out_p.is_file():
                 out_p.unlink(missing_ok=True)
-            raise ValueError("No frames to export from strip.")
-    except ValueError:
-        if out_p.is_file():
-            out_p.unlink(missing_ok=True)
-        raise
-    except Exception as ex:
-        if out_p.is_file():
-            out_p.unlink(missing_ok=True)
-        raise RuntimeError(f"Frame sequence strip MP4 export failed: {ex}") from ex
+            raise
+        except Exception as ex:
+            if out_p.is_file():
+                out_p.unlink(missing_ok=True)
+            raise RuntimeError(f"Frame sequence strip MP4 export failed: {ex}") from ex
+    finally:
+        for tmp in temp_cleanup:
+            tmp.unlink(missing_ok=True)
 
 
 def timeline_frame_sequence_to_video(
@@ -11952,16 +12389,27 @@ def find_placed_figure_for_image_rel(image_rel: str) -> dict[str, Any] | None:
                 for slot in strip:
                     if not isinstance(slot, dict):
                         continue
-                    if str(slot.get("relPath") or "").replace("\\", "/") == rel_norm:
-                        pf = slot.get("placedFigure")
-                        if isinstance(pf, dict) and pf.get("placement") and pf.get("canvas"):
-                            return pf
+                    pf = slot.get("placedFigure")
+                    candidates = [
+                        str(slot.get("relPath") or "").replace("\\", "/"),
+                    ]
+                    if isinstance(pf, dict):
+                        candidates.append(
+                            str(pf.get("qwenOutputRelPath") or "").replace("\\", "/")
+                        )
+                        candidates.append(
+                            str(pf.get("layoutPlateRelPath") or "").replace("\\", "/")
+                        )
+                    if rel_norm not in candidates:
+                        continue
+                    if isinstance(pf, dict) and pf.get("placement") and pf.get("canvas"):
+                        return pf
 
     for entry in reference_storage.list_keypoints():
         pf = entry.get("placedFigure")
         if not isinstance(pf, dict):
             continue
-        for key in ("figurePlateRelPath",):
+        for key in ("figurePlateRelPath", "qwenOutputRelPath", "layoutPlateRelPath"):
             plate_rel = str(pf.get(key) or "").replace("\\", "/")
             if plate_rel and plate_rel == rel_norm:
                 return pf

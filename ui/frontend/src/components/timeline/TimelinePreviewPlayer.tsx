@@ -76,7 +76,7 @@ import {
   previewDebugEnabled,
   type ClipLayerDiagnostic,
 } from "./playback/previewDiagnostics";
-import { audioSinkMode, getPreviewAudioGraph } from "./playback/previewAudioGraph";
+import { getPreviewAudioGraph } from "./playback/previewAudioGraph";
 
 type DragPreviewState = {
   clipId: string;
@@ -195,6 +195,18 @@ export function TimelinePreviewPlayer(props: {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const debugEnabled = previewDebugEnabled();
   const [layerDiagnostics, setLayerDiagnostics] = useState<ClipLayerDiagnostic[]>([]);
+  const [audioDiagnostics, setAudioDiagnostics] = useState<
+    Array<{
+      clipId: string;
+      gain: number;
+      sink: "webaudio" | "element";
+      ctx: string;
+      paused: boolean;
+      currentTime: number;
+      sourceTime: number;
+    }>
+  >([]);
+  const audioDebugLastLogRef = useRef(0);
   const mediaRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const audioOutputRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
   const audioPlayPendingRef = useRef<Set<string>>(new Set());
@@ -319,6 +331,17 @@ export function TimelinePreviewPlayer(props: {
     );
   }, []);
 
+  const applyAudioSink = useCallback((
+    el: HTMLAudioElement,
+    _clipId: string,
+    gain: number
+  ): "webaudio" | "element" => {
+    // Always use plain HTML audio like the Add Audio picker. MediaElementSource
+    // silently mutes boosted clips (gain > 1); preview clamps boost to 1.
+    el.volume = clamp(gain, 0, 1);
+    return "element";
+  }, []);
+
   const attemptAudioPlay = useCallback((
     el: HTMLAudioElement,
     output: PreviewAudioOutput
@@ -329,14 +352,7 @@ export function TimelinePreviewPlayer(props: {
     void (async () => {
       try {
         await getPreviewAudioGraph()?.resume();
-        const graph = getPreviewAudioGraph();
-        if (graph?.isRunning()) {
-          graph.attach(output.clip.id, el);
-          graph.setGain(output.clip.id, clamp(output.gain, 0, 2));
-          el.volume = 1;
-        } else {
-          el.volume = clamp(output.gain, 0, 1);
-        }
+        applyAudioSink(el, output.clip.id, output.gain);
         await el.play();
         audioPlayPendingRef.current.delete(key);
         audioFailureReportedRef.current.delete(key);
@@ -345,7 +361,7 @@ export function TimelinePreviewPlayer(props: {
         reportAudioFailure(output, error);
       }
     })();
-  }, [reportAudioFailure]);
+  }, [applyAudioSink, reportAudioFailure]);
 
   const syncAudioOutput = useCallback((
     el: HTMLAudioElement,
@@ -354,17 +370,8 @@ export function TimelinePreviewPlayer(props: {
     const { clip, sourceTime, gain } = output;
     const reversed = !!clip.reversed;
     el.playbackRate = Math.min(16, Math.max(0.1, clip.speed || 1));
-    // WebAudio GainNode supports gain > 1; only attach once the context is
-    // running so a suspended MediaElementSource cannot mute the element.
-    const graph = getPreviewAudioGraph();
-    if (graph && audioSinkMode(graph.state()) === "webaudio") {
-      graph.attach(clip.id, el);
-      graph.setGain(clip.id, clamp(gain, 0, 2));
-      el.volume = 1;
-    } else {
-      void graph?.resume();
-      el.volume = clamp(gain, 0, 1);
-    }
+    // Prefer plain element volume (like Add Audio picker). Preview clamps gain > 1.
+    applyAudioSink(el, clip.id, gain);
     const seekThreshold = reversed ? 0.05 : playing ? 0.35 : 0.05;
     if (Math.abs(el.currentTime - sourceTime) > seekThreshold) {
       try {
@@ -378,7 +385,7 @@ export function TimelinePreviewPlayer(props: {
     } else if (el.paused) {
       attemptAudioPlay(el, output);
     }
-  }, [attemptAudioPlay, playing]);
+  }, [applyAudioSink, attemptAudioPlay, playing]);
 
   useEffect(() => {
     const seenVisual = new Set<string>();
@@ -469,6 +476,42 @@ export function TimelinePreviewPlayer(props: {
       seenAudio.add(output.clip.id);
       const el = audioOutputRefs.current.get(output.clip.id);
       if (el) syncAudioOutput(el, output);
+    }
+
+    if (debugEnabled) {
+      const graph = getPreviewAudioGraph();
+      const ctx = graph?.state() ?? "n/a";
+      const rows = audioOutputs.map((output) => {
+        const el = audioOutputRefs.current.get(output.clip.id);
+        const g = clamp(output.gain, 0, 2);
+        return {
+          clipId: output.clip.id,
+          gain: g,
+          sink: "element" as const,
+          ctx: String(ctx),
+          paused: el?.paused ?? true,
+          volume: el?.volume ?? -1,
+          currentTime: el?.currentTime ?? -1,
+          sourceTime: output.sourceTime,
+        };
+      });
+      setAudioDiagnostics(rows);
+      const now = performance.now();
+      if (now - audioDebugLastLogRef.current > 1000) {
+        audioDebugLastLogRef.current = now;
+        console.debug(
+          "[previewAudio]",
+          rows.map((r) => ({
+            id: r.clipId.slice(0, 10),
+            gain: Number(r.gain.toFixed(3)),
+            vol: Number(r.volume.toFixed(3)),
+            sink: r.sink,
+            ctx: r.ctx,
+            paused: r.paused,
+            drift: Number(Math.abs(r.currentTime - r.sourceTime).toFixed(3)),
+          }))
+        );
+      }
     }
 
     for (const [id, el] of mediaRefs.current) {
@@ -1436,6 +1479,18 @@ export function TimelinePreviewPlayer(props: {
                 </div>
               );
             })}
+            {audioDiagnostics.length ? (
+              <div style={{ color: "#fc6", marginTop: 4 }}>audio</div>
+            ) : null}
+            {audioDiagnostics.map((a) => {
+              const drift = Math.abs(a.currentTime - a.sourceTime);
+              return (
+                <div key={`a-${a.clipId}`} style={{ color: "#fc6" }}>
+                  {a.clipId.slice(0, 8)} g{a.gain.toFixed(2)} {a.sink} ctx=
+                  {a.ctx} {a.paused ? "pause" : "run"} drift{drift.toFixed(2)}
+                </div>
+              );
+            })}
           </div>
         ) : null}
         {useBake && previewBake ? (
@@ -1884,11 +1939,10 @@ export function TimelinePreviewPlayer(props: {
             <audio
               key={`audio-output-${clip.id}`}
               preload="auto"
-              crossOrigin="anonymous"
               ref={(el) => {
                 if (el) {
                   audioOutputRefs.current.set(clip.id, el);
-                  // Attach only once AudioContext is running (see syncAudioOutput).
+                  // Element-only sink; no MediaElementSource attach.
                 } else {
                   audioOutputRefs.current.delete(clip.id);
                   getPreviewAudioGraph()?.detach(clip.id);

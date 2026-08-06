@@ -114,6 +114,32 @@ def test_composite_qwen_output_on_white_plate() -> None:
     assert plate.getpixel((150, 120)) == (200, 50, 50)
 
 
+def test_composite_hd_figure_on_canvas_upscales_placement() -> None:
+    from services.figure_crop import (
+        MIN_SQUARE_WORKING_SIZE,
+        composite_hd_figure_on_canvas,
+        scale_placed_figure_for_min_placement,
+    )
+
+    qwen = Image.new("RGB", (1024, 1024), color=(10, 20, 30))
+    placed = {
+        "canvas": {"width": 1024, "height": 576},
+        "placement": {"x": 100, "y": 50, "width": 400, "height": 400},
+        "workingSquareSize": MIN_SQUARE_WORKING_SIZE,
+    }
+    c_w, c_h, box = scale_placed_figure_for_min_placement(placed)
+    assert box["width"] >= MIN_SQUARE_WORKING_SIZE
+    assert box["height"] >= MIN_SQUARE_WORKING_SIZE
+    assert c_w > 1024
+    plate = composite_hd_figure_on_canvas(qwen, placed)
+    assert plate.size == (c_w, c_h)
+    # Placement patch should keep Qwen color (near 1:1 with 1024 side).
+    cx = box["x"] + box["width"] // 2
+    cy = box["y"] + box["height"] // 2
+    assert plate.getpixel((cx, cy)) == (10, 20, 30)
+    assert plate.getpixel((0, 0)) == (255, 255, 255)
+
+
 def test_composite_rgba_on_white_plate() -> None:
     rgba = Image.new("RGBA", (40, 60), color=(0, 128, 0, 200))
     plate = composite_rgba_on_white_plate(

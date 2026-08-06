@@ -2,7 +2,7 @@
 
 import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL, wsUrlForPath } from "../lib/api";
+import { API_BASE_URL, apiGetStartupTokens, wsUrlForPath } from "../lib/api";
 import {
   SharedLogStream,
   SharedLogStreamHandle,
@@ -25,6 +25,23 @@ export default function StartupInstallPage() {
   const sawLogRef = useRef(false);
   const sawDoneOrErrorRef = useRef(false);
   const errorTextRef = useRef("");
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const saved = await apiGetStartupTokens();
+        if (cancelled) return;
+        if (saved.hf_token) setToken(saved.hf_token);
+        if (saved.github_pat) setGithubPat(saved.github_pat);
+      } catch {
+        // Prefill is best-effort; empty form is fine if API is down.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function setNotRunning() {
     setRunning(false);
@@ -282,6 +299,18 @@ export default function StartupInstallPage() {
               color: "inherit",
             }}
           />
+
+          <div
+            style={{
+              fontSize: 12,
+              opacity: 0.65,
+              lineHeight: 1.4,
+            }}
+          >
+            Tokens are saved locally on this drive (storage/api_settings.json) and
+            are not committed to git. Prefill uses the last values from Install
+            Dependencies.
+          </div>
 
           <button
             type="submit"

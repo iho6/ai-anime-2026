@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 # Streaming-style loudness target. -14 LUFS keeps dialogue/music previews hot
 # without the +/-2x gain cap flattening most corrections.
 TARGET_LUFS = -14.0
-# Keep corrections inside the 0..2 preview/export gain range (with headroom
-# for user automation on top).
+# Keep corrections inside the 0..2 gain range used by preview math before the
+# HTML volume / export clamp to 1 (with headroom for user automation on top).
 MIN_NORMALIZATION_GAIN = 0.25
 MAX_NORMALIZATION_GAIN = 2.0
 

@@ -160,6 +160,15 @@ def settings_get_hf_token() -> dict[str, str]:
     return {"hf_token": token}
 
 
+@app.get("/settings/startup_tokens")
+def settings_get_startup_tokens() -> dict[str, str]:
+    """Return locally persisted HF + GitHub tokens for startup form prefill."""
+    return {
+        "hf_token": (os.environ.get("HF_TOKEN") or "").strip(),
+        "github_pat": (os.environ.get("GITHUB_PAT") or "").strip(),
+    }
+
+
 @app.post("/settings/hf_token")
 def settings_update_hf_token(payload: HfTokenUpdatePayload) -> dict[str, Any]:
     token = (payload.hf_token or "").strip()

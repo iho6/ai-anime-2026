@@ -16,13 +16,20 @@ Shared configuration lives in [`constant.py`](constant.py). Override with enviro
 
 ## GPU / PyTorch (RTX 4090 and 5090)
 
-Use **PyTorch 2.8+** with **CUDA 12.8 wheels** (`cu128`). Official wheels cover Ada (`sm_89`, RTX 4090) and Blackwell (`sm_120`, RTX 5090).
+Use **PyTorch 2.8+** with **CUDA 12.8 wheels** (`cu128`) by default. Official wheels cover Ada (`sm_89`, RTX 4090) and Blackwell (`sm_120`, RTX 5090).
+
+Override with **`ANIME2026_TORCH_PROFILE`** when moving the same Seagate `.venv` between GPU generations (reinstalls **only** torch/vision/audio):
+
+| Profile | Index | Typical GPUs |
+|---------|-------|----------------|
+| `cu128` (default) / `rtx50` | cu128 | RTX 50 / mixed Ada+Blackwell stack |
+| `rtx40` | cu124 | RTX 40-class when you want the Ada cu124 line |
 
 | Install path | When |
 |--------------|------|
 | UI **Launch** (startup WebSocket) | Primary: [`services.logic.run_startup_setup_and_launch`](logic.py) calls [`ensure_pytorch_stack`](pytorch_setup.py) |
-| `dev.sh --full-bootstrap` | Optional pre-install into `.venv` before opening the UI |
-| `dev.sh` default (`--minimal-ui`) | API only; PyTorch is installed on Launch |
+| `dev.sh --full-bootstrap` / `dev.ps1 -BootstrapMode full` | Optional pre-install into `.venv` before opening the UI |
+| `dev.sh` / `dev.ps1` default (`minimal`) | API only; PyTorch is installed on Launch |
 
 Verify from repo root:
 
@@ -33,6 +40,25 @@ Verify from repo root:
 RTX 5090: use an NVIDIA driver that supports CUDA 12.8 (e.g. 570+). Startup logs include extended [`gpu_preflight`](utils.py) (torch version, arch list, smoke test).
 
 Install logic lives in [`pytorch_setup.py`](pytorch_setup.py) (single source of truth; do not pin `torch==2.6` cu124).
+
+## Portable Seagate Python + `.venv`
+
+Keep the interpreter **on the same drive as the repo** so plugging the HDD into another laptop does not wipe packages:
+
+| Path | Role |
+|------|------|
+| `<drive>/Animation/python311/` | Full CPython 3.11 (sibling of this repo) |
+| `<drive>/Animation/anime2026_refactored/.venv/` | Traveling venv |
+
+One-time install of on-drive Python:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_portable_python.ps1
+```
+
+Then `.\dev.ps1` prefers `..\python311\python.exe` (or `ANIME2026_PYTHON`). If the Seagate letter changes (`H:` → `D:`), `dev.ps1` / `dev.sh` **rewrite** `pyvenv.cfg` instead of deleting `.venv`. Only an irreparable venv is recreated. Torch profile swaps use `ANIME2026_TORCH_PROFILE` as above — not a full env reset.
+
+Do **not** rely on a host-only `C:\Users\…\Python311` install for this workflow.
 
 In local `--test-mode`, image-input services now upload local filesystem paths directly to ComfyUI via `POST /upload/image` and pass the returned input reference into `LoadImage`. This avoids temporary S3 staging for local test runs.
 

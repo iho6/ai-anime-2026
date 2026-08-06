@@ -10,7 +10,9 @@ working square size):
 - **Qwen primary**: full base identity image (character starting portrait) — no crop.
 - **Qwen keypoint aux**: 1024² crop at ``placement`` (enlarged pose, less whitespace).
 - **Qwen output**: only the model result is pasted onto a fresh white plate at
-  ``placedFigure`` coordinates (never the identity input).
+  ``placedFigure`` coordinates (never the identity input). The native Qwen file
+  is the quality master for gallery/strip/timeline; white-plate composite is
+  layout preview / late bake via ``composite_hd_figure_on_canvas``.
 """
 
 from __future__ import annotations
@@ -338,6 +340,59 @@ def composite_qwen_output_on_white_plate(
     placement = placed_figure["placement"]
     c_w, c_h = int(canvas["width"]), int(canvas["height"])
     return paste_on_white_canvas(qwen_output, c_w, c_h, placement)
+
+
+def scale_placed_figure_for_min_placement(
+    placed_figure: dict[str, Any],
+    *,
+    min_placement_side: int = MIN_SQUARE_WORKING_SIZE,
+) -> tuple[int, int, dict[str, int]]:
+    """Upscale canvas/placement so the shorter placement side is at least ``min_placement_side``.
+
+    Used for late composite at export so HD Qwen (~1024²) is not LANCZOS-shrunk into a
+    ~400px layout box. Layout ratios are preserved.
+    """
+    canvas = placed_figure["canvas"]
+    placement = placed_figure["placement"]
+    c_w, c_h = int(canvas["width"]), int(canvas["height"])
+    x, y, w, h = placement_box(placement)
+    short = min(w, h)
+    scale = 1.0
+    if min_placement_side > 0 and short > 0:
+        scale = max(1.0, float(min_placement_side) / float(short))
+    if scale <= 1.0:
+        return c_w, c_h, {"x": x, "y": y, "width": w, "height": h}
+    return (
+        max(1, int(round(c_w * scale))),
+        max(1, int(round(c_h * scale))),
+        {
+            "x": int(round(x * scale)),
+            "y": int(round(y * scale)),
+            "width": max(1, int(round(w * scale))),
+            "height": max(1, int(round(h * scale))),
+        },
+    )
+
+
+def composite_hd_figure_on_canvas(
+    qwen_output: Image.Image,
+    placed_figure: dict[str, Any],
+    *,
+    min_placement_side: int = MIN_SQUARE_WORKING_SIZE,
+    background: tuple[int, int, int] = (255, 255, 255),
+) -> Image.Image:
+    """Late-composite HD Qwen onto a (possibly upscaled) white plate for bake/export."""
+    c_w, c_h, placement = scale_placed_figure_for_min_placement(
+        placed_figure, min_placement_side=min_placement_side
+    )
+    return paste_patch_on_canvas(
+        qwen_output,
+        c_w,
+        c_h,
+        placement,
+        background=background,
+        feather_px=0,
+    ).convert("RGB")
 
 
 def placed_figure_from_motion_capture_meta(
