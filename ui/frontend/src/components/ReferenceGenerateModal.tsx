@@ -280,7 +280,7 @@ function ReferenceGenerateModalOpen(props: ReferenceGenerateModalProps) {
             ) : (
               <div style={{ marginTop: 8, color: "#bbb", fontSize: 13 }}>
                 <div style={{ marginBottom: 4 }}>
-                  640×640 · {WAN_VIDEO_FPS} FPS · {formatWanVideoLengthHint(videoLength)}
+                  1280×1280 · {WAN_VIDEO_FPS} FPS · {formatWanVideoLengthHint(videoLength)}
                 </div>
                 <div style={{ color: "#aaa", fontSize: 12, marginBottom: 2 }}>
                   Output length (frames, 4n+1: 25–121)
@@ -317,8 +317,8 @@ function ReferenceGenerateModalOpen(props: ReferenceGenerateModalProps) {
                     const result = await onGenerate({
                       kind,
                       promptText: prompt.trim(),
-                      width: kind === "video" ? 640 : Math.max(64, Math.round(width)),
-                      height: kind === "video" ? 640 : Math.max(64, Math.round(height)),
+                      width: kind === "video" ? 1280 : Math.max(64, Math.round(width)),
+                      height: kind === "video" ? 1280 : Math.max(64, Math.round(height)),
                       ...(kind === "video" ? { length: videoLength } : {}),
                     });
                     if (

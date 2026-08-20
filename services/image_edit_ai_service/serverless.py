@@ -25,6 +25,9 @@ except ModuleNotFoundError:  # local --test-mode should still work
 
 from services import prompts
 from services.constant import LOCAL_OUTPUT_DIR, TIMEOUT
+from services.qwen_image_dims import (
+    snap_paths_to_shared_qwen_bucket,
+)
 from services.utils import (
     apply_upload_local_paths_to_comfy_in_task,
     apply_convert_local_paths_to_urls_in_task,
@@ -59,8 +62,8 @@ WORKFLOW_STEM = "image_qwen_image_edit_2509"
 
 _QWEN_EDIT_ENCODER_NEG = "433:110"
 _QWEN_EDIT_ENCODER_POS = "433:111"
-_QWEN_EDIT_SCALE_AUX2 = "433:118"
-_QWEN_EDIT_SCALE_AUX3 = "433:119"
+_QWEN_EDIT_VAE_ENCODE = "433:88"
+_QWEN_EDIT_KONTEXT_IDS = ("433:117", "433:118", "433:119")
 
 
 def _load_image_node_sort_key(node_id: str) -> tuple[int, int | str]:
@@ -78,6 +81,33 @@ def _find_load_image_nodes_ordered(workflow: dict) -> list[str]:
             ids.append(str(nid))
     ids.sort(key=_load_image_node_sort_key)
     return ids
+
+
+def rewire_qwen_edit_encode_without_kontext(workflow: dict) -> dict:
+    """Point VAEEncode / Qwen encoders at LoadImage and drop FluxKontextImageScale.
+
+    Flux 1MP buckets would snap a 1328² still down to 1024².
+    """
+    load_ids = _find_load_image_nodes_ordered(workflow)
+    if not load_ids:
+        return workflow
+    primary = load_ids[0]
+    vae = workflow.get(_QWEN_EDIT_VAE_ENCODE)
+    if isinstance(vae, dict):
+        vae.setdefault("inputs", {})["pixels"] = [primary, 0]
+    for enc_id in (_QWEN_EDIT_ENCODER_NEG, _QWEN_EDIT_ENCODER_POS):
+        node = workflow.get(enc_id)
+        if not isinstance(node, dict):
+            continue
+        inp = node.setdefault("inputs", {})
+        inp["image1"] = [primary, 0]
+        if len(load_ids) >= 2 and "image2" in inp:
+            inp["image2"] = [load_ids[1], 0]
+        if len(load_ids) >= 3 and "image3" in inp:
+            inp["image3"] = [load_ids[2], 0]
+    for nid in _QWEN_EDIT_KONTEXT_IDS:
+        workflow.pop(nid, None)
+    return workflow
 
 
 def _find_prompt_node(workflow: dict) -> str | None:
@@ -246,6 +276,7 @@ def run_one_prompt(
     cfg: float | None = None,
 ) -> str:
     w = deepcopy(api_workflow)
+    rewire_qwen_edit_encode_without_kontext(w)
     load_ids = _find_load_image_nodes_ordered(w)
     prompt_nid = _find_prompt_node(w)
     if not load_ids or not prompt_nid:
@@ -273,9 +304,9 @@ def run_one_prompt(
             if not isinstance(node, dict):
                 continue
             inp = node.setdefault("inputs", {})
-            inp["image2"] = [_QWEN_EDIT_SCALE_AUX2, 0]
+            inp["image2"] = [load_ids[1], 0]
             if len(aux) >= 2:
-                inp["image3"] = [_QWEN_EDIT_SCALE_AUX3, 0]
+                inp["image3"] = [load_ids[2], 0]
             else:
                 inp.pop("image3", None)
 
@@ -322,84 +353,99 @@ def run_image_edit_job(
             cfg = float(cfg)
 
         aux_url_list = _parse_auxiliary_image_urls(task)
-        aux_comfy_refs: list[str] = []
-        for aux_u in aux_url_list:
-            try:
-                aux_comfy_refs.append(
-                    resolve_to_comfy_input_ref(
-                        aux_u,
+        temps_to_delete: list[str] = []
+        try:
+            use_s3 = services_use_s3()
+
+            for img_idx, image_url in enumerate(image_urls):
+                snapped_primary, snapped_aux, temps = snap_paths_to_shared_qwen_bucket(
+                    str(image_url), list(aux_url_list)
+                )
+                temps_to_delete.extend(temps)
+                try:
+                    aux_comfy_refs: list[str] = []
+                    for aux_u in snapped_aux:
+                        aux_comfy_refs.append(
+                            resolve_to_comfy_input_ref(
+                                aux_u,
+                                server_address,
+                                subfolder="anime2026_image_edit_inputs",
+                            )
+                        )
+                except Exception as e:
+                    logger.error("Auxiliary input resolve failed: %s", e)
+                    out["error"] = f"Failed to resolve auxiliary image: {e}"
+                    return out
+
+                try:
+                    comfy_image_ref = resolve_to_comfy_input_ref(
+                        snapped_primary,
                         server_address,
                         subfolder="anime2026_image_edit_inputs",
                     )
-                )
-            except Exception as e:
-                logger.error("Auxiliary input resolve failed: %s", e)
-                out["error"] = f"Failed to resolve auxiliary image: {aux_u}"
-                return out
-
-        use_s3 = services_use_s3()
-
-        for img_idx, image_url in enumerate(image_urls):
-            try:
-                comfy_image_ref = resolve_to_comfy_input_ref(
-                    image_url, server_address, subfolder="anime2026_image_edit_inputs"
-                )
-            except Exception as e:
-                logger.error("Input resolve failed: %s", e)
-                out["error"] = f"Failed to resolve image: {image_url}"
-                return out
-
-            row = prompts_matrix[img_idx]
-            id_row = catalog_id_matrix[img_idx]
-            for p_idx, prompt_text in enumerate(row):
-                try:
-                    pid = run_one_prompt(
-                        api,
-                        comfy_image_ref,
-                        prompt_text,
-                        server_address,
-                        auxiliary_comfy_refs=aux_comfy_refs or None,
-                        cfg=cfg,
-                    )
-                    waiting_for_results(pid, server_address, timeout_seconds=TIMEOUT)
-                    with urllib.request.urlopen(
-                        f"http://{server_address}/history/{pid}"
-                    ) as resp:
-                        history = json.loads(resp.read().decode("utf-8"))
-                    fn = get_first_output_filename(
-                        history, pid, LOCAL_OUTPUT_DIR
-                    )
-                    if not fn:
-                        out["error"] = (
-                            f"No output image for image {img_idx} prompt {p_idx}"
-                        )
-                        return out
-                    local_file = osp.join(LOCAL_OUTPUT_DIR, fn)
-                    if use_s3:
-                        url = upload_to_s3(local_file, str(uuid.uuid4()))
-                    else:
-                        qfn = urllib.parse.quote(fn)
-                        url = f"http://{server_address}/view?filename={qfn}&type=output"
-                    entry = {
-                        "image_index": img_idx,
-                        "prompt_index": p_idx,
-                        "prompt": prompt_text,
-                        "url": url,
-                    }
-                    cid = id_row[p_idx] if p_idx < len(id_row) else None
-                    if cid is not None:
-                        entry["catalog_id"] = cid
-                    out["results"].append(entry)
                 except Exception as e:
-                    logger.error(
-                        "Run failed image=%s prompt=%s: %s", img_idx, p_idx, e
-                    )
-                    out["error"] = (
-                        f"Workflow failed for image {img_idx} prompt {p_idx}: {e}"
-                    )
+                    logger.error("Input resolve failed: %s", e)
+                    out["error"] = f"Failed to resolve image: {image_url}"
                     return out
 
-        return out
+                row = prompts_matrix[img_idx]
+                id_row = catalog_id_matrix[img_idx]
+                for p_idx, prompt_text in enumerate(row):
+                    try:
+                        pid = run_one_prompt(
+                            api,
+                            comfy_image_ref,
+                            prompt_text,
+                            server_address,
+                            auxiliary_comfy_refs=aux_comfy_refs or None,
+                            cfg=cfg,
+                        )
+                        waiting_for_results(pid, server_address, timeout_seconds=TIMEOUT)
+                        with urllib.request.urlopen(
+                            f"http://{server_address}/history/{pid}"
+                        ) as resp:
+                            history = json.loads(resp.read().decode("utf-8"))
+                        fn = get_first_output_filename(
+                            history, pid, LOCAL_OUTPUT_DIR
+                        )
+                        if not fn:
+                            out["error"] = (
+                                f"No output image for image {img_idx} prompt {p_idx}"
+                            )
+                            return out
+                        local_file = osp.join(LOCAL_OUTPUT_DIR, fn)
+                        if use_s3:
+                            url = upload_to_s3(local_file, str(uuid.uuid4()))
+                        else:
+                            qfn = urllib.parse.quote(fn)
+                            url = f"http://{server_address}/view?filename={qfn}&type=output"
+                        entry = {
+                            "image_index": img_idx,
+                            "prompt_index": p_idx,
+                            "prompt": prompt_text,
+                            "url": url,
+                        }
+                        cid = id_row[p_idx] if p_idx < len(id_row) else None
+                        if cid is not None:
+                            entry["catalog_id"] = cid
+                        out["results"].append(entry)
+                    except Exception as e:
+                        logger.error(
+                            "Run failed image=%s prompt=%s: %s", img_idx, p_idx, e
+                        )
+                        out["error"] = (
+                            f"Workflow failed for image {img_idx} prompt {p_idx}: {e}"
+                        )
+                        return out
+
+            return out
+        finally:
+            for tmp in temps_to_delete:
+                try:
+                    if tmp and osp.isfile(tmp):
+                        os.unlink(tmp)
+                except OSError:
+                    pass
     except ValueError as e:
         out["error"] = str(e)
         return out

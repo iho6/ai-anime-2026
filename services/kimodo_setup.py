@@ -7,6 +7,7 @@ active interpreter. CMake must build against the venv Python, not system python.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -82,7 +83,11 @@ def apply_kimodo_cmake_patches(
 
 
 def motion_correction_extension_files(kimodo_dir: Path | None = None) -> list[Path]:
-    """Built extension modules under the kimodo tree, if any."""
+    """Built extension modules under the kimodo tree, if any.
+
+    Linux builds produce ``*.so``; Windows editable installs produce ``*.pyd``
+    (sometimes accompanied by a sibling ``*.dll``).
+    """
     pkg_dir = (
         (kimodo_dir or _KIMODO_DIR)
         / "MotionCorrection"
@@ -91,7 +96,22 @@ def motion_correction_extension_files(kimodo_dir: Path | None = None) -> list[Pa
     )
     if not pkg_dir.is_dir():
         return []
-    return sorted(pkg_dir.glob("_motion_correction*.so"))
+    found: list[Path] = []
+    for pattern in (
+        "_motion_correction*.so",
+        "_motion_correction*.pyd",
+        "_motion_correction*.dll",
+    ):
+        found.extend(pkg_dir.glob(pattern))
+    # De-dupe while preserving order (same stem may match multiple globs).
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for p in sorted(found, key=lambda x: x.name):
+        if p in seen:
+            continue
+        seen.add(p)
+        out.append(p)
+    return out
 
 
 def _subprocess_import_status() -> tuple[bool, list[str]]:
@@ -130,12 +150,14 @@ def _subprocess_import_status() -> tuple[bool, list[str]]:
 
 
 def _kimodo_import_status(kimodo_dir: Path | None = None) -> tuple[bool, str]:
-    """Try kimodo + motion_correction imports; report per-module errors and .so state."""
+    """Try kimodo + motion_correction imports; report per-module errors and extension state."""
     ok, lines = _subprocess_import_status()
 
-    so_files = motion_correction_extension_files(kimodo_dir)
-    if so_files:
-        lines.append("motion_correction extension: " + ", ".join(p.name for p in so_files))
+    ext_files = motion_correction_extension_files(kimodo_dir)
+    if ext_files:
+        lines.append(
+            "motion_correction extension: " + ", ".join(p.name for p in ext_files)
+        )
     else:
         ok = False
         pkg = (
@@ -145,15 +167,182 @@ def _kimodo_import_status(kimodo_dir: Path | None = None) -> tuple[bool, str]:
             / "motion_correction"
         )
         lines.append(
-            f"motion_correction extension: missing (no _motion_correction*.so under {pkg})"
+            "motion_correction extension: missing "
+            f"(no _motion_correction*.so/.pyd under {pkg})"
         )
 
     return ok, "\n".join(lines)
 
 
+def _env_flag(name: str) -> bool:
+    return (os.environ.get(name) or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+
+
+def _cmake_on_path() -> bool:
+    """True if cmake is usable without installing (PATH refresh + common dirs on Windows)."""
+    if shutil.which("cmake"):
+        return True
+    if os.name == "nt":
+        _refresh_windows_path()
+        if shutil.which("cmake"):
+            return True
+        if _prepend_known_cmake_dirs() and shutil.which("cmake"):
+            return True
+    return False
+
+
+def _force_kimodo_build() -> bool:
+    return _env_flag("ANIME2026_FORCE_KIMODO_BUILD")
+
+
+def _skip_kimodo() -> bool:
+    return _env_flag("ANIME2026_SKIP_KIMODO")
+
+
+def _kimodo_build_failed_sentinel() -> Path:
+    return _REPO_ROOT / ".anime2026_kimodo_build_failed"
+
+
+def _kimodo_build_failed_previously() -> bool:
+    return _kimodo_build_failed_sentinel().is_file()
+
+
+def _mark_kimodo_build_failed(detail: str) -> None:
+    try:
+        _kimodo_build_failed_sentinel().write_text(
+            (detail or "kimodo build failed").strip()[:4000] + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
+def _clear_kimodo_build_failed() -> None:
+    try:
+        _kimodo_build_failed_sentinel().unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def kimodo_importable() -> bool:
     ok, _ = _kimodo_import_status()
     return ok
+
+
+def _winget_exe_usable(exe: str) -> bool:
+    """True when ``exe`` runs ``winget --version`` successfully (rejects dead App aliases)."""
+    try:
+        path = Path(exe)
+        if path.is_file() and path.stat().st_size == 0:
+            # Common WindowsApps stub; may still work via execution alias — probe below.
+            pass
+        proc = subprocess.run(
+            [exe, "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+        return proc.returncode == 0 and bool((proc.stdout or proc.stderr or "").strip())
+    except Exception:
+        return False
+
+
+def _resolve_winget_exe() -> str | None:
+    """Locate a working winget.exe (PATH, WindowsApps, or ``where``)."""
+    candidates: list[str] = []
+    which = shutil.which("winget")
+    if which:
+        candidates.append(which)
+    local_app = (os.environ.get("LOCALAPPDATA") or "").strip()
+    if local_app:
+        candidates.append(
+            str(Path(local_app) / "Microsoft" / "WindowsApps" / "winget.exe")
+        )
+    # Desktop App Installer package location varies; ask where.exe for extras.
+    try:
+        proc = subprocess.run(
+            ["where.exe", "winget"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+        )
+        if proc.returncode == 0:
+            for line in (proc.stdout or "").splitlines():
+                line = line.strip()
+                if line:
+                    candidates.append(line)
+    except Exception:
+        pass
+
+    seen: set[str] = set()
+    for cand in candidates:
+        key = cand.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        if _winget_exe_usable(cand):
+            return cand
+    return None
+
+
+def _vswhere_exe() -> str | None:
+    pf86 = os.environ.get("ProgramFiles(x86)") or r"C:\Program Files (x86)"
+    candidate = (
+        Path(pf86)
+        / "Microsoft Visual Studio"
+        / "Installer"
+        / "vswhere.exe"
+    )
+    if candidate.is_file():
+        return str(candidate)
+    return shutil.which("vswhere")
+
+
+def _msvc_available() -> bool:
+    """True if MSVC C++ toolchain looks usable (cl.exe or VS Build Tools via vswhere)."""
+    if shutil.which("cl"):
+        return True
+    if shutil.which("g++"):
+        # MinGW is accepted by the MotionCorrection overlay when g++ is present.
+        return True
+    vswhere = _vswhere_exe()
+    if not vswhere:
+        return False
+    try:
+        proc = subprocess.run(
+            [
+                vswhere,
+                "-latest",
+                "-products",
+                "*",
+                "-requires",
+                "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+                "-property",
+                "installationPath",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+        return proc.returncode == 0 and bool((proc.stdout or "").strip())
+    except Exception:
+        return False
+
+
+def _cxx_toolchain_available() -> bool:
+    return _msvc_available()
 
 
 def _kimodo_pip_install_env() -> dict[str, str]:
@@ -194,6 +383,34 @@ def _kimodo_requirements_install_cmd() -> list[str]:
     return [sys.executable, "-m", "pip", "install", "-r", str(_KIMODO_REQUIREMENTS)]
 
 
+def kimodo_runtime_deps_ready() -> bool:
+    """True when primary kimodo runtime deps (gradio) are importable."""
+    return importlib.util.find_spec("gradio") is not None
+
+
+def ensure_kimodo_runtime_deps(
+    *,
+    run_command: Callable[..., None] | None = None,
+    log_cb: Callable[[str], None] | None = None,
+) -> None:
+    """Install ``kimodo-requirements.txt`` when gradio (or peers) are missing.
+
+    Safe to call from text-encoder startup without rebuilding MotionCorrection.
+    """
+    if kimodo_runtime_deps_ready():
+        if log_cb:
+            log_cb("kimodo runtime deps already present (gradio)")
+        return
+    if log_cb:
+        log_cb("Installing kimodo runtime dependencies…")
+    _run_pip_install(
+        _kimodo_requirements_install_cmd(),
+        run_command=run_command,
+        log_cb=log_cb,
+        env=os.environ.copy(),
+    )
+
+
 def _run_pip_install(
     cmd: list[str],
     *,
@@ -224,7 +441,11 @@ def _run_kimodo_editable_install(
     run_command: Callable[..., None] | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> None:
-    """Apply patches, editable-install kimodo + motion_correction, restore cu128 torch."""
+    """Apply patches, editable-install kimodo + deps + motion_correction, restore cu128 torch.
+
+    Runtime requirements are installed **before** MotionCorrection so a C-extension
+    build failure cannot strand the venv without gradio (needed by the text encoder).
+    """
     apply_kimodo_patches(kimodo_dir, log_cb=log_cb)
     env = _kimodo_pip_install_env()
     if log_cb:
@@ -236,20 +457,20 @@ def _run_kimodo_editable_install(
         env=env,
     )
     if log_cb:
-        log_cb("Installing motion_correction (editable C extension)…")
-    _run_pip_install(
-        _motion_correction_pip_install_cmd(kimodo_dir),
-        run_command=run_command,
-        log_cb=log_cb,
-        env=env,
-    )
-    if log_cb:
         log_cb("Installing kimodo runtime dependencies…")
     _run_pip_install(
         _kimodo_requirements_install_cmd(),
         run_command=run_command,
         log_cb=log_cb,
         env=os.environ.copy(),
+    )
+    if log_cb:
+        log_cb("Installing motion_correction (editable C extension)…")
+    _run_pip_install(
+        _motion_correction_pip_install_cmd(kimodo_dir),
+        run_command=run_command,
+        log_cb=log_cb,
+        env=env,
     )
     from services.pytorch_setup import ensure_pytorch_stack
 
@@ -278,10 +499,16 @@ def _kimodo_build_deps_hint() -> str:
         return f"Install manually: sudo apt-get install -y {packages}"
     if os.name == "nt":
         return (
-            "On Windows: install CMake (e.g. winget install Kitware.CMake --scope user), "
-            "open a new terminal so cmake is on PATH, ensure Visual Studio Build Tools "
-            "with C++ are installed, and use a full CPython with include\\Python.h "
-            f"(active interpreter: {sys.executable})."
+            "On Windows: CMake + Visual Studio 2022 Build Tools (C++ workload) are required "
+            "to compile motion_correction. Prefer: "
+            "powershell -ExecutionPolicy Bypass -File scripts\\install_kimodo_windows.ps1 "
+            "(or set ANIME2026_FORCE_KIMODO_BUILD=1 and re-run Launch). "
+            "Manual: winget install Kitware.CMake --scope user; "
+            "winget install Microsoft.VisualStudio.2022.BuildTools "
+            "--override \"--wait --passive --add Microsoft.VisualStudio.Workload.VCTools "
+            "--includeRecommended\". Use a full CPython with include\\Python.h "
+            f"(active interpreter: {sys.executable}). "
+            "Skip motion entirely with ANIME2026_SKIP_KIMODO=1."
         )
     return "Install cmake and Python development headers for this platform."
 
@@ -344,44 +571,19 @@ def _prepend_known_cmake_dirs() -> bool:
     return False
 
 
-def _ensure_cmake_windows(
+def _run_winget(
+    args: list[str],
     *,
     log_cb: Callable[[str], None] | None = None,
-) -> None:
-    """Install CMake via user-scope winget when missing (Windows only)."""
-    if os.name != "nt":
-        return
-    if shutil.which("cmake"):
-        return
-
-    # Already installed but PATH not refreshed in this process.
-    _refresh_windows_path()
-    if shutil.which("cmake") or _prepend_known_cmake_dirs():
-        if shutil.which("cmake"):
-            if log_cb:
-                log_cb(f"Found cmake on PATH: {shutil.which('cmake')}")
-            return
-
-    winget = shutil.which("winget")
+) -> subprocess.CompletedProcess[str]:
+    winget = _resolve_winget_exe()
     if not winget:
         raise RuntimeError(
-            "cmake not found on PATH and winget is unavailable.\n"
+            "winget is unavailable (PATH / WindowsApps alias failed).\n"
             + _kimodo_build_deps_hint()
         )
-
-    cmd = [
-        winget,
-        "install",
-        "-e",
-        "--id",
-        "Kitware.CMake",
-        "--scope",
-        "user",
-        "--accept-package-agreements",
-        "--accept-source-agreements",
-    ]
+    cmd = [winget, *args]
     if log_cb:
-        log_cb("cmake not found; installing Kitware.CMake via winget (user scope)…")
         log_cb("$ " + " ".join(cmd))
     proc = subprocess.run(
         cmd,
@@ -399,12 +601,42 @@ def _ensure_cmake_windows(
         for line in proc.stderr.splitlines():
             if line.strip():
                 log_cb(line)
+    return proc
+
+
+def _ensure_cmake_windows(
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> None:
+    """Install CMake via user-scope winget when missing (Windows only)."""
+    if os.name != "nt":
+        return
+    if _cmake_on_path():
+        if log_cb:
+            log_cb(f"Found cmake on PATH: {shutil.which('cmake')}")
+        return
+
+    if log_cb:
+        log_cb("cmake not found; installing Kitware.CMake via winget (user scope)…")
+    proc = _run_winget(
+        [
+            "install",
+            "-e",
+            "--id",
+            "Kitware.CMake",
+            "--scope",
+            "user",
+            "--accept-package-agreements",
+            "--accept-source-agreements",
+        ],
+        log_cb=log_cb,
+    )
 
     _refresh_windows_path()
     if not shutil.which("cmake"):
         _prepend_known_cmake_dirs()
 
-    if shutil.which("cmake"):
+    if _cmake_on_path():
         if log_cb:
             log_cb(f"cmake ready: {shutil.which('cmake')}")
         return
@@ -413,6 +645,70 @@ def _ensure_cmake_windows(
     raise RuntimeError(
         "cmake still not on PATH after winget install of Kitware.CMake "
         f"(exit {proc.returncode}). Open a new terminal and retry, or install CMake manually.\n"
+        f"{detail}\n"
+        + _kimodo_build_deps_hint()
+    )
+
+
+def _ensure_msvc_windows(
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> None:
+    """Ensure MSVC (or MinGW g++) is available; attempt VS 2022 Build Tools via winget."""
+    if os.name != "nt":
+        return
+    if _cxx_toolchain_available():
+        if log_cb:
+            which_cl = shutil.which("cl") or shutil.which("g++") or "vswhere-detected"
+            log_cb(f"C++ toolchain available ({which_cl})")
+        return
+
+    if log_cb:
+        log_cb(
+            "MSVC/MinGW not found; installing Visual Studio 2022 Build Tools "
+            "(C++ workload) via winget. UAC/admin approval may be required…"
+        )
+    # Machine-scope Build Tools; often needs elevation.
+    override = (
+        "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools "
+        "--includeRecommended"
+    )
+    try:
+        proc = _run_winget(
+            [
+                "install",
+                "-e",
+                "--id",
+                "Microsoft.VisualStudio.2022.BuildTools",
+                "--accept-package-agreements",
+                "--accept-source-agreements",
+                "--override",
+                override,
+            ],
+            log_cb=log_cb,
+        )
+    except RuntimeError as exc:
+        raise RuntimeError(
+            "C++ toolchain missing and winget could not install VS Build Tools.\n"
+            "Install manually from "
+            "https://visualstudio.microsoft.com/visual-cpp-build-tools/ "
+            "(workload: Desktop development with C++), then set "
+            "ANIME2026_FORCE_KIMODO_BUILD=1 and retry.\n"
+            + _kimodo_build_deps_hint()
+        ) from exc
+
+    _refresh_windows_path()
+    if _cxx_toolchain_available():
+        if log_cb:
+            log_cb("C++ toolchain ready after Build Tools install")
+        return
+
+    detail = (proc.stderr or proc.stdout or "").strip()
+    raise RuntimeError(
+        "C++ toolchain still missing after winget install of VS 2022 Build Tools "
+        f"(exit {proc.returncode}). Approve UAC if prompted, open a new terminal, "
+        "or install Build Tools manually:\n"
+        "https://visualstudio.microsoft.com/visual-cpp-build-tools/\n"
         f"{detail}\n"
         + _kimodo_build_deps_hint()
     )
@@ -472,14 +768,20 @@ def ensure_kimodo_build_deps(
     else:
         if log_cb:
             log_cb(
-                "Ensuring kimodo build deps (non-apt): cmake on PATH + Python headers"
+                "Ensuring kimodo build deps (non-apt): cmake + C++ toolchain + Python headers"
             )
-        # Windows: auto-install CMake via winget when missing (no apt-get).
+        # Windows: auto-install CMake + attempt VS Build Tools via winget.
         if os.name == "nt":
             _ensure_cmake_windows(log_cb=log_cb)
+            _ensure_msvc_windows(log_cb=log_cb)
 
     # Never call apt-get here on Windows; verify local toolchain.
     _require_cmake()
+    if os.name == "nt" and not _cxx_toolchain_available():
+        raise RuntimeError(
+            "C++ toolchain (MSVC or MinGW g++) required to build motion_correction.\n"
+            + _kimodo_build_deps_hint()
+        )
     require_python_dev_headers()
 
 
@@ -589,34 +891,69 @@ def ensure_kimodo_installed(
 ) -> None:
     """Editable-install kimodo with MotionCorrection when imports are missing.
 
-    Default behaviour is unchanged: early-return when kimodo already imports. When
+    Default behaviour: early-return when kimodo already imports. When
     ``KIMODO_GIT_UPDATE=1`` is set, the checkout is fast-forwarded and the full
-    guarded reinstall runs even if kimodo currently imports (the only way to pick up
-    upstream multi-prompt improvements). The reinstall order is preserved:
-    pull -> apply patches -> pip kimodo -> pip MotionCorrection -> pip requirements
-    -> ensure_pytorch_stack -> verify.
+    guarded reinstall runs even if kimodo currently imports.
+
+    Windows bootstrap (when not importable): ensure cmake + MSVC (via winget if
+    needed), clone empty gitlink, editable install, verify. A failure sentinel
+    (``.anime2026_kimodo_build_failed``) prevents retrying a broken toolchain on
+    every warm start unless ``ANIME2026_FORCE_KIMODO_BUILD=1``. Skip entirely with
+    ``ANIME2026_SKIP_KIMODO=1``.
     """
+    if _skip_kimodo():
+        if log_cb:
+            log_cb("ANIME2026_SKIP_KIMODO=1 — skipping kimodo install")
+        return
+
     if kimodo_git_update_requested():
         if log_cb:
             log_cb("KIMODO_GIT_UPDATE=1 — updating and reinstalling kimodo…")
-        ensure_kimodo_build_deps(run_command=run_command, log_cb=log_cb)
-        kimodo_dir = _ensure_kimodo_repo(run_command=run_command, log_cb=log_cb)
-        update_kimodo_repo(kimodo_dir, run_command=run_command, log_cb=log_cb)
-        _run_kimodo_editable_install(kimodo_dir, run_command=run_command, log_cb=log_cb)
-        if not kimodo_importable():
-            raise RuntimeError(_kimodo_post_install_failure_message(kimodo_dir))
+        try:
+            ensure_kimodo_build_deps(run_command=run_command, log_cb=log_cb)
+            kimodo_dir = _ensure_kimodo_repo(run_command=run_command, log_cb=log_cb)
+            update_kimodo_repo(kimodo_dir, run_command=run_command, log_cb=log_cb)
+            _run_kimodo_editable_install(
+                kimodo_dir, run_command=run_command, log_cb=log_cb
+            )
+            if not kimodo_importable():
+                raise RuntimeError(_kimodo_post_install_failure_message(kimodo_dir))
+            _clear_kimodo_build_failed()
+        except Exception as exc:
+            _mark_kimodo_build_failed(str(exc))
+            raise
         return
 
     if kimodo_importable():
         if log_cb:
             log_cb("kimodo + motion_correction already importable")
+        _clear_kimodo_build_failed()
         return
 
-    ensure_kimodo_build_deps(run_command=run_command, log_cb=log_cb)
-    kimodo_dir = _ensure_kimodo_repo(run_command=run_command, log_cb=log_cb)
-    _run_kimodo_editable_install(kimodo_dir, run_command=run_command, log_cb=log_cb)
-    if not kimodo_importable():
-        raise RuntimeError(_kimodo_post_install_failure_message(kimodo_dir))
+    if _kimodo_build_failed_previously() and not _force_kimodo_build():
+        prev = ""
+        try:
+            prev = _kimodo_build_failed_sentinel().read_text(encoding="utf-8").strip()
+        except OSError:
+            pass
+        raise RuntimeError(
+            "Previous kimodo build failed; skipping retry "
+            "(motion features optional). Set ANIME2026_FORCE_KIMODO_BUILD=1 "
+            "or run scripts\\install_kimodo_windows.ps1 to retry.\n"
+            + (f"Last error: {prev}\n" if prev else "")
+            + _kimodo_build_deps_hint()
+        )
+
+    try:
+        ensure_kimodo_build_deps(run_command=run_command, log_cb=log_cb)
+        kimodo_dir = _ensure_kimodo_repo(run_command=run_command, log_cb=log_cb)
+        _run_kimodo_editable_install(kimodo_dir, run_command=run_command, log_cb=log_cb)
+        if not kimodo_importable():
+            raise RuntimeError(_kimodo_post_install_failure_message(kimodo_dir))
+        _clear_kimodo_build_failed()
+    except Exception as exc:
+        _mark_kimodo_build_failed(str(exc))
+        raise
 
 
 def pip_install_kimodo_editable() -> None:

@@ -21,6 +21,7 @@ except ModuleNotFoundError:
     runpod = None  # type: ignore
 
 from services.constant import LOCAL_OUTPUT_DIR, TIMEOUT
+from services.wan_video_dims import resolve_wan_job_dims
 from services.utils import (
     apply_convert_local_paths_to_urls_in_task,
     apply_upload_local_paths_to_comfy_in_task,
@@ -58,8 +59,8 @@ individual_frames_default = False
 API_KEY = "video_wan2_2_14B_i2v"
 
 DEFAULT_LENGTH = 121
-DEFAULT_WIDTH = 640
-DEFAULT_HEIGHT = 640
+DEFAULT_WIDTH = 1280
+DEFAULT_HEIGHT = 1280
 
 
 def _find_wan_i2v_nodes(workflow: dict[str, Any]) -> tuple[str, str]:
@@ -313,8 +314,6 @@ def run_img2video_job(
 
         width = _parse_optional_int(task, "width")
         height = _parse_optional_int(task, "height")
-        w_px = int(width) if width is not None else DEFAULT_WIDTH
-        h_px = int(height) if height is not None else DEFAULT_HEIGHT
 
         pos = task.get("positive_prompt")
         if pos is not None:
@@ -337,6 +336,12 @@ def run_img2video_job(
 
         for j, url in enumerate(image_urls):
             length = lengths[j]
+            w_px, h_px = resolve_wan_job_dims(
+                width,
+                height,
+                url,
+                fallback=(DEFAULT_WIDTH, DEFAULT_HEIGHT),
+            )
             logger.info(
                 "img2video image_index=%s length=%s width=%s height=%s use_lora=%s",
                 j, length, w_px, h_px, use_lora,
@@ -567,13 +572,13 @@ def _parse_args() -> argparse.Namespace:
         "--width",
         type=int,
         default=None,
-        help="Optional width in px, must be multiple of 16 (default 640, max 1280)",
+        help="Optional width in px, must be multiple of 16 (default: 1280 long-edge from source)",
     )
     p.add_argument(
         "--height",
         type=int,
         default=None,
-        help="Optional height in px, must be multiple of 16 (default 640, max 720)",
+        help="Optional height in px, must be multiple of 16 (default: 1280 long-edge from source)",
     )
     p.add_argument(
         "--use-lora",

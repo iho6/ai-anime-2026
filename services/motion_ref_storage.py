@@ -18,11 +18,16 @@ from __future__ import annotations
 
 import json
 import shutil
+import time
 import uuid
 from pathlib import Path
 from typing import Any
 
-from services.character_storage import DEFAULT_STORAGE_ROOT, sanitize_for_folder
+from services.character_storage import (
+    DEFAULT_STORAGE_ROOT,
+    path_created_at,
+    sanitize_for_folder,
+)
 
 MOTION_REFS_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "motion_refs").resolve()
 
@@ -40,7 +45,7 @@ def motion_ref_shots_dir(motion_key: str) -> Path:
 
 
 def list_motion_ref_keys() -> list[str]:
-    """Return motion keys newest-first (directory mtime descending)."""
+    """Return motion keys newest-first by durable ``createdAt`` (not dir mtime)."""
     root = MOTION_REFS_STORAGE_ROOT
     if not root.exists():
         return []
@@ -49,7 +54,11 @@ def list_motion_ref_keys() -> list[str]:
         for p in root.iterdir()
         if p.is_dir() and not p.name.startswith("_") and (p / "manifest.json").is_file()
     ]
-    dirs.sort(key=lambda p: (-p.stat().st_mtime_ns, p.name.lower()))
+
+    def sort_key(p: Path) -> tuple[float, str]:
+        return (-ensure_motion_created_at(p.name), p.name.lower())
+
+    dirs.sort(key=sort_key)
     return [p.name for p in dirs]
 
 
@@ -81,12 +90,48 @@ def read_manifest(motion_key: str) -> dict:
         return json.load(f)
 
 
+def _coerce_created_at(raw: Any) -> float | None:
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    return None
+
+
+def ensure_motion_created_at(motion_key: str) -> float:
+    """Return durable creation time from manifest, seeding once when missing."""
+    manifest = read_manifest(motion_key)
+    existing = _coerce_created_at(manifest.get("createdAt"))
+    if existing is not None:
+        return existing
+    d = motion_ref_dir(motion_key)
+    try:
+        seed = path_created_at(d) if d.is_dir() else time.time()
+    except OSError:
+        seed = time.time()
+    # Persist without wiping other fields (touch writes only createdAt merge).
+    try:
+        write_manifest(motion_key, {**manifest, "createdAt": seed})
+    except OSError:
+        pass
+    return seed
+
+
 def write_manifest(motion_key: str, manifest: dict) -> None:
     d = motion_ref_dir(motion_key)
     d.mkdir(parents=True, exist_ok=True)
+    existing = read_manifest(motion_key)
+    payload = dict(manifest)
+    created = _coerce_created_at(payload.get("createdAt"))
+    if created is None:
+        created = _coerce_created_at(existing.get("createdAt"))
+    if created is None:
+        try:
+            created = path_created_at(d)
+        except OSError:
+            created = time.time()
+    payload["createdAt"] = float(created)
     tmp = d / "manifest.json.tmp"
     with tmp.open("w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=2, ensure_ascii=False)
+        json.dump(payload, f, indent=2, ensure_ascii=False)
     tmp.replace(d / "manifest.json")
 
 
@@ -104,7 +149,7 @@ def rename_motion_ref(old_key: str, new_name: str) -> str:
     """
     old = sanitize_for_folder(old_key)
     new = sanitize_for_folder(new_name)
-    if not new:
+    if not (new_name or "").strip() or not new or new == "unnamed":
         raise ValueError("Name cannot be empty.")
     old_dir = motion_ref_dir(old)
     if not old_dir.is_dir() or not (old_dir / "manifest.json").is_file():

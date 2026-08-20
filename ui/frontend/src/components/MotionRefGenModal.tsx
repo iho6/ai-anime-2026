@@ -51,6 +51,7 @@ import {
   PoseReference,
   type KeypointVideoReference,
   MOTION_REF_DEFAULT_PROMPT_ADHERENCE,
+  MOTION_REF_DEFAULT_TRANSITION_FRAMES,
   MOTION_REF_MAX_SEGMENT_DURATION_SEC,
 } from "../lib/api";
 import { useJobRunSession } from "../hooks/useJobRunSession";
@@ -61,6 +62,7 @@ import { PauseBarsIcon, SquareIconButton, TimelinePlayIcon, TriangleIcon } from 
 import { SkeletonViewer3D, SkeletonViewer3DHandle, CameraState, ViewerMode } from "./motionRef/SkeletonViewer3D";
 import { MotionTimeline } from "./motionRef/MotionTimeline";
 import { PromptAdherenceKnob } from "./motionRef/PromptAdherenceKnob";
+import { TransitionFramesKnob } from "./motionRef/TransitionFramesKnob";
 import { MotionShotGallery } from "./motionRef/MotionShotGallery";
 import { MotionPlaybackScrubber } from "./motionRef/MotionPlaybackScrubber";
 import { CameraKeyframeContextMenu } from "./motionRef/CameraKeyframeContextMenu";
@@ -139,6 +141,9 @@ export function MotionRefGenModal(props: {
   // ── Motion data ────────────────────────────────────────────────────────────
   const [segments, setSegments] = useState<MotionRefSegment[]>(DEFAULT_SEGMENTS);
   const [promptAdherence, setPromptAdherence] = useState(MOTION_REF_DEFAULT_PROMPT_ADHERENCE);
+  const [numTransitionFrames, setNumTransitionFrames] = useState(
+    MOTION_REF_DEFAULT_TRANSITION_FRAMES
+  );
   const [manifest, setManifest] = useState<MotionRefManifest | null>(null);
   // SMPL-X mesh stream: flat float32 vertices for all frames + dims for slicing.
   const [meshData, setMeshData] = useState<{
@@ -799,6 +804,7 @@ export function MotionRefGenModal(props: {
         motionName: motionRefAutoNameFromSegment(segments[0].text),
         segments: activeSegments,
         promptAdherence,
+        numTransitionFrames,
         onLogLine: (line) => pushLog(line),
       });
 
@@ -1950,13 +1956,20 @@ export function MotionRefGenModal(props: {
           </div>
         </div>
 
-        {/* Prompt adherence */}
+        {/* Prompt adherence + transition frames */}
         <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
           <PromptAdherenceKnob
             value={promptAdherence}
             onChange={setPromptAdherence}
             disabled={busy}
           />
+          <div style={{ marginTop: 12 }}>
+            <TransitionFramesKnob
+              value={numTransitionFrames}
+              onChange={setNumTransitionFrames}
+              disabled={busy}
+            />
+          </div>
         </div>
 
         {/* Motion segments */}

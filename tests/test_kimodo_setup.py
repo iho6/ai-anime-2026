@@ -127,10 +127,30 @@ class KimodoSetupTests(unittest.TestCase):
                 )
             self.assertEqual(len(calls), 3)
             self.assertIn(str(kimodo_dir), calls[0])
-            self.assertIn("MotionCorrection", calls[1][calls[1].index("-e") + 1])
-            self.assertIn("-r", calls[2])
-            self.assertTrue(calls[2][-1].endswith("kimodo-requirements.txt"))
+            # Runtime requirements before MotionCorrection so C-build failure
+            # cannot strand the venv without gradio.
+            self.assertIn("-r", calls[1])
+            self.assertTrue(calls[1][-1].endswith("kimodo-requirements.txt"))
+            self.assertIn("MotionCorrection", calls[2][calls[2].index("-e") + 1])
             mock_torch.assert_called_once()
+
+    def test_ensure_kimodo_runtime_deps_skips_when_gradio_present(self) -> None:
+        run = mock.Mock()
+        with mock.patch.object(kimodo_setup, "kimodo_runtime_deps_ready", return_value=True):
+            kimodo_setup.ensure_kimodo_runtime_deps(run_command=run)
+        run.assert_not_called()
+
+    def test_ensure_kimodo_runtime_deps_installs_when_gradio_missing(self) -> None:
+        calls: list[list[str]] = []
+
+        def fake_run(cmd: list[str], **kwargs: object) -> None:
+            calls.append(cmd)
+
+        with mock.patch.object(kimodo_setup, "kimodo_runtime_deps_ready", return_value=False):
+            kimodo_setup.ensure_kimodo_runtime_deps(run_command=fake_run)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("-r", calls[0])
+        self.assertTrue(calls[0][-1].endswith("kimodo-requirements.txt"))
 
     def test_python_dev_headers_ready_is_bool(self) -> None:
         self.assertIsInstance(python_dev_headers_ready(), bool)
@@ -197,9 +217,27 @@ class KimodoSetupTests(unittest.TestCase):
                 ok, status = _kimodo_import_status(kimodo_dir)
             self.assertFalse(ok)
             self.assertIn("missing", status)
-            self.assertIn("_motion_correction*.so", status)
+            self.assertIn("_motion_correction", status)
             self.assertEqual(motion_correction_extension_files(kimodo_dir), [])
 
+    def test_motion_correction_extension_files_finds_pyd(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            kimodo_dir = Path(tmp) / "kimodo"
+            pkg_dir = kimodo_dir / "MotionCorrection" / "python" / "motion_correction"
+            pkg_dir.mkdir(parents=True)
+            pyd = pkg_dir / "_motion_correction.cp311-win_amd64.pyd"
+            pyd.write_bytes(b"")
+            found = motion_correction_extension_files(kimodo_dir)
+            self.assertEqual(found, [pyd])
+
+            with mock.patch.object(
+                kimodo_setup,
+                "_subprocess_import_status",
+                return_value=(True, ["kimodo: import OK", "motion_correction: import OK"]),
+            ):
+                ok, status = _kimodo_import_status(kimodo_dir)
+            self.assertTrue(ok)
+            self.assertIn(pyd.name, status)
     def test_kimodo_import_status_fails_when_subprocess_import_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             kimodo_dir = Path(tmp) / "kimodo"
@@ -353,6 +391,125 @@ class KimodoSetupTests(unittest.TestCase):
                 kimodo_setup.update_kimodo_repo(kimodo_dir, run_command=mock.Mock())
             git.assert_not_called()
             patches.assert_not_called()
+
+    def test_sentinel_skips_build_without_force(self) -> None:
+        """Warm path: failure sentinel present → raise, no winget/build."""
+        run = mock.Mock()
+        with tempfile.TemporaryDirectory() as tmp:
+            sentinel = Path(tmp) / ".anime2026_kimodo_build_failed"
+            sentinel.write_text("prior failure\n", encoding="utf-8")
+            with mock.patch.object(
+                kimodo_setup, "_kimodo_build_failed_sentinel", return_value=sentinel
+            ), mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("ANIME2026_FORCE_KIMODO_BUILD", None)
+                os.environ.pop("ANIME2026_SKIP_KIMODO", None)
+                os.environ.pop("KIMODO_GIT_UPDATE", None)
+                with mock.patch.object(
+                    kimodo_setup, "kimodo_importable", return_value=False
+                ), mock.patch.object(
+                    kimodo_setup, "ensure_kimodo_build_deps"
+                ) as deps, mock.patch.object(
+                    kimodo_setup, "_ensure_kimodo_repo"
+                ) as repo, mock.patch.object(
+                    kimodo_setup, "_run_kimodo_editable_install"
+                ) as install, mock.patch.object(
+                    kimodo_setup, "_resolve_winget_exe"
+                ) as winget:
+                    with self.assertRaises(RuntimeError) as ctx:
+                        kimodo_setup.ensure_kimodo_installed(run_command=run)
+        self.assertIn("Previous kimodo build failed", str(ctx.exception))
+        deps.assert_not_called()
+        repo.assert_not_called()
+        install.assert_not_called()
+        winget.assert_not_called()
+        run.assert_not_called()
+
+    def test_force_ignores_sentinel_and_builds(self) -> None:
+        """FORCE=1 retries bootstrap even when sentinel exists."""
+        run = mock.Mock()
+        with tempfile.TemporaryDirectory() as tmp:
+            sentinel = Path(tmp) / ".anime2026_kimodo_build_failed"
+            sentinel.write_text("prior failure\n", encoding="utf-8")
+            with mock.patch.object(
+                kimodo_setup, "_kimodo_build_failed_sentinel", return_value=sentinel
+            ), mock.patch.dict(
+                os.environ, {"ANIME2026_FORCE_KIMODO_BUILD": "1"}, clear=False
+            ):
+                os.environ.pop("ANIME2026_SKIP_KIMODO", None)
+                os.environ.pop("KIMODO_GIT_UPDATE", None)
+                with mock.patch.object(
+                    kimodo_setup, "kimodo_importable", side_effect=[False, True]
+                ), mock.patch.object(
+                    kimodo_setup, "ensure_kimodo_build_deps"
+                ) as deps, mock.patch.object(
+                    kimodo_setup,
+                    "_ensure_kimodo_repo",
+                    return_value=Path(tmp) / "kimodo",
+                ) as repo, mock.patch.object(
+                    kimodo_setup, "_run_kimodo_editable_install"
+                ) as install:
+                    kimodo_setup.ensure_kimodo_installed(run_command=run)
+        deps.assert_called_once()
+        repo.assert_called_once()
+        install.assert_called_once()
+        self.assertFalse(sentinel.is_file())
+
+    def test_skip_kimodo_env_returns_immediately(self) -> None:
+        run = mock.Mock()
+        with mock.patch.dict(os.environ, {"ANIME2026_SKIP_KIMODO": "1"}):
+            with mock.patch.object(
+                kimodo_setup, "kimodo_importable"
+            ) as imp, mock.patch.object(
+                kimodo_setup, "ensure_kimodo_build_deps"
+            ) as deps:
+                kimodo_setup.ensure_kimodo_installed(run_command=run)
+        imp.assert_not_called()
+        deps.assert_not_called()
+        run.assert_not_called()
+
+    def test_resolve_winget_exe_prefers_working_executable(self) -> None:
+        good = r"C:\Tools\winget.exe"
+        bad_alias = r"C:\Users\x\AppData\Local\Microsoft\WindowsApps\winget.exe"
+
+        def fake_usable(exe: str) -> bool:
+            return exe == good
+
+        with mock.patch.object(
+            kimodo_setup.shutil, "which", return_value=bad_alias
+        ), mock.patch.object(
+            kimodo_setup, "_winget_exe_usable", side_effect=fake_usable
+        ), mock.patch.object(
+            kimodo_setup.subprocess,
+            "run",
+            return_value=mock.Mock(
+                returncode=0, stdout=good + "\n" + bad_alias + "\n", stderr=""
+            ),
+        ):
+            resolved = kimodo_setup._resolve_winget_exe()
+        self.assertEqual(resolved, good)
+
+    def test_build_failure_writes_sentinel(self) -> None:
+        run = mock.Mock()
+        with tempfile.TemporaryDirectory() as tmp:
+            sentinel = Path(tmp) / ".anime2026_kimodo_build_failed"
+            with mock.patch.object(
+                kimodo_setup, "_kimodo_build_failed_sentinel", return_value=sentinel
+            ), mock.patch.dict(
+                os.environ, {"ANIME2026_FORCE_KIMODO_BUILD": "1"}, clear=False
+            ):
+                os.environ.pop("ANIME2026_SKIP_KIMODO", None)
+                os.environ.pop("KIMODO_GIT_UPDATE", None)
+                with mock.patch.object(
+                    kimodo_setup, "kimodo_importable", return_value=False
+                ), mock.patch.object(
+                    kimodo_setup,
+                    "ensure_kimodo_build_deps",
+                    side_effect=RuntimeError("cmake boom"),
+                ):
+                    with self.assertRaises(RuntimeError):
+                        kimodo_setup.ensure_kimodo_installed(run_command=run)
+            self.assertTrue(sentinel.is_file())
+            self.assertIn("cmake boom", sentinel.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

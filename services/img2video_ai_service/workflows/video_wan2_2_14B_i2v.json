@@ -26,8 +26,8 @@
   },
   "129:98": {
     "inputs": {
-      "width": 640,
-      "height": 640,
+      "width": 1280,
+      "height": 1280,
       "length": 9,
       "batch_size": 1,
       "positive": [

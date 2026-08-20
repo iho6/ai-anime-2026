@@ -44,8 +44,9 @@ To update, set `KIMODO_GIT_UPDATE=1` and re-run Launch. `ensure_kimodo_installed
 
 1. `git fetch` + `git pull --ff-only` in `kimodo/` (`update_kimodo_repo`)
 2. re-apply overlays (`apply_kimodo_patches`)
-3. run the same guarded editable install (`--no-deps` kimodo, `--no-deps`
-   MotionCorrection, `-r kimodo-requirements.txt`, then `ensure_pytorch_stack()` last)
+3. run the same guarded editable install (`--no-deps` kimodo, `-r
+   kimodo-requirements.txt`, `--no-deps` MotionCorrection, then
+   `ensure_pytorch_stack()` last)
 4. verify in a fresh subprocess (`_subprocess_import_status`)
 
 `--ff-only` makes a dirty or diverged checkout fail loudly rather than producing a bad
@@ -80,9 +81,13 @@ when `kimodo/` lacks `setup.py`/`pyproject.toml`.
 Full install order (`_run_kimodo_editable_install`):
 
 1. editable `kimodo` (`--no-deps`)
-2. editable `kimodo/MotionCorrection` (`--no-deps`)
-3. `pip install -r kimodo-requirements.txt` (kimodo's runtime deps, with transitive resolution)
+2. `pip install -r kimodo-requirements.txt` (kimodo's runtime deps, with transitive resolution)
+3. editable `kimodo/MotionCorrection` (`--no-deps`)
 4. `ensure_pytorch_stack()` torch guard last (restores cu128 if a dep shifted torch)
+
+Requirements are installed **before** MotionCorrection so a C-extension build
+failure cannot leave the venv without `gradio` (needed by the text encoder).
+`ensure_text_encoder` also calls `ensure_kimodo_runtime_deps` before spawn.
 
 `kimodo-requirements.txt` holds only the kimodo deps that are NOT in repo-root
 `requirements.txt` (hydra-core, omegaconf, peft, gradio, gradio-client, trimesh,
@@ -101,6 +106,37 @@ not importable there until a new interpreter starts (e.g. the worker subprocesse
 
 Editable install runs with `--no-build-isolation` so `setup.py` / CMake bind to the
 active venv Python (`KIMODO_TARGET_PYTHON`), not pip's isolated build interpreter.
-The compiled `_motion_correction*.so` is a **local build artifact** under
+The compiled extension (`_motion_correction*.so` on Linux, `_motion_correction*.pyd`
+on Windows) is a **local build artifact** under
 `kimodo/MotionCorrection/python/motion_correction/` — it is not committed and is
-rebuilt automatically on UI Launch or `pip_install_kimodo_editable()`.
+rebuilt by `ensure_kimodo_installed` / `pip_install_kimodo_editable()`.
+
+### Windows
+
+Required toolchain: **CMake** + **Visual Studio 2022 Build Tools** (C++ / VCTools
+workload) + a full CPython with `include\Python.h`. On first Launch (or via the
+one-shot script), `ensure_kimodo_installed` will:
+
+1. Install Kitware.CMake via user-scope `winget` when cmake is missing
+2. Attempt VS 2022 Build Tools (C++ workload) via `winget` when `cl` / vswhere
+   detection fails (UAC/admin may be required)
+3. Clone `nv-tlabs/kimodo` into the empty `kimodo/` gitlink when needed
+4. Run the editable install and verify imports + extension files
+
+Env knobs:
+
+| Variable | Effect |
+|----------|--------|
+| `ANIME2026_FORCE_KIMODO_BUILD=1` | Ignore the failure sentinel and retry full bootstrap |
+| `ANIME2026_SKIP_KIMODO=1` | Skip kimodo entirely (motion features optional) |
+
+After a failed bootstrap, `.anime2026_kimodo_build_failed` is written at the repo
+root so warm starts do not re-run winget/build every time. Clear it by fixing the
+toolchain and re-running with FORCE, or:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_kimodo_windows.ps1
+```
+
+SMPL-X mesh skinning remains separate (`storage/body_models/smplx/`); see
+`services/README.md`.

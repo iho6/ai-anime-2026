@@ -46,7 +46,9 @@ from services import prompts
 from services.constant import (
     WAN_VIDEO_DEFAULT_LENGTH,
     WAN_VIDEO_FPS,
+    WAN_VIDEO_MAX_EDGE,
 )
+from services.wan_video_dims import wan_dims_from_image_paths, wan_dims_from_source
 from services.prompts import (
     ANIME_DEFAULT_STYLE_PREFIX,
     NEW_CHARACTER_POSITIVE_LEAD,
@@ -11780,6 +11782,9 @@ def _run_flf_service(
 ) -> list[str]:
     """Invoke flf2video with two endpoint image paths; return ordered frame URLs."""
     length = normalize_wan_video_length(length)
+    out_w, out_h = wan_dims_from_image_paths(path_a, path_b)
+    if log_cb:
+        log_cb(f"FLF size: {out_w}×{out_h}")
     body = _run_service_testmode(
         "services.flf2video_ai_service.serverless",
         [
@@ -11794,6 +11799,10 @@ def _run_flf_service(
             "1,2",
             "--length",
             str(length),
+            "--width",
+            str(int(out_w)),
+            "--height",
+            str(int(out_h)),
         ],
         log_cb=log_cb,
     )
@@ -11868,22 +11877,23 @@ def _i2v_dims_from_source_image(
     width: int | None,
     height: int | None,
     *,
-    target_long_edge: int = 1280,
+    target_long_edge: int = WAN_VIDEO_MAX_EDGE,
 ) -> tuple[int, int]:
-    """Resolve I2V width/height from explicit args or source image aspect (not 640 default)."""
+    """Resolve I2V width/height from explicit args or source image (1280 long-edge, step 16)."""
     if width is not None and height is not None:
-        return max(64, int(width)), max(64, int(height))
+        return max(16, int(width)), max(16, int(height))
     from PIL import Image
 
-    with Image.open(path_img) as im:
-        iw, ih = im.size
+    try:
+        with Image.open(path_img) as im:
+            iw, ih = im.size
+    except OSError:
+        cap = max(16, int(target_long_edge))
+        return wan_dims_from_source(cap, cap, max_edge=cap)
     if iw < 1 or ih < 1:
-        return 1280, 720
-    long_edge = max(iw, ih)
-    scale = float(target_long_edge) / float(long_edge)
-    w = max(64, int(round(iw * scale / 2) * 2))
-    h = max(64, int(round(ih * scale / 2) * 2))
-    return w, h
+        cap = max(16, int(target_long_edge))
+        return wan_dims_from_source(cap, cap, max_edge=cap)
+    return wan_dims_from_source(iw, ih, max_edge=int(target_long_edge))
 
 
 def _download_frame_urls_to_dir(frame_urls: list[str], out_dir: Path) -> list[Path]:

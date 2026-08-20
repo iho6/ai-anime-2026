@@ -524,14 +524,6 @@ export function MotionShotGallery(props: {
           </span>
           <button
             type="button"
-            disabled={busy || addableShots.length === 0}
-            onClick={() => onAddToPose(addableShots)}
-            style={actionBtn}
-          >
-            Add to Pose
-          </button>
-          <button
-            type="button"
             onClick={() => onSelectedIdsChange(new Set())}
             style={{ ...actionBtn, color: "#888" }}
           >

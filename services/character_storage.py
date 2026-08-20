@@ -7,14 +7,18 @@ The UI downloads those URLs and writes files under a deterministic character fol
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
 import requests
+
+CHARACTER_META_FILENAME = "meta.json"
 
 
 _SERVICES_DIR = Path(__file__).resolve().parent
@@ -205,14 +209,100 @@ def write_multi_angle_appended_stem(
     return dest
 
 
-def list_characters(storage_root: Path | None = None) -> list[str]:
+def path_created_at(path: Path) -> float:
+    """Best-effort filesystem creation time (seconds since epoch).
+
+    Prefers ``st_birthtime`` when present; on Windows ``st_ctime`` is creation
+    time. Elsewhere falls back to ``st_mtime`` (less ideal but stable enough as
+    a one-time seed for ``createdAt`` metadata).
+    """
+    st = path.stat()
+    birth = getattr(st, "st_birthtime", None)
+    if birth is not None:
+        return float(birth)
+    if os.name == "nt":
+        return float(st.st_ctime)
+    return float(st.st_mtime)
+
+
+def character_meta_path(character_dir: Path) -> Path:
+    return character_dir / CHARACTER_META_FILENAME
+
+
+def read_character_created_at(character_dir: Path) -> float | None:
+    meta = character_meta_path(character_dir)
+    if not meta.is_file():
+        return None
+    try:
+        data = json.loads(meta.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    raw = data.get("createdAt")
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    return None
+
+
+def write_character_created_at(character_dir: Path, created_at: float | None = None) -> float:
+    """Write/merge ``meta.json`` ``createdAt``; return the stamped value."""
+    character_dir.mkdir(parents=True, exist_ok=True)
+    stamp = float(created_at if created_at is not None else time.time())
+    meta = character_meta_path(character_dir)
+    data: dict = {}
+    if meta.is_file():
+        try:
+            loaded = json.loads(meta.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data = loaded
+        except (OSError, json.JSONDecodeError, TypeError):
+            data = {}
+    if isinstance(data.get("createdAt"), (int, float)):
+        return float(data["createdAt"])
+    data["createdAt"] = stamp
+    tmp = meta.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.replace(meta)
+    return stamp
+
+
+def ensure_character_created_at(character_dir: Path) -> float:
+    """Return durable creation time, seeding ``meta.json`` from FS birth when missing."""
+    existing = read_character_created_at(character_dir)
+    if existing is not None:
+        return existing
+    try:
+        seed = path_created_at(character_dir)
+    except OSError:
+        seed = time.time()
+    try:
+        return write_character_created_at(character_dir, seed)
+    except OSError:
+        return seed
+
+
+def list_characters(
+    storage_root: Path | None = None,
+    *,
+    skip: set[str] | frozenset[str] | None = None,
+) -> list[str]:
+    """Character folder names, newest-first by durable ``createdAt``."""
     root = storage_root or DEFAULT_STORAGE_ROOT
     if not root.exists():
         return []
-    return sorted(
-        [p.name for p in root.iterdir() if p.is_dir()],
-        key=lambda s: s.lower(),
-    )
+    skip_names = skip or set()
+    dirs = [
+        p
+        for p in root.iterdir()
+        if p.is_dir() and p.name not in skip_names and not p.name.startswith(".")
+    ]
+
+    def sort_key(p: Path) -> tuple[float, str]:
+        return (-ensure_character_created_at(p), p.name.lower())
+
+    dirs.sort(key=sort_key)
+    return [p.name for p in dirs]
 
 
 def list_pose_labels(character: CharacterPaths) -> list[str]:

@@ -130,8 +130,8 @@ export function MotionTimeline(props: {
               Each segment is at most {MOTION_REF_MAX_SEGMENT_DURATION_SEC} seconds (Kimodo limit).
             </li>
             <li>
-              The first ~0.2s of each later segment is spent transitioning, so
-              give big action changes a little extra duration.
+              Transition length is set by the Transition frames slider above —
+              give big action changes a little extra segment duration.
             </li>
           </ul>
         </div>

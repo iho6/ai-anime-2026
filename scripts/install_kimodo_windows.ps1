@@ -1,0 +1,39 @@
+# One-shot Windows installer for kimodo + MotionCorrection (.pyd).
+# Ensures CMake / VS Build Tools (via winget when missing), clones empty kimodo/
+# gitlink, then editable-installs into the repo .venv.
+#
+# Usage (from repo root; approve UAC if Build Tools prompts):
+#   powershell -ExecutionPolicy Bypass -File scripts\install_kimodo_windows.ps1
+param(
+  [switch]$SkipVenvActivate
+)
+
+$ErrorActionPreference = "Stop"
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location -LiteralPath $RepoRoot
+
+$venvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path -LiteralPath $venvPython)) {
+  Write-Error "[kimodo] Missing $venvPython — create the venv first (Launch / setup)."
+  exit 1
+}
+
+if (-not $SkipVenvActivate) {
+  $activate = Join-Path $RepoRoot ".venv\Scripts\Activate.ps1"
+  if (Test-Path -LiteralPath $activate) {
+    Write-Host "[kimodo] Activating .venv…"
+    . $activate
+  }
+}
+
+$env:ANIME2026_FORCE_KIMODO_BUILD = "1"
+Remove-Item Env:ANIME2026_SKIP_KIMODO -ErrorAction SilentlyContinue
+
+Write-Host "[kimodo] Bootstrapping (FORCE=1) with $venvPython …"
+& $venvPython (Join-Path $RepoRoot "utils\install_kimodo.py")
+if ($LASTEXITCODE -ne 0) {
+  Write-Error "[kimodo] Install failed (exit $LASTEXITCODE). Fix toolchain, then re-run with FORCE."
+  exit $LASTEXITCODE
+}
+
+Write-Host "[kimodo] Done."

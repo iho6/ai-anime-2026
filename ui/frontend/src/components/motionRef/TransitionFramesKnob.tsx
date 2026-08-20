@@ -2,9 +2,10 @@
 
 import React from "react";
 import {
-  MOTION_REF_MAX_PROMPT_ADHERENCE,
-  MOTION_REF_MIN_PROMPT_ADHERENCE,
-  MOTION_REF_PROMPT_ADHERENCE_STEP,
+  MOTION_REF_DEFAULT_TRANSITION_FRAMES,
+  MOTION_REF_MAX_TRANSITION_FRAMES,
+  MOTION_REF_MIN_TRANSITION_FRAMES,
+  MOTION_REF_TRANSITION_FRAMES_STEP,
 } from "../../lib/api";
 import {
   MOTION_REF_HINT_COLOR,
@@ -12,7 +13,7 @@ import {
   MOTION_REF_VALUE_COLOR,
 } from "./theme";
 
-export function PromptAdherenceKnob(props: {
+export function TransitionFramesKnob(props: {
   value: number;
   onChange: (value: number) => void;
   disabled?: boolean;
@@ -31,21 +32,21 @@ export function PromptAdherenceKnob(props: {
           color: MOTION_REF_LABEL_COLOR,
         }}
       >
-        <span>Prompt adherence</span>
+        <span>Transition frames</span>
         <span style={{ fontVariantNumeric: "tabular-nums", color: MOTION_REF_VALUE_COLOR }}>
-          {value.toFixed(1)}
+          {Math.round(value)}
         </span>
       </div>
       <input
         type="range"
         className="ui-square-range"
-        min={MOTION_REF_MIN_PROMPT_ADHERENCE}
-        max={MOTION_REF_MAX_PROMPT_ADHERENCE}
-        step={MOTION_REF_PROMPT_ADHERENCE_STEP}
+        min={MOTION_REF_MIN_TRANSITION_FRAMES}
+        max={MOTION_REF_MAX_TRANSITION_FRAMES}
+        step={MOTION_REF_TRANSITION_FRAMES_STEP}
         value={value}
         disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
-        title="Kimodo CFG text weight — higher follows the prompt more strongly"
+        onChange={(e) => onChange(Math.round(Number(e.target.value)))}
+        title="Overlap frames blended between consecutive multi-segment prompts"
         style={{
           width: "100%",
           opacity: disabled ? 0.5 : 1,
@@ -53,7 +54,8 @@ export function PromptAdherenceKnob(props: {
         }}
       />
       <div style={{ fontSize: 10, color: MOTION_REF_HINT_COLOR, marginTop: 4 }}>
-        Higher = stronger text following
+        Between multi-segment prompts — higher = longer blend (default{" "}
+        {MOTION_REF_DEFAULT_TRANSITION_FRAMES} ≈ 0.2s @ 30fps)
       </div>
     </div>
   );

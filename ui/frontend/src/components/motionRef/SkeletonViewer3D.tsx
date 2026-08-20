@@ -830,7 +830,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
 
         if (!positionsRef.current || positionsRef.current.length < 3) return null;
 
-        const targetSize = opts?.targetSize ?? 1024;
+        const targetSize = opts?.targetSize ?? 1328;
 
         const { w: arW, h: arH } = aspectDimensionsForId(captureAspectRef.current);
         const captureW = arW >= arH ? targetSize : Math.round(targetSize * arW / arH);
@@ -860,7 +860,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
           if (!screenBbox) return null;
 
           // ── Phase 2: 3D re-render via tile projection matrix ─────────────
-          // Narrows the GPU frustum to the figure's bbox so the full 1024²
+          // Narrows the GPU frustum to the figure's bbox so the full 1328²
           // output is a real re-render at native 3D quality — not a 2D upscale.
           t.renderer.setSize(targetSize, targetSize);
           t.camera.aspect = 1.0;
@@ -924,7 +924,7 @@ const SkeletonViewer3D = forwardRef<SkeletonViewer3DHandle, Props>(
         const t = threeRef.current;
         if (!t) return null;
 
-        const targetSize = opts?.targetSize ?? 1024;
+        const targetSize = opts?.targetSize ?? 1328;
         const { w: arW, h: arH } = aspectDimensionsForId(captureAspectRef.current);
         const captureW = arW >= arH ? targetSize : Math.round(targetSize * arW / arH);
         const captureH = arH >= arW ? targetSize : Math.round(targetSize * arH / arW);

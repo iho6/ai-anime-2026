@@ -21,6 +21,7 @@ except ModuleNotFoundError:
     runpod = None  # type: ignore
 
 from services.constant import LOCAL_OUTPUT_DIR, TIMEOUT
+from services.wan_video_dims import resolve_wan_job_dims
 from services.utils import (
     apply_convert_local_paths_to_urls_in_task,
     apply_upload_local_paths_to_comfy_in_task,
@@ -56,6 +57,8 @@ individual_frames_default = False
 
 API_KEY = "video_wan2_2_14B_flf2v_lightning_api"
 DEFAULT_LENGTH = 121
+DEFAULT_WIDTH = 1280
+DEFAULT_HEIGHT = 1280
 
 
 def _find_wan_flf_nodes(workflow: dict[str, Any]) -> tuple[str, str, str]:
@@ -94,6 +97,8 @@ def _patch_workflow(
     end_ref: str,
     length: int,
     positive_prompt: str | None,
+    width: int,
+    height: int,
 ) -> dict[str, Any]:
     w = deepcopy(api_workflow)
     wan_nid, start_nid, end_nid = _find_wan_flf_nodes(w)
@@ -106,7 +111,10 @@ def _patch_workflow(
         e = osp.basename(e)
     w[start_nid].setdefault("inputs", {})["image"] = s
     w[end_nid].setdefault("inputs", {})["image"] = e
-    w[wan_nid].setdefault("inputs", {})["length"] = int(length)
+    wan_in = w[wan_nid].setdefault("inputs", {})
+    wan_in["length"] = int(length)
+    wan_in["width"] = int(width)
+    wan_in["height"] = int(height)
 
     if positive_prompt is not None and str(positive_prompt).strip():
         text = str(positive_prompt).strip()
@@ -141,6 +149,15 @@ def _parse_frames_1based(task: dict) -> list[int]:
     if len(frames) < 2:
         raise ValueError("frames must contain at least two indices for first/last pairing")
     return frames
+
+
+def _parse_optional_int(task: dict, key: str) -> int | None:
+    if key not in task:
+        return None
+    v = task[key]
+    if v is None or (isinstance(v, str) and not str(v).strip()):
+        return None
+    return int(v)
 
 
 def _parse_lengths(task: dict) -> list[int] | None:
@@ -233,16 +250,28 @@ def run_flf2video_job(
         if pos is not None:
             pos = str(pos).strip() or None
 
+        width = _parse_optional_int(task, "width")
+        height = _parse_optional_int(task, "height")
+
         for j, (_pair_idx, ia, ib) in enumerate(pairs_meta):
             length = lengths[j]
             url_a = image_urls[ia]
             url_b = image_urls[ib]
+            w_px, h_px = resolve_wan_job_dims(
+                width,
+                height,
+                url_a,
+                url_b,
+                fallback=(DEFAULT_WIDTH, DEFAULT_HEIGHT),
+            )
             logger.info(
-                "FLF2V pair %s: frame indices %s-%s (1-based), length=%s",
+                "FLF2V pair %s: frame indices %s-%s (1-based), length=%s width=%s height=%s",
                 j,
                 frames_1[j],
                 frames_1[j + 1],
                 length,
+                w_px,
+                h_px,
             )
             try:
                 ref_start = resolve_to_comfy_input_ref(
@@ -266,6 +295,8 @@ def run_flf2video_job(
                 end_ref=ref_end,
                 length=length,
                 positive_prompt=pos,
+                width=w_px,
+                height=h_px,
             )
             try:
                 pid = task_queue(w, server_address)
@@ -476,6 +507,18 @@ def _parse_args() -> argparse.Namespace:
         help="Optional positive prompt (CLIP encode)",
     )
     p.add_argument(
+        "--width",
+        type=int,
+        default=None,
+        help="Optional width in px, multiple of 16 (default: 1280 long-edge from source)",
+    )
+    p.add_argument(
+        "--height",
+        type=int,
+        default=None,
+        help="Optional height in px, multiple of 16 (default: 1280 long-edge from source)",
+    )
+    p.add_argument(
         "--convert-local-to-url",
         action="store_true",
         help="Upload local paths in image_url(s) to S3 for remote download_input.",
@@ -523,6 +566,10 @@ def _run_test_mode(args: argparse.Namespace) -> None:
             sys.exit(1)
     if args.positive_prompt:
         inp["positive_prompt"] = args.positive_prompt
+    if args.width is not None:
+        inp["width"] = args.width
+    if args.height is not None:
+        inp["height"] = args.height
 
     if not local_servers.get("default"):
         local_servers["default"] = f"127.0.0.1:{args.default_port}"

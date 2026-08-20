@@ -103,7 +103,7 @@
         0
       ],
       "image1": [
-        "433:117",
+        "78",
         0
       ]
     },
@@ -140,7 +140,7 @@
         0
       ],
       "image1": [
-        "433:117",
+        "78",
         0
       ]
     },
@@ -152,7 +152,7 @@
   "433:88": {
     "inputs": {
       "pixels": [
-        "433:117",
+        "78",
         0
       ],
       "vae": [
@@ -193,42 +193,6 @@
     "class_type": "LoraLoaderModelOnly",
     "_meta": {
       "title": "Load LoRA"
-    }
-  },
-  "433:117": {
-    "inputs": {
-      "image": [
-        "78",
-        0
-      ]
-    },
-    "class_type": "FluxKontextImageScale",
-    "_meta": {
-      "title": "FluxKontextImageScale"
-    }
-  },
-  "433:118": {
-    "inputs": {
-      "image": [
-        "79",
-        0
-      ]
-    },
-    "class_type": "FluxKontextImageScale",
-    "_meta": {
-      "title": "FluxKontextImageScale (aux2)"
-    }
-  },
-  "433:119": {
-    "inputs": {
-      "image": [
-        "80",
-        0
-      ]
-    },
-    "class_type": "FluxKontextImageScale",
-    "_meta": {
-      "title": "FluxKontextImageScale (aux3)"
     }
   },
   "433:3": {
