@@ -6,20 +6,19 @@
   ],
   "expression_key_order": [],
   "pose_image_order": [
-    "pimg:flat:dw/poses/pose_000.png",
-    "pimg:flat:dw/poses/starting_image.png",
-    "pimg:flat:dw/poses/pose_001.png",
-    "pimg:flat:dw/poses/pose_002.png",
-    "pimg:flat:dw/poses/pose_006.png",
-    "pimg:flat:dw/poses/pose_009.png",
-    "pimg:flat:dw/poses/pose_010.png"
+    "pimg:flat:poses/pose_000.png",
+    "pimg:flat:poses/pose_001.png",
+    "pimg:flat:poses/pose_002.png",
+    "pimg:flat:poses/pose_006.png",
+    "pimg:flat:poses/pose_009.png",
+    "pimg:flat:poses/pose_010.png"
   ],
   "hidden_pose_images": [],
   "expression_image_order": [
-    "eimg:flat:dw/expressions/expr_000.png",
-    "eimg:flat:dw/expressions/expr_001.png",
-    "eimg:flat:dw/expressions/expr_002.png",
-    "eimg:flat:dw/expressions/expr_003.png"
+    "eimg:flat:expressions/expr_000.png",
+    "eimg:flat:expressions/expr_001.png",
+    "eimg:flat:expressions/expr_002.png",
+    "eimg:flat:expressions/expr_003.png"
   ],
   "hidden_expression_images": [],
   "gallery_flat_migrated_v1": true,

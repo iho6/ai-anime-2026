@@ -2,5 +2,13 @@
   "version": 2,
   "fps": 24,
   "previewAspect": "16:9",
-  "tracks": []
+  "tracks": [
+    {
+      "id": "trk_mshrqe1c_2",
+      "name": "Track 1",
+      "kind": "neutral",
+      "clips": [],
+      "hidden": false
+    }
+  ]
 }

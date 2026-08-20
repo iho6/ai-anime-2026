@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "fps": 24,
+  "gallery": [
+    {
+      "id": "g_1787179939930_33c69cc6a9e6b",
+      "relPath": "sequence/Sequence_1/gallery/gal_763908e90e49.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "id": "g_1787179938502_48af8302b2f27",
+      "relPath": "sequence/Sequence_1/gallery/gal_c83eefea72c9.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "id": "g_1787179941113_6c6fe52b4ab158",
+      "relPath": "sequence/Sequence_1/gallery/gal_90ba7aa9f4d8.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "id": "g_1787179942082_1e33f2cb718758",
+      "relPath": "sequence/Sequence_1/gallery/gal_88b3396d4cf1.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    }
+  ],
+  "frames": [
+    {
+      "index": 0,
+      "cellId": "cell_1787179997746_194bb792e6faa",
+      "relPath": "sequence/Sequence_1/cells/cell_462d40c6b1df.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 2,
+      "cellId": "cell_1787179952563_453f879c42b36",
+      "relPath": "sequence/Sequence_1/cells/cell_86aab3cc410c.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 4,
+      "cellId": "cell_1787179951246_7035e4887c08c",
+      "relPath": "sequence/Sequence_1/cells/cell_acba8686f271.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 6,
+      "cellId": "cell_1787179949947_8c81973f16ac8",
+      "relPath": "sequence/Sequence_1/cells/cell_4f36a4c73e1b.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    },
+    {
+      "index": 8,
+      "cellId": "cell_1787180002436_1a7309ccece91",
+      "relPath": "sequence/Sequence_1/cells/cell_37cc046b8441.png",
+      "crop": {
+        "translateXFrac": 0,
+        "translateYFrac": 0,
+        "scale": 1
+      }
+    }
+  ],
+  "previewAspect": "16:9",
+  "timelineViewStep": 1
+}

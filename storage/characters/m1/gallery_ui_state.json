@@ -1,0 +1,27 @@
+{
+  "hidden_pose_keys": [],
+  "hidden_expression_keys": [],
+  "pose_key_order": [
+    "flat"
+  ],
+  "expression_key_order": [
+    "flat"
+  ],
+  "pose_image_order": [
+    "pimg:flat:poses/pose_000.png"
+  ],
+  "hidden_pose_images": [],
+  "expression_image_order": [
+    "eimg:flat:expressions/expr_000.png",
+    "eimg:flat:expressions/expr_001.png",
+    "eimg:flat:expressions/expr_002.png",
+    "eimg:flat:expressions/expr_003.png"
+  ],
+  "hidden_expression_images": [],
+  "gallery_flat_migrated_v1": true,
+  "gallery_layout_v2": true,
+  "gallery_filename_v3": true,
+  "dataset_builder_order": [],
+  "dataset_builder_pose_strip_ids": [],
+  "dataset_builder_expr_strip_ids": []
+}
