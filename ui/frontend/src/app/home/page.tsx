@@ -3,6 +3,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { HfTokenSettingsButton } from "../../components/HfTokenSettingsButton";
+import { JobLogButton } from "../../components/JobLogButton";
 
 export default function HomePage() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function HomePage() {
     >
       <div style={{ display: "flex", gap: 4, alignItems: "center", paddingLeft: 20, marginBottom: 10 }}>
         <HfTokenSettingsButton />
+        <JobLogButton />
       </div>
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ display: "flex", gap: 12 }}>

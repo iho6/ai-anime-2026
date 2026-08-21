@@ -22,7 +22,6 @@ import {
 import { apiExportFramesVideo, runVideoExportJob, sanitizeDownloadBaseName, type VideoExportJob } from "../../lib/downloadVideo";
 import { ExportFpsDialog } from "../ExportFpsDialog";
 import { useAppError } from "../ErrorProvider";
-import { MOTION_REF_ACCENT_BTN_BG } from "./theme";
 
 export function MotionShotGallery(props: {
   busy?: boolean;
@@ -288,7 +287,7 @@ export function MotionShotGallery(props: {
         },
         {
           key: "add",
-          label: "Add to Pose",
+          label: "Convert to Keypoint",
           disabled: busy || Boolean(shot.keypointId),
           onSelect: () => onAddToPose([shot]),
         },
@@ -351,7 +350,7 @@ export function MotionShotGallery(props: {
         },
         {
           key: "add",
-          label: "Add to Pose",
+          label: "Convert to Keypoint",
           disabled: busy || addable.length === 0,
           onSelect: () => onAddToPose(addable),
         },
@@ -519,7 +518,7 @@ export function MotionShotGallery(props: {
           <span style={{ fontSize: 11, color: "#aaa" }}>
             {selectedIds.size} selected
             {addableShots.length < selectedShots.length
-              ? ` (${addableShots.length} can add to pose)`
+              ? ` (${addableShots.length} can convert to keypoint)`
               : ""}
           </span>
           <button
@@ -535,17 +534,6 @@ export function MotionShotGallery(props: {
           Click a shot to restore frame and camera · Checkbox to select · Right-click for options
         </div>
       )}
-
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <button
-          type="button"
-          disabled={busy || addableShots.length === 0}
-          onClick={() => onAddToPose(addableShots)}
-          style={{ ...actionBtn, background: MOTION_REF_ACCENT_BTN_BG }}
-        >
-          Add to Pose
-        </button>
-      </div>
 
       <DesktopContextMenu
         open={menu.open}

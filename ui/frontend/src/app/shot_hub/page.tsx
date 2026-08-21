@@ -19,6 +19,7 @@ import {
 import { GalleryImageLightbox } from "../../components/GalleryImageLightbox";
 import { HomeIcon, SquareIconButton, TriangleIcon } from "../../components/IconPrimitives";
 import { HfTokenSettingsButton } from "../../components/HfTokenSettingsButton";
+import { JobLogButton } from "../../components/JobLogButton";
 import { CharacterNameTag } from "../../components/CharacterNameTag";
 import { SquareButton } from "../../components/SquareButton";
 import { useAppError } from "../../components/ErrorProvider";
@@ -193,6 +194,7 @@ export default function ShotHubPage() {
         }}
       >
         <HfTokenSettingsButton />
+        <JobLogButton />
         <SquareIconButton
           onClick={() => router.push("/home")}
           aria-label="Home"

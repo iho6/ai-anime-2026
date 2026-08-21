@@ -97,6 +97,19 @@ export function GearIcon(props: { size?: number }) {
   );
 }
 
+/** Document / log lines icon for the job queue panel. */
+export function LogIcon(props: { size?: number }) {
+  const size = props.size ?? 14;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden style={{ display: "block" }}>
+      <path
+        fill="currentColor"
+        d="M5 3h11l3 3v15H5V3zm2 2v14h12V7.4L14.6 5H7zm2 3h8v2H9V8zm0 4h8v2H9v-2zm0 4h5v2H9v-2z"
+      />
+    </svg>
+  );
+}
+
 /** Videocam silhouette (trajectory keyframe markers, etc.). */
 export function CameraIcon(props: { size?: number }) {
   const size = props.size ?? 14;
@@ -105,6 +118,23 @@ export function CameraIcon(props: { size?: number }) {
       <path
         fill="currentColor"
         d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"
+      />
+    </svg>
+  );
+}
+
+/** Camera with a plus badge — add camera pose to trajectory. */
+export function PlusCameraIcon(props: { size?: number }) {
+  const size = props.size ?? 16;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden style={{ display: "block" }}>
+      <path
+        fill="currentColor"
+        d="M15.5 9.5V7a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h11.5a1 1 0 0 0 1-1v-2.5l3.5 3.5V6l-3.5 3.5z"
+      />
+      <path
+        fill="currentColor"
+        d="M19 3v2h2v2h-2v2h-2V7h-2V5h2V3h2z"
       />
     </svg>
   );

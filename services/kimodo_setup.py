@@ -184,11 +184,70 @@ def _env_flag(name: str) -> bool:
     }
 
 
+def _portable_toolchain_roots() -> list[Path]:
+    """Candidate roots for portable CMake/MinGW living on the project drive."""
+    roots: list[Path] = []
+    env_root = (os.environ.get("ANIME2026_TOOLCHAINS") or "").strip()
+    if env_root:
+        roots.append(Path(env_root))
+    # Prefer H:\Animation\toolchains when the repo lives under H:\Animation\...
+    try:
+        anim = _REPO_ROOT.parents[0]  # .../Animation/anime2026_refactored → Animation
+        roots.append(anim / "toolchains")
+    except IndexError:
+        pass
+    roots.append(_REPO_ROOT / "toolchains")
+    # De-dupe while preserving order
+    seen: set[str] = set()
+    out: list[Path] = []
+    for r in roots:
+        key = str(r.resolve()) if r.exists() else str(r)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
+
+
+def _prepend_portable_toolchains(
+    *,
+    log_cb: Callable[[str], None] | None = None,
+) -> bool:
+    """Put on-drive CMake/MinGW ahead of PATH when present (no Program Files needed)."""
+    if os.name != "nt":
+        return False
+    prepend: list[str] = []
+    found_root: Path | None = None
+    for root in _portable_toolchain_roots():
+        cmake_bin = root / "cmake" / "bin"
+        mingw_bin = root / "mingw64" / "bin"
+        if (cmake_bin / "cmake.exe").is_file():
+            prepend.append(str(cmake_bin))
+            found_root = root
+        if (mingw_bin / "g++.exe").is_file():
+            prepend.append(str(mingw_bin))
+            found_root = root
+        if prepend:
+            break
+    if not prepend:
+        return False
+    path = os.environ.get("PATH", "")
+    os.environ["PATH"] = os.pathsep.join(prepend + ([path] if path else []))
+    # MotionCorrection overlay picks MinGW Makefiles when g++ is visible.
+    os.environ.setdefault("CMAKE_GENERATOR", "MinGW Makefiles")
+    if log_cb and found_root is not None:
+        log_cb(f"Using portable toolchain on {found_root}")
+    return True
+
+
 def _cmake_on_path() -> bool:
     """True if cmake is usable without installing (PATH refresh + common dirs on Windows)."""
     if shutil.which("cmake"):
         return True
     if os.name == "nt":
+        _prepend_portable_toolchains()
+        if shutil.which("cmake"):
+            return True
         _refresh_windows_path()
         if shutil.which("cmake"):
             return True
@@ -310,6 +369,8 @@ def _vswhere_exe() -> str | None:
 
 def _msvc_available() -> bool:
     """True if MSVC C++ toolchain looks usable (cl.exe or VS Build Tools via vswhere)."""
+    if os.name == "nt":
+        _prepend_portable_toolchains()
     if shutil.which("cl"):
         return True
     if shutil.which("g++"):
@@ -346,6 +407,8 @@ def _cxx_toolchain_available() -> bool:
 
 
 def _kimodo_pip_install_env() -> dict[str, str]:
+    if os.name == "nt":
+        _prepend_portable_toolchains()
     env = os.environ.copy()
     env["KIMODO_TARGET_PYTHON"] = sys.executable
     env["KIMODO_CMAKE_ARGS"] = " ".join(python_cmake_args())
@@ -770,8 +833,9 @@ def ensure_kimodo_build_deps(
             log_cb(
                 "Ensuring kimodo build deps (non-apt): cmake + C++ toolchain + Python headers"
             )
-        # Windows: auto-install CMake + attempt VS Build Tools via winget.
+        # Windows: prefer on-drive portable CMake/MinGW, else winget.
         if os.name == "nt":
+            _prepend_portable_toolchains(log_cb=log_cb)
             _ensure_cmake_windows(log_cb=log_cb)
             _ensure_msvc_windows(log_cb=log_cb)
 
@@ -807,22 +871,67 @@ def _run_git_clone(
         raise RuntimeError(f"Failed to clone kimodo: {err}")
 
 
+def _kimodo_source_ready(kimodo_dir: Path) -> bool:
+    """True when ``kimodo/`` has upstream sources (not just applied overlays).
+
+    Overlays copy ``setup.py`` into an empty gitlink, so presence of ``setup.py``
+    alone is not enough — ``kimodo.model`` must exist for the text encoder.
+    """
+    return (kimodo_dir / "kimodo" / "model").is_dir() and (
+        (kimodo_dir / "setup.py").is_file() or (kimodo_dir / "pyproject.toml").is_file()
+    )
+
+
 def _ensure_kimodo_repo(
     *,
     run_command: Callable[..., None] | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> Path:
-    if (kimodo_dir := _KIMODO_DIR).is_dir() and (
-        (kimodo_dir / "setup.py").is_file() or (kimodo_dir / "pyproject.toml").is_file()
-    ):
+    kimodo_dir = _KIMODO_DIR
+    if _kimodo_source_ready(kimodo_dir):
         return kimodo_dir
+
+    if kimodo_dir.is_dir():
+        if log_cb:
+            log_cb(
+                "Kimodo checkout incomplete (missing kimodo/model); "
+                "removing stub and re-cloning nv-tlabs/kimodo…"
+            )
+        bak = kimodo_dir.with_name(kimodo_dir.name + ".incomplete_bak")
+        if bak.exists():
+            shutil.rmtree(bak, ignore_errors=True)
+        try:
+            kimodo_dir.rename(bak)
+        except OSError:
+            shutil.rmtree(kimodo_dir, ignore_errors=True)
+            bak = None  # type: ignore[assignment]
+    else:
+        bak = None
+
     if log_cb:
         log_cb("Cloning nv-tlabs/kimodo…")
-    _run_git_clone(
-        ["git", "clone", "https://github.com/nv-tlabs/kimodo.git", str(kimodo_dir)],
-        run_command=run_command,
-        log_cb=log_cb,
-    )
+    try:
+        _run_git_clone(
+            ["git", "clone", "https://github.com/nv-tlabs/kimodo.git", str(kimodo_dir)],
+            run_command=run_command,
+            log_cb=log_cb,
+        )
+    except Exception:
+        # Restore previous tree if clone failed and we moved it aside.
+        if bak is not None and bak.exists() and not kimodo_dir.exists():
+            try:
+                bak.rename(kimodo_dir)
+            except OSError:
+                pass
+        raise
+
+    if bak is not None and bak.exists():
+        shutil.rmtree(bak, ignore_errors=True)
+
+    if not _kimodo_source_ready(kimodo_dir):
+        raise RuntimeError(
+            "Cloned kimodo but kimodo/model is still missing — check the clone."
+        )
     return kimodo_dir
 
 

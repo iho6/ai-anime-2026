@@ -29,6 +29,7 @@ import {
 } from "../../components/DesktopContextMenu";
 import { HomeIcon, SquareIconButton, TriangleIcon } from "../../components/IconPrimitives";
 import { HfTokenSettingsButton } from "../../components/HfTokenSettingsButton";
+import { JobLogButton } from "../../components/JobLogButton";
 import { SquareButton } from "../../components/SquareButton";
 import { ReferenceGenerateModal } from "../../components/ReferenceGenerateModal";
 import { SortableGrid, SortableItem } from "../../components/dnd/SortableGrid";
@@ -114,7 +115,7 @@ export default function ReferencesPage() {
       height: number;
       length?: number;
     }) => {
-      beginSession({ title: "Generating reference", clearLog: true });
+      await beginSession({ title: "Generating reference", clearLog: true });
       try {
         const done = await runReferenceGenerateWsJob({
           ...args,
@@ -137,7 +138,7 @@ export default function ReferencesPage() {
     async (preview: GeneratedReferencePreview) => {
       try {
         if (preview.kind === "video") {
-          beginSession({ title: "Making video keypoint reference", clearLog: true });
+          await beginSession({ title: "Making video keypoint reference", clearLog: true });
           const done = await runReferenceMakeKeypointVideoWsJob({
             videoRelPath: preview.previewRelPath,
             fps: preview.fps,
@@ -166,7 +167,7 @@ export default function ReferencesPage() {
 
   const makeKeypoint = useCallback(
     async (relPath: string) => {
-      beginSession({ title: "Making keypoint pose", clearLog: true });
+      await beginSession({ title: "Making keypoint pose", clearLog: true });
       try {
         const done = await runReferenceMakeKeypointWsJob({
           imageRelPath: relPath,
@@ -185,7 +186,7 @@ export default function ReferencesPage() {
   const runAngles = useCallback(
     async (relPath: string, angleIds: number[]) => {
       if (angleIds.length === 0) return;
-      beginSession({ title: "Generating new angle", clearLog: true });
+      await beginSession({ title: "Generating new angle", clearLog: true });
       try {
         for (const angleId of angleIds) {
           const done = await runReferenceMakeAngleWsJob({
@@ -328,6 +329,7 @@ export default function ReferencesPage() {
         }}
       >
         <HfTokenSettingsButton />
+        <JobLogButton />
         <SquareIconButton
           onClick={() => router.push("/home")}
           aria-label="Home"

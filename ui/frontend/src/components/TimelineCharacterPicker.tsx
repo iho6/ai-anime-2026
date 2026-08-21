@@ -16,12 +16,7 @@ import {
   apiSequencePut,
   assetUrlFromRelPath,
   runDetailWsJob,
-  runReferenceGenerateWsJob,
-  runReferenceMakeKeypointWsJob,
-  runReferenceMakeKeypointVideoWsJob,
-  type GeneratedReferencePreview,
   type GallerySplit,
-  type ReferenceMediaKind,
   type SequenceFrameItem,
   type SequenceManifest,
 } from "../lib/api";
@@ -51,8 +46,6 @@ import {
 } from "./timeline/pickerGalleryUtils";
 import { SquareIconButton, TriangleIcon } from "./IconPrimitives";
 import { ReferencePicker } from "./ReferencePicker";
-import { ReferenceGenerateModal } from "./ReferenceGenerateModal";
-import { MotionRefGenModal } from "./MotionRefGenModal";
 import { CameraAngleModal } from "./CameraAngleModal";
 import { AiEditModal } from "./AiEditModal";
 import type { SharedLogStreamHandle } from "./SharedLogStream";
@@ -200,6 +193,8 @@ export function TimelineCharacterPicker(props: {
 
   // New Pose panel state
   const [newPoseBaseRelPath, setNewPoseBaseRelPath] = useState<string | null>(null);
+  /** Last starting image chosen per character (survives switching characters in this picker). */
+  const startingByCharRef = useRef<Record<string, string>>({});
   const [newPosePrompt, setNewPosePrompt] = useState("");
   const [newPoseRef, setNewPoseRef] = useState<KeypointRefEntry | null>(null);
   const [poseBatchQueue, setPoseBatchQueue] = useState<KeypointRefEntry[]>([]);
@@ -207,9 +202,7 @@ export function TimelineCharacterPicker(props: {
   const [cropPadding, setCropPadding] = useState(0.0);
   const [qwenCfg, setQwenCfg] = useState(1.0);
   const [refPickerOpen, setRefPickerOpen] = useState(false);
-  const [referenceGenerateOpen, setReferenceGenerateOpen] = useState(false);
   const [referencePickerRefreshToken, setReferencePickerRefreshToken] = useState(0);
-  const [motionRefOpen, setMotionRefOpen] = useState(false);
 
   const logRef = useRef<SharedLogStreamHandle | null>(null);
   const {
@@ -276,8 +269,6 @@ export function TimelineCharacterPicker(props: {
     setCloseupWizardOpen(false);
     setCloseupWizardCharKey("");
     setRefPickerOpen(false);
-    setReferenceGenerateOpen(false);
-    setMotionRefOpen(false);
     setSelectedKey(initialKey ?? null);
     setSelectedRelPaths(new Set());
     setSelectedSequences(new Set());
@@ -290,9 +281,29 @@ export function TimelineCharacterPicker(props: {
   }, [open, initialKey, loadIcons]);
 
   useEffect(() => {
-    if (!sectionData) return;
-    setNewPoseBaseRelPath((prev) => prev ?? sectionData.poseImages[0]?.relPath ?? null);
-  }, [sectionData]);
+    if (!selectedKey) return;
+    const remembered = startingByCharRef.current[selectedKey];
+    if (remembered) {
+      setNewPoseBaseRelPath(remembered);
+      return;
+    }
+    if (sectionsLoading || !sectionData) return;
+    const fallback = sectionData.poseImages[0]?.relPath ?? null;
+    setNewPoseBaseRelPath(fallback);
+    if (fallback) startingByCharRef.current[selectedKey] = fallback;
+  }, [selectedKey, sectionData, sectionsLoading]);
+
+  const setStartingImage = useCallback(
+    (relPath: string | null) => {
+      setNewPoseBaseRelPath(relPath);
+      if (selectedKey && relPath) {
+        startingByCharRef.current[selectedKey] = relPath;
+      } else if (selectedKey && !relPath) {
+        delete startingByCharRef.current[selectedKey];
+      }
+    },
+    [selectedKey]
+  );
 
   async function handlePickerCancel() {
     if (stage === "create") {
@@ -348,7 +359,7 @@ export function TimelineCharacterPicker(props: {
     if (poseBatchQueue.length > 1) {
       const queue = poseBatchQueue;
       const total = queue.length;
-      beginSession({ title: `Batch pose gen (${total})`, clearLog: true });
+      await beginSession({ title: `Batch pose gen (${total})`, clearLog: true });
       await Promise.resolve();
       try {
         for (let i = 0; i < total; i++) {
@@ -370,7 +381,7 @@ export function TimelineCharacterPicker(props: {
     }
 
     // Single
-    beginSession({ title: "Generating pose", clearLog: true });
+    await beginSession({ title: "Generating pose", clearLog: true });
     await Promise.resolve();
     pushLog("Starting pose generation…");
     try {
@@ -505,7 +516,7 @@ export function TimelineCharacterPicker(props: {
         return next.size === prev.size ? prev : next;
       });
       if (newPoseBaseRelPath && targetRelPaths.includes(newPoseBaseRelPath)) {
-        setNewPoseBaseRelPath(null);
+        setStartingImage(null);
       }
       await refreshSections();
     } catch (e) {
@@ -555,7 +566,7 @@ export function TimelineCharacterPicker(props: {
     }
     const angType = inPose ? "pose" : "expr";
 
-    beginSession({ title: "Generating new angle", clearLog: true });
+    await beginSession({ title: "Generating new angle", clearLog: true });
     await Promise.resolve();
     pushLog("Generating a new camera angle…");
     try {
@@ -729,7 +740,7 @@ export function TimelineCharacterPicker(props: {
   const downloadSequenceVideo = useCallback(
     async (seqName: string) => {
       if (!selectedKey) return;
-      beginSession({ title: "Downloading sequence…", clearLog: true });
+      await beginSession({ title: "Downloading sequence…", clearLog: true });
       await Promise.resolve();
       try {
         pushLog("Loading sequence manifest…");
@@ -770,85 +781,6 @@ export function TimelineCharacterPicker(props: {
     [selectedKey, beginSession, pushLog, endSession, failSession]
   );
 
-  const generateReferencePreview = useCallback(
-    async (args: {
-      kind: ReferenceMediaKind;
-      promptText: string;
-      width: number;
-      height: number;
-      length?: number;
-    }) => {
-      try {
-        beginSession({
-          title: "Generating base reference…",
-          clearLog: true,
-          runningStatus: "Generating base reference…",
-        });
-        const done = await runReferenceGenerateWsJob({
-          ...args,
-          onLogLine: (line) => {
-            onJobLogLine(line);
-          },
-        });
-        if (!done.ok || !done.result) {
-          throw new Error(done.error ?? "Reference generation failed");
-        }
-        endSession();
-        return done.result;
-      } catch (error) {
-        failSession(error, "Failed to generate base reference.");
-        return null;
-      }
-    },
-    [beginSession, endSession, failSession, onJobLogLine]
-  );
-
-  const saveGeneratedReferenceAsKeypoint = useCallback(
-    async (preview: GeneratedReferencePreview) => {
-      try {
-        beginSession({
-          title: "Saving reference as keypoint…",
-          clearLog: true,
-          runningStatus: "Starting keypoint conversion…",
-        });
-        if (preview.kind === "video") {
-          const done = await runReferenceMakeKeypointVideoWsJob({
-            videoRelPath: preview.previewRelPath,
-            fps: preview.fps,
-            onLogLine: onJobLogLine,
-          });
-          if (!done.ok || !done.result) {
-            throw new Error(done.error ?? "Video keypoint generation failed");
-          }
-          setNewPoseRef({ kind: "video", ref: done.result.item });
-        } else {
-          const done = await runReferenceMakeKeypointWsJob({
-            imageRelPath: preview.previewRelPath,
-            onLogLine: onJobLogLine,
-          });
-          if (!done.ok || !done.result) {
-            throw new Error(done.error ?? "Keypoint generation failed");
-          }
-          setNewPoseRef({
-            kind: "single",
-            ref: {
-              id: done.result.item.id,
-              referenceRelPath: done.result.item.referenceRelPath,
-              keypointRelPath: done.result.item.keypointRelPath,
-            },
-          });
-        }
-        setPoseBatchQueue([]);
-        setReferencePickerRefreshToken((value) => value + 1);
-        setReferenceGenerateOpen(false);
-        endSession();
-      } catch (error) {
-        failSession(error, "Failed to save the generated reference as keypoints.");
-      }
-    },
-    [beginSession, endSession, failSession, onJobLogLine]
-  );
-
   if (!open) return null;
 
   const showBackButton =
@@ -878,18 +810,28 @@ export function TimelineCharacterPicker(props: {
       >
         <div
           style={{
-            width: 720,
-            maxWidth: "100%",
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "stretch",
             height: "min(92vh, 880px)",
+            maxWidth: "100%",
+            pointerEvents: "auto",
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+        <div
+          style={{
+            width: 720,
+            maxWidth: refPickerOpen ? "min(720px, 54vw)" : "100%",
+            height: "100%",
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
             background: "#0b0b0b",
             color: "white",
             border: "1px solid rgba(255,255,255,0.25)",
-            pointerEvents: "auto",
+            flexShrink: 0,
           }}
-          onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); setImgCtxMenu(null); setSeqCtxMenu(null); }}
         >
           {/* Title bar */}
@@ -1319,6 +1261,37 @@ export function TimelineCharacterPicker(props: {
             )}
           </div>
         </div>
+
+        {/* Reference picker docks to the right of Add Character (both visible). */}
+        <ReferencePicker
+          open={refPickerOpen}
+          variant="side"
+          charKey={selectedKey ?? ""}
+          busy={poseBusy}
+          onCancel={() => setRefPickerOpen(false)}
+          onUseSelected={(sel) => {
+            setRefPickerOpen(false);
+            const queue = buildKeypointRefQueueFromSelection(sel);
+            if (!queue.length) return;
+            setNewPoseRef(queue[0]);
+            setPoseBatchQueue(queue.length > 1 ? queue : []);
+          }}
+          onPickNew={() => setRefPickerOpen(false)}
+          refreshToken={referencePickerRefreshToken}
+          onKeypointsMade={(ref) => {
+            setNewPoseRef({ kind: "single", ref });
+            setPoseBatchQueue([]);
+            setReferencePickerRefreshToken((value) => value + 1);
+          }}
+          onKeypointVideoMade={(ref) => {
+            setNewPoseRef({ kind: "video", ref });
+            setPoseBatchQueue([]);
+            setReferencePickerRefreshToken((value) => value + 1);
+            pushLog("Video keypoint sequence saved to reference library.");
+          }}
+          jobModal={{ begin: beginSession, end: endSession, fail: failSession, log: pushLog }}
+        />
+        </div>
       </div>
 
       {/* Image right-click context menu */}
@@ -1342,7 +1315,7 @@ export function TimelineCharacterPicker(props: {
             onClick={() => {
               const { relPath } = imgCtxMenu;
               setImgCtxMenu(null);
-              setNewPoseBaseRelPath(relPath);
+              setStartingImage(relPath);
             }}
             style={{
               display: "block",
@@ -1603,58 +1576,6 @@ export function TimelineCharacterPicker(props: {
       />
 
       <AiEditModal {...aiEditModalProps} />
-
-      {/* Reference picker — includes Motion Ref Gen (KiMoD) option */}
-      <ReferencePicker
-        open={refPickerOpen}
-        charKey={selectedKey ?? ""}
-        busy={poseBusy}
-        onCancel={() => {
-          setReferenceGenerateOpen(false);
-          setRefPickerOpen(false);
-        }}
-        onUseSelected={(sel) => {
-          setRefPickerOpen(false);
-          const queue = buildKeypointRefQueueFromSelection(sel);
-          if (!queue.length) return;
-          setNewPoseRef(queue[0]);
-          setPoseBatchQueue(queue.length > 1 ? queue : []);
-        }}
-        onPickNew={() => setRefPickerOpen(false)}
-        onOpenGenerateBase={() => setReferenceGenerateOpen(true)}
-        refreshToken={referencePickerRefreshToken}
-        onOpenMotionRef={() => {
-          setRefPickerOpen(false);
-          setMotionRefOpen(true);
-        }}
-        jobModal={{ begin: beginSession, end: endSession, fail: failSession, log: pushLog }}
-      />
-
-      <ReferenceGenerateModal
-        open={referenceGenerateOpen}
-        busy={poseBusy}
-        saveLabel={(preview) =>
-          preview.kind === "video" ? "Save as Video Keypoint" : "Save as Keypoint"
-        }
-        zIndex={10100}
-        onCancel={() => setReferenceGenerateOpen(false)}
-        onGenerate={generateReferencePreview}
-        onCommit={saveGeneratedReferenceAsKeypoint}
-      />
-
-      {/* Motion Ref Gen modal (KiMoD) */}
-      <MotionRefGenModal
-        open={motionRefOpen}
-        charKey={selectedKey ?? ""}
-        onBack={() => { setMotionRefOpen(false); setRefPickerOpen(true); }}
-        onClose={() => setMotionRefOpen(false)}
-        onKeypointsMade={(ref) => {
-          setNewPoseRef({ kind: "single", ref });
-        }}
-        onKeypointVideoMade={() => {
-          pushLog("Video keypoint sequence saved to reference library.");
-        }}
-      />
 
       <ConnectedJobRunModal modal={poseJobModalProps} logRef={logRef} />
 

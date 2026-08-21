@@ -280,10 +280,10 @@ class KimodoSetupTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(lines, ["motion_correction: import failed (ModuleNotFoundError: ...)"])
 
-    def test_ensure_kimodo_repo_returns_existing_when_setup_present(self) -> None:
+    def test_ensure_kimodo_repo_returns_existing_when_source_present(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             kimodo_dir = Path(tmp) / "kimodo"
-            kimodo_dir.mkdir()
+            (kimodo_dir / "kimodo" / "model").mkdir(parents=True)
             (kimodo_dir / "setup.py").write_text("# setup\n", encoding="utf-8")
             run = mock.Mock()
             with mock.patch.object(kimodo_setup, "_KIMODO_DIR", kimodo_dir):
@@ -291,10 +291,36 @@ class KimodoSetupTests(unittest.TestCase):
             self.assertEqual(result, kimodo_dir)
             run.assert_not_called()
 
+    def test_ensure_kimodo_repo_reclones_overlay_only_stub(self) -> None:
+        """setup.py from overlays without kimodo/model must not skip clone."""
+        with tempfile.TemporaryDirectory() as tmp:
+            kimodo_dir = Path(tmp) / "kimodo"
+            kimodo_dir.mkdir()
+            (kimodo_dir / "setup.py").write_text("# overlay stub\n", encoding="utf-8")
+            (kimodo_dir / "kimodo").mkdir()
+
+            def fake_run(cmd, **kwargs):
+                kimodo_dir.mkdir(parents=True, exist_ok=True)
+                (kimodo_dir / "setup.py").write_text("# cloned\n", encoding="utf-8")
+                (kimodo_dir / "kimodo" / "model").mkdir(parents=True, exist_ok=True)
+
+            run = mock.Mock(side_effect=fake_run)
+            with mock.patch.object(kimodo_setup, "_KIMODO_DIR", kimodo_dir):
+                result = _ensure_kimodo_repo(run_command=run)
+            self.assertEqual(result, kimodo_dir)
+            run.assert_called_once()
+            self.assertTrue((kimodo_dir / "kimodo" / "model").is_dir())
+
     def test_ensure_kimodo_repo_clones_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             kimodo_dir = Path(tmp) / "kimodo"  # absent -> must clone
-            run = mock.Mock()
+
+            def fake_run(cmd, **kwargs):
+                kimodo_dir.mkdir(parents=True, exist_ok=True)
+                (kimodo_dir / "setup.py").write_text("# cloned\n", encoding="utf-8")
+                (kimodo_dir / "kimodo" / "model").mkdir(parents=True, exist_ok=True)
+
+            run = mock.Mock(side_effect=fake_run)
             with mock.patch.object(kimodo_setup, "_KIMODO_DIR", kimodo_dir):
                 result = _ensure_kimodo_repo(run_command=run)
             self.assertEqual(result, kimodo_dir)

@@ -31,6 +31,17 @@ def reference_images() -> list[dict[str, str]]:
     ]
 
 
+@router.get("/reference/videos")
+def reference_videos() -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for e in reference_storage.list_videos():
+        item: dict[str, Any] = {"itemId": e["id"], "relPath": e["relPath"]}
+        if e.get("fps") is not None:
+            item["fps"] = e["fps"]
+        out.append(item)
+    return out
+
+
 @router.get("/reference/keypoints")
 def reference_keypoints() -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
@@ -78,6 +89,8 @@ async def reference_generate_ws(ws: WebSocket) -> None:
                     negative_prompt=(
                         str(negative_prompt) if negative_prompt is not None else None
                     ),
+                    width=width,
+                    height=height,
                     length=length,
                     log_cb=log_cb,
                 )
@@ -107,6 +120,25 @@ def reference_image_commit(body: dict[str, str]) -> dict[str, Any]:
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     return {"item": {"itemId": entry["id"], "relPath": entry["relPath"]}}
+
+
+@router.post("/reference/videos/commit")
+def reference_video_commit(body: dict[str, Any]) -> dict[str, Any]:
+    preview_rel = str(body.get("previewRelPath") or "").strip()
+    if not preview_rel:
+        raise HTTPException(400, "previewRelPath is required.")
+    fps_raw = body.get("fps")
+    fps: float | None = None
+    if fps_raw is not None and str(fps_raw).strip() != "":
+        fps = float(fps_raw)
+    try:
+        entry = logic.commit_reference_video(preview_rel, fps=fps)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    item: dict[str, Any] = {"itemId": entry["id"], "relPath": entry["relPath"]}
+    if entry.get("fps") is not None:
+        item["fps"] = entry["fps"]
+    return {"item": item}
 
 
 @router.websocket("/reference/make_keypoint_video/ws")
@@ -436,6 +468,11 @@ def reference_keypoint_video_delete(video_id: str) -> dict[str, bool]:
 @router.delete("/reference/images/{image_id}")
 def reference_image_delete(image_id: str) -> dict[str, bool]:
     return {"ok": reference_storage.delete_image(image_id)}
+
+
+@router.delete("/reference/videos/{video_id}")
+def reference_video_delete(video_id: str) -> dict[str, bool]:
+    return {"ok": reference_storage.delete_video(video_id)}
 
 
 @router.delete("/reference/keypoints/{keypoint_id}")

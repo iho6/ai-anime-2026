@@ -98,5 +98,6 @@
       "duration": 10.0
     }
   ],
-  "model": "kimodo-smplx-rp"
+  "model": "kimodo-smplx-rp",
+  "createdAt": 1784099579.3786817
 }

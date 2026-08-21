@@ -3,8 +3,9 @@
 import React from "react";
 import { HomeIcon, SquareIconButton, TriangleIcon } from "./IconPrimitives";
 import { HfTokenSettingsButton } from "./HfTokenSettingsButton";
+import { JobLogButton } from "./JobLogButton";
 
-/** Shared top bar: home + back (back handler owned by the page for stack / confirm rules). */
+/** Shared top bar: settings + log + home + back (back handler owned by the page). */
 export function DetailSubpageChrome(props: {
   onHome: () => void;
   onBack: () => void;
@@ -22,6 +23,7 @@ export function DetailSubpageChrome(props: {
         }}
       >
         <HfTokenSettingsButton />
+        <JobLogButton />
         <SquareIconButton
           onClick={props.onHome}
           aria-label="Home"

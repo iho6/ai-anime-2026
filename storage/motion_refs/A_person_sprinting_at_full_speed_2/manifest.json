@@ -106,5 +106,6 @@
       "duration": 6.0
     }
   ],
-  "model": "kimodo-smplx-rp"
+  "model": "kimodo-smplx-rp",
+  "createdAt": 1782145252.616194
 }

@@ -6,7 +6,8 @@
   ],
   "expression_key_order": [],
   "pose_image_order": [
-    "pimg:flat:poses/pose_000.png"
+    "pimg:flat:poses/pose_000.png",
+    "pimg:flat:poses/pose_001.png"
   ],
   "hidden_pose_images": [],
   "expression_image_order": [

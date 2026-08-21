@@ -136,7 +136,7 @@ export const NewCharacterCreatePanel = forwardRef<
             confirmText: "Remove",
           });
           if (!ok) return;
-          beginSession({ title: "Discard draft", clearLog: true });
+          await beginSession({ title: "Discard draft", clearLog: true });
           pushLog("Removing draft…");
           try {
             await apiNewCharacterRemoveDraft({ relPath: rel });
@@ -154,7 +154,7 @@ export const NewCharacterCreatePanel = forwardRef<
         disabled: !rel,
         onSelect: async () => {
           if (!rel) return;
-          beginSession({ title: "Archive Character Base", clearLog: true });
+          await beginSession({ title: "Archive Character Base", clearLog: true });
           pushLog("Archiving image…");
           try {
             await apiNewCharacterArchiveBase({ relPath: rel });
@@ -184,7 +184,7 @@ export const NewCharacterCreatePanel = forwardRef<
       return;
     }
 
-    beginSession({ title: "Generating character", clearLog: true });
+    await beginSession({ title: "Generating character", clearLog: true });
     await Promise.resolve();
     pushLog("Starting generation (live logs from image service)…");
     try {
@@ -208,7 +208,7 @@ export const NewCharacterCreatePanel = forwardRef<
 
   async function appendImageFile(file: File | null) {
     if (!file) return;
-    beginSession({ title: "Adding image", clearLog: true });
+    await beginSession({ title: "Adding image", clearLog: true });
     await Promise.resolve();
     pushLog("Uploading image…");
     try {
@@ -263,7 +263,7 @@ export const NewCharacterCreatePanel = forwardRef<
     }
 
     const rel = paths[Math.min(index, paths.length - 1)];
-    beginSession({ title: "Saving character", clearLog: true });
+    await beginSession({ title: "Saving character", clearLog: true });
     pushLog(`Saving as ${nn}…`);
     try {
       await apiNewCharacterFinalize({ characterName: nn, relPath: rel });
@@ -284,7 +284,7 @@ export const NewCharacterCreatePanel = forwardRef<
       if (!ok) return false;
     }
     if (draftRelPaths.length > 0) {
-      beginSession({ title: "Leave new character", clearLog: true });
+      await beginSession({ title: "Leave new character", clearLog: true });
       pushLog("Clearing draft workspace…");
       try {
         await apiNewCharacterDiscard();
@@ -315,7 +315,7 @@ export const NewCharacterCreatePanel = forwardRef<
       confirmText: "Leave",
     });
     if (!ok) return false;
-    beginSession({ title: "Leave new character", clearLog: true });
+    await beginSession({ title: "Leave new character", clearLog: true });
     pushLog("Clearing draft workspace…");
     try {
       await apiNewCharacterDiscard();

@@ -78,6 +78,7 @@ import {
 } from "../../../components/DesktopContextMenu";
 import { HomeIcon, SquareIconButton, TriangleIcon } from "../../../components/IconPrimitives";
 import { HfTokenSettingsButton } from "../../../components/HfTokenSettingsButton";
+import { JobLogButton } from "../../../components/JobLogButton";
 import type { SharedLogStreamHandle } from "../../../components/SharedLogStream";
 import { ConnectedJobRunModal } from "../../../components/ConnectedJobRunModal";
 import { useJobRunSession } from "../../../hooks/useJobRunSession";
@@ -849,7 +850,7 @@ export default function TimelineEditorPage() {
     prompt: string,
     modelMode: T2iModelMode
   ): Promise<TimelineAsset | null> {
-    beginSession({ title: "Generating image (T2I)", clearLog: true });
+    await beginSession({ title: "Generating image (T2I)", clearLog: true });
     await Promise.resolve();
     pushLog(`T2I (${modelMode})…`);
     try {
@@ -875,7 +876,7 @@ export default function TimelineEditorPage() {
     if (!items.length) return;
     setOtherAssetPickerOpen(false);
     const tid = targetTrackRef.current;
-    beginSession({ title: "Adding assets", clearLog: true });
+    await beginSession({ title: "Adding assets", clearLog: true });
     await Promise.resolve();
     try {
       for (const item of items) {
@@ -924,7 +925,7 @@ export default function TimelineEditorPage() {
 
   async function onGenerateAudio(prompt: string, durationSec: number) {
     setAudioPickerOpen(false);
-    beginSession({ title: "Generating audio", clearLog: true });
+    await beginSession({ title: "Generating audio", clearLog: true });
     await Promise.resolve();
     pushLog("Running ACE-Step audio generation…");
     try {
@@ -947,7 +948,7 @@ export default function TimelineEditorPage() {
 
   async function onGenerateMusic(style: string, lyrics: string, durationSec: number) {
     setAudioPickerOpen(false);
-    beginSession({ title: "Generating music", clearLog: true });
+    await beginSession({ title: "Generating music", clearLog: true });
     await Promise.resolve();
     pushLog("Running ACE-Step music generation…");
     try {
@@ -972,7 +973,7 @@ export default function TimelineEditorPage() {
   async function onAudioGalleryUseSelected(items: AudioReference[]) {
     if (!items.length) return;
     setAudioPickerOpen(false);
-    beginSession({ title: "Importing audio", clearLog: true });
+    await beginSession({ title: "Importing audio", clearLog: true });
     await Promise.resolve();
     try {
       for (const item of items) {
@@ -987,7 +988,7 @@ export default function TimelineEditorPage() {
 
   async function onPickSequence(choice: SequenceVideoChoice) {
     setSeqPickerOpen(false);
-    beginSession({ title: "Importing video", clearLog: true });
+    await beginSession({ title: "Importing video", clearLog: true });
     await Promise.resolve();
     pushLog(`Materializing ${choice.label}…`);
     try {
@@ -1033,7 +1034,7 @@ export default function TimelineEditorPage() {
     sessionTitle = "Importing images"
   ) {
     if (!relPaths.length) return;
-    beginSession({ title: sessionTitle, clearLog: true });
+    await beginSession({ title: sessionTitle, clearLog: true });
     await Promise.resolve();
     try {
       for (const sourceRelPath of relPaths) {
@@ -1070,7 +1071,7 @@ export default function TimelineEditorPage() {
   async function addPoseClipFromSource(sourceClipId: string, relPath: string, charKey: string) {
     const found = findClip(sourceClipId);
     if (!found) return;
-    beginSession({ title: "Adding pose clip", clearLog: true });
+    await beginSession({ title: "Adding pose clip", clearLog: true });
     await Promise.resolve();
     pushLog("Importing new pose…");
     try {
@@ -1118,7 +1119,7 @@ export default function TimelineEditorPage() {
     setCharPickerOpen(false);
     setChangePoseClipId(null);
     setCharPickerInitialKey(null);
-    beginSession({ title: "Importing sequences", clearLog: true });
+    await beginSession({ title: "Importing sequences", clearLog: true });
     await Promise.resolve();
     try {
       for (const pick of picks) {
@@ -1183,7 +1184,7 @@ export default function TimelineEditorPage() {
     if (!clipId) return;
     const found = findClip(clipId);
     if (!found) return;
-    beginSession({ title: "Generating new angle", clearLog: true });
+    await beginSession({ title: "Generating new angle", clearLog: true });
     await Promise.resolve();
     pushLog("Generating a new camera angle…");
     try {
@@ -1235,7 +1236,7 @@ export default function TimelineEditorPage() {
     const pair = getOverlappingCharBgPair();
     if (!pair || !manifest) return;
     const [backdrop, overlay] = pair;
-    beginSession({ title: mode === "i2i" ? "Generating scene" : "Combining images", clearLog: true });
+    await beginSession({ title: mode === "i2i" ? "Generating scene" : "Combining images", clearLog: true });
     await Promise.resolve();
     pushLog("Building composite…");
     try {
@@ -1487,7 +1488,7 @@ export default function TimelineEditorPage() {
     };
 
     if (pending.stripResolve) {
-      beginSession({ title: "Removing background", clearLog: true });
+      await beginSession({ title: "Removing background", clearLog: true });
       await Promise.resolve();
       try {
         const out: string[] = [];
@@ -1514,7 +1515,7 @@ export default function TimelineEditorPage() {
     if (!pending.clipId) return;
     const found = findClip(pending.clipId);
     if (!found || found.clip.type !== "image") return;
-    beginSession({ title: "Removing background", clearLog: true });
+    await beginSession({ title: "Removing background", clearLog: true });
     await Promise.resolve();
     pushLog("Removing background…");
     try {
@@ -1606,7 +1607,7 @@ export default function TimelineEditorPage() {
     setRemoveBgVideoOpen(false);
     removeBgVideoTargetRef.current = null;
     if (!tgt || !timelineKey) return;
-    beginSession({ title: "Removing video background (RVM)", clearLog: true });
+    await beginSession({ title: "Removing video background (RVM)", clearLog: true });
     await Promise.resolve();
     pushLog("Starting RobustVideoMatting (model loads on first run ~15 s)…");
     try {
@@ -1638,7 +1639,7 @@ export default function TimelineEditorPage() {
     setRemoveBgVideoOpen(false);
     removeBgVideoTargetRef.current = null;
     if (!tgt || !timelineKey) return;
-    beginSession({ title: "Removing video background (RMBG)", clearLog: true });
+    await beginSession({ title: "Removing video background (RMBG)", clearLog: true });
     await Promise.resolve();
     pushLog("Starting per-frame RMBG-2.0…");
     try {
@@ -1667,7 +1668,7 @@ export default function TimelineEditorPage() {
     setRemoveBgVideoOpen(false);
     removeBgVideoTargetRef.current = null;
     if (!tgt || !timelineKey) return;
-    beginSession({ title: "Removing video background (Anime Seg)", clearLog: true });
+    await beginSession({ title: "Removing video background (Anime Seg)", clearLog: true });
     await Promise.resolve();
     pushLog("Starting per-frame anime segmentation…");
     try {
@@ -1702,7 +1703,7 @@ export default function TimelineEditorPage() {
   }
 
   async function runExportMp4() {
-    beginSession({ title: "Exporting MP4", clearLog: true });
+    await beginSession({ title: "Exporting MP4", clearLog: true });
     await Promise.resolve();
     pushLog("Starting export…");
     try {
@@ -2418,7 +2419,7 @@ export default function TimelineEditorPage() {
     setSegmentOpen(false);
     segmentTargetRef.current = null;
     if (!tgt || !timelineKey) return;
-    beginSession({ title: "Segmenting", clearLog: true });
+    await beginSession({ title: "Segmenting", clearLog: true });
     await Promise.resolve();
     pushLog("Running SAM 3.1 segmentation…");
     try {
@@ -2487,7 +2488,7 @@ export default function TimelineEditorPage() {
     if (!tgt) return;
     const found = findClip(tgt.clipId);
     if (!found) return;
-    beginSession({ title: "AI editing", clearLog: true });
+    await beginSession({ title: "AI editing", clearLog: true });
     await Promise.resolve();
     pushLog("AI editing image…");
     try {
@@ -2526,7 +2527,7 @@ export default function TimelineEditorPage() {
     if (!found || !clipActsAsImage(found.clip)) return;
     if (!prompt.trim()) return;
     const start = found.clip.start;
-    beginSession({ title: "Generating video (I2V)", clearLog: true });
+    await beginSession({ title: "Generating video (I2V)", clearLog: true });
     await Promise.resolve();
     pushLog("Rasterizing source…");
     try {
@@ -2571,7 +2572,7 @@ export default function TimelineEditorPage() {
     if (!a || !b) return;
     const ordered = [a.clip, b.clip].sort((x, y) => x.start - y.start);
     const [earlier, later] = ordered;
-    beginSession({ title: "Generating video (FLF)", clearLog: true });
+    await beginSession({ title: "Generating video (FLF)", clearLog: true });
     await Promise.resolve();
     pushLog(
       `Resolving FLF endpoints: ${flfEndpointLabel(earlier, "start")} → ${flfEndpointLabel(later, "end")}…`
@@ -2763,7 +2764,7 @@ export default function TimelineEditorPage() {
       return !found?.clip.frameSequence?.strip?.length;
     });
     if (!missing.length) return true;
-    beginSession({ title: "Extracting video frames", clearLog: true });
+    await beginSession({ title: "Extracting video frames", clearLog: true });
     await Promise.resolve();
     try {
       await Promise.all(missing.map((clipId) => extractVideoFramesForClip(clipId)));
@@ -2857,7 +2858,7 @@ export default function TimelineEditorPage() {
     if (!charKey || !sequenceName) return;
 
     const hadAlpha = Boolean(found.clip.alphaRelPath?.trim());
-    beginSession({ title: "Updating clip from sequence set", clearLog: true });
+    await beginSession({ title: "Updating clip from sequence set", clearLog: true });
     await Promise.resolve();
     try {
       pushLog(`Materializing ${sequenceName}${galleryItemId ? ` / ${galleryItemId}` : ""}…`);
@@ -3097,7 +3098,7 @@ export default function TimelineEditorPage() {
     const baseName = sanitizeDownloadBaseName(clipVideoLabel(clip)) || "clip";
 
     if (clip.frameSequence) {
-      beginSession({ title: "Downloading clip", clearLog: true });
+      await beginSession({ title: "Downloading clip", clearLog: true });
       await Promise.resolve();
       try {
         pushLog("Encoding edited frames…");
@@ -3145,7 +3146,7 @@ export default function TimelineEditorPage() {
         ),
       })),
     }));
-    beginSession({ title: "Re-extracting video frames", clearLog: true });
+    await beginSession({ title: "Re-extracting video frames", clearLog: true });
     await Promise.resolve();
     try {
       for (const clipId of clipIds) {
@@ -3207,7 +3208,7 @@ export default function TimelineEditorPage() {
     }
     if (!encodeJobs.length) return;
 
-    beginSession({ title: "Encoding video from frames", clearLog: true });
+    await beginSession({ title: "Encoding video from frames", clearLog: true });
     await Promise.resolve();
     try {
       const encoded: Array<{
@@ -3311,7 +3312,7 @@ export default function TimelineEditorPage() {
         }),
       onGenerateI2v: async (relPath, prompt, length) => {
         if (!framesDirRel) throw new Error("Missing frames directory.");
-        beginSession({ title: "Generating strip I2V", clearLog: true });
+        await beginSession({ title: "Generating strip I2V", clearLog: true });
         await Promise.resolve();
         try {
           const done = await runTimelineStripI2vWsJob({
@@ -3334,7 +3335,7 @@ export default function TimelineEditorPage() {
       },
       onGenerateFlf: async (relPathA, relPathB, length) => {
         if (!framesDirRel) throw new Error("Missing frames directory.");
-        beginSession({ title: "Generating strip FLF", clearLog: true });
+        await beginSession({ title: "Generating strip FLF", clearLog: true });
         await Promise.resolve();
         try {
           const done = await runTimelineStripFlfWsJob({
@@ -3372,7 +3373,7 @@ export default function TimelineEditorPage() {
     stripAiEditRelRef.current = null;
     setStripAiEditOpen(false);
     if (!resolve || !imageRelPath) return;
-    beginSession({ title: "AI Editing frame", clearLog: true });
+    await beginSession({ title: "AI Editing frame", clearLog: true });
     await Promise.resolve();
     try {
       const done = await runTimelineAiEditWsJob({
@@ -3939,6 +3940,7 @@ export default function TimelineEditorPage() {
         }}
       >
         <HfTokenSettingsButton />
+        <JobLogButton />
         <SquareIconButton onClick={() => leaveTimeline("/home")} aria-label="Home" icon={<HomeIcon />} />
         <SquareIconButton
           onClick={() => leaveTimeline("/timeline_hub")}
@@ -3968,7 +3970,8 @@ export default function TimelineEditorPage() {
         )}
       </div>
 
-      {/* Preview */}
+      {/* Preview — zIndex keeps traj spill above tracks; isolate player so clip hit
+          layers (z 300–500) cannot paint over transport/toolbar siblings. */}
       <div
         style={{ position: "relative", zIndex: 10, overflow: "visible", padding: "12px 20px", background: "#0e0e0e" }}
         onPointerDown={(e) => {
@@ -3980,7 +3983,16 @@ export default function TimelineEditorPage() {
         }}
       >
         {/* Aspect ratio switch */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
+        <div
+          style={{
+            position: "relative",
+            zIndex: 2,
+            display: "flex",
+            gap: 6,
+            marginBottom: 8,
+            alignItems: "center",
+          }}
+        >
           <span style={{ fontSize: 11, color: "#aaa", marginRight: 4 }}>Aspect</span>
           {(["16:9", "9:16", "1:1", "4:3"] as const).map((a) => (
             <button
@@ -4005,86 +4017,102 @@ export default function TimelineEditorPage() {
           ))}
         </div>
 
-        <TimelinePreviewPlayer
-          manifest={manifest}
-          timelineKey={timelineKey}
-          playing={playing}
-          playheadStore={playheadStore}
-          selectedClipId={selectedClipIds[selectedClipIds.length - 1] ?? null}
-          suppressSelectionChrome={nonTrajectoryUiActive || clipMenu.open}
-          editable={!playing}
-          onPlayheadChange={commitLivePlayhead}
-          onEnded={() => setPlaying(false)}
-          onSelectClip={(id, additive) => selectClip(id, additive ?? false)}
-          onClipTransformChange={setClipTransformFromPreview}
-          onTransformStart={() => {
-            trajDragOriginRef.current = null;
-            commit();
-          }}
-          onClipContextMenu={(clipId, x, y) => {
-            if (!selectedClipIds.includes(clipId)) selectClip(clipId, false);
-            const rc = findClip(clipId);
-            setClipMenu({ open: true, x, y, trackId: rc?.trackId ?? "", clipId, fromTrack: false });
-          }}
-          trajectoryClipId={trajectoryClipId}
-          geometryEditClipId={geometryEditClipId}
-          textEditClipId={textEditClipId}
-          onWaypointChange={onWaypointChange}
-          onWaypointPatchCommit={onWaypointPatchCommit}
-          onMotionChange={onMotionChange}
-          onDeleteTrajectory={(clipId) => { updateClipTrajectory(clipId, undefined); setTrajectoryClipId(null); }}
-          onExitTrajectoryEdit={exitTrajectoryEdit}
-          onGeometryChange={updateClipGeometry}
-          onGeometryCommit={commit}
-          onExitGeometryEdit={() => setGeometryEditClipId(null)}
-          onExitClipEditModes={exitClipEditModes}
-          onTextChange={updateClipText}
-          onTextContentChange={updateClipTextContent}
-          onTextEditEnd={() => setTextEditClipId(null)}
-          onRequestTextEdit={(clipId) => {
-            selectClip(clipId, false);
-            setTextEditClipId(clipId);
-          }}
-          onRequestGeometryEdit={(clipId) => {
-            selectClip(clipId, false);
-            setTrajectoryClipId(null);
-            setVolumeEditClipId(null);
-            setTextEditClipId(null);
-            setGeometryEditClipId(clipId);
-          }}
-          onGeometryContextMenu={(clipId, x, y) => {
-            const rc = findClip(clipId);
-            if (!rc?.clip.geometry) return;
-            setClipMenu({ open: true, x, y, trackId: rc.trackId, clipId, fromTrack: false });
-          }}
-          height={previewHeight}
-          frameExtension={previewFrameExtension}
-          onFrameExtensionChange={(ext) => setPreviewFrameExtension(ext)}
-        />
+        <div style={{ position: "relative", zIndex: 0, isolation: "isolate" }}>
+          <TimelinePreviewPlayer
+            manifest={manifest}
+            timelineKey={timelineKey}
+            playing={playing}
+            playheadStore={playheadStore}
+            selectedClipId={selectedClipIds[selectedClipIds.length - 1] ?? null}
+            suppressSelectionChrome={nonTrajectoryUiActive || clipMenu.open}
+            editable={!playing}
+            onPlayheadChange={commitLivePlayhead}
+            onEnded={() => setPlaying(false)}
+            onSelectClip={(id, additive) => selectClip(id, additive ?? false)}
+            onClipTransformChange={setClipTransformFromPreview}
+            onTransformStart={() => {
+              trajDragOriginRef.current = null;
+              commit();
+            }}
+            onClipContextMenu={(clipId, x, y) => {
+              if (!selectedClipIds.includes(clipId)) selectClip(clipId, false);
+              const rc = findClip(clipId);
+              setClipMenu({ open: true, x, y, trackId: rc?.trackId ?? "", clipId, fromTrack: false });
+            }}
+            trajectoryClipId={trajectoryClipId}
+            geometryEditClipId={geometryEditClipId}
+            textEditClipId={textEditClipId}
+            onWaypointChange={onWaypointChange}
+            onWaypointPatchCommit={onWaypointPatchCommit}
+            onMotionChange={onMotionChange}
+            onDeleteTrajectory={(clipId) => { updateClipTrajectory(clipId, undefined); setTrajectoryClipId(null); }}
+            onExitTrajectoryEdit={exitTrajectoryEdit}
+            onGeometryChange={updateClipGeometry}
+            onGeometryCommit={commit}
+            onExitGeometryEdit={() => setGeometryEditClipId(null)}
+            onExitClipEditModes={exitClipEditModes}
+            onTextChange={updateClipText}
+            onTextContentChange={updateClipTextContent}
+            onTextEditEnd={() => setTextEditClipId(null)}
+            onRequestTextEdit={(clipId) => {
+              selectClip(clipId, false);
+              setTextEditClipId(clipId);
+            }}
+            onRequestGeometryEdit={(clipId) => {
+              selectClip(clipId, false);
+              setTrajectoryClipId(null);
+              setVolumeEditClipId(null);
+              setTextEditClipId(null);
+              setGeometryEditClipId(clipId);
+            }}
+            onGeometryContextMenu={(clipId, x, y) => {
+              const rc = findClip(clipId);
+              if (!rc?.clip.geometry) return;
+              setClipMenu({ open: true, x, y, trackId: rc.trackId, clipId, fromTrack: false });
+            }}
+            height={previewHeight}
+            frameExtension={previewFrameExtension}
+            onFrameExtensionChange={(ext) => setPreviewFrameExtension(ext)}
+          />
+        </div>
 
         {/* Drag handle to resize the preview height */}
         <div
           data-preview-resize-handle
           onPointerDown={(e) => {
             e.preventDefault();
-            (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+            const el = e.currentTarget;
+            const pointerId = e.pointerId;
+            el.setPointerCapture?.(pointerId);
             previewResizeRef.current = { startY: e.clientY, orig: previewHeight };
-          }}
-          onPointerMove={(e) => {
-            const d = previewResizeRef.current;
-            if (!d) return;
-            setPreviewHeight(
-              Math.max(140, Math.min(680, d.orig + (e.clientY - d.startY)))
-            );
-          }}
-          onPointerUp={(e) => {
-            (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-            previewResizeRef.current = null;
+
+            const onMove = (ev: PointerEvent) => {
+              const d = previewResizeRef.current;
+              if (!d) return;
+              setPreviewHeight(
+                Math.max(140, Math.min(680, d.orig + (ev.clientY - d.startY)))
+              );
+            };
+            const onEnd = (ev: PointerEvent) => {
+              if (ev.pointerId !== pointerId) return;
+              previewResizeRef.current = null;
+              try {
+                el.releasePointerCapture?.(pointerId);
+              } catch {
+                /* already released */
+              }
+              window.removeEventListener("pointermove", onMove);
+              window.removeEventListener("pointerup", onEnd);
+              window.removeEventListener("pointercancel", onEnd);
+            };
+            window.addEventListener("pointermove", onMove);
+            window.addEventListener("pointerup", onEnd);
+            window.addEventListener("pointercancel", onEnd);
           }}
           title="Drag to resize preview"
           style={{
             position: "relative",
-            zIndex: 5,
+            zIndex: 2,
             height: 10,
             margin: "4px auto 0",
             width: 80,
@@ -4092,8 +4120,17 @@ export default function TimelineEditorPage() {
             borderBottom: "3px double rgba(255,255,255,0.4)",
           }}
         />
-        {/* Transport */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+        {/* Transport — above isolated preview spill */}
+        <div
+          style={{
+            position: "relative",
+            zIndex: 2,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            marginTop: 8,
+          }}
+        >
           <button onClick={togglePlay} style={toolBtn}>
             {playing ? "⏸ Pause" : "▶ Play"}
           </button>
@@ -4120,8 +4157,17 @@ export default function TimelineEditorPage() {
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div style={{ display: "flex", gap: 8, padding: "0 20px 10px", flexWrap: "wrap" }}>
+      {/* Toolbar — above preview section so off-frame clip hits cannot steal clicks */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 11,
+          display: "flex",
+          gap: 8,
+          padding: "0 20px 10px",
+          flexWrap: "wrap",
+        }}
+      >
         <button
           onClick={undo}
           style={toolBtn}
@@ -4875,7 +4921,8 @@ const toolBtn: React.CSSProperties = {
   background: "transparent",
   color: "#eee",
   border: "1px solid rgba(255,255,255,0.35)",
-  padding: "6px 12px",
+  padding: "2px 12px",
   cursor: "pointer",
   font: "inherit",
+  lineHeight: 1.2,
 };

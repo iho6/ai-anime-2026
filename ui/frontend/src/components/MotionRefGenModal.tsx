@@ -58,11 +58,9 @@ import { useJobRunSession } from "../hooks/useJobRunSession";
 import type { SharedLogStreamHandle } from "./SharedLogStream";
 import { ConnectedJobRunModal } from "./ConnectedJobRunModal";
 import { useAppError } from "./ErrorProvider";
-import { PauseBarsIcon, SquareIconButton, TimelinePlayIcon, TriangleIcon } from "./IconPrimitives";
+import { PauseBarsIcon, PlusCameraIcon, SquareIconButton, TimelinePlayIcon, TriangleIcon } from "./IconPrimitives";
 import { SkeletonViewer3D, SkeletonViewer3DHandle, CameraState, ViewerMode } from "./motionRef/SkeletonViewer3D";
 import { MotionTimeline } from "./motionRef/MotionTimeline";
-import { PromptAdherenceKnob } from "./motionRef/PromptAdherenceKnob";
-import { TransitionFramesKnob } from "./motionRef/TransitionFramesKnob";
 import { MotionShotGallery } from "./motionRef/MotionShotGallery";
 import { MotionPlaybackScrubber } from "./motionRef/MotionPlaybackScrubber";
 import { CameraKeyframeContextMenu } from "./motionRef/CameraKeyframeContextMenu";
@@ -119,8 +117,18 @@ export function MotionRefGenModal(props: {
   onKeypointsMade?: (ref: PoseReference) => void;
   /** Called when a video keypoint sequence row is saved to the reference library. */
   onKeypointVideoMade?: (ref: KeypointVideoReference) => void;
+  /** When true, render as an inline panel (no full-screen overlay / no close chrome). */
+  embedded?: boolean;
 }) {
-  const { open, charKey, onBack, onClose, onKeypointsMade, onKeypointVideoMade } = props;
+  const {
+    open,
+    charKey,
+    onBack,
+    onClose,
+    onKeypointsMade,
+    onKeypointVideoMade,
+    embedded = false,
+  } = props;
   const { showError, askText, confirmAction } = useAppError();
 
   const logRef = useRef<SharedLogStreamHandle | null>(null);
@@ -208,6 +216,7 @@ export function MotionRefGenModal(props: {
     items: [],
   });
   const [selectedShotIds, setSelectedShotIds] = useState<Set<string>>(new Set());
+  const [selectedMotionKeys, setSelectedMotionKeys] = useState<Set<string>>(new Set());
 
   const loadShotsLayout = useCallback(async () => {
     try {
@@ -219,7 +228,7 @@ export function MotionRefGenModal(props: {
   }, []);
 
   const [v2poseDialog, setV2poseDialog] = useState<{
-    motionKey: string;
+    motionKeys: string[];
     label: string;
     sampleFps: V2PoseSeqSampleFps;
     folderName: string;
@@ -795,7 +804,7 @@ export function MotionRefGenModal(props: {
     setTrajectoryEnabled(true);
     skeletonRef.current?.resetAll();
 
-    beginSession({ title: "Generating motion (KiMoD)", clearLog: true });
+    await beginSession({ title: "Generating motion (KiMoD)", clearLog: true });
     await Promise.resolve();
     pushLog("Starting KiMoD worker (model loads on first run)…");
 
@@ -881,7 +890,7 @@ export function MotionRefGenModal(props: {
       segments: item.segments ?? [],
     });
     if (!opts?.quiet) {
-      beginSession({ title: "Loading motion…", clearLog: false });
+      await beginSession({ title: "Loading motion…", clearLog: false });
       await Promise.resolve();
     }
     try {
@@ -941,6 +950,12 @@ export function MotionRefGenModal(props: {
     try {
       await apiMotionRefDelete(motionKey);
       setMotions((prev) => prev.filter((m) => m.motionKey !== motionKey));
+      setSelectedMotionKeys((prev) => {
+        if (!prev.has(motionKey)) return prev;
+        const next = new Set(prev);
+        next.delete(motionKey);
+        return next;
+      });
       if (manifest?.motionKey === motionKey) {
         cancelPreviewCameraSave();
         persistedPreviewCameraRef.current = null;
@@ -1206,13 +1221,13 @@ export function MotionRefGenModal(props: {
       .filter((s) => !s.keypointId)
       .sort((a, b) => a.frameIndex - b.frameIndex);
     if (!pending.length) return;
-    beginSession({ title: "Add to Pose", clearLog: false, runningStatus: `0/${pending.length} complete` });
+    await beginSession({ title: "Convert to Keypoint", clearLog: false, runningStatus: `0/${pending.length} complete` });
     await Promise.resolve();
     try {
       let doneCount = 0;
       for (const shot of pending) {
         doneCount += 1;
-        const status = `Add to Pose ${doneCount}/${pending.length}…`;
+        const status = `Convert to Keypoint ${doneCount}/${pending.length}…`;
         setRunningStatus(status);
         pushLog(`Shot f${shot.frameIndex} (${doneCount}/${pending.length})…`);
         const done = await runMotionRefShotAddToPoseWsJob({
@@ -1220,7 +1235,7 @@ export function MotionRefGenModal(props: {
           onLogLine: onJobLogLine,
         });
         if (!done.ok || !done.result?.item) {
-          throw new Error(done.error || "Add to Pose failed.");
+          throw new Error(done.error || "Convert to Keypoint failed.");
         }
         if (!done.result.skipped) {
           onKeypointsMade?.(done.result.item);
@@ -1491,7 +1506,7 @@ export function MotionRefGenModal(props: {
     label: string
   ) {
     setFpsExportPending(null);
-    beginSession({
+    await beginSession({
       title: "Download as Video",
       clearLog: true,
       runningStatus: "Capturing frames…",
@@ -1530,7 +1545,7 @@ export function MotionRefGenModal(props: {
     useVideoKeypointService: boolean
   ) {
     setV2poseDialog(null);
-    beginSession({
+    await beginSession({
       title: useVideoKeypointService ? "V2Pose Seq (video)" : "V2Pose Seq",
       clearLog: true,
       runningStatus: "Capturing frames…",
@@ -1664,7 +1679,7 @@ export function MotionRefGenModal(props: {
     sampleFps: V2PoseSeqSampleFps
   ) {
     setV2poseDialog(null);
-    beginSession({
+    await beginSession({
       title: "V2Pose Diag Shots",
       clearLog: true,
       runningStatus: "Capturing frames…",
@@ -1713,26 +1728,54 @@ export function MotionRefGenModal(props: {
     return `f${frameIndex} (${rel + 1}/${span})  ${cur}s / ${tot}s`;
   }, [frameIndex, totalFrames, manifest, playbackStart, playbackEnd]);
 
+  const addableShots = useMemo(
+    () =>
+      shotsLayout.items.filter(
+        (s) => selectedShotIds.has(s.id) && !s.keypointId
+      ),
+    [shotsLayout.items, selectedShotIds]
+  );
+
+  const selectedMotions = useMemo(
+    () => motions.filter((m) => selectedMotionKeys.has(m.motionKey)),
+    [motions, selectedMotionKeys]
+  );
+
+  const canConvertToKeypoint = addableShots.length > 0 || selectedMotions.length > 0;
+
+  function openConvertAnimationsDialog(keys: string[]) {
+    const unique = [...new Set(keys)];
+    if (!unique.length) return;
+    const first = motions.find((m) => m.motionKey === unique[0]);
+    if (!first) return;
+    const label =
+      unique.length === 1
+        ? motionRefDisplayLabel(first.segments?.[0]?.text, first.motionKey, 24)
+        : `${unique.length} animations`;
+    setV2poseDialog({
+      motionKeys: unique,
+      label,
+      sampleFps: "source",
+      folderName: `v2pose_${first.motionKey.slice(0, 20)}_${Date.now()}`,
+      useVideoKeypointService: false,
+      noSdpose: false,
+    });
+  }
+
+  function handleConvertToKeypoint() {
+    if (selectedMotions.length > 0) {
+      openConvertAnimationsDialog(selectedMotions.map((m) => m.motionKey));
+      return;
+    }
+    if (addableShots.length > 0) {
+      void addShotsToPose(addableShots);
+    }
+  }
+
   if (!open) return null;
 
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.7)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 10200, // above TimelineCharacterPicker (9998) and ReferencePicker (10000)
-      }}
-      onMouseDown={() => {
-        if (motionCtxMenu) { setMotionCtxMenu(null); return; }
-        if (cameraCtxMenu) { setCameraCtxMenu(null); return; }
-        if (fpsExportPending || v2poseDialog || jobModalProps.open) return;
-        onClose();
-      }}
-    >
+  const shell = (
+    <>
       <div
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
@@ -1743,17 +1786,20 @@ export function MotionRefGenModal(props: {
         style={{
           background: "#111",
           color: "#eee",
-          border: "1px solid rgba(255,255,255,0.2)",
-          width: 900,
-          maxWidth: "96vw",
-          maxHeight: "92vh",
+          border: embedded ? "none" : "1px solid rgba(255,255,255,0.2)",
+          width: embedded ? "100%" : 900,
+          maxWidth: embedded ? "100%" : "96vw",
+          height: embedded ? "100%" : undefined,
+          maxHeight: embedded ? "100%" : "92vh",
           display: "flex",
           flexDirection: "column",
           overflowY: "auto",
           font: "inherit",
+          boxSizing: "border-box",
         }}
       >
         {/* Header */}
+        {!embedded ? (
         <div
           style={{
             display: "flex",
@@ -1784,6 +1830,7 @@ export function MotionRefGenModal(props: {
             ×
           </button>
         </div>
+        ) : null}
 
         {/* 3D viewer (resizable, fills width on open) */}
         <div style={{ padding: 12, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
@@ -1845,6 +1892,54 @@ export function MotionRefGenModal(props: {
                 />
                 SDPose crop
               </label>
+              <label
+                style={{
+                  fontSize: 10,
+                  color:
+                    cameraKeyframes.length === 0
+                      ? "#555"
+                      : trajectoryEnabled
+                        ? MOTION_REF_ACCENT
+                        : "#888",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  cursor: cameraKeyframes.length === 0 ? "default" : "pointer",
+                  userSelect: "none",
+                  whiteSpace: "nowrap",
+                }}
+                title="Follow saved camera keyframes during playback"
+              >
+                <input
+                  type="checkbox"
+                  checked={trajectoryEnabled}
+                  disabled={cameraKeyframes.length === 0}
+                  onChange={(e) => setTrajectoryEnabled(e.target.checked)}
+                  style={{ accentColor: MOTION_REF_ACCENT }}
+                />
+                Trajectory
+              </label>
+              <label
+                style={{
+                  fontSize: 10,
+                  color: inPlace ? MOTION_REF_ACCENT : "#888",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  cursor: "pointer",
+                  userSelect: "none",
+                  whiteSpace: "nowrap",
+                }}
+                title="Remove horizontal root translation so the figure stays centered during playback (recommended for trajectory and shots)"
+              >
+                <input
+                  type="checkbox"
+                  checked={inPlace}
+                  onChange={(e) => setInPlace(e.target.checked)}
+                  style={{ accentColor: MOTION_REF_ACCENT }}
+                />
+                In place
+              </label>
             </div>
           </div>
         </div>
@@ -1884,6 +1979,14 @@ export function MotionRefGenModal(props: {
             onClick={() => setFrameIndex((i) => Math.min(playbackEnd, i + 1))}
           />
           <span style={{ fontSize: 11, color: "#aaa", fontVariantNumeric: "tabular-nums", minWidth: 160 }}>{timeLabel}</span>
+          <SquareIconButton
+            size={32}
+            aria-label="Add camera pose to trajectory"
+            title="Add the current camera pose at this frame to the playback trajectory"
+            disabled={busy || !manifest}
+            icon={<PlusCameraIcon size={16} />}
+            onClick={() => void saveTrajectoryKeyframe()}
+          />
           <MotionPlaybackScrubber
             totalFrames={totalFrames}
             frameIndex={frameIndex}
@@ -1899,86 +2002,34 @@ export function MotionRefGenModal(props: {
             onCameraKeyframeClick={jumpToCameraKeyframe}
             onCameraKeyframeContextMenu={(kf, x, y) => setCameraCtxMenu({ id: kf.id, x, y })}
           />
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <label
-              style={{
-                fontSize: 11,
-                color:
-                  cameraKeyframes.length === 0
-                    ? "#555"
-                    : trajectoryEnabled
-                      ? MOTION_REF_ACCENT
-                      : "#888",
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                cursor: cameraKeyframes.length === 0 ? "default" : "pointer",
-                userSelect: "none",
-                whiteSpace: "nowrap",
-              }}
-              title="Follow saved camera keyframes during playback"
-            >
-              <input
-                type="checkbox"
-                checked={trajectoryEnabled}
-                disabled={cameraKeyframes.length === 0}
-                onChange={(e) => setTrajectoryEnabled(e.target.checked)}
-                style={{ accentColor: MOTION_REF_ACCENT }}
-              />
-              Trajectory
-            </label>
-            <label
-              style={{ fontSize: 11, color: inPlace ? MOTION_REF_ACCENT : "#888", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
-              title="Remove horizontal root translation so the figure stays centered during playback (recommended for trajectory and shots)"
-            >
-              <input
-                type="checkbox"
-                checked={inPlace}
-                onChange={(e) => {
-                  const next = e.target.checked;
-                  if (!next && cameraKeyframes.length > 0) {
-                    void confirmAction({
-                      title: "Disable In place?",
-                      message:
-                        "Camera trajectory and shots assume the figure stays centered. Turning off In place may move the figure out of view during playback.",
-                      confirmText: "Disable",
-                    }).then((ok) => {
-                      if (ok) setInPlace(false);
-                    });
-                    return;
-                  }
-                  setInPlace(next);
-                }}
-                style={{ accentColor: MOTION_REF_ACCENT }}
-              />
-              In place
-            </label>
-          </div>
-        </div>
-
-        {/* Prompt adherence + transition frames */}
-        <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-          <PromptAdherenceKnob
-            value={promptAdherence}
-            onChange={setPromptAdherence}
-            disabled={busy}
-          />
-          <div style={{ marginTop: 12 }}>
-            <TransitionFramesKnob
-              value={numTransitionFrames}
-              onChange={setNumTransitionFrames}
-              disabled={busy}
-            />
-          </div>
         </div>
 
         {/* Motion segments */}
-        <div style={{ padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-          <MotionTimeline segments={segments} onChange={setSegments} disabled={busy} />
+        <div style={{ padding: "10px 16px 0" }}>
+          <MotionTimeline
+            segments={segments}
+            onChange={setSegments}
+            disabled={busy}
+            promptAdherence={promptAdherence}
+            onPromptAdherenceChange={setPromptAdherence}
+            numTransitionFrames={numTransitionFrames}
+            onNumTransitionFramesChange={setNumTransitionFrames}
+          />
         </div>
 
-        {/* Actions: Generate · Reset · Save Shot · Add Trajectory */}
-        <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 16px", flexWrap: "wrap", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+        {/* Actions: Generate · Reset · Save Shot — left edge aligns with prompt textareas */}
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            padding: "8px 16px 10px",
+            // Match MotionTimeline gutter: index label (18) + row gap (6)
+            paddingLeft: 16 + 18 + 6,
+            flexWrap: "wrap",
+            borderBottom: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
           <button
             type="button" onClick={() => void runGenerate()} disabled={busy}
             title="Generate a fresh KiMoD motion sequence from the text segments"
@@ -1999,13 +2050,6 @@ export function MotionRefGenModal(props: {
           >
             Save Shot
           </button>
-          <button
-            type="button" onClick={() => void saveTrajectoryKeyframe()} disabled={busy || !manifest}
-            title="Add the current camera pose at this frame to the playback trajectory"
-            style={actionBtn}
-          >
-            Add Trajectory
-          </button>
         </div>
 
         {/* Animations gallery */}
@@ -2018,51 +2062,133 @@ export function MotionRefGenModal(props: {
               No saved animations — generate one above.
             </div>
           ) : (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {motions.map((m) => {
-                const isActive = manifest?.motionKey === m.motionKey;
-                const label = motionRefDisplayLabel(m.segments?.[0]?.text, m.motionKey);
-                return (
-                  <div
-                    key={m.motionKey}
-                    onClick={() => void loadMotion(m)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setMotionCtxMenu({ motionKey: m.motionKey, x: e.clientX, y: e.clientY });
-                    }}
-                    title={`${label} — ${m.frameCount} frames @ ${m.fps} fps\nClick to load · Right-click for menu`}
-                    style={{
-                      width: 90,
-                      cursor: busy ? "not-allowed" : "pointer",
-                      border: isActive ? `1px solid ${MOTION_REF_ACCENT_BORDER}` : "1px solid rgba(255,255,255,0.15)",
-                      background: isActive ? MOTION_REF_ACCENT_BG : "rgba(255,255,255,0.04)",
-                      padding: 6,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 4,
-                      userSelect: "none",
-                    }}
+            <>
+              {selectedMotionKeys.size > 0 ? (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    marginBottom: 8,
+                  }}
+                >
+                  <span style={{ fontSize: 11, color: "#aaa" }}>
+                    {selectedMotionKeys.size} selected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMotionKeys(new Set())}
+                    style={{ ...actionBtn, color: "#888", padding: "4px 10px", fontSize: 11 }}
                   >
-                    {m.thumbnailRelPath ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={assetUrlFromRelPath(m.thumbnailRelPath)}
-                        alt=""
-                        style={{ width: "100%", aspectRatio: "1", objectFit: "cover" }}
-                        draggable={false}
-                      />
-                    ) : (
-                      <div style={{ width: "100%", aspectRatio: "1", background: "#222", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
-                        🎞
+                    Clear
+                  </button>
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>
+                  Click to load · Checkbox to select for Convert to Keypoint · Right-click for options
+                </div>
+              )}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {motions.map((m) => {
+                  const isActive = manifest?.motionKey === m.motionKey;
+                  const checked = selectedMotionKeys.has(m.motionKey);
+                  const label = motionRefDisplayLabel(m.segments?.[0]?.text, m.motionKey);
+                  return (
+                    <div
+                      key={m.motionKey}
+                      onClick={() => void loadMotion(m)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setMotionCtxMenu({ motionKey: m.motionKey, x: e.clientX, y: e.clientY });
+                      }}
+                      title={`${label} — ${m.frameCount} frames @ ${m.fps} fps\nClick to load · Checkbox to select · Right-click for menu`}
+                      style={{
+                        width: 90,
+                        position: "relative",
+                        cursor: busy ? "not-allowed" : "pointer",
+                        border: isActive
+                          ? `1px solid ${MOTION_REF_ACCENT_BORDER}`
+                          : checked
+                            ? "1px solid rgba(255,255,255,0.55)"
+                            : "1px solid rgba(255,255,255,0.15)",
+                        background: isActive ? MOTION_REF_ACCENT_BG : "rgba(255,255,255,0.04)",
+                        padding: 6,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                        userSelect: "none",
+                      }}
+                    >
+                      <label
+                        style={{
+                          position: "absolute",
+                          top: 4,
+                          left: 6,
+                          zIndex: 2,
+                          cursor: busy ? "not-allowed" : "pointer",
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={busy}
+                          checked={checked}
+                          onChange={(e) => {
+                            const on = e.target.checked;
+                            setSelectedMotionKeys((prev) => {
+                              const next = new Set(prev);
+                              if (on) next.add(m.motionKey);
+                              else next.delete(m.motionKey);
+                              return next;
+                            });
+                          }}
+                        />
+                      </label>
+                      {m.thumbnailRelPath ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={assetUrlFromRelPath(m.thumbnailRelPath)}
+                          alt=""
+                          style={{ width: "100%", aspectRatio: "1", objectFit: "cover" }}
+                          draggable={false}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: "100%",
+                            aspectRatio: "1",
+                            background: "#222",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 20,
+                          }}
+                        >
+                          🎞
+                        </div>
+                      )}
+                      <div
+                        style={{
+                          fontSize: 10,
+                          color: "#aaa",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {label}
                       </div>
-                    )}
-                    <div style={{ fontSize: 10, color: "#aaa", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
-                    <div style={{ fontSize: 9, color: "#666" }}>{m.frameCount}f · {m.fps}fps</div>
-                  </div>
-                );
-              })}
-            </div>
+                      <div style={{ fontSize: 9, color: "#666" }}>
+                        {m.frameCount}f · {m.fps}fps
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
 
@@ -2090,6 +2216,51 @@ export function MotionRefGenModal(props: {
               log: pushLog,
             }}
           />
+        </div>
+
+        {/* Convert + Cancel footer */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 8,
+            alignItems: "center",
+            padding: "10px 16px",
+            borderTop: "1px solid rgba(255,255,255,0.12)",
+            flexShrink: 0,
+            position: "sticky",
+            bottom: 0,
+            background: "#111",
+            zIndex: 2,
+          }}
+        >
+          <button
+            type="button"
+            disabled={busy || !canConvertToKeypoint}
+            onClick={handleConvertToKeypoint}
+            title={
+              !canConvertToKeypoint
+                ? "Select animations and/or shots to convert"
+                : selectedMotions.length > 0
+                  ? "Convert selected animations to keypoints"
+                  : "Convert selected shots to keypoints"
+            }
+            style={{
+              ...actionBtn,
+              background: MOTION_REF_ACCENT_BTN_BG,
+              opacity: busy || !canConvertToKeypoint ? 0.45 : 1,
+              cursor: busy || !canConvertToKeypoint ? "default" : "pointer",
+            }}
+          >
+            Convert to Keypoint
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            style={actionBtn}
+          >
+            Cancel
+          </button>
         </div>
       </div>
 
@@ -2127,27 +2298,6 @@ export function MotionRefGenModal(props: {
             style={ctxMenuBtn}
           >
             Download as Video
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              const item = motions.find((m) => m.motionKey === motionCtxMenu.motionKey);
-              if (!item) return;
-              const label = motionRefDisplayLabel(item.segments?.[0]?.text, item.motionKey, 24);
-              setMotionCtxMenu(null);
-              setV2poseDialog({
-                motionKey: item.motionKey,
-                label,
-                sampleFps: "source",
-                folderName: `v2pose_${item.motionKey.slice(0, 20)}_${Date.now()}`,
-                useVideoKeypointService: false,
-                noSdpose: false,
-              });
-            }}
-            style={ctxMenuBtn}
-          >
-            V2Pose Seq
           </button>
           <button
             type="button"
@@ -2208,7 +2358,7 @@ export function MotionRefGenModal(props: {
               color: "#eee",
             }}
           >
-            <div style={{ fontSize: 14, marginBottom: 12 }}>V2Pose Seq</div>
+            <div style={{ fontSize: 14, marginBottom: 12 }}>Convert to Keypoint</div>
             <div style={{ fontSize: 11, color: "#888", marginBottom: 12 }}>
               {v2poseDialog.label} · trim f{playbackStart}–f{playbackEnd}
               {cameraKeyframes.length === 0 ? " · no trajectory (uses current camera)" : ""}
@@ -2289,7 +2439,10 @@ export function MotionRefGenModal(props: {
             )}
             {!v2poseDialog.noSdpose && !v2poseDialog.useVideoKeypointService ? (
               <>
-                <label style={{ display: "block", fontSize: 11, marginBottom: 6 }}>Pose folder name</label>
+                <label style={{ display: "block", fontSize: 11, marginBottom: 6 }}>
+                  Pose folder name
+                  {v2poseDialog.motionKeys.length > 1 ? " (first animation)" : ""}
+                </label>
                 <input
                   value={v2poseDialog.folderName}
                   onChange={(e) =>
@@ -2312,28 +2465,37 @@ export function MotionRefGenModal(props: {
                     !v2poseDialog.folderName.trim())
                 }
                 onClick={() => {
-                  const item = motions.find((m) => m.motionKey === v2poseDialog.motionKey);
-                  if (!item) return;
-                  if (v2poseDialog.noSdpose) {
-                    void runV2PoseDiagShots(
-                      v2poseDialog.motionKey,
-                      item,
-                      v2poseDialog.sampleFps
-                    );
-                  } else {
-                    void runV2PoseSeq(
-                      v2poseDialog.motionKey,
-                      item,
-                      v2poseDialog.folderName.trim() ||
-                        `v2pose_${v2poseDialog.motionKey.slice(0, 20)}`,
-                      v2poseDialog.sampleFps,
-                      v2poseDialog.useVideoKeypointService
-                    );
-                  }
+                  const keys = v2poseDialog.motionKeys;
+                  const dialog = v2poseDialog;
+                  setV2poseDialog(null);
+                  void (async () => {
+                    for (let i = 0; i < keys.length; i++) {
+                      const motionKey = keys[i]!;
+                      const item = motions.find((m) => m.motionKey === motionKey);
+                      if (!item) continue;
+                      const folder =
+                        i === 0
+                          ? dialog.folderName.trim() ||
+                            `v2pose_${motionKey.slice(0, 20)}`
+                          : `v2pose_${motionKey.slice(0, 20)}_${Date.now()}`;
+                      if (dialog.noSdpose) {
+                        await runV2PoseDiagShots(motionKey, item, dialog.sampleFps);
+                      } else {
+                        await runV2PoseSeq(
+                          motionKey,
+                          item,
+                          folder,
+                          dialog.sampleFps,
+                          dialog.useVideoKeypointService
+                        );
+                      }
+                    }
+                    setSelectedMotionKeys(new Set());
+                  })();
                 }}
                 style={{ ...actionBtn, background: MOTION_REF_ACCENT_BTN_BG }}
               >
-                Run
+                Convert
               </button>
             </div>
           </div>
@@ -2357,6 +2519,32 @@ export function MotionRefGenModal(props: {
       })()}
 
       <ConnectedJobRunModal modal={jobModalProps} logRef={logRef} />
+    </>
+  );
+
+  if (embedded) {
+    return shell;
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.7)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10200,
+      }}
+      onMouseDown={() => {
+        if (motionCtxMenu) { setMotionCtxMenu(null); return; }
+        if (cameraCtxMenu) { setCameraCtxMenu(null); return; }
+        if (fpsExportPending || v2poseDialog || jobModalProps.open) return;
+        onClose();
+      }}
+    >
+      {shell}
     </div>
   );
 }

@@ -71,7 +71,7 @@ export type DatasetBuilderTileProps = {
   setEntries: React.Dispatch<React.SetStateAction<BuilderEntry[]>>;
   setDirty: React.Dispatch<React.SetStateAction<boolean>>;
   setSelectedBuilder: React.Dispatch<React.SetStateAction<Set<string>>>;
-  beginRemoveBackgroundModal: () => void;
+  beginRemoveBackgroundModal: () => void | Promise<void>;
   endRemoveBackgroundModal: () => void;
   failRmbgJob: (err: unknown) => void;
   onRemoveBackgroundRequest?: (tileId: string, sourceRel: string) => void;
@@ -164,7 +164,7 @@ function DatasetBuilderTileInner(props: DatasetBuilderTileProps) {
                   return;
                 }
                 void (async () => {
-                  beginRemoveBackgroundModal();
+                  await beginRemoveBackgroundModal();
                   try {
                     const done = await runDetailWsJob<{ previewRelPath: string }>({
                       charKey,

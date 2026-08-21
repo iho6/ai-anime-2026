@@ -778,7 +778,7 @@ export default function LocationDetailPage() {
       showError({ message: "No base image. Set a cover or upload files in the modal." });
       return;
     }
-    beginSession({ title: "Generating location angles", clearLog: true });
+    await beginSession({ title: "Generating location angles", clearLog: true });
     let sessionOk = false;
     try {
       await apiLocationGenerateAnglesStream({
@@ -808,7 +808,7 @@ export default function LocationDetailPage() {
     finishOnDone: boolean;
   }) {
     const { sourceRelPath, stage, stageIndex, totalStages, finishOnDone } = params;
-    beginSession({
+    await beginSession({
       title:
         totalStages > 1
           ? `Outpainting (${stageIndex + 1}/${totalStages})`
@@ -1502,7 +1502,7 @@ export default function LocationDetailPage() {
           if (!ctx) return;
           const section = ctx.folderKey === "lighting" ? "lighting" : "view";
           setAiOpen(false);
-          beginSession({ title: "AI Editing", clearLog: true, runningStatus: "AI editing…" });
+          await beginSession({ title: "AI Editing", clearLog: true, runningStatus: "AI editing…" });
           await Promise.resolve();
           pushLog("AI editing…");
           try {

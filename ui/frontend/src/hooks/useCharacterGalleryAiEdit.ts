@@ -96,7 +96,7 @@ export function useCharacterGalleryAiEdit({
       if (aiEditSeqCtx) {
         const { seqName, galleryItemId } = aiEditSeqCtx;
         setAiEditOpen(false);
-        beginSession({
+        await beginSession({
           title: "AI Editing sequence frame",
           clearLog: true,
           runningStatus: "AI editing…",
@@ -143,7 +143,7 @@ export function useCharacterGalleryAiEdit({
 
       const aiPose = aiEditType === "pose";
       setAiEditOpen(false);
-      beginSession({
+      await beginSession({
         title: aiPose ? "AI Editing pose" : "AI Editing expression",
         clearLog: true,
         runningStatus: "AI editing…",

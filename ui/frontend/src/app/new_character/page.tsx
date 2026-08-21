@@ -9,6 +9,7 @@ import {
 } from "../../lib/api";
 import { HomeIcon, SquareIconButton, TriangleIcon } from "../../components/IconPrimitives";
 import { HfTokenSettingsButton } from "../../components/HfTokenSettingsButton";
+import { JobLogButton } from "../../components/JobLogButton";
 import { useAppError } from "../../components/ErrorProvider";
 import { BaseCloseupWizardModal } from "../../components/BaseCloseupWizardModal";
 import { NewCharacterCreatePanel } from "../../components/create/NewCharacterCreatePanel";
@@ -24,6 +25,7 @@ export default function NewCharacterPage() {
     <div style={{ minHeight: "100vh" }}>
       <div style={{ display: "flex", gap: 4, alignItems: "center", paddingLeft: 20, marginBottom: 10 }}>
         <HfTokenSettingsButton />
+        <JobLogButton />
         <SquareIconButton
           onClick={() => router.push("/home")}
           aria-label="Home"

@@ -4,6 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { HomeIcon, SquareIconButton, TriangleIcon } from "../../components/IconPrimitives";
 import { HfTokenSettingsButton } from "../../components/HfTokenSettingsButton";
+import { JobLogButton } from "../../components/JobLogButton";
 import { NewLocationCreatePanel } from "../../components/create/NewLocationCreatePanel";
 
 export default function NewLocationPage() {
@@ -13,6 +14,7 @@ export default function NewLocationPage() {
     <div style={{ minHeight: "100vh" }}>
       <div style={{ display: "flex", gap: 4, alignItems: "center", paddingLeft: 20, marginBottom: 10 }}>
         <HfTokenSettingsButton />
+        <JobLogButton />
         <SquareIconButton
           onClick={() => router.push("/home")}
           aria-label="Home"

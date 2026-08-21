@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -16,9 +18,16 @@ logger = logging.getLogger("motion_ref_gen")
 _SERVICE_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _SERVICE_DIR.parents[1]
 _KIMODO_SRC = _REPO_ROOT / "kimodo"
+_API_SETTINGS_FILE = _REPO_ROOT / "storage" / "api_settings.json"
 
 _DEFAULT_TEXT_ENCODER_PORT = 9550
 _DEFAULT_READY_TIMEOUT = 600.0
+
+_HF_TOKEN_ENV_KEYS = (
+    "HF_TOKEN",
+    "HUGGINGFACE_HUB_TOKEN",
+    "HUGGING_FACE_HUB_TOKEN",
+)
 
 
 def text_encoder_port() -> int:
@@ -59,6 +68,96 @@ def _kimodo_pythonpath() -> str:
     return f"{src}{os.pathsep}{existing}" if existing else src
 
 
+def _sanitize_hf_token(token: str) -> str:
+    t = (token or "").replace("\r", "").replace("\n", "").strip()
+    if len(t) >= 2 and t[0] == t[-1] and t[0] in ("'", '"'):
+        t = t[1:-1].strip()
+    return t
+
+
+def resolve_hf_token() -> str:
+    """HF token for gated Llama / Kimodo downloads.
+
+    Prefer process env (set by API startup / Settings), then
+    ``storage/api_settings.json`` so text-encoder children still auth when the
+    parent process was started without the env var already exported.
+    """
+    for key in _HF_TOKEN_ENV_KEYS:
+        val = _sanitize_hf_token(os.environ.get(key) or "")
+        if val:
+            return val
+    try:
+        if _API_SETTINGS_FILE.is_file():
+            data = json.loads(_API_SETTINGS_FILE.read_text(encoding="utf-8"))
+            val = _sanitize_hf_token(str(data.get("hf_token") or ""))
+            if val:
+                return val
+    except Exception:
+        pass
+    return ""
+
+
+def validate_hf_token(token: str) -> None:
+    """Fail fast when the saved HF token is revoked/wrong (common 401 cause)."""
+    token = _sanitize_hf_token(token)
+    if not token:
+        raise RuntimeError("HF_TOKEN is empty.")
+    if not token.startswith("hf_"):
+        raise RuntimeError(
+            "Saved token does not look like a Hugging Face token (expected prefix 'hf_'). "
+            "Paste an HF access token from https://huggingface.co/settings/tokens — "
+            "not a GitHub PAT."
+        )
+    try:
+        from huggingface_hub import HfApi
+
+        HfApi().whoami(token=token)
+    except Exception as exc:
+        raise RuntimeError(
+            "Saved Hugging Face token is invalid or revoked "
+            f"({type(exc).__name__}). Update it in Settings (gear) or Install Dependencies "
+            "with a new read token from https://huggingface.co/settings/tokens, "
+            "and accept access at https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct"
+        ) from exc
+
+
+def _runtime_hf_token_path() -> Path:
+    return _REPO_ROOT / "storage" / ".hf_token_runtime"
+
+
+def _stage_hf_token_file(token: str) -> Path:
+    path = _runtime_hf_token_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(token, encoding="utf-8")
+    return path
+
+
+def _inject_hf_token(env: dict[str, str]) -> str:
+    """Write HF token into all common env aliases used by huggingface_hub."""
+    token = resolve_hf_token()
+    if not token:
+        return ""
+    for key in _HF_TOKEN_ENV_KEYS:
+        env[key] = token
+    token_path = _stage_hf_token_file(token)
+    env["KIMODO_HF_TOKEN_FILE"] = str(token_path)
+    # Keep parent process consistent for later child spawns.
+    for key in _HF_TOKEN_ENV_KEYS:
+        if not _sanitize_hf_token(os.environ.get(key) or ""):
+            os.environ[key] = token
+    return token
+
+
+def _stringify_env(env: dict[str, str]) -> dict[str, str]:
+    """Windows CreateProcess requires a clean str→str environment block."""
+    out: dict[str, str] = {}
+    for key, value in env.items():
+        if value is None:
+            continue
+        out[str(key)] = str(value)
+    return out
+
+
 def text_encoder_child_env(port: int | None = None) -> dict[str, str]:
     """Environment for the headless text encoder subprocess."""
     env = os.environ.copy()
@@ -66,6 +165,13 @@ def text_encoder_child_env(port: int | None = None) -> dict[str, str]:
     env["GRADIO_SERVER_PORT"] = str(p)
     env["GRADIO_SERVER_NAME"] = "127.0.0.1"
     env["PYTHONPATH"] = _kimodo_pythonpath()
+    # Windows often lacks symlink privilege; avoid noisy HF cache warnings.
+    env.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+    # Gradio 6 rejects /tmp-style paths outside OS temp / cwd.
+    env.setdefault(
+        "TEXT_ENCODER_TMP_FOLDER",
+        os.path.join(tempfile.gettempdir(), "kimodo_text_encoder"),
+    )
     if "TEXT_ENCODER_DEVICE" not in env:
         try:
             import torch
@@ -73,10 +179,8 @@ def text_encoder_child_env(port: int | None = None) -> dict[str, str]:
             env["TEXT_ENCODER_DEVICE"] = "cuda" if torch.cuda.is_available() else "cpu"
         except ImportError:
             env["TEXT_ENCODER_DEVICE"] = "cpu"
-    for key in ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN"):
-        if key in os.environ:
-            env[key] = os.environ[key]
-    return env
+    _inject_hf_token(env)
+    return _stringify_env(env)
 
 
 def motion_worker_child_env(port: int | None = None) -> dict[str, str]:
@@ -86,6 +190,7 @@ def motion_worker_child_env(port: int | None = None) -> dict[str, str]:
     env["TEXT_ENCODER_MODE"] = "api"
     env["TEXT_ENCODER_URL"] = text_encoder_url(te_port)
     env["PYTHONPATH"] = _kimodo_pythonpath()
+    env.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
     if "TEXT_ENCODER_DEVICE" not in env:
         try:
             import torch
@@ -93,7 +198,8 @@ def motion_worker_child_env(port: int | None = None) -> dict[str, str]:
             env["TEXT_ENCODER_DEVICE"] = "cuda" if torch.cuda.is_available() else "cpu"
         except ImportError:
             env["TEXT_ENCODER_DEVICE"] = "cpu"
-    return env
+    _inject_hf_token(env)
+    return _stringify_env(env)
 
 
 def _text_encoder_is_up(port: int | None = None) -> bool:
@@ -150,8 +256,17 @@ def _wait_for_text_encoder(
             return
         if proc.poll() is not None:
             tail = "\n".join(stderr_lines[-15:])
+            hint = ""
+            joined = "\n".join(stderr_lines)
+            if "GatedRepoError" in joined or "gated repo" in joined.lower() or "401" in joined:
+                hint = (
+                    "\n\nHugging Face gated model access failed. "
+                    "1) Request access at https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct "
+                    "2) Put a read token in Settings (gear) / startup HF token "
+                    "(same token as Install Dependencies)."
+                )
             raise RuntimeError(
-                f"Text encoder worker exited (code {proc.returncode}).\n{tail}"
+                f"Text encoder worker exited (code {proc.returncode}).\n{tail}{hint}"
             )
         time.sleep(0.3)
 
@@ -181,15 +296,47 @@ def ensure_text_encoder(
             _wait_for_text_encoder(_text_encoder_proc, p, timeout, log_cb=log_cb)
             return text_encoder_url(p)
 
-        device = text_encoder_child_env(p).get("TEXT_ENCODER_DEVICE", "cpu")
+        child_env = text_encoder_child_env(p)
+        device = child_env.get("TEXT_ENCODER_DEVICE", "cpu")
         if log_cb:
             log_cb(
                 f"Starting KiMoD text encoder (Llama 3 8B on {device}, port {p}). "
                 "First run may take several minutes while weights load…"
             )
 
-        from services.kimodo_setup import apply_kimodo_patches, ensure_kimodo_runtime_deps
+        token = resolve_hf_token()
+        if not token:
+            raise RuntimeError(
+                "HF_TOKEN is missing — Llama 3 text encoder is a gated Hugging Face model. "
+                "Set your token in Settings (gear) or on the Install Dependencies screen, "
+                "and accept https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct"
+            )
+        if log_cb:
+            log_cb(
+                "Using saved Hugging Face token for gated Llama / LLM2Vec download "
+                f"(child env HF_TOKEN={'yes' if bool(child_env.get('HF_TOKEN')) else 'no'}, "
+                f"prefix_ok={'yes' if token.startswith('hf_') else 'no'})."
+            )
+        try:
+            if log_cb:
+                log_cb("Validating Hugging Face token…")
+            validate_hf_token(token)
+            if log_cb:
+                log_cb("Hugging Face token OK.")
+        except RuntimeError as exc:
+            if log_cb:
+                log_cb(f"[ERROR] {exc}")
+            raise
 
+        from services.kimodo_setup import (
+            _ensure_kimodo_repo,
+            apply_kimodo_patches,
+            ensure_kimodo_runtime_deps,
+        )
+
+        # Overlays alone leave an empty gitlink looking "installed" (setup.py present)
+        # without kimodo.model — ensure a real upstream checkout first.
+        _ensure_kimodo_repo(log_cb=log_cb)
         apply_kimodo_patches(_KIMODO_SRC, log_cb=log_cb)
         ensure_kimodo_runtime_deps(log_cb=log_cb)
 
@@ -202,7 +349,7 @@ def ensure_text_encoder(
         _text_encoder_proc = subprocess.Popen(
             cmd,
             cwd=str(_REPO_ROOT),
-            env=text_encoder_child_env(p),
+            env=child_env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

@@ -11,6 +11,7 @@ import {
 } from "../../../lib/api";
 import { HomeIcon, SquareIconButton, TriangleIcon } from "../../../components/IconPrimitives";
 import { HfTokenSettingsButton } from "../../../components/HfTokenSettingsButton";
+import { JobLogButton } from "../../../components/JobLogButton";
 import { CharacterNameTag } from "../../../components/CharacterNameTag";
 import { SquareButton } from "../../../components/SquareButton";
 import { StartingImagePreview } from "../../../components/StartingImagePreview";
@@ -149,6 +150,7 @@ export default function DetailGatePage() {
         }}
       >
         <HfTokenSettingsButton />
+        <JobLogButton />
         <SquareIconButton
           onClick={() => router.push("/home")}
           aria-label="Home"

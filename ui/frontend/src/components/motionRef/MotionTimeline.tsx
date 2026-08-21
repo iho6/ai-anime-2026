@@ -1,35 +1,52 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import type { MotionRefSegment } from "../../lib/api";
-import { MOTION_REF_MAX_SEGMENT_DURATION_SEC, MOTION_REF_MIN_SEGMENT_DURATION_SEC } from "../../lib/api";
-import { MOTION_REF_HINT_COLOR, motionRefNumberInputStyle } from "./theme";
+import { MOTION_REF_MAX_SEGMENT_DURATION_SEC } from "../../lib/api";
+import { MotionRefSettingsFlyout } from "./MotionRefSettingsFlyout";
+import { MOTION_REF_HINT_COLOR } from "./theme";
 
 /**
  * Multi-segment motion timeline editor.
- * Each row = one text-prompt + duration. With more than one row, KiMoD generates
+ * Each row = one text-prompt. With more than one row, KiMoD generates
  * the segments **sequentially**: each segment continues from the end of the
  * previous one, with a short blended overlap for a smooth transition (KiMoD
  * multi_prompt path). Rows are not independent clips played back-to-back.
+ *
+ * Duration / prompt adherence / transition frames live in the hover settings flyout.
  */
 export function MotionTimeline(props: {
   segments: MotionRefSegment[];
   onChange: (segments: MotionRefSegment[]) => void;
   disabled?: boolean;
+  promptAdherence: number;
+  onPromptAdherenceChange: (value: number) => void;
+  numTransitionFrames: number;
+  onNumTransitionFramesChange: (value: number) => void;
 }) {
-  const { segments, onChange, disabled = false } = props;
+  const {
+    segments,
+    onChange,
+    disabled = false,
+    promptAdherence,
+    onPromptAdherenceChange,
+    numTransitionFrames,
+    onNumTransitionFramesChange,
+  } = props;
 
-  // Transient text for the duration field being edited, so it can be fully cleared
-  // (an empty <input type=number> otherwise snaps back to a default and blocks backspace).
-  const [durEdit, setDurEdit] = useState<{ i: number; val: string } | null>(null);
+  const sharedDuration = segments[0]?.duration ?? 3.0;
 
   function update(i: number, patch: Partial<MotionRefSegment>) {
     const next = segments.map((s, idx) => (idx === i ? { ...s, ...patch } : s));
     onChange(next);
   }
 
+  function setAllDurations(duration: number) {
+    onChange(segments.map((s) => ({ ...s, duration })));
+  }
+
   function add() {
-    onChange([...segments, { text: "", duration: 3.0 }]);
+    onChange([...segments, { text: "", duration: sharedDuration }]);
   }
 
   function remove(i: number) {
@@ -51,6 +68,7 @@ export function MotionTimeline(props: {
             rows={2}
             style={{
               flex: 1,
+              minWidth: 0,
               padding: "6px 8px",
               background: "#111",
               color: "#eee",
@@ -58,43 +76,20 @@ export function MotionTimeline(props: {
               resize: "vertical",
               font: "inherit",
               fontSize: 12,
+              boxSizing: "border-box",
             }}
           />
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 70 }}>
-            <label
-              style={{ fontSize: 10, color: "#888" }}
-              title="Kimodo max 10 seconds per segment"
-            >
-              Duration (s) <span style={{ color: "#666" }}>max {MOTION_REF_MAX_SEGMENT_DURATION_SEC}</span>
-            </label>
-            <input
-              type="number"
-              min={MOTION_REF_MIN_SEGMENT_DURATION_SEC}
-              max={MOTION_REF_MAX_SEGMENT_DURATION_SEC}
-              step={0.5}
-              title="Kimodo max 10 seconds per segment"
-              value={durEdit?.i === i ? durEdit.val : String(seg.duration)}
-              onChange={(e) => {
-                const raw = e.target.value;
-                setDurEdit({ i, val: raw });
-                const n = parseFloat(raw);
-                if (raw !== "" && !Number.isNaN(n)) update(i, { duration: n });
-              }}
-              onBlur={() => {
-                if (durEdit?.i !== i) return;
-                let n = parseFloat(durEdit.val);
-                if (Number.isNaN(n)) n = 3;
-                n = Math.max(
-                  MOTION_REF_MIN_SEGMENT_DURATION_SEC,
-                  Math.min(MOTION_REF_MAX_SEGMENT_DURATION_SEC, n),
-                );
-                update(i, { duration: n });
-                setDurEdit(null);
-              }}
+          {i === 0 ? (
+            <MotionRefSettingsFlyout
               disabled={disabled}
-              style={motionRefNumberInputStyle}
+              promptAdherence={promptAdherence}
+              onPromptAdherenceChange={onPromptAdherenceChange}
+              numTransitionFrames={numTransitionFrames}
+              onNumTransitionFramesChange={onNumTransitionFramesChange}
+              durationSec={sharedDuration}
+              onDurationSecChange={setAllDurations}
             />
-          </div>
+          ) : null}
           {segments.length > 1 ? (
             <button
               type="button"
@@ -108,14 +103,18 @@ export function MotionTimeline(props: {
           ) : null}
         </div>
       ))}
-      <button
-        type="button"
-        onClick={add}
-        disabled={disabled}
-        style={{ ...addBtn, opacity: disabled ? 0.5 : 1 }}
-      >
-        + Add Motion (Animates a Sequence)
-      </button>
+      <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+        <span style={{ minWidth: 18, flexShrink: 0 }} aria-hidden />
+        <button
+          type="button"
+          onClick={add}
+          disabled={disabled}
+          style={{ ...addBtn, flex: 1, minWidth: 0, opacity: disabled ? 0.5 : 1 }}
+        >
+          + Add Motion (Animates a Sequence)
+        </button>
+        <span style={{ width: 22, flexShrink: 0 }} aria-hidden />
+      </div>
       {segments.length > 1 ? (
         <div style={hintBox}>
           Segments generate in order, each continuing from the previous one.
@@ -130,7 +129,7 @@ export function MotionTimeline(props: {
               Each segment is at most {MOTION_REF_MAX_SEGMENT_DURATION_SEC} seconds (Kimodo limit).
             </li>
             <li>
-              Transition length is set by the Transition frames slider above —
+              Transition length is set in the settings flyout (›) —
               give big action changes a little extra segment duration.
             </li>
           </ul>
@@ -160,6 +159,9 @@ const addBtn: React.CSSProperties = {
   font: "inherit",
   fontSize: 12,
   textAlign: "left",
+  width: "100%",
+  boxSizing: "border-box",
+  alignSelf: "stretch",
 };
 
 const hintBox: React.CSSProperties = {

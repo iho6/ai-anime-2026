@@ -43,4 +43,5 @@ set-env.local.ps1
 
 # Local API secrets (HF token, GitHub PAT, etc.)
 /storage/api_settings.json
+/storage/.hf_token_runtime
 /models/

@@ -31,6 +31,7 @@ KIMODO_TEXT_ENCODER_PORT=9550
 KIMODO_TEXT_ENCODER_READY_TIMEOUT=600  — first Llama load (seconds)
 KIMODO_MOTION_WORKER_READY_TIMEOUT=300 — motion diffusion model load (seconds)
 KIMODO_MODEL=kimodo-smplx-rp  (default model name — SMPL-X checkpoint for mesh skinning)
+KIMODO_FORCE_POST_PROCESS=1  — require motion_correction (fail if C ext missing)
 SMPLX_MODEL_DIR=storage/body_models  (parent of the smplx/ body-model folder)
 MOTION_REF_SKIN_CHUNK_FRAMES=32  (frames per skinning batch; 0 = default 32)
 MOTION_REF_SKIN_DEVICE=auto|cuda|cpu  (override skinning device)
@@ -187,6 +188,46 @@ _DEFAULT_CFG_TEXT_WEIGHT = 2.0
 _DEFAULT_CFG_CONSTRAINT_WEIGHT = 2.0
 _MIN_CFG_TEXT_WEIGHT = 1.0
 _MAX_CFG_TEXT_WEIGHT = 4.0
+# Bump when generate_motion / serve contract changes so ensure_worker replaces stale listeners.
+_WORKER_CODE_REV = "optional-postprocess-2-smplx-copy"
+
+
+def _motion_correction_available() -> bool:
+    try:
+        import motion_correction  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def _resolve_post_processing(*, log: Callable[[str], None] | None = None) -> bool:
+    """Use foot/IK post-process when the C extension is present; otherwise skip.
+
+    Windows setups often lack VS Build Tools / cmake, so ``motion_correction`` may
+    be missing. Generation still works; foot-plant correction is just skipped.
+    Set ``KIMODO_FORCE_POST_PROCESS=1`` to require the extension.
+    """
+    force = (os.environ.get("KIMODO_FORCE_POST_PROCESS") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    if _motion_correction_available():
+        return True
+    if force:
+        raise RuntimeError(
+            "KIMODO_FORCE_POST_PROCESS=1 but motion_correction is not installed. "
+            "Build it with scripts\\install_kimodo_windows.ps1 "
+            "(needs CMake + VS 2022 C++ Build Tools), or unset KIMODO_FORCE_POST_PROCESS."
+        )
+    if log:
+        log(
+            "motion_correction C extension not installed — generating without "
+            "foot/IK post-processing (install VS Build Tools + cmake later for "
+            "cleaner foot plants)."
+        )
+    return False
 
 
 def _load_kimodo_model(model_name: str = _DEFAULT_MODEL) -> Any:
@@ -331,6 +372,7 @@ def generate_motion(
 
     model = _load_kimodo_model(model_name)
     fps: int = getattr(model, "fps", 30)
+    post_processing = _resolve_post_processing(log=_log)
 
     texts = [str(s["text"]).strip() for s in segments]
     durations = [float(s.get("duration", 3.0)) for s in segments]
@@ -391,7 +433,7 @@ def generate_motion(
         num_samples=num_samples,
         constraint_lst=constraint_lst,
         return_numpy=True,
-        post_processing=True,
+        post_processing=post_processing,
         progress_bar=_silent_progress,
         cfg_type="separated",
         cfg_weight=[cfg_text, _DEFAULT_CFG_CONSTRAINT_WEIGHT],
@@ -672,7 +714,14 @@ def _make_request_handler(model_name: str) -> type:
             if self.path == "/health":
                 from services.motion_ref_gen_ai_service.smplx_skinning import smplx_body_model_ready
 
-                self._send_json(200, {"ok": True, "smplx_ready": smplx_body_model_ready()})
+                self._send_json(
+                    200,
+                    {
+                        "ok": True,
+                        "smplx_ready": smplx_body_model_ready(),
+                        "code_rev": _WORKER_CODE_REV,
+                    },
+                )
             elif self.path == "/bones":
                 from services.motion_ref_gen_ai_service.smplx_skinning import bones_from_skeleton
 
@@ -756,6 +805,84 @@ def _server_is_up(port: int) -> bool:
         return False
 
 
+def _worker_health_payload(port: int) -> dict[str, Any] | None:
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2) as r:
+            if r.status != 200:
+                return None
+            return json.loads(r.read().decode())
+    except Exception:
+        return None
+
+
+def _stop_motion_worker(port: int, *, log_cb: Callable[[str], None] | None = None) -> None:
+    """Stop our child worker or any leftover listener on the motion port."""
+    global _worker_proc
+
+    if _worker_proc is not None and _worker_proc.poll() is None:
+        if log_cb:
+            log_cb(f"Stopping KiMoD motion worker (pid {_worker_proc.pid})…")
+        try:
+            _worker_proc.terminate()
+            _worker_proc.wait(timeout=15)
+        except Exception:
+            try:
+                _worker_proc.kill()
+            except Exception:
+                pass
+        _worker_proc = None
+        return
+
+    # Orphan from a previous API process — free the port.
+    if os.name == "nt":
+        try:
+            creation = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            probe = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    f"(Get-NetTCPConnection -LocalPort {int(port)} -ErrorAction SilentlyContinue)."
+                    "OwningProcess | Select-Object -Unique",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                creationflags=creation,
+            )
+            pids = {
+                int(tok)
+                for tok in (probe.stdout or "").split()
+                if tok.strip().isdigit() and int(tok) > 0
+            }
+            for pid in pids:
+                if log_cb:
+                    log_cb(f"Stopping leftover process on port {port} (pid {pid})…")
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/F"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    creationflags=creation,
+                )
+        except Exception as exc:
+            logger.warning("Could not free motion worker port %s: %s", port, exc)
+    else:
+        try:
+            probe = subprocess.run(
+                ["fuser", "-k", f"{int(port)}/tcp"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if log_cb and probe.returncode == 0:
+                log_cb(f"Freed port {port}.")
+        except Exception as exc:
+            logger.warning("Could not free motion worker port %s: %s", port, exc)
+
+
 def _wait_for_server(
     proc: subprocess.Popen,  # type: ignore[type-arg]
     port: int,
@@ -822,12 +949,25 @@ def ensure_worker(
     with _worker_lock:
         _worker_port = port
 
-        if _server_is_up(port):
+        health = _worker_health_payload(port)
+        if health and health.get("ok") and health.get("code_rev") == _WORKER_CODE_REV:
             return f"http://127.0.0.1:{port}"
 
-        if _worker_proc is not None and _worker_proc.poll() is None:
+        if health and health.get("ok") and health.get("code_rev") != _WORKER_CODE_REV:
+            if log_cb:
+                log_cb(
+                    "KiMoD motion worker is outdated "
+                    f"(rev {health.get('code_rev')!r} → {_WORKER_CODE_REV!r}); restarting…"
+                )
+            _stop_motion_worker(port, log_cb=log_cb)
+        elif _worker_proc is not None and _worker_proc.poll() is None:
             _wait_for_server(_worker_proc, port, log_cb=log_cb)
             return f"http://127.0.0.1:{port}"
+        elif _server_is_up(port):
+            # Up but no/unknown rev (old binary) — replace so this process owns it.
+            if log_cb:
+                log_cb("Replacing KiMoD motion worker on port without code_rev…")
+            _stop_motion_worker(port, log_cb=log_cb)
 
         ensure_text_encoder(log_cb=log_cb, port=text_encoder_port())
 

@@ -135,7 +135,7 @@ export const NewLocationCreatePanel = forwardRef<
             confirmText: "Remove",
           });
           if (!ok) return;
-          beginSession({ title: "Discard draft", clearLog: true });
+          await beginSession({ title: "Discard draft", clearLog: true });
           pushLog("Removing draft…");
           try {
             await apiNewLocationRemoveDraft({ relPath: rel });
@@ -153,7 +153,7 @@ export const NewLocationCreatePanel = forwardRef<
         disabled: !rel,
         onSelect: async () => {
           if (!rel) return;
-          beginSession({ title: "Archive Location Base", clearLog: true });
+          await beginSession({ title: "Archive Location Base", clearLog: true });
           pushLog("Archiving image…");
           try {
             await apiNewLocationArchiveBase({ relPath: rel });
@@ -183,7 +183,7 @@ export const NewLocationCreatePanel = forwardRef<
       return;
     }
 
-    beginSession({ title: "Generating location", clearLog: true });
+    await beginSession({ title: "Generating location", clearLog: true });
     await Promise.resolve();
     pushLog("Starting generation (live logs from image service)…");
     try {
@@ -207,7 +207,7 @@ export const NewLocationCreatePanel = forwardRef<
 
   async function appendImageFile(file: File | null) {
     if (!file) return;
-    beginSession({ title: "Adding image", clearLog: true });
+    await beginSession({ title: "Adding image", clearLog: true });
     await Promise.resolve();
     pushLog("Uploading image…");
     try {
@@ -262,7 +262,7 @@ export const NewLocationCreatePanel = forwardRef<
     }
 
     const rel = paths[Math.min(index, paths.length - 1)];
-    beginSession({ title: "Saving location", clearLog: true });
+    await beginSession({ title: "Saving location", clearLog: true });
     pushLog(`Saving as ${nn}…`);
     try {
       await apiNewLocationFinalize({ locationName: nn, relPath: rel });
@@ -283,7 +283,7 @@ export const NewLocationCreatePanel = forwardRef<
       if (!ok) return false;
     }
     if (draftRelPaths.length > 0) {
-      beginSession({ title: "Leave new location", clearLog: true });
+      await beginSession({ title: "Leave new location", clearLog: true });
       pushLog("Clearing draft workspace…");
       try {
         await apiNewLocationDiscard();
@@ -314,7 +314,7 @@ export const NewLocationCreatePanel = forwardRef<
       confirmText: "Leave",
     });
     if (!ok) return false;
-    beginSession({ title: "Leave new location", clearLog: true });
+    await beginSession({ title: "Leave new location", clearLog: true });
     pushLog("Clearing draft workspace…");
     try {
       await apiNewLocationDiscard();

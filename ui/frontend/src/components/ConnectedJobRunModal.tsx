@@ -1,19 +1,17 @@
 "use client";
 
 import React, { type RefObject } from "react";
-import { JobRunModal } from "./JobRunModal";
-import { SharedLogStream, type SharedLogStreamHandle } from "./SharedLogStream";
+import type { SharedLogStreamHandle } from "./SharedLogStream";
 import type { JobRunModalSessionProps } from "../hooks/useJobRunSession";
 
-export function ConnectedJobRunModal(props: {
+/**
+ * Formerly showed a blocking JobRunModal. Jobs now run via the global queue + Log panel.
+ * Kept as a no-op so call sites can be removed gradually without breaking imports.
+ */
+export function ConnectedJobRunModal(_props: {
   modal: JobRunModalSessionProps;
   logRef: RefObject<SharedLogStreamHandle | null>;
   children?: React.ReactNode;
 }) {
-  const { modal, logRef, children } = props;
-  return (
-    <JobRunModal {...modal}>
-      {children ?? <SharedLogStream ref={logRef} rows={10} minHeight={200} />}
-    </JobRunModal>
-  );
+  return null;
 }

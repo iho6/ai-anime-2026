@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ErrorProvider } from "../components/ErrorProvider";
+import { JobQueueProvider } from "../components/JobQueueProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,7 +19,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ErrorProvider>{children}</ErrorProvider>
+        <ErrorProvider>
+          <JobQueueProvider>{children}</JobQueueProvider>
+        </ErrorProvider>
       </body>
     </html>
   );

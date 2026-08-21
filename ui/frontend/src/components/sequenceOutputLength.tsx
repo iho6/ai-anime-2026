@@ -25,6 +25,19 @@ export function wanVideoDurationSec(frames: number, fps: number = WAN_VIDEO_FPS)
   return frames / fps;
 }
 
+/** Frame step is 4 → duration step at Wan fps (0.25s @ 16fps). */
+export const WAN_VIDEO_DURATION_STEP_SEC = 4 / WAN_VIDEO_FPS;
+
+export const WAN_VIDEO_MIN_DURATION_SEC = wanVideoDurationSec(
+  WAN_VIDEO_OUTPUT_LENGTHS[0]!,
+  WAN_VIDEO_FPS
+);
+
+export const WAN_VIDEO_MAX_DURATION_SEC = wanVideoDurationSec(
+  WAN_VIDEO_OUTPUT_LENGTHS[WAN_VIDEO_OUTPUT_LENGTHS.length - 1]!,
+  WAN_VIDEO_FPS
+);
+
 export function formatWanVideoLengthHint(
   frames: number = WAN_VIDEO_DEFAULT_LENGTH,
   fps: number = WAN_VIDEO_FPS

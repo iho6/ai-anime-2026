@@ -10033,13 +10033,27 @@ def generate_reference_video_preview(
     *,
     prompt_text: str,
     negative_prompt: str | None = None,
+    width: int | None = None,
+    height: int | None = None,
     length: int | None = None,
     log_cb: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
-    """Generate a 640px Wan T2V preview and store an H.264 MP4 scratch asset."""
+    """Generate a Wan T2V preview and store an H.264 MP4 scratch asset.
+
+    Default size is 640×640 (16 FPS). Width/height are clamped to multiples of 16.
+    """
     from services import reference_storage
 
-    width, height, fps = 640, 640, 16
+    def _dim(v: int | None, default: int) -> int:
+        n = int(default if v is None else v)
+        n = max(16, n)
+        # Wan latents prefer multiples of 16.
+        n = n - (n % 16)
+        return max(16, n)
+
+    width = _dim(width, 640)
+    height = _dim(height, 640)
+    fps = 16
     length = normalize_wan_video_length(49 if length is None else int(length))
     frame_refs = _run_t2v_service(
         prompt_text=prompt_text,
@@ -10074,6 +10088,15 @@ def commit_reference_image(preview_rel: str) -> dict[str, Any]:
     from services import reference_storage
 
     return reference_storage.commit_preview(preview_rel)
+
+
+def commit_reference_video(
+    preview_rel: str, *, fps: float | None = None
+) -> dict[str, Any]:
+    """Promote a ``_preview`` video generation into the saved Video refs gallery."""
+    from services import reference_storage
+
+    return reference_storage.commit_video_preview(preview_rel, fps=fps)
 
 
 def make_reference_keypoint_video_from_staged_frames(

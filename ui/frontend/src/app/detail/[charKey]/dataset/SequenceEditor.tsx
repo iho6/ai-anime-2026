@@ -85,9 +85,9 @@ type UndoEntry = {
   focusScope: "gallery" | "timeline";
 };
 
-/** Shared dataset job modal (ConnectedJobRunModal / useJobRunSession) for long HTTP work e.g. FLF. */
+/** Shared dataset job session (global queue / useJobRunSession) for long HTTP work e.g. FLF. */
 export type SequenceJobModal = {
-  begin: (opts: BeginSessionOpts) => void;
+  begin: (opts: BeginSessionOpts) => void | Promise<void>;
   end: () => void;
   fail: (err: unknown, userMessage: string) => void;
   log: (line: string) => void;
@@ -240,7 +240,7 @@ async function placeFrameSequenceStripOnTimeline(params: {
   const placedIndices: number[] = [];
   try {
     if (jm) {
-      jm.begin({ title: "Loading sequence set into timeline...", clearLog: true });
+      await jm.begin({ title: "Loading sequence set into timeline...", clearLog: true });
       jm.log("Loading sequence set into timeline...");
       jm.log(`Sequence: ${sequenceName}`);
       jm.log(`Strip columns: ${n}, images to copy: ${imageCount}`);
@@ -511,7 +511,7 @@ export function SequenceEditor(props: {
     removeBgStripPendingRef.current = null;
     if (!pending) return;
     const jm = jobModal;
-    jm?.begin({ title: "Removing background", clearLog: true });
+    await jm?.begin({ title: "Removing background", clearLog: true });
     await Promise.resolve();
     const out: string[] = [];
     try {
@@ -1522,7 +1522,7 @@ export function SequenceEditor(props: {
           setStripAiEditOpen(true);
         }),
       onGenerateI2v: async (relPath, prompt, length) => {
-        jm?.begin({ title: "Generating strip I2V", clearLog: true });
+        await jm?.begin({ title: "Generating strip I2V", clearLog: true });
         await Promise.resolve();
         try {
           const r = await apiSequenceStripGenerateI2v({
@@ -1541,7 +1541,7 @@ export function SequenceEditor(props: {
         }
       },
       onGenerateFlf: async (relPathA, relPathB, length) => {
-        jm?.begin({ title: "Generating strip FLF", clearLog: true });
+        await jm?.begin({ title: "Generating strip FLF", clearLog: true });
         await Promise.resolve();
         try {
           const r = await apiSequenceStripGenerateFlf({
@@ -1571,7 +1571,7 @@ export function SequenceEditor(props: {
       setStripAiEditOpen(false);
       if (!resolve || !sourceRelPath) return;
       const jm = jobModal;
-      jm?.begin({ title: "AI Editing frame", clearLog: true });
+      await jm?.begin({ title: "AI Editing frame", clearLog: true });
       await Promise.resolve();
       try {
         const done = await runDetailWsJob<{ fileRelPath: string }>({
@@ -1762,7 +1762,7 @@ export function SequenceEditor(props: {
                     setFlfDialog(null);
                     try {
                       if (jm) {
-                        jm.begin({ title: "Generating first–last frame video", clearLog: false });
+                        await jm.begin({ title: "Generating first–last frame video", clearLog: false });
                         jm.log(`Sequence: ${sequenceName}`);
                         jm.log(`Timeline endpoints: ${dlg.start} → ${dlg.end}`);
                         jm.log(`Output length: ${len} frames`);
@@ -1925,7 +1925,7 @@ export function SequenceEditor(props: {
                           ? `${promptOneLine.slice(0, 120)}…`
                           : promptOneLine;
                       if (jm) {
-                        jm.begin({ title: "Generating image-to-video", clearLog: false });
+                        await jm.begin({ title: "Generating image-to-video", clearLog: false });
                         jm.log(`Sequence: ${sequenceName}`);
                         jm.log(`Timeline frame: ${dlg.frameIndex}`);
                         jm.log(`Output length: ${len}`);

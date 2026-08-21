@@ -65,6 +65,7 @@ export function useCharacterSections(charKey: string | null | undefined) {
   }, [charKey]);
 
   useEffect(() => {
+    setData(null);
     void load();
   }, [load]);
 

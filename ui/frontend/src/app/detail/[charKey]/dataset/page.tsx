@@ -252,7 +252,7 @@ export default function DatasetPage() {
       };
 
       setAiEditOpen(false);
-      beginSession({ title: "AI Editing", clearLog: true, runningStatus: "AI editing…" });
+      await beginSession({ title: "AI Editing", clearLog: true, runningStatus: "AI editing…" });
       await Promise.resolve();
       pushLog("AI editing…");
 
@@ -379,7 +379,7 @@ export default function DatasetPage() {
     const hasExpr = sel.exprItems.length > 0 || sel.exprPrompts.length > 0;
     if (!hasAngles && !hasPose && !hasExpr) return;
 
-    beginSession({ title: "Batch generating", clearLog: true });
+    await beginSession({ title: "Batch generating", clearLog: true });
     let sessionOk = false;
     try {
       // ── Angles: grouped by kind + folder (reuse the original grouping) ──────
@@ -504,7 +504,7 @@ export default function DatasetPage() {
         : [];
     if (!inputRels.length && !selectedAngleIds.length) return;
 
-    beginSession({ title: "Generating angles", clearLog: true });
+    await beginSession({ title: "Generating angles", clearLog: true });
     let anglesSessionOk = false;
     try {
       const payload: Record<string, unknown> = {
@@ -567,8 +567,8 @@ export default function DatasetPage() {
     });
   }
 
-  const beginRemoveBackgroundModal = useCallback(() => {
-    beginSession({ title: "Removing background", clearLog: true });
+  const beginRemoveBackgroundModal = useCallback(async () => {
+    await beginSession({ title: "Removing background", clearLog: true });
   }, [beginSession]);
 
   const endRemoveBackgroundModal = useCallback(() => {
@@ -614,7 +614,7 @@ export default function DatasetPage() {
     if (!pending) return;
 
     if (pending.kind === "builder_batch") {
-      beginRemoveBackgroundModal();
+      await beginRemoveBackgroundModal();
       let rembgBatchOk = true;
       try {
         for (const tid of pending.tileIds) {
@@ -643,7 +643,7 @@ export default function DatasetPage() {
     }
 
     if (pending.kind === "builder_tile") {
-      beginRemoveBackgroundModal();
+      await beginRemoveBackgroundModal();
       try {
         const prev = await runRembgOnRel(pending.sourceRel, options);
         setEntries((list) =>
@@ -662,7 +662,7 @@ export default function DatasetPage() {
     }
 
     if (pending.kind === "saved_tile") {
-      beginRemoveBackgroundModal();
+      await beginRemoveBackgroundModal();
       try {
         const prev = await runRembgOnRel(pending.sourceRel, options);
         setSavedEntries((list) =>
@@ -686,7 +686,7 @@ export default function DatasetPage() {
   }
 
   async function batchAddNoise(ids: string[]) {
-    beginSession({ title: "Adding noise", clearLog: true });
+    await beginSession({ title: "Adding noise", clearLog: true });
     pushLog(`Adding noise to ${ids.length} selected tile(s) (API previews, no Comfy log).`);
     let noiseSessionOk = false;
     try {
@@ -786,7 +786,7 @@ export default function DatasetPage() {
       });
       return;
     }
-    beginSession({ title: "Exporting dataset", clearLog: true });
+    await beginSession({ title: "Exporting dataset", clearLog: true });
     pushLog(`Export folder name: ${name.trim()}`);
     pushLog(`Entries: ${exportEntries.length}`);
     pushLog("Calling export API…");
@@ -1082,10 +1082,10 @@ function SavedDatasetView(props: {
   setSelectedSaved: React.Dispatch<React.SetStateAction<Set<string>>>;
   toggleSaved: (id: string, on: boolean) => void;
   busy: boolean;
-  beginDatasetJob: (opts: BeginSessionOpts) => void;
+  beginDatasetJob: (opts: BeginSessionOpts) => void | Promise<void>;
   endDatasetJob: () => void;
   logRef: RefObject<SharedLogStreamHandle | null>;
-  beginRemoveBackgroundModal: () => void;
+  beginRemoveBackgroundModal: () => void | Promise<void>;
   endRemoveBackgroundModal: () => void;
   failRmbgJob: (err: unknown) => void;
   onRemoveBackgroundRequest?: (tileId: string, sourceRel: string) => void;
@@ -1164,7 +1164,7 @@ function SavedDatasetView(props: {
 
   async function commitSave() {
     if (!savedName) return;
-    beginDatasetJob({ title: "Saving dataset", clearLog: false });
+    await beginDatasetJob({ title: "Saving dataset", clearLog: false });
     try {
       await apiDatasetSavedCommit({
         charKey,

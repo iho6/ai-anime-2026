@@ -2,6 +2,9 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  apiReferenceImageCommit,
+  apiReferenceImageDelete,
+  apiReferenceImages,
   apiReferenceKeypointCopy,
   apiReferenceKeypointDelete,
   apiReferenceKeypointFolderCreate,
@@ -11,14 +14,24 @@ import {
   apiReferenceKeypointVideoDelete,
   apiReferenceKeypointVideoUpdateStrip,
   apiReferenceKeypointsLayout,
+  apiReferenceVideoCommit,
+  apiReferenceVideoDelete,
+  apiReferenceVideos,
   assetDownloadUrlFromRelPath,
   assetUrlFromRelPath,
+  runReferenceGenerateWsJob,
+  runReferenceMakeKeypointVideoWsJob,
+  runReferenceMakeKeypointWsJob,
   type FrameSequencePayload,
+  type GeneratedReferencePreview,
   type KeypointFolder,
   type KeypointsLayout,
   type KeypointVideoReference,
   type PlacedFigureMeta,
   type PoseReference,
+  type ReferenceImageItem,
+  type ReferenceMediaKind,
+  type ReferenceVideoItem,
 } from "../lib/api";
 import {
   DesktopContextMenu,
@@ -30,6 +43,8 @@ import { KeypointRefGrid, parseFolderToken, parseVideoToken } from "./KeypointRe
 import { KeypointVideoSequenceModal } from "./KeypointVideoSequenceModal";
 import { SquareButton } from "./SquareButton";
 import { ExportFpsDialog } from "./ExportFpsDialog";
+import { MotionRefGenModal } from "./MotionRefGenModal";
+import { Reference2DGenTab, type RefGalleryItem } from "./Reference2DGenTab";
 import { apiExportFramesVideo, runVideoExportJob, sanitizeDownloadBaseName, type VideoExportJob } from "../lib/downloadVideo";
 import {
   collectFolderIdsPostOrder,
@@ -38,6 +53,8 @@ import {
   folderSelectionState,
   isKeypointGridLeaf,
 } from "../lib/folderSelection";
+
+type RefTab = "keypoint" | "2d" | "3d";
 
 export type ReferencePickerFolderSelection = {
   folder: KeypointFolder;
@@ -57,10 +74,12 @@ export function ReferencePicker(props: {
   onCancel: () => void;
   onUseSelected: (sel: ReferencePickerSelection) => void;
   onPickNew: (file: File) => void;
-  onOpenGenerateBase?: () => void;
-  onOpenMotionRef?: () => void;
   refreshToken?: number;
   jobModal?: VideoExportJob;
+  /** ``modal`` = full-screen overlay (default). ``side`` = adjacent panel, no dimming overlay. */
+  variant?: "modal" | "side";
+  onKeypointsMade?: (ref: PoseReference) => void;
+  onKeypointVideoMade?: (ref: KeypointVideoReference) => void;
 }) {
   if (!props.open) return null;
   return (
@@ -70,10 +89,11 @@ export function ReferencePicker(props: {
       onCancel={props.onCancel}
       onUseSelected={props.onUseSelected}
       onPickNew={props.onPickNew}
-      onOpenGenerateBase={props.onOpenGenerateBase}
-      onOpenMotionRef={props.onOpenMotionRef}
       refreshToken={props.refreshToken}
       jobModal={props.jobModal}
+      variant={props.variant ?? "modal"}
+      onKeypointsMade={props.onKeypointsMade}
+      onKeypointVideoMade={props.onKeypointVideoMade}
     />
   );
 }
@@ -84,20 +104,23 @@ function ReferencePickerOpen(props: {
   onCancel: () => void;
   onUseSelected: (sel: ReferencePickerSelection) => void;
   onPickNew: (file: File) => void;
-  onOpenGenerateBase?: () => void;
-  onOpenMotionRef?: () => void;
   refreshToken?: number;
   jobModal?: VideoExportJob;
+  variant: "modal" | "side";
+  onKeypointsMade?: (ref: PoseReference) => void;
+  onKeypointVideoMade?: (ref: KeypointVideoReference) => void;
 }) {
   const {
     busy,
     onCancel,
     onUseSelected,
     onPickNew,
-    onOpenGenerateBase,
-    onOpenMotionRef,
     refreshToken,
     jobModal,
+    variant,
+    charKey,
+    onKeypointsMade,
+    onKeypointVideoMade,
   } = props;
   const { confirmAction, askText, showError } = useAppError();
 
@@ -113,6 +136,11 @@ function ReferencePickerOpen(props: {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorId, setAnchorId] = useState<string | null>(null);
   const [viewFolderId, setViewFolderId] = useState<string | null>(null);
+  const [tab, setTab] = useState<RefTab>("keypoint");
+  const [refGallery, setRefGallery] = useState<RefGalleryItem[]>([]);
+  const [gallerySelectedIds, setGallerySelectedIds] = useState<Set<string>>(new Set());
+  const [twoDBusy, setTwoDBusy] = useState(false);
+  const [twoDPreview, setTwoDPreview] = useState<GeneratedReferencePreview | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [menu, setMenu] = useState<{
     open: boolean;
@@ -143,6 +171,152 @@ function ReferencePickerOpen(props: {
       setLoadingLayout(false);
     }
   }, []);
+
+  const loadGallery = useCallback(async () => {
+    try {
+      const [images, videos] = await Promise.all([
+        apiReferenceImages(),
+        apiReferenceVideos(),
+      ]);
+      const items: RefGalleryItem[] = [
+        ...images.map((item) => ({ kind: "image" as const, item })),
+        ...videos.map((item) => ({ kind: "video" as const, item })),
+      ];
+      setRefGallery(items);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadGallery();
+  }, [loadGallery, refreshToken]);
+
+  const handleGenerate2D = useCallback(
+    async (args: {
+      kind: ReferenceMediaKind;
+      promptText: string;
+      width: number;
+      height: number;
+      length?: number;
+    }): Promise<GeneratedReferencePreview | null> => {
+      if (!jobModal) {
+        showError({ message: "Job session is not available." });
+        return null;
+      }
+      setTwoDBusy(true);
+      await jobModal.begin({
+        title: args.kind === "video" ? "Generating reference video…" : "Generating reference image…",
+        clearLog: true,
+        runningStatus: "Generating…",
+      });
+      try {
+        const done = await runReferenceGenerateWsJob({
+          ...args,
+          onLogLine: (line) => jobModal.log?.(line),
+        });
+        if (!done.ok || !done.result) {
+          throw new Error(done.error ?? "Generation failed");
+        }
+        const result = done.result as GeneratedReferencePreview;
+        try {
+          if (result.kind === "video") {
+            await apiReferenceVideoCommit(result.previewRelPath, result.fps);
+          } else {
+            await apiReferenceImageCommit(result.previewRelPath);
+          }
+          await loadGallery();
+        } catch (commitErr) {
+          showError({ message: "Generated, but could not save to gallery.", error: commitErr });
+        }
+        jobModal.end();
+        setTwoDPreview(result);
+        return result;
+      } catch (e) {
+        jobModal.fail(e, "Reference generation failed.");
+        return null;
+      } finally {
+        setTwoDBusy(false);
+      }
+    },
+    [jobModal, loadGallery, showError]
+  );
+
+  const handleConvertGalleryToKeypoint = useCallback(async () => {
+    if (!jobModal || gallerySelectedIds.size === 0) return;
+    const selected = refGallery.filter((g) =>
+      gallerySelectedIds.has(`${g.kind}:${g.item.itemId}`)
+    );
+    if (!selected.length) return;
+    setTwoDBusy(true);
+    await jobModal.begin({
+      title: "Convert to Keypoint",
+      clearLog: false,
+      runningStatus: `0/${selected.length} complete`,
+    });
+    try {
+      let doneCount = 0;
+      for (const g of selected) {
+        doneCount += 1;
+        jobModal.log?.(`Convert to Keypoint ${doneCount}/${selected.length}…`);
+        if (g.kind === "image") {
+          const done = await runReferenceMakeKeypointWsJob({
+            imageRelPath: g.item.relPath,
+            onLogLine: (line) => jobModal.log?.(line),
+          });
+          if (!done.ok || !done.result) {
+            throw new Error(done.error ?? "Keypoint generation failed");
+          }
+          onKeypointsMade?.({
+            id: done.result.item.id,
+            referenceRelPath: done.result.item.referenceRelPath,
+            keypointRelPath: done.result.item.keypointRelPath,
+          });
+        } else {
+          const done = await runReferenceMakeKeypointVideoWsJob({
+            videoRelPath: g.item.relPath,
+            fps: g.item.fps,
+            onLogLine: (line) => jobModal.log?.(line),
+          });
+          if (!done.ok || !done.result) {
+            throw new Error(done.error ?? "Video keypoint generation failed");
+          }
+          onKeypointVideoMade?.(done.result.item);
+        }
+      }
+      jobModal.end();
+      setGallerySelectedIds(new Set());
+      await loadLayout();
+      setTab("keypoint");
+    } catch (e) {
+      jobModal.fail(e, "Convert to Keypoint failed.");
+    } finally {
+      setTwoDBusy(false);
+    }
+  }, [
+    gallerySelectedIds,
+    jobModal,
+    loadLayout,
+    onKeypointVideoMade,
+    onKeypointsMade,
+    refGallery,
+  ]);
+
+  const handleDeleteGallerySelected = useCallback(async () => {
+    const selected = refGallery.filter((g) =>
+      gallerySelectedIds.has(`${g.kind}:${g.item.itemId}`)
+    );
+    for (const g of selected) {
+      try {
+        if (g.kind === "image") await apiReferenceImageDelete(g.item.itemId);
+        else await apiReferenceVideoDelete(g.item.itemId);
+      } catch {
+        /* ignore */
+      }
+    }
+    setGallerySelectedIds(new Set());
+    await loadGallery();
+  }, [gallerySelectedIds, loadGallery, refGallery]);
 
   useEffect(() => {
     void loadLayout();
@@ -648,43 +822,96 @@ function ReferencePickerOpen(props: {
     onUseSelected(sel);
   };
 
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.55)",
-        zIndex: 10000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
-      onMouseDown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        e.preventDefault();
-        onCancel();
-      }}
-    >
+  const combinedBusy = busy || twoDBusy;
+
+  const tabBtn = (id: RefTab): React.CSSProperties => {
+    const selected = tab === id;
+    return {
+      flex: "0 0 auto",
+      border: "1px solid rgba(255,255,255,0.25)",
+      borderRadius: 0,
+      background: selected ? "rgba(255, 255, 255, 0.2)" : "transparent",
+      boxShadow: selected ? "inset 0 0 0 1px rgba(255, 255, 255, 0.35)" : "none",
+      color: selected ? "#eee" : "#aaa",
+      padding: "6px 12px",
+      cursor: "pointer",
+      font: "inherit",
+      fontSize: 12,
+      lineHeight: 1.2,
+      whiteSpace: "nowrap",
+    };
+  };
+
+  const panel = (
       <div
-        style={{
-          width: 600,
-          maxWidth: "100%",
-          maxHeight: "88vh",
-          overflow: "hidden",
-          background: "#111",
-          color: "#eee",
-          border: "1px solid rgba(255,255,255,0.2)",
-          padding: 14,
-          display: "flex",
-          flexDirection: "column",
-        }}
+        style={
+          variant === "side"
+            ? {
+                width: tab === "3d" ? 900 : 720,
+                maxWidth: tab === "3d" ? "min(900px, 58vw)" : "min(720px, 52vw)",
+                height: "100%",
+                overflow: "hidden",
+                background: "#111",
+                color: "#eee",
+                border: "1px solid rgba(255,255,255,0.25)",
+                borderLeft: "1px solid rgba(255,255,255,0.35)",
+                padding: 0,
+                display: "flex",
+                flexDirection: "column",
+                boxSizing: "border-box",
+              }
+            : {
+                width: tab === "3d" ? 900 : 720,
+                maxWidth: "100%",
+                maxHeight: "88vh",
+                height: "min(92vh, 880px)",
+                overflow: "hidden",
+                background: "#111",
+                color: "#eee",
+                border: "1px solid rgba(255,255,255,0.2)",
+                padding: 0,
+                display: "flex",
+                flexDirection: "column",
+              }
+        }
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div style={{ fontWeight: 400, marginBottom: 10 }}>
-          Add Reference Image
+        <div
+          role="tablist"
+          aria-label="Reference modes"
+          style={{
+            display: "flex",
+            gap: 0,
+            flexShrink: 0,
+            width: "100%",
+            justifyContent: "center",
+            padding: "0 14px",
+            boxSizing: "border-box",
+          }}
+        >
+          <button type="button" role="tab" aria-selected={tab === "keypoint"} style={tabBtn("keypoint")} onClick={() => setTab("keypoint")}>
+            Keypoint
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "2d"} style={{ ...tabBtn("2d"), borderLeft: "none" }} onClick={() => setTab("2d")}>
+            2D Ref Gen
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "3d"} style={{ ...tabBtn("3d"), borderLeft: "none" }} onClick={() => setTab("3d")}>
+            3D Ref Gen
+          </button>
         </div>
 
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            padding: 14,
+            boxSizing: "border-box",
+          }}
+        >
+        {tab === "keypoint" ? (
+          <>
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -700,11 +927,11 @@ function ReferencePickerOpen(props: {
           }}
         >
           <SquareButton
-            disabled={busy}
+            disabled={combinedBusy}
             onClick={() => inputRef.current?.click()}
             variant="import"
             tone="light"
-            size={120}
+            size={100}
             dragOver={dragOver}
             style={{ color: "inherit" }}
             title="Drop an image here or click to pick a file"
@@ -722,38 +949,6 @@ function ReferencePickerOpen(props: {
             style={{ display: "none" }}
             onChange={handleFileInput}
           />
-          {onOpenGenerateBase && (
-            <SquareButton
-              disabled={busy}
-              onClick={onOpenGenerateBase}
-              variant="import"
-              tone="light"
-              size={120}
-              style={{ color: "inherit" }}
-              title="Generate and preview a base reference image with AI"
-            >
-              AI Generate
-              <br />
-              Base
-              <br />
-              Reference
-            </SquareButton>
-          )}
-          {onOpenMotionRef && (
-            <SquareButton
-              disabled={busy}
-              onClick={onOpenMotionRef}
-              variant="import"
-              tone="light"
-              size={120}
-              style={{ color: "inherit" }}
-              title="Open Motion Ref Gen to pose a 3D skeleton and generate motion sequences"
-            >
-              Motion
-              <br />
-              Ref Gen
-            </SquareButton>
-          )}
         </div>
 
         <div
@@ -804,7 +999,7 @@ function ReferencePickerOpen(props: {
             </div>
           ) : (
           <KeypointRefGrid
-            busy={busy}
+            busy={combinedBusy}
             layout={layout}
             onLayoutChange={setLayout}
             selectedIds={selectedIds}
@@ -847,7 +1042,7 @@ function ReferencePickerOpen(props: {
           </button>
           <button
             type="button"
-            disabled={busy || selectedIds.size === 0}
+            disabled={combinedBusy || selectedIds.size === 0}
             onClick={handleUseSelected}
             style={{
               borderRadius: 0,
@@ -855,15 +1050,74 @@ function ReferencePickerOpen(props: {
               background: "transparent",
               color: "#eee",
               padding: "6px 16px",
-              cursor: busy || selectedIds.size === 0 ? "not-allowed" : "pointer",
-              opacity: busy || selectedIds.size === 0 ? 0.5 : 1,
+              cursor: combinedBusy || selectedIds.size === 0 ? "not-allowed" : "pointer",
+              opacity: combinedBusy || selectedIds.size === 0 ? 0.5 : 1,
             }}
           >
             Use Selected
           </button>
         </div>
-      </div>
+          </>
+        ) : null}
 
+        {tab === "2d" ? (
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <Reference2DGenTab
+              busy={combinedBusy}
+              gallery={refGallery}
+              selectedIds={gallerySelectedIds}
+              onSelectedIdsChange={setGallerySelectedIds}
+              preview={twoDPreview}
+              onPreviewChange={setTwoDPreview}
+              onGenerate={handleGenerate2D}
+              onConvertToKeypoint={() => void handleConvertGalleryToKeypoint()}
+              onDeleteSelected={() => void handleDeleteGallerySelected()}
+            />
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={onCancel}
+                style={{
+                  borderRadius: 0,
+                  border: "1px solid rgba(255,255,255,0.3)",
+                  background: "transparent",
+                  color: "#eee",
+                  padding: "6px 16px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {tab === "3d" ? (
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+              <MotionRefGenModal
+                open
+                embedded
+                charKey={charKey}
+                onClose={onCancel}
+                onKeypointsMade={(ref) => {
+                  onKeypointsMade?.(ref);
+                  void loadLayout();
+                }}
+                onKeypointVideoMade={(ref) => {
+                  onKeypointVideoMade?.(ref);
+                  void loadLayout();
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
+        </div>
+      </div>
+  );
+
+  const overlays = (
+    <>
       <DesktopContextMenu
         open={menu.open}
         x={menu.x}
@@ -914,6 +1168,38 @@ function ReferencePickerOpen(props: {
           noBackdropItems={lightbox.noBackdropItems}
         />
       ) : null}
+    </>
+  );
+
+  if (variant === "side") {
+    return (
+      <>
+        {panel}
+        {overlays}
+      </>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.55)",
+        zIndex: 10000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+      }}
+      onMouseDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        e.preventDefault();
+        onCancel();
+      }}
+    >
+      {panel}
+      {overlays}
     </div>
   );
 }

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -283,8 +284,9 @@ def ensure_kimodo_smplx_npz(skeleton: Any) -> Path:
     """
     Ensure ``SMPLX_NEUTRAL.npz`` is present under ``skeleton.folder`` for KiMoD's SMPLXSkin.
 
-    If only the legacy ``storage/body_models/smplx/`` copy exists, symlink it into the
-    KiMoD skeleton assets folder (one-time).
+    If only the legacy ``storage/body_models/smplx/`` copy exists, link/copy it into the
+    KiMoD skeleton assets folder (one-time). Windows often lacks symlink privilege, so
+    we fall back to hardlink then a real file copy.
     """
     skel_dir = Path(skeleton.folder)
     target = skel_dir / "SMPLX_NEUTRAL.npz"
@@ -293,24 +295,47 @@ def ensure_kimodo_smplx_npz(skeleton: Any) -> Path:
 
     legacy = _gender_npz_path("neutral")
     if _npz_is_valid(legacy):
-        skel_dir.mkdir(parents=True, exist_ok=True)
-        if target.is_symlink() or target.exists():
-            target.unlink()
-        target.symlink_to(legacy.resolve())
-        return target
+        return _place_npz_at(target, legacy)
 
     kimodo_default = _kimodo_smplx_npz_path()
-    if _npz_is_valid(kimodo_default) and kimodo_default != target:
-        skel_dir.mkdir(parents=True, exist_ok=True)
-        if target.is_symlink() or target.exists():
-            target.unlink()
-        target.symlink_to(kimodo_default.resolve())
-        return target
+    if _npz_is_valid(kimodo_default) and kimodo_default.resolve() != target.resolve():
+        return _place_npz_at(target, kimodo_default)
 
     raise RuntimeError(
         f"SMPL-X body model not found for KiMoD skinning. Place SMPLX_NEUTRAL.npz at "
         f"{kimodo_default} or {legacy}."
     )
+
+
+def _place_npz_at(target: Path, source: Path) -> Path:
+    """Make ``target`` resolve to ``source`` via symlink, hardlink, or copy."""
+    source = source.resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_symlink() or target.exists():
+        if _npz_is_valid(target) and target.resolve() == source:
+            return target
+        target.unlink()
+
+    try:
+        target.symlink_to(source)
+        return target
+    except OSError as exc:
+        logger.info(
+            "SMPL-X symlink failed (%s); trying hardlink/copy into %s",
+            exc,
+            target,
+        )
+
+    try:
+        os.link(source, target)
+        return target
+    except OSError:
+        pass
+
+    shutil.copy2(source, target)
+    if not _npz_is_valid(target):
+        raise RuntimeError(f"Failed to stage SMPL-X body model at {target} from {source}")
+    return target
 
 
 def bones_from_skeleton(skeleton: Any) -> list[list[int]]:

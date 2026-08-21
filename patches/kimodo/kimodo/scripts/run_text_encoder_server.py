@@ -3,6 +3,7 @@
 
 import argparse
 import os
+import tempfile
 import time
 
 import gradio as gr
@@ -17,7 +18,9 @@ DEFAULT_TEXT = "A person walks and falls to the ground."
 DEFAULT_SERVER_NAME = "0.0.0.0"
 HEADLESS_SERVER_NAME = "127.0.0.1"
 DEFAULT_SERVER_PORT = 9550
-DEFAULT_TMP_FOLDER = "/tmp/text_encoder/"
+# Gradio 6 only allows returning files under cwd or the OS temp dir unless
+# allowed_paths is set. Prefer OS temp so Windows does not use H:\tmp\...
+DEFAULT_TMP_FOLDER = os.path.join(tempfile.gettempdir(), "kimodo_text_encoder")
 DEFAULT_TEXT_ENCODER = "llm2vec"
 TEXT_ENCODER_PRESETS = {
     "llm2vec": {
@@ -68,6 +71,71 @@ def _default_text_encoder_device() -> str:
     except ImportError:
         pass
     return "cpu"
+
+
+def _sanitize_hf_token(token: str) -> str:
+    t = (token or "").replace("\r", "").replace("\n", "").strip()
+    if len(t) >= 2 and t[0] == t[-1] and t[0] in ("'", '"'):
+        t = t[1:-1].strip()
+    return t
+
+
+def _resolve_hf_token_for_child() -> str:
+    for key in ("HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACE_HUB_TOKEN"):
+        val = _sanitize_hf_token(os.environ.get(key) or "")
+        if val:
+            return val
+    token_file = _sanitize_hf_token(os.environ.get("KIMODO_HF_TOKEN_FILE") or "")
+    if token_file and os.path.isfile(token_file):
+        with open(token_file, "r", encoding="utf-8") as handle:
+            return _sanitize_hf_token(handle.read())
+    return ""
+
+
+def _ensure_hf_login() -> None:
+    """Force huggingface_hub auth before gated Llama / LLM2Vec downloads.
+
+    Env injection alone can fail to reach Hub requests on some Windows/spawn
+    paths; login() + rewriting HF_TOKEN makes auth explicit for transformers.
+    """
+    token = _resolve_hf_token_for_child()
+    env_has = bool(_sanitize_hf_token(os.environ.get("HF_TOKEN") or ""))
+    file_has = bool(
+        (os.environ.get("KIMODO_HF_TOKEN_FILE") or "").strip()
+        and os.path.isfile(os.environ.get("KIMODO_HF_TOKEN_FILE") or "")
+    )
+    print(
+        f"HF auth preflight: env_HF_TOKEN={env_has} token_file={file_has} resolved={bool(token)}",
+        flush=True,
+    )
+    if not token:
+        raise SystemExit(
+            "HF_TOKEN missing inside text-encoder process. "
+            "Set a Hugging Face read token in Settings / Install Dependencies, "
+            "and accept https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct"
+        )
+    if not token.startswith("hf_"):
+        print(
+            "HF auth warning: token does not start with 'hf_' — "
+            "use a Hugging Face access token (not a GitHub PAT).",
+            flush=True,
+        )
+    os.environ["HF_TOKEN"] = token
+    os.environ["HUGGING_FACE_HUB_TOKEN"] = token
+    os.environ["HUGGINGFACE_HUB_TOKEN"] = token
+    try:
+        from huggingface_hub import get_token, login
+
+        login(token=token, add_to_git_credential=False)
+        print(f"HF auth login ok; get_token={bool(get_token())}", flush=True)
+    except Exception as exc:
+        raise SystemExit(
+            "huggingface_hub.login failed — saved HF token is invalid/revoked or "
+            "lacks access. Update Settings with a new token from "
+            "https://huggingface.co/settings/tokens and accept "
+            "https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct "
+            f"({type(exc).__name__}: {exc})"
+        ) from exc
 
 
 def _build_text_encoder(name: str, fp32: bool = False):
@@ -193,6 +261,8 @@ def main():
         server_name = _get_env("GRADIO_SERVER_NAME", DEFAULT_SERVER_NAME)
     server_port = int(_get_env("GRADIO_SERVER_PORT", DEFAULT_SERVER_PORT))
     os.makedirs(args.tmp_folder, exist_ok=True)
+    # Gated Meta-Llama base weights require an authenticated Hub session.
+    _ensure_hf_login()
     text_encoder = _build_text_encoder(args.text_encoder, args.fp32)
     display_name = TEXT_ENCODER_PRESETS[args.text_encoder]["display_name"]
     demo = _build_demo(
@@ -208,12 +278,19 @@ def main():
             server_port=server_port,
             prevent_thread_lock=True,
             quiet=True,
+            show_error=True,
+            allowed_paths=[args.tmp_folder],
         )
         print(f"READY:{server_port}", flush=True)
         while True:
             time.sleep(3600)
     else:
-        demo.launch(server_name=server_name, server_port=server_port)
+        demo.launch(
+            server_name=server_name,
+            server_port=server_port,
+            show_error=True,
+            allowed_paths=[args.tmp_folder],
+        )
 
 
 if __name__ == "__main__":

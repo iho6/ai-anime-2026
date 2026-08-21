@@ -52,7 +52,7 @@ type DatasetBuilderSourcesPanelProps = {
   exprStripIds: string[];
   setPoseStripIds: React.Dispatch<React.SetStateAction<string[]>>;
   setExprStripIds: React.Dispatch<React.SetStateAction<string[]>>;
-  beginRemoveBackgroundModal: () => void;
+  beginRemoveBackgroundModal: () => void | Promise<void>;
   endRemoveBackgroundModal: () => void;
   failRmbgJob: (err: unknown) => void;
   onRemoveBackgroundRequest?: (tileId: string, sourceRel: string) => void;

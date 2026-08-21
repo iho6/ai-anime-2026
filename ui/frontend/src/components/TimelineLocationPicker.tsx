@@ -226,7 +226,7 @@ export function TimelineLocationPicker(props: {
     angleInputRelPathRef.current = null;
     if (!locationKey || !inputRelPath) return;
 
-    beginSession({ title: "Generating location angles", clearLog: true });
+    await beginSession({ title: "Generating location angles", clearLog: true });
     let sessionOk = false;
     try {
       await apiLocationGenerateAnglesStream({
@@ -665,7 +665,7 @@ export function TimelineLocationPicker(props: {
           if (!ctx || !locKey) return;
           const section = ctx.folderKey === "lighting" ? "lighting" : "view";
           setAiOpen(false);
-          beginSession({ title: "AI Editing", clearLog: true, runningStatus: "AI editing…" });
+          await beginSession({ title: "AI Editing", clearLog: true, runningStatus: "AI editing…" });
           await Promise.resolve();
           pushLog("AI editing…");
           try {

@@ -6,7 +6,7 @@ import {
 import type { BeginSessionOpts } from "../hooks/useJobRunSession";
 
 export type VideoExportJob = {
-  begin: (opts: BeginSessionOpts) => void;
+  begin: (opts: BeginSessionOpts) => void | Promise<void>;
   end: () => void;
   fail: (err: unknown, userMessage: string) => void;
   log?: (line: string) => void;
@@ -22,11 +22,13 @@ export async function runVideoExportJob(
     onError?: (e: unknown) => void;
   }
 ): Promise<void> {
-  job?.begin({
-    title: opts.title ?? "Download as Video",
-    clearLog: true,
-    runningStatus: opts.runningStatus ?? "Encoding video…",
-  });
+  await Promise.resolve(
+    job?.begin({
+      title: opts.title ?? "Download as Video",
+      clearLog: true,
+      runningStatus: opts.runningStatus ?? "Encoding video…",
+    })
+  );
   await Promise.resolve();
   try {
     job?.log?.("Starting export…");

@@ -29,7 +29,7 @@ export function HfTokenSettingsButton() {
   } = useJobRunSession(logRef);
 
   async function onRestartComfy() {
-    beginSession({ title: "Restarting ComfyUI (8188)…", clearLog: true });
+    await beginSession({ title: "Restarting ComfyUI (8188)…", clearLog: true });
     await Promise.resolve();
     pushLog("Requesting ComfyUI restart…");
     try {

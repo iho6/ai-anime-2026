@@ -41,11 +41,13 @@ REFERENCES_STORAGE_ROOT = (DEFAULT_STORAGE_ROOT.parent / "references").resolve()
 IMAGES_DIRNAME = "images"
 KEYPOINTS_DIRNAME = "keypoints"
 PREVIEW_DIRNAME = "_preview"
+VIDEOS_DIRNAME = "videos"
 IMAGES_MANIFEST = "images.json"
 KEYPOINTS_MANIFEST = "keypoints.json"
 KEYPOINTS_UI_MANIFEST = "keypoints_ui.json"
 KEYPOINTS_VIDEO_DIRNAME = "keypoints_video"
 KEYPOINTS_VIDEO_MANIFEST = "keypoints_video.json"
+VIDEOS_MANIFEST = "videos.json"
 PLACED_DIRNAME = "placed"
 FOLDER_TOKEN_PREFIX = "folder:"
 VIDEO_TOKEN_PREFIX = "video:"
@@ -66,6 +68,10 @@ def images_dir() -> Path:
     return REFERENCES_STORAGE_ROOT / IMAGES_DIRNAME
 
 
+def videos_dir() -> Path:
+    return REFERENCES_STORAGE_ROOT / VIDEOS_DIRNAME
+
+
 def keypoints_dir() -> Path:
     return REFERENCES_STORAGE_ROOT / KEYPOINTS_DIRNAME
 
@@ -83,7 +89,14 @@ def placed_dir() -> Path:
 
 
 def _ensure_dirs() -> None:
-    for d in (images_dir(), keypoints_dir(), keypoints_video_dir(), preview_dir(), placed_dir()):
+    for d in (
+        images_dir(),
+        videos_dir(),
+        keypoints_dir(),
+        keypoints_video_dir(),
+        preview_dir(),
+        placed_dir(),
+    ):
         d.mkdir(parents=True, exist_ok=True)
 
 
@@ -130,6 +143,10 @@ def _write_manifest(path: Path, entries: list[dict[str, Any]]) -> None:
 
 def _images_manifest_path() -> Path:
     return REFERENCES_STORAGE_ROOT / IMAGES_MANIFEST
+
+
+def _videos_manifest_path() -> Path:
+    return REFERENCES_STORAGE_ROOT / VIDEOS_MANIFEST
 
 
 def _keypoints_manifest_path() -> Path:
@@ -941,6 +958,67 @@ def set_images_order(order_ids: list[str]) -> None:
         if e.get("id") not in seen:
             ordered.append(e)
     _write_manifest(_images_manifest_path(), ordered)
+
+
+# --- videos (non-keypoint gallery refs) ----------------------------------------
+
+
+def list_videos() -> list[dict[str, Any]]:
+    """Return video ref entries whose files still exist, in manifest order."""
+    entries = _read_manifest(_videos_manifest_path())
+    out: list[dict[str, Any]] = []
+    for e in entries:
+        try:
+            if _resolve_rel(e.get("relPath", "")).is_file():
+                out.append(e)
+        except Exception:
+            continue
+    return out
+
+
+def commit_video_preview(preview_rel: str, *, fps: float | None = None) -> dict[str, Any]:
+    """Move a ``_preview/*`` video into ``videos/`` and prepend to the manifest."""
+    _ensure_dirs()
+    src = _resolve_rel(preview_rel)
+    if src.parent.resolve() != preview_dir().resolve():
+        raise ValueError("Preview path is not under the preview scratch dir.")
+    if not src.is_file():
+        raise ValueError(f"Preview video not found: {src}")
+    rid = _new_id()
+    ext = src.suffix.lower() or ".mp4"
+    if ext not in _VIDEO_EXTS:
+        ext = ".mp4"
+    dest = videos_dir() / f"vid_{rid}{ext}"
+    shutil.move(str(src), str(dest))
+    entry: dict[str, Any] = {
+        "id": rid,
+        "relPath": _abs_to_storage_rel(dest),
+        "createdAt": time.time(),
+    }
+    if fps is not None:
+        entry["fps"] = float(fps)
+    entries = _read_manifest(_videos_manifest_path())
+    entries.insert(0, entry)
+    _write_manifest(_videos_manifest_path(), entries)
+    return entry
+
+
+def delete_video(video_id: str) -> bool:
+    entries = _read_manifest(_videos_manifest_path())
+    remaining: list[dict[str, Any]] = []
+    found = False
+    for e in entries:
+        if e.get("id") == video_id:
+            found = True
+            try:
+                _resolve_rel(e.get("relPath", "")).unlink(missing_ok=True)
+            except Exception:
+                pass
+        else:
+            remaining.append(e)
+    if found:
+        _write_manifest(_videos_manifest_path(), remaining)
+    return found
 
 
 # --- keypoints ----------------------------------------------------------------

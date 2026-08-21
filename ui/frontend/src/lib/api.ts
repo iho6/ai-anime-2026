@@ -1429,6 +1429,12 @@ export const MOTION_REF_MAX_PROMPT_ADHERENCE = 4;
 export const MOTION_REF_PROMPT_ADHERENCE_STEP = 0.5;
 export const MOTION_REF_DEFAULT_CFG_CONSTRAINT_WEIGHT = 2;
 
+/** Multi-segment overlap blend frames (Kimodo num_transition_frames). */
+export const MOTION_REF_DEFAULT_TRANSITION_FRAMES = 5;
+export const MOTION_REF_MIN_TRANSITION_FRAMES = 1;
+export const MOTION_REF_MAX_TRANSITION_FRAMES = 30;
+export const MOTION_REF_TRANSITION_FRAMES_STEP = 1;
+
 export type MotionRefSegment = {
   text: string;
   duration: number; // seconds
@@ -3564,12 +3570,26 @@ export type ReferenceImageItem = {
   relPath: string;
 };
 
+export type ReferenceVideoItem = {
+  itemId: string;
+  relPath: string;
+  fps?: number;
+};
+
 export async function apiReferenceImages(): Promise<ReferenceImageItem[]> {
   const res = await fetch(`${API_BASE_URL}/reference/images`, {
     method: "GET",
     credentials: "omit",
   });
   return readJson<ReferenceImageItem[]>(res);
+}
+
+export async function apiReferenceVideos(): Promise<ReferenceVideoItem[]> {
+  const res = await fetch(`${API_BASE_URL}/reference/videos`, {
+    method: "GET",
+    credentials: "omit",
+  });
+  return readJson<ReferenceVideoItem[]>(res);
 }
 
 export async function apiReferenceKeypoints(): Promise<PoseReference[]> {
@@ -3590,6 +3610,23 @@ export async function apiReferenceImageCommit(
     body: JSON.stringify({ previewRelPath }),
   });
   const data = await readJson<{ item: ReferenceImageItem }>(res);
+  return data.item;
+}
+
+export async function apiReferenceVideoCommit(
+  previewRelPath: string,
+  fps?: number
+): Promise<ReferenceVideoItem> {
+  const res = await fetch(`${API_BASE_URL}/reference/videos/commit`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      previewRelPath,
+      ...(fps != null ? { fps } : {}),
+    }),
+  });
+  const data = await readJson<{ item: ReferenceVideoItem }>(res);
   return data.item;
 }
 
@@ -3722,6 +3759,14 @@ export async function apiReferenceKeypointFolderDelete(
 export async function apiReferenceImageDelete(id: string): Promise<void> {
   const res = await fetch(
     `${API_BASE_URL}/reference/images/${encodeURIComponent(id)}`,
+    { method: "DELETE", credentials: "omit" }
+  );
+  if (!res.ok) await readJson(res);
+}
+
+export async function apiReferenceVideoDelete(id: string): Promise<void> {
+  const res = await fetch(
+    `${API_BASE_URL}/reference/videos/${encodeURIComponent(id)}`,
     { method: "DELETE", credentials: "omit" }
   );
   if (!res.ok) await readJson(res);
